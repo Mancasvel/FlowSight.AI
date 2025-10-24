@@ -23,7 +23,8 @@
     "lucide-react": "^0.309.0",
     "recharts": "^2.10.3",
     "axios": "^1.6.5",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "openai": "^4.28.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

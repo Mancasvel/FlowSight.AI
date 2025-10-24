@@ -9,6 +9,8 @@ FlowSight AI is a privacy-first developer productivity tool that automatically t
 - **🔒 Privacy-First**: All screen analysis happens locally; only semantic events are sent to the cloud
 - **⚡ Real-time Dashboard**: Live updates via Pusher showing team activity, ticket progress, and blockers
 - **🤖 Intelligent Automation**: Rules engine automatically updates ticket statuses based on developer activity
+- **🧠 AI-Powered Analysis**: Uses GPT-4/Claude via OpenRouter to detect blockers, analyze productivity, and estimate completion times
+- **🏢 Enterprise-Ready**: Support for custom AI models (on-premise or cloud) for maximum privacy
 - **🎨 Beautiful UI**: Modern dashboard built with Next.js 15, Tailwind CSS, and Framer Motion
 - **☁️ Serverless Architecture**: Deployed on Vercel with MongoDB Atlas and Pusher Channels
 
@@ -107,6 +109,7 @@ FlowSight.AI/
 - **MongoDB Atlas** account (free tier works)
 - **Pusher** account (free tier works)
 - **GitHub OAuth App** (for dashboard authentication)
+- **OpenRouter API Key** (optional, for AI features - free tier available)
 
 ### 1. Clone and Install
 
@@ -137,6 +140,14 @@ pnpm install
    - **Callback URL**: `http://localhost:3000/api/auth/callback/github`
 3. Note down `Client ID` and `Client Secret`
 
+### 4.5 Setup OpenRouter (Optional - AI Features)
+
+1. Go to [openrouter.ai](https://openrouter.ai) and create an account
+2. Navigate to [openrouter.ai/keys](https://openrouter.ai/keys)
+3. Click "Create Key" and copy your API key (starts with `sk-or-v1-...`)
+4. **Free tier**: $1 of credits to start, then pay-as-you-go
+5. **Recommended model**: `anthropic/claude-3-sonnet` (~$85/month for 50 developers)
+
 ### 5. Configure Dashboard
 
 ```bash
@@ -158,6 +169,10 @@ NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=generate_with_openssl_rand_base64_32
 GITHUB_ID=your_github_client_id
 GITHUB_SECRET=your_github_client_secret
+
+# AI Features (Optional but Recommended)
+OPENROUTER_API_KEY=sk-or-v1-your-key-here
+DEFAULT_AI_MODEL=anthropic/claude-3-sonnet
 ```
 
 ### 6. Run Dashboard (Dev Mode)
@@ -195,6 +210,27 @@ In the agent UI, use the Dev Mode section to simulate events:
 
 Watch the dashboard update in real-time!
 
+### 10. Test AI Features (Optional)
+
+If you configured OpenRouter:
+
+```bash
+# Check AI status
+curl http://localhost:3000/api/ai/analyze/status
+
+# Should return: {"available": true, "providers": {"openrouter": true}}
+
+# Manual AI analysis
+curl -X POST http://localhost:3000/api/ai/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "devId": "your@email.com",
+    "analysisType": "blocker"
+  }'
+```
+
+The AI will automatically run every ~10 events to detect blockers, analyze productivity, and estimate completion times. Check the dashboard logs for "AI Blocker Analysis Result".
+
 ## 📦 Deploy to Production
 
 ### Deploy Dashboard to Vercel
@@ -223,10 +259,34 @@ Installers will be in `apps/agent/dist-electron/`
 The rules engine automatically triggers actions based on developer activity. Default rules in `apps/dashboard/src/lib/rules-engine.ts`:
 
 1. **Auto In Progress**: When developer starts coding on a ticket branch, mark it "In Progress"
-2. **Detect Blocker**: If excessive browsing activity (>70%), mark as "Blocked"
-3. **Progress on Commit**: When a commit is detected, increase ticket progress by 10%
+2. **AI-Powered Blocker Detection** (if OpenRouter configured): Uses GPT-4/Claude to intelligently detect blockers based on activity patterns
+3. **Simple Blocker Detection** (fallback): If excessive browsing activity (>70%), mark as "Blocked"
+4. **Progress on Commit**: When a commit is detected, increase ticket progress by 10%
 
 Customize rules by editing the `getDefaultRules()` method.
+
+### AI Configuration
+
+**Quick Start:** See `AI_QUICKSTART.md` for 5-minute setup
+
+**Full Documentation:** See `AI_INTEGRATION.md` for:
+- Multi-provider support (OpenRouter, OpenAI, Custom)
+- Cost analysis and optimization
+- Enterprise deployment with custom models
+- API reference
+
+**Per-Project Configuration:**
+```bash
+# Configure custom AI model for a project
+curl -X PUT http://localhost:3000/api/projects/my-project/ai-config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "custom",
+    "apiKey": "your-key",
+    "model": "company-llama-70b",
+    "baseURL": "https://ai.company.com/v1"
+  }'
+```
 
 ### Agent Capture Interval
 

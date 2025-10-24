@@ -1,6 +1,8 @@
 import { SemanticEvent, Rule, RuleAction, extractTicketId } from '@flowsight/shared';
 import { getTicketsCollection, getEventsCollection } from './mongodb';
 import { triggerRealtimeUpdate } from './pusher';
+import { getAIAnalyzer } from './ai/analyzer';
+import { BlockerAnalysis } from './ai/types';
 
 /**
  * Rules Engine - Evaluates events and triggers automated actions
@@ -32,8 +34,21 @@ export class RulesEngine {
         enabled: true,
       },
       {
-        id: 'detect-blocker',
-        name: 'Detect Blocker',
+        id: 'ai-blocker-detection',
+        name: 'AI-Powered Blocker Detection',
+        description: 'Use AI to intelligently detect if developer is blocked based on activity patterns',
+        conditions: [], // AI-based, no simple conditions
+        actions: [
+          {
+            type: 'set_blocked',
+            params: { reason: 'AI detected potential blocker' },
+          },
+        ],
+        enabled: !!process.env.OPENROUTER_API_KEY, // Only enable if API key is set
+      },
+      {
+        id: 'detect-blocker-simple',
+        name: 'Simple Blocker Detection',
         description: 'If developer has excessive browsing activity, mark as blocked',
         conditions: [
           { field: 'activity', operator: 'equals', value: 'browsing' },
@@ -44,7 +59,7 @@ export class RulesEngine {
             params: { reason: 'Excessive research activity detected' },
           },
         ],
-        enabled: true,
+        enabled: !process.env.OPENROUTER_API_KEY, // Fallback when AI is not available
       },
       {
         id: 'progress-on-commit',
@@ -93,10 +108,22 @@ export class RulesEngine {
       }
     }
 
-    // Check for blocker pattern (more sophisticated)
+    // Check for blocker pattern (AI-powered if available)
     const blockerCheck = await this.checkForBlocker(event);
     if (blockerCheck.isBlocked) {
       triggeredActions.push(blockerCheck.action);
+    }
+
+    // Periodic AI analysis (every 10 events to control costs)
+    if (process.env.OPENROUTER_API_KEY && Math.random() < 0.1) {
+      try {
+        const aiAnalysis = await this.performAIAnalysis(event);
+        if (aiAnalysis) {
+          triggeredActions.push(...aiAnalysis);
+        }
+      } catch (error) {
+        console.error('AI analysis failed:', error);
+      }
     }
 
     return triggeredActions;
@@ -235,6 +262,57 @@ export class RulesEngine {
   private async sendNotification(event: SemanticEvent, params: any): Promise<void> {
     console.log('Notification:', params.message, event);
     // TODO: Implement actual notification system (email, Slack, etc.)
+  }
+
+  /**
+   * Perform AI-powered analysis
+   */
+  private async performAIAnalysis(event: SemanticEvent): Promise<string[]> {
+    const actions: string[] = [];
+
+    try {
+      // Get recent events for this developer
+      const events = await getEventsCollection();
+      const recentEvents = await events
+        .find({
+          devId: event.devId,
+          timestamp: { $gte: new Date(Date.now() - 2 * 60 * 60 * 1000) }, // Last 2 hours
+        })
+        .sort({ timestamp: -1 })
+        .limit(30)
+        .toArray();
+
+      if (recentEvents.length < 10) {
+        return actions; // Not enough data
+      }
+
+      // Perform AI blocker analysis
+      const analyzer = getAIAnalyzer();
+      const analysis: BlockerAnalysis = await analyzer.analyzeBlocker(
+        recentEvents as SemanticEvent[]
+      );
+
+      console.log('AI Blocker Analysis Result:', analysis);
+
+      // Act on AI insights
+      if (analysis.isBlocked && analysis.confidence > 70) {
+        if (event.ticketId) {
+          await this.setBlocked(event, analysis.reason);
+          actions.push(`AI Blocker Detection: ${analysis.category} (confidence: ${analysis.confidence}%)`);
+
+          // Trigger notification with AI suggestions
+          await triggerRealtimeUpdate(`dev:${event.devId}`, 'ai_blocker_alert', {
+            ticketId: event.ticketId,
+            analysis,
+          });
+        }
+      }
+
+      return actions;
+    } catch (error) {
+      console.error('AI analysis error:', error);
+      return actions;
+    }
   }
 
   /**
