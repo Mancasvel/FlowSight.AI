@@ -1,0 +1,51 @@
+{
+  "name": "@flowsight/agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FlowSight AI - Developer Activity Agent",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development electron-vite dev",
+    "build": "electron-vite build",
+    "type-check": "tsc --noEmit",
+    "package": "electron-builder"
+  },
+  "dependencies": {
+    "@flowsight/shared": "workspace:*",
+    "active-win": "^8.1.0",
+    "axios": "^1.6.5",
+    "electron-store": "^8.1.0",
+    "screenshot-desktop": "^1.15.0",
+    "tesseract.js": "^5.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "cross-env": "^7.0.3",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11"
+  },
+  "build": {
+    "appId": "com.flowsight.agent",
+    "productName": "FlowSight Agent",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
+

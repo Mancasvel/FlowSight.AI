@@ -1,0 +1,24 @@
+{
+  "name": "flowsight-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FlowSight AI - Real-time developer activity monitoring and automation",
+  "scripts": {
+    "dev:agent": "pnpm --filter @flowsight/agent dev",
+    "dev:dashboard": "pnpm --filter @flowsight/dashboard dev",
+    "build:agent": "pnpm --filter @flowsight/agent build",
+    "build:dashboard": "pnpm --filter @flowsight/dashboard build",
+    "build:all": "pnpm -r build",
+    "type-check": "pnpm -r type-check"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
+
