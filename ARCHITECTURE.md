@@ -1,510 +1,366 @@
-# FlowSight AI - Technical Architecture
+# FlowSight AI - Architecture Overview
 
-## System Overview
+## Executive Summary
 
-FlowSight AI is a distributed, serverless application designed for real-time developer activity monitoring. The architecture prioritizes privacy, scalability, and real-time performance.
+FlowSight AI is a privacy-first, locally-executed AI system that detects and resolves developer blockers in real-time. This document outlines the complete architectural design for converting the existing cloud-based repository into a distributed, edge-first architecture.
 
 ## Core Principles
 
-1. **Privacy-First**: Screen analysis happens locally; only semantic events are transmitted
-2. **Serverless**: All backend logic runs as Vercel Edge/Serverless functions
-3. **Real-time**: Pusher Channels provide <100ms update latency
-4. **Scalable**: MongoDB Atlas handles elastic workload scaling
-5. **Type-Safe**: End-to-end TypeScript with Zod validation
+### 1. Privacy by Design
+- **Zero data transmission**: All processing occurs locally
+- **No persistent storage of sensitive data**: Screenshots processed instantly and discarded
+- **User consent required**: Cloud sync is opt-in only
+- **GDPR/CCPA compliant**: Architecture ensures compliance
 
-## Component Architecture
+### 2. Local-First Architecture
+- **Offline-first**: Core functionality works without internet
+- **Sub-200ms latency**: No network round-trips for blocker detection
+- **Unlimited scalability**: Each device operates independently
+- **Resilient**: Continues working during network outages
 
-### 1. Electron Agent (Client)
+### 3. Hybrid AI Intelligence
+- **Deterministic rules**: Fast, reliable pattern matching
+- **Local ML models**: On-device inference for context
+- **Computer vision**: Screenshot analysis for visual cues
+- **Consensus-based decisions**: Multiple signals for high confidence
 
-**Technology Stack:**
-- Electron 28
-- TypeScript 5.3
-- Tesseract.js (OCR)
-- screenshot-desktop (screen capture)
-- active-win (window detection)
-
-**Responsibilities:**
-- Capture active window information every 30s (configurable)
-- Detect application type (VSCode, Chrome, Terminal, etc.)
-- Extract file paths and git information for code editors
-- Perform local OCR to detect ticket IDs
-- Build semantic event objects (no images)
-- POST events to Vercel API via HTTPS
-
-**Data Flow:**
-```
-OS APIs → Activity Monitor → Event Builder → HTTP Client → Vercel API
-  ↓
-Screen Capture (optional) → OCR → Ticket ID Extraction → Discard image
-```
-
-**Privacy Measures:**
-- Screenshots never leave the device
-- Only ticket IDs and metadata extracted
-- User can disable screen capture entirely
-- File paths sanitized (user directories redacted)
-
-### 2. Next.js Dashboard (Frontend + API)
-
-**Technology Stack:**
-- Next.js 15 (App Router)
-- React 18.3
-- TypeScript 5.3
-- Tailwind CSS 3.4
-- Framer Motion 11
-- Pusher JS Client
-- NextAuth.js (GitHub OAuth)
-
-**API Routes (Serverless Functions):**
-
-#### POST /api/events
-- Validates API key from Authorization header
-- Parses and validates event with Zod schema
-- Stores event in MongoDB
-- Runs rules engine
-- Triggers Pusher updates
-- Returns triggered actions
-
-**Code Flow:**
-```typescript
-Request → API Key Validation → Zod Validation → MongoDB Insert 
-  → Rules Engine → Pusher Trigger → Response
-```
-
-#### GET /api/project/[id]/status
-- Fetches project info from MongoDB
-- Aggregates tickets by status
-- Retrieves last 24h events
-- Builds developer status map
-- Returns combined response
-
-#### POST /api/tickets
-- Creates or updates tickets
-- Triggers Pusher updates
-- Returns updated ticket
-
-#### PATCH /api/tickets
-- Updates ticket status/progress
-- Logs manual PM overrides
-- Triggers real-time updates
-
-### 3. MongoDB Atlas (Persistence)
-
-**Collections:**
-
-#### events
-```typescript
-{
-  _id: ObjectId,
-  devId: string,           // Developer identifier
-  timestamp: Date,
-  activity: ActivityType,  // coding, browsing, terminal, etc.
-  application?: string,    // VSCode, Chrome, etc.
-  filePath?: string,       // Current file (sanitized)
-  gitBranch?: string,      // Git branch name
-  gitRepo?: string,        // Repository name
-  ticketId?: string,       // Extracted ticket ID
-  meta?: object,           // Additional context
-  createdAt: Date
-}
-```
-
-**Indexes:**
-- `{ devId: 1, timestamp: -1 }` - Developer activity timeline
-- `{ ticketId: 1, timestamp: -1 }` - Ticket activity history
-- `{ timestamp: -1 }` - Global timeline
-
-#### tickets
-```typescript
-{
-  _id: ObjectId,
-  ticketId: string,        // Unique ticket ID (e.g., FE-123)
-  projectId: string,       // Project reference
-  title: string,
-  status: TicketStatus,    // todo, in_progress, blocked, etc.
-  progress: number,        // 0-100
-  assignedTo?: string,     // Developer ID
-  lastUpdatedBy: string,   // 'system' or user ID
-  lastUpdatedAt: Date,
-  blockerReason?: string,  // Why ticket is blocked
-  externalUrl?: string,    // Jira/Linear link
-  createdAt: Date
-}
-```
-
-**Indexes:**
-- `{ ticketId: 1 }` - Unique constraint
-- `{ projectId: 1, status: 1 }` - Project tickets by status
-- `{ assignedTo: 1 }` - Developer tickets
-
-#### projects
-```typescript
-{
-  _id: ObjectId,
-  projectId: string,
-  name: string,
-  description?: string,
-  repoUrl?: string,
-  jiraUrl?: string,
-  teamMembers: string[],   // Array of dev IDs
-  createdAt: Date,
-  settings: {
-    autoUpdateJira: boolean,
-    blockDetectionThreshold: number,
-    pusherChannelName: string
-  }
-}
-```
-
-#### users
-```typescript
-{
-  _id: ObjectId,
-  userId: string,
-  email: string,
-  name: string,
-  avatar?: string,
-  role: 'dev' | 'pm' | 'admin',
-  projectIds: string[],
-  githubId?: string,
-  createdAt: Date
-}
-```
-
-### 4. Pusher Channels (Real-time)
-
-**Channel Structure:**
-
-- `dev:{devId}` - Individual developer events
-- `project:{projectId}` - Project-wide updates
-- `ticket:{ticketId}` - Ticket-specific updates
-
-**Event Types:**
-- `event` - New semantic event
-- `ticket_update` - Ticket status/progress changed
-- `dev_status` - Developer status changed
-- `status_change` - Generic status update
-
-**Message Format:**
-```typescript
-{
-  type: 'event' | 'ticket_update' | ...,
-  payload: any,
-  timestamp: string
-}
-```
-
-**Client Subscription:**
-```typescript
-const pusher = new PusherClient(key, { cluster });
-const channel = pusher.subscribe('project:default');
-channel.bind('event', (data) => {
-  // Update UI
-});
-```
-
-### 5. Rules Engine
-
-**Architecture:**
-
-The rules engine is a lightweight, in-process system that evaluates semantic events against predefined rules and executes actions.
-
-**Rule Structure:**
-```typescript
-{
-  id: string,
-  name: string,
-  conditions: [
-    { field: 'activity', operator: 'equals', value: 'coding' },
-    { field: 'gitBranch', operator: 'contains', value: '-' }
-  ],
-  actions: [
-    { type: 'update_ticket_status', params: { status: 'in_progress' } }
-  ],
-  enabled: boolean
-}
-```
-
-**Execution Flow:**
-```
-Event Received → Rules Engine.processEvent()
-  → Evaluate each rule's conditions
-  → If all conditions match:
-      → Execute each action
-      → Log triggered action
-  → Return list of triggered actions
-```
-
-**Available Actions:**
-1. `update_ticket_status` - Change ticket status
-2. `set_blocked` - Mark ticket as blocked with reason
-3. `increase_progress` - Increment progress percentage
-4. `send_notification` - Trigger notification (TODO)
-
-**Blocker Detection Algorithm:**
-```typescript
-// Get last 20 events for developer (last 1 hour)
-const recentEvents = await getRecentEvents(devId, 20, 60min);
-
-// Calculate browsing ratio
-const browsingRatio = browsingEvents.length / totalEvents.length;
-
-// If >70% browsing, mark as blocked
-if (browsingRatio > 0.7 && totalEvents > 10) {
-  setBlocked(ticketId, 'Excessive research activity detected');
-}
-```
-
-## Data Flow Diagrams
-
-### Event Capture Flow
+## System Architecture
 
 ```
-┌─────────────────┐
-│  Developer's    │
-│  Active Window  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Activity Monitor│ (every 30s)
-│  - Get window   │
-│  - Detect app   │
-│  - Read git     │
-│  - OCR screen   │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Semantic Event  │
-│   {devId, ...}  │
-└────────┬────────┘
-         │
-         ▼ HTTPS POST
-┌─────────────────┐
-│ /api/events     │
-│  (Vercel)       │
-└────────┬────────┘
-         │
-         ├──────────────┐
-         ▼              ▼
-    ┌─────────┐   ┌──────────┐
-    │ MongoDB │   │  Pusher  │
-    │  Store  │   │ Trigger  │
-    └─────────┘   └────┬─────┘
-                       │
-                       ▼
-                 ┌──────────────┐
-                 │  Dashboard   │
-                 │  (Real-time) │
-                 └──────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Developer Machine                        │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                Electron Main Process               │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            ActivityMonitor                     │ │    │
+│  │  │  - OS-level window tracking                     │ │    │
+│  │  │  - Idle detection                              │ │    │
+│  │  │  - Process monitoring                           │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            ScreenCapture                        │ │    │
+│  │  │  - Safe local screenshots                        │ │    │
+│  │  │  - Instant discard after processing             │ │    │
+│  │  │  - Metadata-only retention                       │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            BlockerDetector                      │ │    │
+│  │  │  - Hybrid intelligence engine                   │ │    │
+│  │  │  - Consensus-based detection                    │ │    │
+│  │  │  - Real-time blocker identification             │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            DashboardServer                      │ │    │
+│  │  │  - Express + Socket.io                          │ │    │
+│  │  │  - Real-time WebSocket sync                     │ │    │
+│  │  │  - Local web interface                          │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  └─────────────────────────────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │               AI/ML Components                     │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            RulesEngine                         │ │    │
+│  │  │  - Deterministic blocker patterns              │ │    │
+│  │  │  - Fast regex-based detection                   │ │    │
+│  │  │  - Configurable rule sets                       │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            LLMLocal                             │ │    │
+│  │  │  - Phi-3 mini via Ollama                        │ │    │
+│  │  │  - Contextual reasoning                         │ │    │
+│  │  │  - Offline inference                            │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            OCRLocal                             │ │    │
+│  │  │  - PaddleOCR text extraction                    │ │    │
+│  │  │  - Local processing only                        │ │    │
+│  │  │  - Confidence scoring                           │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            VisionLocal                          │ │    │
+│  │  │  - FastVLM/LLaVA for vision                     │ │    │
+│  │  │  - Error pattern recognition                    │ │    │
+│  │  │  - Local model inference                        │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  └─────────────────────────────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │               Data Layer                           │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            EventStore                          │ │    │
+│  │  │  - SQLite local database                       │ │    │
+│  │  - Event persistence and querying                 │ │    │
+│  │  - Session management                             │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  │                                                       │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            PrivacyManager                       │ │    │
+│  │  │  - User consent management                      │ │    │
+│  │  │  - Privacy control enforcement                  │ │    │
+│  │  │  - Configuration persistence                    │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  └─────────────────────────────────────────────────────┘    │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │               Sync Layer (Optional)                │    │
+│  │  ┌─────────────────────────────────────────────────┐ │    │
+│  │  │            CloudSync                           │ │    │
+│  │  │  - User-consent only                           │ │    │
+│  │  │  - Aggregated data only                        │ │    │
+│  │  │  - Async background sync                       │ │    │
+│  │  └─────────────────────────────────────────────────┘ │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Rules Engine Flow
+## Component Details
+
+### ActivityMonitor
+
+**Purpose**: Track developer activity at the OS level without privacy violations.
+
+**Key Features**:
+- Platform-specific implementations (macOS: osascript, Windows: native API, Linux: xdotool)
+- Window focus change detection
+- Idle time calculation
+- Process name extraction (for application identification)
+
+**Privacy**: Only tracks window names and focus duration, no content or keystrokes.
+
+### ScreenCapture
+
+**Purpose**: Safely capture screen content for analysis while maintaining privacy.
+
+**Key Features**:
+- Electron desktopCapturer API usage
+- Instant processing and discard of image data
+- Metadata-only retention (width, height, colors)
+- Configurable capture intervals
+
+**Privacy**: Images exist in memory for <1 second, never written to disk.
+
+### BlockerDetector
+
+**Purpose**: Main intelligence engine that combines multiple AI techniques.
+
+**Detection Pipeline**:
+1. **Activity Analysis**: Check for prolonged activity indicating potential blocks
+2. **Screenshot Capture**: Safe local capture (when enabled)
+3. **OCR Processing**: Extract text from screen
+4. **Rules Engine**: Fast deterministic pattern matching
+5. **Vision Analysis**: ML-based visual error detection
+6. **LLM Analysis**: Contextual reasoning for complex cases
+7. **Consensus Scoring**: Weighted combination of all signals
+
+**Blocker Types**:
+- Build errors (compilation failures)
+- Timeouts (hung processes)
+- Circular dependencies
+- Permission errors
+- Resource exhaustion
+- Network issues
+
+### AI/ML Components
+
+#### RulesEngine
+- **Input**: OCR text, activity duration, window context
+- **Processing**: Regex pattern matching with confidence scoring
+- **Output**: Deterministic blocker classification
+- **Performance**: <1ms per detection
+
+#### LLMLocal
+- **Model**: Phi-3 mini (3.8B parameters)
+- **Runtime**: Ollama local inference
+- **Input**: OCR text + context
+- **Output**: Contextual blocker analysis and suggestions
+- **Performance**: <500ms per inference
+
+#### OCRLocal
+- **Engine**: PaddleOCR
+- **Input**: Screenshot buffer
+- **Output**: Extracted text + confidence scores
+- **Languages**: Multi-language support
+- **Performance**: <200ms per image
+
+#### VisionLocal
+- **Models**: FastVLM (macOS) / LLaVA-Phi (Win/Linux)
+- **Input**: Screenshot analysis
+- **Output**: Visual error indicators (loading spinners, error colors, stack traces)
+- **Performance**: <1000ms per analysis
+
+### DashboardServer
+
+**Purpose**: Provide real-time web interface for blocker monitoring.
+
+**Features**:
+- Express.js REST API
+- Socket.io real-time updates
+- Local web dashboard (localhost:3000)
+- Blocker resolution interface
+- Privacy controls
+- Activity visualization
+
+**Security**: Local-only access, no external exposure.
+
+### Data Layer
+
+#### EventStore
+- **Database**: SQLite with better-sqlite3
+- **Schema**: Events, sessions, metadata
+- **Retention**: Configurable cleanup (default: 30 days)
+- **Queries**: Time-based, type-based filtering
+
+#### PrivacyManager
+- **Configuration**: User privacy preferences
+- **Enforcement**: Runtime privacy control
+- **Persistence**: Local JSON config file
+- **Defaults**: Maximum privacy (cloud sync disabled)
+
+### CloudSync (Optional)
+
+**Purpose**: User-opt-in cloud synchronization for team features.
+
+**Features**:
+- API key based authentication
+- Aggregated data only (no raw screenshots/text)
+- Background async sync
+- User consent required
+- GDPR-compliant data handling
+
+**Data Types**:
+- Blocker metadata (type, severity, confidence, timestamp)
+- Session statistics
+- Team analytics (when enabled)
+
+## Data Flow
+
+### Blocker Detection Flow
 
 ```
-┌─────────────────┐
-│  Semantic Event │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Rules Engine   │
-└────────┬────────┘
-         │
-         ├─────► Rule 1: Auto In Progress
-         │         ├─ activity == 'coding' ?
-         │         ├─ gitBranch contains ticket ?
-         │         └─ → Update ticket status
-         │
-         ├─────► Rule 2: Detect Blocker
-         │         ├─ Get recent events
-         │         ├─ Calculate browsing ratio
-         │         └─ → Set blocked if >70%
-         │
-         └─────► Rule 3: Progress on Commit
-                   ├─ meta contains 'commit' ?
-                   └─ → Increase progress +10%
+Activity Change
+    ↓
+ActivityMonitor → EventStore
+    ↓
+BlockerDetector.detect()
+    ↓
+├── Privacy Check (screenshots enabled?)
+├── ScreenCapture.captureAndAnalyze()
+│   ├── OCRLocal.extractText()
+│   ├── VisionLocal.analyzeScreenshot()
+│   └── RulesEngine.detectBlocker()
+├── LLMLocal.analyzeBlocker()
+└── Consensus Scoring
+    ↓
+Blocker Created → Dashboard Broadcast
+    ↓
+User Resolution → Cloud Sync (optional)
 ```
 
-### Real-time Update Flow
+### Real-time Dashboard Flow
 
 ```
-┌─────────────────┐
-│  POST /api/     │
-│  events         │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ pusherServer    │
-│  .trigger()     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Pusher Service  │
-│  (Managed)      │
-└────────┬────────┘
-         │
-         ├──────────┐
-         ▼          ▼
-    ┌────────┐  ┌────────┐
-    │Client 1│  │Client 2│
-    │(PM)    │  │(Dev)   │
-    └────────┘  └────────┘
+DashboardServer.start()
+    ↓
+WebSocket Connection
+    ↓
+Initial State Broadcast
+    ├── Current Blockers
+    ├── Recent Events
+    └── Statistics
+    ↓
+Real-time Updates
+    ├── New Blockers
+    ├── Resolved Blockers
+    └── Activity Changes
 ```
-
-## Security Considerations
-
-### 1. API Authentication
-- Agent uses Bearer token authentication
-- Tokens follow format: `fsa_` + 48 random alphanumeric chars
-- Validated on every API request
-- TODO: Store valid tokens in MongoDB with rate limits
-
-### 2. Dashboard Authentication
-- GitHub OAuth via NextAuth.js
-- Session stored in encrypted JWT
-- Role-based access control (dev, pm, admin)
-
-### 3. Data Privacy
-- Screenshots never stored or transmitted
-- File paths sanitized (user dirs redacted)
-- Events contain minimal metadata
-- MongoDB encrypted at rest (Atlas default)
-
-### 4. Network Security
-- All communication over HTTPS
-- Vercel provides automatic SSL
-- MongoDB Atlas requires TLS 1.2+
-- Pusher uses WSS (WebSocket Secure)
 
 ## Performance Characteristics
 
-### Latency
-- Agent → API: ~100-200ms (depends on network)
-- API → MongoDB: ~10-50ms (Atlas cluster)
-- API → Pusher: ~20-50ms
-- Pusher → Client: <100ms
-- **Total end-to-end**: ~200-400ms
+### Latency Targets
+- **Activity monitoring**: <50ms
+- **Screenshot capture**: <100ms
+- **OCR processing**: <200ms
+- **Rules matching**: <1ms
+- **Vision analysis**: <1000ms
+- **LLM inference**: <500ms
+- **Consensus scoring**: <10ms
+- **Total detection**: <200ms
 
-### Throughput
-- Vercel: 100,000 function invocations/day (free tier)
-- MongoDB Atlas: 512MB storage, unlimited reads (free tier)
-- Pusher: 200k messages/day (free tier)
-- **Supports**: ~50 developers with 30s capture interval
+### Resource Usage
+- **Memory**: <500MB baseline, <1GB with models loaded
+- **CPU**: <5% average, <20% during analysis
+- **Storage**: <100MB for SQLite database
+- **Network**: 0 required (optional cloud sync)
 
-### Scaling
-- **50 devs**: Free tier sufficient
-- **500 devs**: Upgrade to Vercel Pro ($20/mo), Atlas M10 ($57/mo), Pusher Startup ($49/mo)
-- **5000 devs**: Vercel Enterprise, Atlas M30, Pusher Business
+## Security & Privacy
 
-## Deployment
+### Privacy Controls
+1. **Screenshot Capture**: User-configurable on/off
+2. **Cloud Sync**: Explicit opt-in required
+3. **Data Retention**: Configurable cleanup intervals
+4. **Application Filtering**: Whitelist/blacklist apps
+5. **Data Export**: User-initiated only
 
-### Vercel Deployment
+### Data Protection
+- **Encryption**: Local data encrypted at rest
+- **Access Control**: File system permissions
+- **Audit Trail**: All data access logged locally
+- **Deletion**: Complete local data removal on uninstall
 
-```bash
-cd apps/dashboard
-vercel
-```
+## Deployment & Distribution
 
-**Environment Variables (Vercel Dashboard):**
-- `MONGODB_URI`
-- `PUSHER_APP_ID`, `PUSHER_KEY`, `PUSHER_SECRET`, `PUSHER_CLUSTER`
-- `NEXTAUTH_URL`, `NEXTAUTH_SECRET`
-- `GITHUB_ID`, `GITHUB_SECRET`
-- `NEXT_PUBLIC_PUSHER_KEY`, `NEXT_PUBLIC_PUSHER_CLUSTER`
+### Packaging
+- **Electron Builder**: Cross-platform binaries
+- **Auto-updater**: Background model and app updates
+- **Installer**: Native platform installers (DMG, EXE, DEB)
 
-**Vercel Edge Config:**
-- **Region**: Closest to team (e.g., `us-east-1` for US teams)
-- **Function Timeout**: 10s (default)
-- **Memory**: 1024MB (default, increase if needed)
-
-### MongoDB Atlas Setup
-
-1. Create cluster (M0 free tier or M10 for production)
-2. Database Access: Create user with read/write permissions
-3. Network Access: Add IP (0.0.0.0/0 for Vercel, or use Vercel IPs)
-4. Connect: Get connection string
-
-**Recommended Indexes:**
-```javascript
-db.events.createIndex({ devId: 1, timestamp: -1 });
-db.events.createIndex({ ticketId: 1, timestamp: -1 });
-db.events.createIndex({ timestamp: -1 });
-db.tickets.createIndex({ ticketId: 1 }, { unique: true });
-db.tickets.createIndex({ projectId: 1, status: 1 });
-```
-
-### Pusher Setup
-
-1. Create account at pusher.com
-2. Create Channels app
-3. Note credentials (app_id, key, secret, cluster)
-4. Enable client events (optional, for future features)
+### Distribution Channels
+- **Direct Download**: GitHub releases
+- **Package Managers**: Homebrew, Snap, Chocolatey
+- **Enterprise**: Custom deployment packages
 
 ## Monitoring & Observability
 
-### Logs
-- **Vercel**: Automatic function logs in dashboard
-- **MongoDB**: Query metrics in Atlas dashboard
-- **Pusher**: Message counts and connection stats
+### Local Metrics
+- Blocker detection accuracy
+- Response time latency
+- Model inference performance
+- System resource usage
+- User interaction patterns
 
-### Metrics to Track
-- Agent → API success rate
-- Rules engine trigger rate
-- Pusher delivery rate
-- Dashboard load time
-- API p95 latency
-
-### Alerts
-- MongoDB connection failures
-- Pusher message failures
-- Vercel function errors >1% error rate
-- Agent offline >5 minutes
+### Cloud Analytics (Optional)
+- Aggregated team productivity metrics
+- Blocker type distribution
+- Resolution time statistics
+- Feature usage analytics
 
 ## Future Enhancements
 
-### Phase 2: AI Integration
-- GPT-4 analysis of activity patterns
-- Smart blocker detection with context
-- Automated commit message analysis
-- Code complexity scoring
+### AI/ML Improvements
+- Custom model fine-tuning for developer workflows
+- Multi-modal analysis (audio cues for frustration detection)
+- Predictive blocker prevention
+- Personalized blocker patterns
 
-### Phase 3: Integrations
-- Jira/Linear two-way sync
-- Slack/Teams notifications
-- GitHub PR automation
-- Calendar integration for meeting detection
+### Feature Extensions
+- IDE plugin integrations
+- Team collaboration features
+- Historical trend analysis
+- Custom blocker pattern creation
 
-### Phase 4: Advanced Analytics
-- Weekly productivity reports
-- Team velocity trends
-- Burnout detection
-- Focus time analysis
+### Platform Support
+- Mobile development workflow support
+- Container-based development environments
+- Remote development (VS Code Remote, SSH)
 
-## Troubleshooting
+## Conclusion
 
-### Agent not sending events
-1. Check API URL in agent config
-2. Verify API key format (fsa_...)
-3. Check network connectivity
-4. View Vercel function logs
-
-### Dashboard not updating
-1. Check Pusher credentials in .env.local
-2. Verify client connected (browser console)
-3. Check Pusher dashboard for messages
-4. Ensure channel subscription matches projectId
-
-### MongoDB connection issues
-1. Verify connection string format
-2. Check IP whitelist in Atlas
-3. Ensure user has correct permissions
-4. Test connection with MongoDB Compass
-
----
-
-**Last Updated**: October 24, 2025
-
+FlowSight AI represents a fundamental shift from cloud-centric to local-first AI architecture. By processing all data locally and requiring explicit user consent for any cloud interaction, we achieve both superior performance and uncompromising privacy. The hybrid AI approach ensures high accuracy while maintaining the speed and reliability developers need for productive workflows.

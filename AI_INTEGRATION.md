@@ -477,3 +477,5 @@ const analyzer = new AIAnalyzer(customConfig);
 **¿Preguntas?** Consulta la documentación completa en `README.md` o abre un issue.
 
 
+
+

@@ -358,3 +358,5 @@ Ahora cada ~10 eventos, la IA analizará automáticamente la actividad y te aler
 **Siguiente Paso:** Lee `AI_INTEGRATION.md` para configuración avanzada y uso enterprise.
 
 
+
+
