@@ -112,3 +112,7 @@ ipcMain.handle('screenshot:capture', async () => {
   const capturer = new ScreenCapture();
   return capturer.captureForAnalysis();
 });
+
+
+
+

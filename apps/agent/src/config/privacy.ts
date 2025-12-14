@@ -92,3 +92,7 @@ export class PrivacyManager {
     return !this.config.excludedApplications.includes(appName);
   }
 }
+
+
+
+

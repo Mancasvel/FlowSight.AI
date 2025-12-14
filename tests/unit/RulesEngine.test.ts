@@ -107,3 +107,7 @@ describe('RulesEngine', () => {
     expect(patterns[0]).toHaveProperty('type');
   });
 });
+
+
+
+

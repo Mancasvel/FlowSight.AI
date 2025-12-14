@@ -137,3 +137,7 @@ export class ActivityMonitor extends EventEmitter {
 ipcMain.handle('activity:stats', async () => {
   // Return to renderer for UI
 });
+
+
+
+
