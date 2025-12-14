@@ -107,12 +107,13 @@ FlowSight is designed with privacy first:
 
 ## 🤖 AI Models
 
-FlowSight uses several local AI models:
+FlowSight uses hybrid AI with local models by default:
 
-- **Phi-3 Mini (3.8B)** - Contextual reasoning via Ollama
-- **PaddleOCR** - Text extraction from screenshots
-- **LLaVA-Phi** - Visual error detection
+- **Phi-3 Mini (3.8B)** - Local contextual reasoning via Ollama (FREE)
+- **PaddleOCR** - Local text extraction from screenshots
+- **LLaVA-Phi** - Local visual error detection
 - **Rules Engine** - Deterministic pattern matching
+- **OpenRouter** - Optional cloud AI for advanced analysis (paid)
 
 ## 🧪 Testing
 

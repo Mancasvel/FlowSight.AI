@@ -37,7 +37,20 @@ Cada proveedor implementa esta interfaz, permitiendo cambiar entre ellos sin mod
 
 ## 🚀 Configuración Rápida
 
-### 1. OpenRouter (Recomendado)
+### 1. Modelos Locales (Recomendado - Gratis)
+
+```bash
+# 1. Instala Ollama
+# Visita: https://ollama.ai/download
+
+# 2. Inicia Ollama y descarga modelo
+ollama serve
+ollama pull phi3:3.8b
+
+# ¡Listo! Funciona automáticamente sin configuración adicional
+```
+
+### 2. OpenRouter (Opcional - Pago)
 
 ```bash
 # 1. Obtén tu API key
@@ -247,17 +260,30 @@ if (eventCount % 10 === 0) {
 
 ### Costos Mensuales por Modelo
 
+#### Modelos Locales - ¡GRATIS! 🎉
+
+**Phi-3 3.8B via Ollama:**
+- **Hardware requerido:** CPU moderno (i5/i7) o GPU
+- **Memoria:** ~4GB RAM
+- **Almacenamiento:** ~7.6GB para el modelo
+- **Costo:** $0/mes
+- **Latencia:** ~500ms después de carga inicial
+- **Privacidad:** 100% local
+
+#### Modelos Cloud (OpenRouter)
+
 **50 Developers, 22 días laborables:**
 
 | Modelo | Input | Output | Total/mes | Calidad |
 |--------|-------|--------|-----------|---------|
+| **Phi-3 Local** | $0 | $0 | **$0** | ⭐⭐⭐⭐ |
 | GPT-4 Turbo | $47 | $141 | **$188** | ⭐⭐⭐⭐⭐ |
 | Claude 3 Sonnet | $14 | $71 | **$85** | ⭐⭐⭐⭐⭐ |
 | Claude 3 Haiku | $1.18 | $5.90 | **$7** | ⭐⭐⭐⭐ |
 | Llama 3 70B | $2.79 | $3.73 | **$6.50** | ⭐⭐⭐ |
 | Mixtral 8x7B | $1.13 | $1.13 | **$2.26** | ⭐⭐⭐ |
 
-**Recomendación:** Claude 3 Sonnet - mejor balance calidad/precio
+**Recomendación:** Phi-3 Local para desarrollo, Claude 3 Sonnet para producción enterprise
 
 ### Optimizaciones para Reducir Costos
 
@@ -397,31 +423,49 @@ PUT /api/projects/default/ai-config
 
 ## 🔒 Privacidad y Seguridad
 
+### Nivel de Privacidad por Provider
+
+| Provider | Datos salen de tu máquina | Privacidad | Costo |
+|----------|--------------------------|------------|-------|
+| **Ollama (Local)** | ❌ No | ⭐⭐⭐⭐⭐ Máxima | $0 |
+| Custom (On-premise) | ❌ No | ⭐⭐⭐⭐⭐ Máxima | Variable |
+| OpenRouter | ✅ Sí | ⭐⭐⭐ Buena | Pago |
+| OpenAI Direct | ✅ Sí | ⭐⭐⭐ Buena | Pago |
+
 ### Datos Enviados a IA
 
-**SÍ se envía:**
+**SÍ se envía (solo para proveedores cloud):**
 - ✅ Tipo de actividad (coding, browsing, etc.)
 - ✅ Nombres de aplicaciones
 - ✅ Nombres de archivos (sanitizados)
 - ✅ Ticket IDs
 - ✅ Timestamps
 
-**NO se envía:**
+**NO se envía NUNCA:**
 - ❌ Contenido de archivos
-- ❌ Screenshots
+- ❌ Screenshots completos
 - ❌ Código fuente
 - ❌ Credenciales o tokens
 - ❌ Información personal identificable
 
 ### Para Máxima Privacidad
 
-Use modelos custom on-premise:
+**Opción 1: Modelos Locales (Recomendado)**
+```bash
+# Todo queda en tu máquina
+ollama serve
+ollama pull phi3:3.8b
+```
+
+**Opción 2: Modelos Custom On-premise**
 ```typescript
 {
   provider: 'custom',
   baseURL: 'http://localhost:8000/v1'  // Tu servidor interno
 }
 ```
+
+**Los modelos locales nunca envían datos a proveedores externos.**
 
 ## 📈 Métricas y Monitoreo
 

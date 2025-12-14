@@ -146,6 +146,115 @@ export class OpenAIProvider implements IAIProvider {
 }
 
 /**
+ * Ollama Provider
+ * For local AI models running via Ollama
+ */
+export class OllamaProvider implements IAIProvider {
+  private config: AIConfig;
+
+  constructor(config: AIConfig) {
+    this.config = config;
+  }
+
+  async analyze(prompt: string, systemPrompt?: string): Promise<string> {
+    try {
+      const messages = [];
+
+      if (systemPrompt) {
+        messages.push({
+          role: 'system',
+          content: systemPrompt,
+        });
+      }
+
+      messages.push({
+        role: 'user',
+        content: prompt,
+      });
+
+      const response = await fetch(`${this.config.baseURL || 'http://localhost:11434'}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages,
+          stream: false,
+          options: {
+            temperature: this.config.temperature || 0.3,
+            num_predict: this.config.maxTokens || 2000,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.message?.content || '';
+    } catch (error) {
+      console.error('Ollama API error:', error);
+      throw new Error(`Local AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async analyzeJSON<T>(prompt: string, systemPrompt?: string): Promise<T> {
+    try {
+      const enhancedSystemPrompt = systemPrompt
+        ? systemPrompt + '\n\nRespond ONLY with valid JSON. No explanations, no markdown, just JSON.'
+        : 'Respond ONLY with valid JSON. No explanations, no markdown, just JSON.';
+
+      const messages = [
+        {
+          role: 'system',
+          content: enhancedSystemPrompt,
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ];
+
+      const response = await fetch(`${this.config.baseURL || 'http://localhost:11434'}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages,
+          stream: false,
+          format: 'json',
+          options: {
+            temperature: this.config.temperature || 0.1, // Lower temperature for JSON responses
+            num_predict: this.config.maxTokens || 2000,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const content = data.message?.content || '{}';
+
+      try {
+        return JSON.parse(content) as T;
+      } catch (parseError) {
+        console.error('Failed to parse Ollama JSON response:', content);
+        throw new Error('Invalid JSON response from local AI model');
+      }
+    } catch (error) {
+      console.error('Ollama JSON API error:', error);
+      throw new Error(`Local AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+}
+
+/**
  * Custom Provider
  * For enterprise customers with their own models
  */
@@ -220,6 +329,8 @@ export function createAIProvider(config: AIConfig): IAIProvider {
       return new OpenAIProvider(config);
     case 'custom':
       return new CustomProvider(config);
+    case 'ollama':
+      return new OllamaProvider(config);
     default:
       throw new Error(`Unsupported AI provider: ${config.provider}`);
   }

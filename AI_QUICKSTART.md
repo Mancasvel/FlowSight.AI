@@ -2,18 +2,31 @@
 
 ## 🚀 Setup en 5 Minutos
 
-### 1. Obtén tu API Key de OpenRouter
+### Opción 1: Usar Modelos Locales (Recomendado - Gratis y Privado)
+
+```bash
+# 1. Instala Ollama
+# Visita: https://ollama.ai/download
+# Descarga e instala para tu sistema operativo
+
+# 2. Inicia Ollama
+ollama serve
+
+# 3. Descarga el modelo Phi-3
+ollama pull phi3:3.8b
+
+# ¡Listo! La IA local ya está funcionando
+```
+
+### Opción 2: Usar OpenRouter (Cloud - Pago)
 
 ```bash
 # 1. Visita https://openrouter.ai/keys
 # 2. Crea una cuenta gratuita
 # 3. Click en "Create Key"
 # 4. Copia tu API key (empieza con sk-or-v1-...)
-```
 
-### 2. Agrega a tu Configuración
-
-```bash
+# 2. Agrega a tu Configuración
 cd apps/dashboard
 echo "OPENROUTER_API_KEY=sk-or-v1-tu-key-aqui" >> .env.local
 echo "DEFAULT_AI_MODEL=openai/gpt-4-turbo-preview" >> .env.local
@@ -39,18 +52,21 @@ pnpm dev
 
 ### Opción 1: Automático (Reglas Engine)
 
-La IA se ejecutará automáticamente cada ~10 eventos que recibas del agent:
+La IA se ejecutará automáticamente cada ~10 eventos que recibas del agent, usando modelos locales por defecto:
 
 ```bash
-# 1. Inicia el agent
+# 1. Asegúrate de que Ollama esté corriendo
+ollama serve
+
+# 2. Inicia el agent
 cd apps/agent
 pnpm dev
 
-# 2. Simula varios eventos
+# 3. Simula varios eventos
 # En el agent, click en "💻 Coding" varias veces
 
-# 3. Mira los logs del dashboard
-# Verás: "AI Blocker Analysis Result: {...}"
+# 4. Mira los logs del dashboard
+# Verás: "AI Blocker Analysis Result: {...}" (usando Phi-3 local)
 ```
 
 ### Opción 2: Manual (API)
@@ -199,7 +215,24 @@ curl -X POST http://localhost:3000/api/ai/analyze \
 
 ## 💰 Costos
 
-### Modelo Recomendado: Claude 3 Sonnet
+### Opción 1: Modelos Locales - ¡GRATIS! 🎉
+
+**Phi-3 3.8B via Ollama:**
+- **Costo mensual:** $0 USD
+- **Hardware:** Tu propia máquina
+- **Privacidad:** 100% local
+- **Velocidad:** Sub-200ms (después de carga inicial)
+
+**Ventajas:**
+- ✅ Completamente gratis
+- ✅ Máxima privacidad
+- ✅ Sin límites de uso
+- ✅ Funciona offline
+- ✅ Control total
+
+### Opción 2: Modelos Cloud (Pago)
+
+#### Modelo Recomendado: Claude 3 Sonnet
 
 **50 developers, 22 días/mes:**
 - **Costo mensual:** ~$85 USD
@@ -212,7 +245,7 @@ curl -X POST http://localhost:3000/api/ai/analyze \
 - ✅ Respuestas rápidas
 - ✅ Buen balance costo/beneficio
 
-### Alternativa Económica: Claude 3 Haiku
+#### Alternativa Económica: Claude 3 Haiku
 
 **50 developers, 22 días/mes:**
 - **Costo mensual:** ~$7 USD
@@ -313,7 +346,7 @@ cd apps/dashboard
 pnpm dev
 ```
 
-### "Rate limit exceeded"
+### "Rate limit exceeded" (solo para OpenRouter)
 
 ```bash
 # Opción 1: Reducir frecuencia de análisis
@@ -328,6 +361,33 @@ DEFAULT_AI_MODEL=anthropic/claude-3-haiku
 # https://openrouter.ai/credits
 ```
 
+### "Ollama connection failed"
+
+```bash
+# Verificar que Ollama esté corriendo
+ollama list
+
+# Si no está corriendo, iniciarlo
+ollama serve
+
+# Verificar que el modelo esté descargado
+ollama pull phi3:3.8b
+
+# Verificar que el puerto esté abierto
+curl http://localhost:11434/api/tags
+```
+
+### "Local AI analysis failed"
+
+```bash
+# Verificar configuración
+cd apps/dashboard
+cat .env.local | grep -E "(OLLAMA|OPENROUTER)"
+
+# Si no hay OPENROUTER_API_KEY, debería usar Ollama automáticamente
+# Verificar logs del dashboard para más detalles
+```
+
 ---
 
 ## 📚 Más Información
@@ -339,7 +399,19 @@ DEFAULT_AI_MODEL=anthropic/claude-3-haiku
 
 ---
 
-## ✅ Checklist
+## ✅ Checklist - Modelos Locales
+
+- [ ] Ollama instalado y corriendo (`ollama serve`)
+- [ ] Modelo Phi-3 descargado (`ollama pull phi3:3.8b`)
+- [ ] Dashboard corriendo en http://localhost:3000
+- [ ] Agent configurado y enviando eventos
+- [ ] Logs muestran "AI Blocker Analysis Result" (con Phi-3 local)
+
+**¡Todo listo con IA local!** 🎉
+
+Ahora cada ~10 eventos, Phi-3 analizará automáticamente la actividad y te alertará si detecta problemas.
+
+## ✅ Checklist - OpenRouter (Opcional)
 
 - [ ] Cuenta en OpenRouter creada
 - [ ] API key generada
@@ -347,11 +419,7 @@ DEFAULT_AI_MODEL=anthropic/claude-3-haiku
 - [ ] Dashboard reiniciado
 - [ ] API status retorna `available: true`
 - [ ] Agent enviando eventos
-- [ ] Logs muestran "AI Blocker Analysis Result"
-
-**¡Todo listo!** 🎉
-
-Ahora cada ~10 eventos, la IA analizará automáticamente la actividad y te alertará si detecta problemas.
+- [ ] Logs muestran "AI Blocker Analysis Result" (con modelo cloud)
 
 ---
 

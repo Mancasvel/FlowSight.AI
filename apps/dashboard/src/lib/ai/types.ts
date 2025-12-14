@@ -57,7 +57,7 @@ export interface TeamAnalysis {
  * AI Provider Configuration
  */
 
-export type AIProvider = 'openrouter' | 'openai' | 'anthropic' | 'custom';
+export type AIProvider = 'openrouter' | 'openai' | 'anthropic' | 'custom' | 'ollama';
 
 export interface AIConfig {
   provider: AIProvider;
@@ -121,10 +121,10 @@ export const AI_MODELS = {
 } as const;
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
-  provider: 'openrouter',
+  provider: process.env.OPENROUTER_API_KEY ? 'openrouter' : 'ollama',
   apiKey: process.env.OPENROUTER_API_KEY || '',
-  model: AI_MODELS['gpt-4-turbo'],
-  baseURL: 'https://openrouter.ai/api/v1',
+  model: process.env.OPENROUTER_API_KEY ? AI_MODELS['gpt-4-turbo'] : 'phi3:3.8b',
+  baseURL: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : 'http://localhost:11434',
   maxTokens: 2000,
   temperature: 0.3,
   timeout: 30000,

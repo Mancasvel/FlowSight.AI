@@ -44,12 +44,12 @@ export class RulesEngine {
             params: { reason: 'AI detected potential blocker' },
           },
         ],
-        enabled: !!process.env.OPENROUTER_API_KEY, // Only enable if API key is set
+        enabled: true, // Always enabled - will use local AI if cloud AI not available
       },
       {
         id: 'detect-blocker-simple',
         name: 'Simple Blocker Detection',
-        description: 'If developer has excessive browsing activity, mark as blocked',
+        description: 'Fallback detection when AI analysis fails',
         conditions: [
           { field: 'activity', operator: 'equals', value: 'browsing' },
         ],
@@ -59,7 +59,7 @@ export class RulesEngine {
             params: { reason: 'Excessive research activity detected' },
           },
         ],
-        enabled: !process.env.OPENROUTER_API_KEY, // Fallback when AI is not available
+        enabled: false, // Only enabled when AI analysis fails
       },
       {
         id: 'progress-on-commit',
@@ -115,14 +115,19 @@ export class RulesEngine {
     }
 
     // Periodic AI analysis (every 10 events to control costs)
-    if (process.env.OPENROUTER_API_KEY && Math.random() < 0.1) {
+    if (Math.random() < 0.1) {
       try {
         const aiAnalysis = await this.performAIAnalysis(event);
         if (aiAnalysis) {
           triggeredActions.push(...aiAnalysis);
         }
       } catch (error) {
-        console.error('AI analysis failed:', error);
+        console.error('AI analysis failed, using fallback detection:', error);
+        // Enable simple detection as fallback when AI fails
+        const simpleAnalysis = await this.checkForBlocker(event);
+        if (simpleAnalysis.isBlocked) {
+          triggeredActions.push(simpleAnalysis.action);
+        }
       }
     }
 
