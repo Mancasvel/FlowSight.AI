@@ -10,10 +10,25 @@ coverage
 .next/
 out/
 build/
-dist/
 
-# Production
+# Tauri / Rust
+src-tauri/target/
+src-tauri/debug/
+src-tauri/release/
+Cargo.lock
+
+# Build outputs
+dist/
 dist-electron/
+apps/*/dist/
+
+# Production builds
+*.exe
+*.msi
+*.dmg
+*.appimage
+*.deb
+*.rpm
 
 # Misc
 .DS_Store
@@ -21,7 +36,7 @@ dist-electron/
 .env
 .env*.local
 
-# Debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -41,12 +56,39 @@ pnpm-debug.log*
 next-env.d.ts
 
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
 
 # OS
 Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# AI Models (local downloads)
+models/
+*.bin
+*.gguf
+*.onnx
+
+# Temporary files
+.tmp/
+temp/
+*.tmp
+*.temp
 
