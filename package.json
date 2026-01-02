@@ -30,7 +30,7 @@
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
     "turbo": "^1.11.0"
   }
 }
-

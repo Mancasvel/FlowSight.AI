@@ -1,15 +1,15 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { invoke } from '@tauri-apps/api/core';
 import { AgentConfig } from '@flowsight/shared';
 
 // Expose protected methods to renderer process
-contextBridge.exposeInMainWorld('electronAPI', {
-  getConfig: () => ipcRenderer.invoke('get-config'),
-  updateConfig: (config: Partial<AgentConfig>) => ipcRenderer.invoke('update-config', config),
-  startMonitoring: () => ipcRenderer.invoke('start-monitoring'),
-  stopMonitoring: () => ipcRenderer.invoke('stop-monitoring'),
-  getStatus: () => ipcRenderer.invoke('get-status'),
-  simulateEvent: (eventType: string) => ipcRenderer.invoke('simulate-event', eventType),
-});
+(window as any).electronAPI = {
+  getConfig: () => invoke('get_config'),
+  updateConfig: (config: Partial<AgentConfig>) => invoke('update_config', { config }),
+  startMonitoring: () => invoke('start_monitoring'),
+  stopMonitoring: () => invoke('stop_monitoring'),
+  getStatus: () => invoke('get_status'),
+  simulateEvent: (eventType: string) => invoke('simulate_event', { eventType }),
+};
 
 // Type declarations for window object
 declare global {

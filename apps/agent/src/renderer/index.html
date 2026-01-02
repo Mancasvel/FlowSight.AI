@@ -281,38 +281,48 @@
       </div>
     </div>
 
-    <script>
+    <script type="module">
+      import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
+
       // Load config on startup
       async function loadConfig() {
-        const config = await window.electronAPI.getConfig();
-        document.getElementById('apiUrl').value = config.apiUrl;
-        document.getElementById('apiKey').value = config.apiKey;
-        document.getElementById('devId').value = config.devId;
-        document.getElementById('captureInterval').value = config.captureInterval / 1000;
-        document.getElementById('enableScreenCapture').checked = config.enableScreenCapture;
-        document.getElementById('enableOCR').checked = config.enableOCR;
-        document.getElementById('enableActivityDetection').checked = config.enableActivityDetection;
+        try {
+          const config = await invoke('get_config');
+          document.getElementById('apiUrl').value = config.apiUrl || '';
+          document.getElementById('apiKey').value = config.apiKey || '';
+          document.getElementById('devId').value = config.devId || '';
+          document.getElementById('captureInterval').value = (config.captureInterval || 30000) / 1000;
+          document.getElementById('enableScreenCapture').checked = config.enableScreenCapture || false;
+          document.getElementById('enableOCR').checked = config.enableOCR || false;
+          document.getElementById('enableActivityDetection').checked = config.enableActivityDetection || false;
+        } catch (error) {
+          console.error('Failed to load config:', error);
+        }
       }
 
       // Update status
       async function updateStatus() {
-        const status = await window.electronAPI.getStatus();
-        const indicator = document.getElementById('statusIndicator');
-        const text = document.getElementById('statusText');
-        
-        if (status.isRunning) {
-          indicator.classList.add('running');
-          indicator.classList.remove('stopped');
-          text.textContent = 'Running';
-        } else {
-          indicator.classList.remove('running');
-          indicator.classList.add('stopped');
-          text.textContent = 'Stopped';
-        }
+        try {
+          const status = await invoke('get_status');
+          const indicator = document.getElementById('statusIndicator');
+          const text = document.getElementById('statusText');
 
-        document.getElementById('eventCount').textContent = status.eventCount;
-        document.getElementById('lastActivity').textContent = 
-          status.lastEventTime ? new Date(status.lastEventTime).toLocaleTimeString() : 'Never';
+          if (status.isRunning) {
+            indicator.classList.add('running');
+            indicator.classList.remove('stopped');
+            text.textContent = 'Running';
+          } else {
+            indicator.classList.remove('running');
+            indicator.classList.add('stopped');
+            text.textContent = 'Stopped';
+          }
+
+          document.getElementById('eventCount').textContent = status.eventCount || 0;
+          document.getElementById('lastActivity').textContent =
+            status.lastEventTime ? new Date(status.lastEventTime).toLocaleTimeString() : 'Never';
+        } catch (error) {
+          console.error('Failed to update status:', error);
+        }
       }
 
       // Save config
@@ -327,28 +337,45 @@
           enableActivityDetection: document.getElementById('enableActivityDetection').checked,
         };
 
-        await window.electronAPI.updateConfig(config);
-        alert('Configuration saved!');
+        try {
+          await invoke('update_config', { config });
+          alert('Configuration saved!');
+        } catch (error) {
+          console.error('Failed to save config:', error);
+          alert('Failed to save configuration!');
+        }
       });
 
       // Start monitoring
       document.getElementById('startBtn').addEventListener('click', async () => {
-        await window.electronAPI.startMonitoring();
-        await updateStatus();
+        try {
+          await invoke('start_monitoring');
+          await updateStatus();
+        } catch (error) {
+          console.error('Failed to start monitoring:', error);
+        }
       });
 
       // Stop monitoring
       document.getElementById('stopBtn').addEventListener('click', async () => {
-        await window.electronAPI.stopMonitoring();
-        await updateStatus();
+        try {
+          await invoke('stop_monitoring');
+          await updateStatus();
+        } catch (error) {
+          console.error('Failed to stop monitoring:', error);
+        }
       });
 
       // Simulate events
       document.querySelectorAll('.btn-simulate').forEach(btn => {
         btn.addEventListener('click', async () => {
           const eventType = btn.getAttribute('data-event');
-          await window.electronAPI.simulateEvent(eventType);
-          await updateStatus();
+          try {
+            await invoke('simulate_event', { eventType });
+            await updateStatus();
+          } catch (error) {
+            console.error('Failed to simulate event:', error);
+          }
         });
       });
 

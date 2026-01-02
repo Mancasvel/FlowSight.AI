@@ -2,6 +2,8 @@
 
 **Privacy-First, Local-First Developer Productivity Agent**
 
+*Built with Tauri for maximum performance and security*
+
 FlowSight AI is a revolutionary developer productivity tool that detects and resolves coding blockers in real-time. Unlike traditional cloud-based solutions, FlowSight processes everything locally on your machine, ensuring 100% privacy and sub-200ms response times.
 
 ## 🚀 Key Features
@@ -10,13 +12,16 @@ FlowSight AI is a revolutionary developer productivity tool that detects and res
 - **Sub-200ms Detection** - Instant blocker identification
 - **GDPR/CCPA Compliant** - Privacy by architecture
 - **Offline-First** - Works without internet
-- **Cross-Platform** - macOS, Windows, Linux support
+- **Cross-Platform** - Native macOS, Windows, Linux support
+- **High-Performance** - Rust backend for maximum speed
+- **Secure by Design** - Tauri security model
+- **Smaller Bundles** - Lightweight compared to Electron
 - **Hybrid AI** - Rules + ML + Vision intelligence
 
 ## 🏗️ Architecture
 
 ```
-Developer Machine (Electron Agent)
+Developer Machine (Tauri Agent)
 ├── ActivityMonitor.ts (local)
 ├── ScreenCapture.ts (local, instant discard)
 ├── FastVLM.ts (Apple MLX - vision on-device)
@@ -24,6 +29,7 @@ Developer Machine (Electron Agent)
 ├── RulesEngine.ts (deterministic blocker patterns)
 ├── LLMLocal.ts (Phi-3 mini - contextual reasoning)
 ├── BlockerDetector.ts (hybrid: rules + ML consensus)
+├── Rust Backend (high-performance core)
 └── LocalDashboard.ts (React WebSocket)
 
 ┌─→ Optional Cloud Sync (async, user-consent only)
@@ -35,6 +41,7 @@ Developer Machine (Electron Agent)
 ### Prerequisites
 
 - Node.js 20.10+
+- Rust 1.77+ (for Tauri backend)
 - Python 3.11+ (for OCR)
 - Ollama (for local LLM)
 
@@ -58,6 +65,10 @@ make dev
 # Install Node dependencies
 pnpm install
 
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
 # Install Python OCR dependencies
 pip3 install paddlepaddle paddleocr
 
@@ -72,17 +83,20 @@ ollama pull phi3:3.8b
 ## 🚀 Usage
 
 ```bash
-# Development mode
-make dev
+# Development mode (Tauri)
+pnpm --filter @flowsight/agent dev
 
 # Build for production
-make build
+pnpm --filter @flowsight/agent build
 
 # Run tests
-make test
+pnpm test
 
-# Create installer
-make release
+# Create platform-specific installers
+pnpm --filter @flowsight/agent package
+
+# Development dashboard only
+pnpm --filter @flowsight/dashboard dev
 ```
 
 ## 📊 Dashboard
@@ -119,29 +133,32 @@ FlowSight uses hybrid AI with local models by default:
 
 ```bash
 # Run all tests
-make test
+pnpm test
 
 # Run specific test suite
-pnpm test -- tests/unit/RulesEngine.test.ts
+pnpm test tests/unit/RulesEngine.test.ts
 
 # Type checking
-make type-check
+pnpm type-check
 
 # Linting
-make lint
+pnpm lint
 ```
 
 ## 📦 Build & Release
 
 ```bash
 # Build all packages
-make build
+pnpm build
+
+# Build Tauri application
+pnpm --filter @flowsight/agent build
 
 # Create platform-specific installers
-make release
+pnpm --filter @flowsight/agent package
 
-# Docker build
-make docker
+# Development mode
+pnpm dev
 ```
 
 ## 🏢 Business Model
@@ -167,6 +184,15 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Documentation: [docs.flowsight.ai](https://docs.flowsight.ai)
 - Issues: [GitHub Issues](https://github.com/yourorg/flowsight-ai/issues)
 - Email: support@flowsight.ai
+
+## 🔄 Migration to Tauri
+
+FlowSight AI has been successfully migrated from Electron to Tauri (v2), providing:
+
+- **Better Performance**: Rust backend replaces Node.js main process
+- **Smaller Bundle Size**: Reduced application footprint
+- **Enhanced Security**: Tauri's security model by default
+- **Native Performance**: Direct OS integration without Chromium overhead
 
 ---
 
