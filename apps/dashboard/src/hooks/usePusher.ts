@@ -1,25 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
-import PusherClient from 'pusher-js';
+import { useEffect, useState } from 'react';
 
-let pusherInstance: PusherClient | null = null;
+// Pusher is optional - will work without it using polling
+let pusherInstance: any = null;
 
 export function usePusher() {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
+    // Only initialize Pusher if keys are configured
+    const pusherKey = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const pusherCluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+    
+    if (!pusherKey || !pusherCluster || pusherKey === 'your_pusher_key') {
+      console.log('Pusher not configured - using polling mode');
+      return;
+    }
+
     if (!pusherInstance && typeof window !== 'undefined') {
-      pusherInstance = new PusherClient(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
-        cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-      });
+      // Dynamic import to avoid errors when Pusher is not needed
+      import('pusher-js').then((PusherModule) => {
+        const PusherClient = PusherModule.default;
+        pusherInstance = new PusherClient(pusherKey, {
+          cluster: pusherCluster,
+        });
 
-      pusherInstance.connection.bind('connected', () => {
-        console.log('Pusher connected');
-        setIsConnected(true);
-      });
+        pusherInstance.connection.bind('connected', () => {
+          console.log('Pusher connected');
+          setIsConnected(true);
+        });
 
-      pusherInstance.connection.bind('disconnected', () => {
-        console.log('Pusher disconnected');
-        setIsConnected(false);
+        pusherInstance.connection.bind('disconnected', () => {
+          console.log('Pusher disconnected');
+          setIsConnected(false);
+        });
+      }).catch((err) => {
+        console.log('Pusher not available:', err.message);
       });
     }
 
@@ -30,7 +45,12 @@ export function usePusher() {
 
   const subscribe = (channelName: string) => {
     if (!pusherInstance) {
-      throw new Error('Pusher not initialized');
+      // Return a mock channel that does nothing
+      return {
+        bind: () => {},
+        unbind: () => {},
+        unbind_all: () => {},
+      };
     }
     return pusherInstance.subscribe(channelName);
   };
@@ -42,4 +62,3 @@ export function usePusher() {
 
   return { subscribe, unsubscribe, isConnected };
 }
-

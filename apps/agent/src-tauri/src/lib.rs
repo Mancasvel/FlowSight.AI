@@ -1,10 +1,15 @@
-use std::sync::Mutex;
-use tauri::State;
+﻿mod agent;
 
-mod agent;
-
-// Define a state type for our agent
-type AgentState = Mutex<Option<FlowSightAgent>>;
+use agent::{
+    initialize_agent, get_config, update_config, start_monitoring,
+    stop_monitoring, get_status, simulate_event, get_blockers,
+    resolve_blocker, get_blocker_stats, get_recent_events,
+    get_session_stats, get_activity_stats, detect_blockers,
+    get_status_summary, capture_screenshot, capture_and_analyze,
+    add_activity_report, get_activity_log, check_ollama,
+    analyze_with_text_model, register_with_api_key, sync_reports,
+    AgentState
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,7 +30,15 @@ pub fn run() {
       get_session_stats,
       get_activity_stats,
       detect_blockers,
-      get_status_summary
+      get_status_summary,
+      capture_screenshot,
+      capture_and_analyze,
+      add_activity_report,
+      get_activity_log,
+      check_ollama,
+      analyze_with_text_model,
+      register_with_api_key,
+      sync_reports
     ])
     .setup(|app| {
       if cfg!(debug_assertions) {
