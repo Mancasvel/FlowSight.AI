@@ -189,12 +189,19 @@ fn send_to_pm(pm_url: &str, api_key: &str, dev_name: &str, desc: &str, activity_
 // Capture and analyze screen
 fn capture_screen() -> Result<String, String> {
     use screenshots::Screen;
+    use image::GenericImageView;
     
     let screens = Screen::all().map_err(|e| e.to_string())?;
     let screen = screens.first().ok_or("No screen")?;
-    let image = screen.capture().map_err(|e| e.to_string())?;
+    let captured = screen.capture().map_err(|e| e.to_string())?;
     
-    let img = image::load_from_memory(image.buffer()).map_err(|e| e.to_string())?;
+    // Convert to DynamicImage
+    let (width, height) = captured.dimensions();
+    let img = image::DynamicImage::ImageRgba8(
+        image::RgbaImage::from_raw(width, height, captured.into_raw())
+            .ok_or("Failed to create image")?
+    );
+    
     let resized = img.resize(1024, 768, image::imageops::FilterType::Triangle);
     
     let mut png = Vec::new();
@@ -365,7 +372,7 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub fn test_pm_connection(state: State<'_, AgentState>) -> Result<serde_json::Value, String> {
-    let (pm_url, api_key) = {
+    let (pm_url, _api_key) = {
         let agent = state.lock().unwrap();
         let a = agent.as_ref().ok_or("Not initialized")?;
         (a.config.pm_url.clone().unwrap_or_default(), a.config.api_key.clone().unwrap_or_default())
@@ -379,5 +386,76 @@ pub fn test_pm_connection(state: State<'_, AgentState>) -> Result<serde_json::Va
     match client.get(&url).send() {
         Ok(r) if r.status().is_success() => Ok(serde_json::json!({"connected": true, "url": pm_url})),
         _ => Ok(serde_json::json!({"connected": false, "url": pm_url}))
+    }
+}
+
+#[tauri::command]
+pub fn install_ollama() -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    // Check if Ollama is already installed
+    let check = if cfg!(windows) {
+        Command::new("where").arg("ollama").output()
+    } else {
+        Command::new("which").arg("ollama").output()
+    };
+    
+    if let Ok(output) = check {
+        if output.status.success() {
+            return Ok(serde_json::json!({"installed": true, "message": "Ollama already installed"}));
+        }
+    }
+    
+    // Open download page (safest cross-platform approach)
+    let url = "https://ollama.ai/download";
+    let _ = if cfg!(windows) {
+        Command::new("cmd").args(["/c", "start", url]).spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open").arg(url).spawn()
+    } else {
+        Command::new("xdg-open").arg(url).spawn()
+    };
+    
+    Ok(serde_json::json!({
+        "installed": false, 
+        "message": "Opening Ollama download page. Please install and restart."
+    }))
+}
+
+#[tauri::command]
+pub fn pull_model(model: String) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    let output = Command::new("ollama")
+        .args(["pull", &model])
+        .output()
+        .map_err(|e| format!("Failed to run ollama: {}", e))?;
+    
+    if output.status.success() {
+        Ok(serde_json::json!({"success": true, "model": model}))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to pull {}: {}", model, stderr))
+    }
+}
+
+#[tauri::command]
+pub fn start_ollama() -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    // Try to start Ollama in background
+    let result = if cfg!(windows) {
+        Command::new("cmd")
+            .args(["/c", "start", "/b", "ollama", "serve"])
+            .spawn()
+    } else {
+        Command::new("ollama")
+            .arg("serve")
+            .spawn()
+    };
+    
+    match result {
+        Ok(_) => Ok(serde_json::json!({"started": true})),
+        Err(e) => Err(format!("Failed to start Ollama: {}", e))
     }
 }
