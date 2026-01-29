@@ -1,17 +1,18 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlowSight DEV Agent</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <style>
+    <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
       --primary: #2563eb;
       --success: #16a34a;
       --error: #dc2626;
+      --warning: #d97706;
       --bg: #f8fafc;
       --surface: #fff;
       --text: #1e293b;
@@ -36,19 +37,21 @@
     .btn-primary { background: var(--primary); color: white; }
     .btn-success { background: var(--success); color: white; }
     .btn-error { background: var(--error); color: white; }
+    .btn-warning { background: var(--warning); color: white; }
     .btn-outline { background: transparent; border: 1px solid var(--border); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-group { display: flex; gap: 8px; }
+    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
     .status-row { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 12px; }
     .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
     .status-dot.ok { background: var(--success); }
-    .status-dot.warn { background: #f59e0b; }
-    .status-text { font-size: 13px; }
+    .status-dot.warn { background: var(--warning); }
+    .status-dot.error { background: var(--error); }
+    .status-text { font-size: 13px; flex: 1; }
     .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
     .stat { text-align: center; padding: 12px; background: var(--bg); border-radius: 8px; }
     .stat-value { font-size: 24px; font-weight: 300; }
     .stat-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
-    .activity-list { max-height: 300px; overflow-y: auto; }
+    .activity-list { max-height: 250px; overflow-y: auto; }
     .activity-item { padding: 12px; border-bottom: 1px solid var(--border); }
     .activity-item:last-child { border-bottom: none; }
     .activity-time { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
@@ -58,6 +61,16 @@
     .empty { text-align: center; padding: 30px; color: var(--text-secondary); }
     .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .install-steps { background: var(--bg); border-radius: 8px; padding: 16px; }
+    .install-step { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .install-step:last-child { border-bottom: none; }
+    .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+    .step-num.done { background: var(--success); color: white; }
+    .step-num.active { background: var(--primary); color: white; }
+    .step-info { flex: 1; }
+    .step-title { font-size: 13px; font-weight: 500; }
+    .step-desc { font-size: 11px; color: var(--text-secondary); }
+    .progress-log { background: #1e293b; color: #e2e8f0; font-family: monospace; font-size: 12px; padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto; margin-top: 12px; display: none; }
   </style>
 </head>
 <body>
@@ -67,6 +80,39 @@
   </div>
   
   <div class="container">
+    <!-- Setup Card -->
+    <div class="card" id="setupCard">
+      <div class="card-title"><span class="material-icons">download</span> Setup</div>
+      <div class="install-steps">
+        <div class="install-step">
+          <div class="step-num" id="step1Num">1</div>
+          <div class="step-info">
+            <div class="step-title">Ollama</div>
+            <div class="step-desc" id="step1Desc">AI runtime for local models</div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="installOllamaBtn">Install</button>
+        </div>
+        <div class="install-step">
+          <div class="step-num" id="step2Num">2</div>
+          <div class="step-info">
+            <div class="step-title">LLaVA Model</div>
+            <div class="step-desc" id="step2Desc">Vision AI for screen analysis (~5GB)</div>
+          </div>
+          <button class="btn btn-primary btn-sm" id="pullLlavaBtn" disabled>Pull Model</button>
+        </div>
+        <div class="install-step">
+          <div class="step-num" id="step3Num">3</div>
+          <div class="step-info">
+            <div class="step-title">Start Ollama</div>
+            <div class="step-desc" id="step3Desc">Run the AI server</div>
+          </div>
+          <button class="btn btn-success btn-sm" id="startOllamaBtn" disabled>Start</button>
+        </div>
+      </div>
+      <div class="progress-log" id="progressLog"></div>
+    </div>
+    
+    <!-- Connection Card -->
     <div class="card">
       <div class="card-title"><span class="material-icons">link</span> Connection</div>
       <div class="status-row">
@@ -97,6 +143,7 @@
       </button>
     </div>
     
+    <!-- Monitoring Card -->
     <div class="card">
       <div class="card-title"><span class="material-icons">play_circle</span> Monitoring</div>
       <div class="stats">
@@ -124,6 +171,7 @@
       </div>
     </div>
     
+    <!-- Activity Card -->
     <div class="card">
       <div class="card-title"><span class="material-icons">history</span> Recent Activity</div>
       <div class="activity-list" id="activityList">
@@ -140,6 +188,119 @@
     let activityLog = [];
     
     await invoke('initialize_agent');
+    
+    // ============ SETUP ============
+    
+    function log(msg) {
+      const el = document.getElementById('progressLog');
+      el.style.display = 'block';
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+    
+    async function checkSetup() {
+      const step1 = document.getElementById('step1Num');
+      const step2 = document.getElementById('step2Num');
+      const step3 = document.getElementById('step3Num');
+      const pullBtn = document.getElementById('pullLlavaBtn');
+      const startBtn = document.getElementById('startOllamaBtn');
+      
+      try {
+        const r = await invoke('check_ollama');
+        
+        if (r.online) {
+          step1.classList.add('done');
+          step1.textContent = '✓';
+          document.getElementById('step1Desc').textContent = 'Installed and running';
+          document.getElementById('installOllamaBtn').textContent = 'Installed';
+          document.getElementById('installOllamaBtn').disabled = true;
+          
+          step3.classList.add('done');
+          step3.textContent = '✓';
+          document.getElementById('step3Desc').textContent = 'Running';
+          startBtn.textContent = 'Running';
+          startBtn.disabled = true;
+          
+          pullBtn.disabled = false;
+          
+          if (r.hasVisionModel) {
+            step2.classList.add('done');
+            step2.textContent = '✓';
+            document.getElementById('step2Desc').textContent = 'LLaVA ready';
+            pullBtn.textContent = 'Installed';
+            pullBtn.disabled = true;
+            
+            // Hide setup card if everything is ready
+            document.getElementById('setupCard').style.display = 'none';
+          }
+        } else {
+          pullBtn.disabled = true;
+          startBtn.disabled = false;
+        }
+      } catch (e) {
+        console.error('Setup check error:', e);
+      }
+    }
+    
+    document.getElementById('installOllamaBtn').onclick = async () => {
+      const btn = document.getElementById('installOllamaBtn');
+      btn.disabled = true;
+      btn.textContent = 'Opening...';
+      
+      try {
+        const r = await invoke('install_ollama');
+        log(r.message);
+        if (!r.installed) {
+          alert('Please install Ollama from the download page, then click "Start" to run it.');
+        }
+      } catch (e) {
+        log('Error: ' + e);
+      }
+      
+      btn.disabled = false;
+      btn.textContent = 'Install';
+    };
+    
+    document.getElementById('pullLlavaBtn').onclick = async () => {
+      const btn = document.getElementById('pullLlavaBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Downloading...';
+      log('Pulling LLaVA model... This may take several minutes.');
+      
+      try {
+        const r = await invoke('pull_model', { model: 'llava:7b' });
+        log('LLaVA model installed successfully!');
+        checkSetup();
+      } catch (e) {
+        log('Error: ' + e);
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      }
+    };
+    
+    document.getElementById('startOllamaBtn').onclick = async () => {
+      const btn = document.getElementById('startOllamaBtn');
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+      log('Starting Ollama server...');
+      
+      try {
+        await invoke('start_ollama');
+        log('Ollama started. Waiting for it to be ready...');
+        
+        // Wait a bit and check
+        setTimeout(async () => {
+          await checkSetup();
+          await checkOllama();
+        }, 3000);
+      } catch (e) {
+        log('Error: ' + e);
+        btn.disabled = false;
+        btn.textContent = 'Start';
+      }
+    };
+    
+    // ============ CONFIG ============
     
     async function loadConfig() {
       const config = await invoke('get_config');
@@ -161,6 +322,8 @@
       });
     }
     
+    // ============ STATUS ============
+    
     async function checkOllama() {
       const dot = document.getElementById('ollamaDot');
       const text = document.getElementById('ollamaStatus');
@@ -171,13 +334,13 @@
           text.textContent = 'Ollama + LLaVA ready';
         } else if (r.online) {
           dot.className = 'status-dot warn';
-          text.textContent = 'Need LLaVA: ollama pull llava:7b';
+          text.textContent = 'Need LLaVA model';
         } else {
-          dot.className = 'status-dot';
-          text.textContent = 'Ollama offline';
+          dot.className = 'status-dot error';
+          text.textContent = 'Ollama not running';
         }
       } catch {
-        dot.className = 'status-dot';
+        dot.className = 'status-dot error';
         text.textContent = 'Ollama error';
       }
     }
@@ -197,11 +360,11 @@
           dot.className = 'status-dot ok';
           text.textContent = 'Connected to PM Dashboard';
         } else {
-          dot.className = 'status-dot';
+          dot.className = 'status-dot error';
           text.textContent = 'Cannot reach PM at ' + r.url;
         }
       } catch {
-        dot.className = 'status-dot';
+        dot.className = 'status-dot error';
         text.textContent = 'Connection error';
       }
       
@@ -215,6 +378,8 @@
       document.getElementById('statStatus').style.color = status.isRunning ? 'var(--success)' : 'var(--text)';
       document.getElementById('statSent').textContent = status.reportsSent || 0;
     }
+    
+    // ============ CAPTURE ============
     
     async function captureNow() {
       const btn = document.getElementById('captureBtn');
@@ -246,7 +411,7 @@
         <div class="activity-item">
           <div class="activity-time">${r.timestamp}</div>
           <div class="activity-desc">${r.description}</div>
-          <span class="activity-badge ${r.synced ? 'synced' : ''}">${r.activity_type} ${r.synced ? '- synced' : ''}</span>
+          <span class="activity-badge ${r.synced ? 'synced' : ''}">${r.activity_type} ${r.synced ? '- sent' : ''}</span>
         </div>
       `).join('');
     }
@@ -272,6 +437,8 @@
       updateStatus();
     }
     
+    // ============ EVENTS ============
+    
     document.getElementById('testBtn').onclick = testConnection;
     document.getElementById('startBtn').onclick = startMonitoring;
     document.getElementById('stopBtn').onclick = stopMonitoring;
@@ -281,11 +448,14 @@
       document.getElementById(id).onchange = saveConfig;
     });
     
-    loadConfig();
+    // ============ INIT ============
+    
+      loadConfig();
+    checkSetup();
     checkOllama();
-    updateStatus();
+      updateStatus();
     setInterval(checkOllama, 30000);
     setInterval(updateStatus, 5000);
-  </script>
-</body>
+    </script>
+  </body>
 </html>
