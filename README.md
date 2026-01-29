@@ -1,199 +1,93 @@
 # FlowSight AI
 
-**Privacy-First, Local-First Developer Productivity Agent**
+**Real-time developer activity monitoring with local AI analysis.**
 
-*Built with Tauri for maximum performance and security*
+Two lightweight desktop apps built with Tauri (Rust + HTML):
+- **DEV Agent**: Captures screen, analyzes with LLaVA, sends reports to PM
+- **PM Dashboard**: Receives reports, shows team activity in real-time
 
-FlowSight AI is a revolutionary developer productivity tool that detects and resolves coding blockers in real-time. Unlike traditional cloud-based solutions, FlowSight processes everything locally on your machine, ensuring 100% privacy and sub-200ms response times.
-
-## 🚀 Key Features
-
-- **100% Local Processing** - Zero data leaves your machine
-- **Sub-200ms Detection** - Instant blocker identification
-- **GDPR/CCPA Compliant** - Privacy by architecture
-- **Offline-First** - Works without internet
-- **Cross-Platform** - Native macOS, Windows, Linux support
-- **High-Performance** - Rust backend for maximum speed
-- **Secure by Design** - Tauri security model
-- **Smaller Bundles** - Lightweight compared to Electron
-- **Hybrid AI** - Rules + ML + Vision intelligence
-
-## 🏗️ Architecture
+## Architecture
 
 ```
-Developer Machine (Tauri Agent)
-├── ActivityMonitor.ts (local)
-├── ScreenCapture.ts (local, instant discard)
-├── FastVLM.ts (Apple MLX - vision on-device)
-├── OCRLocal.ts (PaddleOCR - text extraction)
-├── RulesEngine.ts (deterministic blocker patterns)
-├── LLMLocal.ts (Phi-3 mini - contextual reasoning)
-├── BlockerDetector.ts (hybrid: rules + ML consensus)
-├── Rust Backend (high-performance core)
-└── LocalDashboard.ts (React WebSocket)
-
-┌─→ Optional Cloud Sync (async, user-consent only)
-└─→ MongoDB Atlas (historical data, no real-time processing)
+┌─────────────────────┐     HTTP      ┌─────────────────────┐
+│     DEV Agent       │──────────────>│   PM Dashboard      │
+│                     │               │                     │
+│  - Screen capture   │               │  - HTTP Server      │
+│  - LLaVA analysis   │               │  - SQLite storage   │
+│  - SQLite buffer    │               │  - Real-time view   │
+│                     │               │                     │
+│  Ollama (local)     │               │  API Key auth       │
+└─────────────────────┘               └─────────────────────┘
 ```
 
-## 🛠️ Installation
+## Requirements
 
-### Prerequisites
+- **Rust 1.77+** - [Install Rust](https://rustup.rs)
+- **Ollama** - [Install Ollama](https://ollama.ai)
+- **LLaVA model** - `ollama pull llava:7b`
+- **Node.js 18+** (for Tauri CLI)
 
-- Node.js 20.10+
-- Rust 1.77+ (for Tauri backend)
-- Python 3.11+ (for OCR)
-- Ollama (for local LLM)
+## Quick Start
 
-### Quick Start
+### 1. Install Ollama and LLaVA
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourorg/flowsight-ai.git
-cd flowsight-ai
-
-# Install dependencies
-make setup
-
-# Start development
-make dev
-```
-
-### Manual Setup
-
-```bash
-# Install Node dependencies
-pnpm install
-
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-
-# Install Python OCR dependencies
-pip3 install paddlepaddle paddleocr
-
-# Download AI models
-npm run download:models phi3-mini llava-phi
-
-# Start Ollama (for LLM)
+# Install Ollama from https://ollama.ai
 ollama serve
-ollama pull phi3:3.8b
+ollama pull llava:7b
 ```
 
-## 🚀 Usage
+### 2. Run PM Dashboard
 
 ```bash
-# Development mode (Tauri)
-pnpm --filter @flowsight/agent dev
-
-# Build for production
-pnpm --filter @flowsight/agent build
-
-# Run tests
-pnpm test
-
-# Create platform-specific installers
-pnpm --filter @flowsight/agent package
-
-# Development dashboard only
-pnpm --filter @flowsight/dashboard dev
-```
-
-## 📊 Dashboard
-
-Once running, FlowSight provides a local web dashboard at `http://localhost:3000` with:
-
-- Real-time blocker detection
-- Activity timeline
-- Privacy controls
-- Performance metrics
-- Resolution tracking
-
-## 🔒 Privacy
-
-FlowSight is designed with privacy first:
-
-- **No screenshots stored** - Images are processed instantly and discarded
-- **No keystroke logging** - Only window focus and idle detection
-- **No cloud required** - Fully functional offline
-- **User consent required** - Optional cloud sync with explicit permission
-- **Local data only** - All processing on-device
-
-## 🤖 AI Models
-
-FlowSight uses hybrid AI with local models by default:
-
-- **Phi-3 Mini (3.8B)** - Local contextual reasoning via Ollama (FREE)
-- **PaddleOCR** - Local text extraction from screenshots
-- **LLaVA-Phi** - Local visual error detection
-- **Rules Engine** - Deterministic pattern matching
-- **OpenRouter** - Optional cloud AI for advanced analysis (paid)
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pnpm test
-
-# Run specific test suite
-pnpm test tests/unit/RulesEngine.test.ts
-
-# Type checking
-pnpm type-check
-
-# Linting
-pnpm lint
-```
-
-## 📦 Build & Release
-
-```bash
-# Build all packages
-pnpm build
-
-# Build Tauri application
-pnpm --filter @flowsight/agent build
-
-# Create platform-specific installers
-pnpm --filter @flowsight/agent package
-
-# Development mode
+cd apps/pm
+pnpm install
 pnpm dev
 ```
 
-## 🏢 Business Model
+The PM Dashboard will start and show its API key. Share this key with developers.
 
-- **Free Tier**: Local processing only, 30-day data retention
-- **Pro ($5/dev/month)**: Cloud sync, 90-day retention, team features
-- **Enterprise ($8/dev/month)**: Unlimited retention, SSO, dedicated support
+### 3. Run DEV Agent
 
-## 🤝 Contributing
+```bash
+cd apps/agent
+pnpm install
+pnpm dev
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Enter the PM Dashboard URL (e.g., `http://192.168.1.100:8080`) and API key.
 
-## 📄 License
+## How It Works
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+1. **DEV Agent** captures the screen every N seconds
+2. **LLaVA** (running locally via Ollama) analyzes the screenshot
+3. LLaVA generates a text description of what the developer is doing
+4. The text report is sent to the **PM Dashboard** via HTTP
+5. **PM Dashboard** stores reports in SQLite and displays them
 
-## 📞 Support
+**Privacy**: Screenshots never leave the developer's machine. Only text descriptions are sent.
 
-- Documentation: [docs.flowsight.ai](https://docs.flowsight.ai)
-- Issues: [GitHub Issues](https://github.com/yourorg/flowsight-ai/issues)
-- Email: support@flowsight.ai
+## Apps
 
-## 🔄 Migration to Tauri
+| App | Description | Tech |
+|-----|-------------|------|
+| `apps/agent` | DEV Agent - screen capture + AI | Tauri + Rust |
+| `apps/pm` | PM Dashboard - team monitor | Tauri + Rust |
 
-FlowSight AI has been successfully migrated from Electron to Tauri (v2), providing:
+## Build for Production
 
-- **Better Performance**: Rust backend replaces Node.js main process
-- **Smaller Bundle Size**: Reduced application footprint
-- **Enhanced Security**: Tauri's security model by default
-- **Native Performance**: Direct OS integration without Chromium overhead
+```bash
+# Build DEV Agent
+cd apps/agent
+pnpm build
 
----
+# Build PM Dashboard  
+cd apps/pm
+pnpm build
+```
 
-**FlowSight AI** - Making developers more productive, one blocker at a time. 🔍✨
+Installers will be in `src-tauri/target/release/bundle/`.
+
+## License
+
+MIT

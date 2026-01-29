@@ -1,393 +1,133 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlowSight DEV Agent</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    
     :root {
-      --primary: #1976d2;
-      --primary-dark: #1565c0;
-      --success: #2e7d32;
-      --error: #c62828;
-      --warning: #f57c00;
-      --surface: #ffffff;
-      --background: #fafafa;
-      --on-surface: #212121;
-      --on-surface-secondary: #757575;
-      --divider: #e0e0e0;
-      --elevation-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-      --elevation-2: 0 3px 6px rgba(0,0,0,0.15), 0 2px 4px rgba(0,0,0,0.12);
+      --primary: #2563eb;
+      --success: #16a34a;
+      --error: #dc2626;
+      --bg: #f8fafc;
+      --surface: #fff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
     }
-    
-    body {
-      font-family: 'Roboto', -apple-system, sans-serif;
-      background: var(--background);
-      color: var(--on-surface);
-      min-height: 100vh;
-      line-height: 1.5;
-    }
-    
-    .app-bar {
-      background: var(--primary);
-      color: white;
-      padding: 16px 24px;
-      box-shadow: var(--elevation-2);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    
-    .app-bar h1 { font-size: 20px; font-weight: 500; }
-    .app-bar .subtitle { font-size: 14px; opacity: 0.87; margin-top: 4px; font-weight: 300; }
-    
-    .container { max-width: 900px; margin: 0 auto; padding: 24px; }
-    
-    .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      background: var(--surface);
-      border-radius: 4px;
-      box-shadow: var(--elevation-1);
-      margin-bottom: 24px;
-    }
-    
-    .status-indicator {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: var(--error);
-    }
-    
-    .status-indicator.online { background: var(--success); }
-    .status-indicator.warning { background: var(--warning); }
-    
-    .status-text { font-size: 14px; color: var(--on-surface-secondary); }
-    
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    
-    .stat-card {
-      background: var(--surface);
-      border-radius: 4px;
-      padding: 20px;
-      box-shadow: var(--elevation-1);
-    }
-    
-    .stat-card .label {
-      font-size: 11px;
-      color: var(--on-surface-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-    }
-    
-    .stat-card .value { font-size: 28px; font-weight: 300; color: var(--primary); }
-    .stat-card .value.running { color: var(--success); }
-    .stat-card .value.stopped { color: var(--error); }
-    
-    .card {
-      background: var(--surface);
-      border-radius: 4px;
-      box-shadow: var(--elevation-1);
-      margin-bottom: 24px;
-      overflow: hidden;
-    }
-    
-    .card-header {
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--divider);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .card-header .material-icons { color: var(--primary); font-size: 24px; }
-    .card-header h2 { font-size: 16px; font-weight: 500; color: var(--on-surface); }
-    
-    .card-content { padding: 24px; }
-    
-    .form-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-    
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--on-surface-secondary);
-      margin-bottom: 8px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    .form-group input, .form-group select {
-      width: 100%;
-      padding: 12px 16px;
-      border: 1px solid var(--divider);
-      border-radius: 4px;
-      font-size: 16px;
-      font-family: inherit;
-      background: var(--surface);
-      color: var(--on-surface);
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    
-    .form-group input:focus, .form-group select:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
-    }
-    
-    .button-group { display: flex; gap: 12px; margin-top: 20px; }
-    
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 4px;
-      font-size: 14px;
-      font-weight: 500;
-      font-family: inherit;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      transition: all 0.2s;
-      min-width: 120px;
-    }
-    
-    .btn .material-icons { font-size: 18px; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+    .container { max-width: 600px; margin: 0 auto; padding: 24px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .card-title .material-icons { font-size: 18px; color: var(--primary); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
+    .form-group input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+    .form-group input:focus { outline: none; border-color: var(--primary); }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .btn .material-icons { font-size: 16px; }
     .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: var(--primary-dark); box-shadow: var(--elevation-2); }
     .btn-success { background: var(--success); color: white; }
-    .btn-success:hover { background: #1b5e20; }
     .btn-error { background: var(--error); color: white; }
-    .btn-error:hover { background: #b71c1c; }
-    .btn-outlined { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
-    .btn-outlined:hover { background: rgba(25, 118, 210, 0.08); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    
-    .activity-list { max-height: 350px; overflow-y: auto; }
-    
-    .activity-item {
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--divider);
-      border-left: 4px solid var(--primary);
-    }
-    
+    .btn-group { display: flex; gap: 8px; }
+    .status-row { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+    .status-dot.ok { background: var(--success); }
+    .status-dot.warn { background: #f59e0b; }
+    .status-text { font-size: 13px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat { text-align: center; padding: 12px; background: var(--bg); border-radius: 8px; }
+    .stat-value { font-size: 24px; font-weight: 300; }
+    .stat-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
+    .activity-list { max-height: 300px; overflow-y: auto; }
+    .activity-item { padding: 12px; border-bottom: 1px solid var(--border); }
     .activity-item:last-child { border-bottom: none; }
-    
-    .activity-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .activity-time { font-size: 12px; color: var(--on-surface-secondary); font-family: 'Roboto Mono', monospace; }
-    
-    .activity-type {
-      font-size: 11px;
-      padding: 4px 12px;
-      border-radius: 12px;
-      background: rgba(25, 118, 210, 0.1);
-      color: var(--primary);
-      font-weight: 500;
-      text-transform: uppercase;
-    }
-    
-    .activity-type.synced { background: rgba(46, 125, 50, 0.1); color: var(--success); }
-    .activity-description { font-size: 14px; color: var(--on-surface); line-height: 1.6; }
-    
-    .empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--on-surface-secondary);
-    }
-    
-    .empty-state .material-icons { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
-    
-    .loading-spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-radius: 50%;
-      border-top-color: white;
-      animation: spin 1s linear infinite;
-    }
-    
+    .activity-time { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+    .activity-desc { font-size: 13px; line-height: 1.4; }
+    .activity-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg); margin-top: 6px; }
+    .activity-badge.synced { background: #dcfce7; color: #166534; }
+    .empty { text-align: center; padding: 30px; color: var(--text-secondary); }
+    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    
-    .registration-view, .main-view { display: none; }
-    .registration-view.active, .main-view.active { display: block; }
-    
-    .alert {
-      padding: 12px 16px;
-      border-radius: 4px;
-      margin-bottom: 16px;
-      font-size: 14px;
-    }
-    
-    .alert-error { background: #ffebee; color: var(--error); border: 1px solid #ffcdd2; }
-    .alert-success { background: #e8f5e9; color: var(--success); border: 1px solid #c8e6c9; }
-    
-    .sync-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 10px;
-      margin-left: 8px;
-    }
-    
-    .sync-badge.synced { background: rgba(46, 125, 50, 0.1); color: var(--success); }
-    .sync-badge.pending { background: rgba(245, 124, 0, 0.1); color: var(--warning); }
   </style>
 </head>
 <body>
-  <div class="app-bar">
+  <div class="header">
     <h1>FlowSight DEV Agent</h1>
-    <div class="subtitle">Screen analysis with local AI - Activity reports sent to your team</div>
+    <div class="sub">Screen analysis with local AI</div>
   </div>
   
-  <!-- Registration View -->
-  <div class="registration-view" id="registrationView">
-    <div class="container">
-      <div class="card" style="max-width: 500px; margin: 40px auto;">
-        <div class="card-header">
-          <span class="material-icons">vpn_key</span>
-          <h2>Connect to Your Team</h2>
+  <div class="container">
+    <div class="card">
+      <div class="card-title"><span class="material-icons">link</span> Connection</div>
+      <div class="status-row">
+        <div class="status-dot" id="ollamaDot"></div>
+        <span class="status-text" id="ollamaStatus">Checking Ollama...</span>
+      </div>
+      <div class="status-row">
+        <div class="status-dot" id="pmDot"></div>
+        <span class="status-text" id="pmStatus">Not connected to PM</span>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label>PM Dashboard URL</label>
+          <input type="text" id="pmUrl" placeholder="http://192.168.1.100:8080">
         </div>
-        <div class="card-content">
-          <p style="color: var(--on-surface-secondary); margin-bottom: 24px;">
-            Enter the API key provided by your team administrator to start reporting your activity.
-          </p>
-          
-          <div id="registrationError" class="alert alert-error" style="display: none;"></div>
-          
-          <div class="form-group" style="margin-bottom: 20px;">
-            <label>API Key</label>
-            <input type="text" id="apiKeyInput" placeholder="fsk_..." />
-          </div>
-          
-          <div class="form-group" style="margin-bottom: 20px;">
-            <label>Your Name</label>
-            <input type="text" id="devNameInput" placeholder="John Doe" />
-          </div>
-          
-          <div class="form-group" style="margin-bottom: 20px;">
-            <label>Dashboard URL</label>
-            <input type="text" id="dashboardUrlInput" placeholder="http://localhost:3000" value="http://localhost:3000" />
-          </div>
-          
-          <button class="btn btn-primary" id="registerBtn" style="width: 100%;">
-            <span class="material-icons">login</span>
-            Connect
-          </button>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="text" id="apiKey" placeholder="fsk_...">
         </div>
+      </div>
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="devName" placeholder="John Doe">
+      </div>
+      <button class="btn btn-primary" id="testBtn">
+        <span class="material-icons">wifi_tethering</span> Test Connection
+      </button>
+    </div>
+    
+    <div class="card">
+      <div class="card-title"><span class="material-icons">play_circle</span> Monitoring</div>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value" id="statStatus">Off</div>
+          <div class="stat-label">Status</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statSent">0</div>
+          <div class="stat-label">Reports</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="statInterval">30s</div>
+          <div class="stat-label">Interval</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Capture Interval (seconds)</label>
+        <input type="number" id="interval" value="30" min="10" max="300">
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-success" id="startBtn"><span class="material-icons">play_arrow</span> Start</button>
+        <button class="btn btn-error" id="stopBtn"><span class="material-icons">stop</span> Stop</button>
+        <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture Now</button>
       </div>
     </div>
-  </div>
-  
-  <!-- Main View (after registration) -->
-  <div class="main-view" id="mainView">
-    <div class="container">
-      <div class="status-bar">
-        <div class="status-indicator" id="statusIndicator"></div>
-        <span class="status-text" id="ollamaStatus">Checking Ollama...</span>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
-          <span class="status-text" id="teamInfo"></span>
-          <button class="btn btn-outlined" id="disconnectBtn" style="padding: 6px 12px; min-width: auto;">
-            Disconnect
-          </button>
-        </div>
-      </div>
-      
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="label">Status</div>
-          <div class="value" id="statusText">Stopped</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Reports Sent</div>
-          <div class="value" id="reportCount">0</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Interval</div>
-          <div class="value" id="intervalValue">30s</div>
-        </div>
-        <div class="stat-card">
-          <div class="label">Sync Status</div>
-          <div class="value" id="syncStatus" style="font-size: 16px;">-</div>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-header">
-          <span class="material-icons">settings</span>
-          <h2>Monitoring Settings</h2>
-        </div>
-        <div class="card-content">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Capture Interval (seconds)</label>
-              <input type="number" id="interval" min="10" max="300" value="30" />
-            </div>
-            <div class="form-group">
-              <label>Vision Model</label>
-              <select id="visionModel">
-                <option value="llava:7b">LLaVA 7B (Recommended)</option>
-                <option value="llava:13b">LLaVA 13B (Higher accuracy)</option>
-                <option value="bakllava">BakLLaVA</option>
-              </select>
-            </div>
-          </div>
-          
-          <div class="button-group">
-            <button class="btn btn-success" id="startBtn">
-              <span class="material-icons">play_arrow</span>
-              Start
-            </button>
-            <button class="btn btn-error" id="stopBtn">
-              <span class="material-icons">stop</span>
-              Stop
-            </button>
-            <button class="btn btn-outlined" id="captureBtn">
-              <span class="material-icons">camera_alt</span>
-              Capture Now
-            </button>
-            <button class="btn btn-outlined" id="syncBtn">
-              <span class="material-icons">sync</span>
-              Sync
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <div class="card">
-        <div class="card-header">
-          <span class="material-icons">history</span>
-          <h2>Activity Log</h2>
-        </div>
-        <div class="activity-list" id="activityLog">
-          <div class="empty-state">
-            <span class="material-icons">hourglass_empty</span>
-            <div>No activity recorded yet</div>
-            <div style="font-size: 13px; margin-top: 8px;">Start monitoring to begin capturing screen activity</div>
-          </div>
-        </div>
+    
+    <div class="card">
+      <div class="card-title"><span class="material-icons">history</span> Recent Activity</div>
+      <div class="activity-list" id="activityList">
+        <div class="empty">No activity yet. Start monitoring to begin.</div>
       </div>
     </div>
   </div>
@@ -399,282 +139,151 @@
     let monitoringInterval = null;
     let activityLog = [];
     
-    // Initialize and check registration status
-    async function init() {
-      await invoke('initialize_agent');
-      const status = await invoke('get_status');
-      
-      if (status.isRegistered && status.teamId) {
-        showMainView();
-        document.getElementById('teamInfo').textContent = 'Team: ' + (status.teamId || '').substring(0, 8) + '...';
-        await loadActivityLog();
-      } else {
-        showRegistrationView();
-      }
-      
-      checkOllama();
-      updateStatus();
+    await invoke('initialize_agent');
+    
+    async function loadConfig() {
+      const config = await invoke('get_config');
+      document.getElementById('pmUrl').value = config.pmUrl || 'http://localhost:8080';
+      document.getElementById('apiKey').value = config.apiKey || '';
+      document.getElementById('devName').value = config.devName || '';
+      document.getElementById('interval').value = (config.captureInterval || 30000) / 1000;
     }
     
-    function showRegistrationView() {
-      document.getElementById('registrationView').classList.add('active');
-      document.getElementById('mainView').classList.remove('active');
-    }
-    
-    function showMainView() {
-      document.getElementById('registrationView').classList.remove('active');
-      document.getElementById('mainView').classList.add('active');
-    }
-    
-    async function register() {
-      const apiKey = document.getElementById('apiKeyInput').value.trim();
-      const devName = document.getElementById('devNameInput').value.trim();
-      const dashboardUrl = document.getElementById('dashboardUrlInput').value.trim();
-      const errorEl = document.getElementById('registrationError');
-      const btn = document.getElementById('registerBtn');
-      
-      if (!apiKey || !devName) {
-        errorEl.textContent = 'Please enter both API key and your name';
-        errorEl.style.display = 'block';
-        return;
-      }
-      
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading-spinner"></span> Connecting...';
-      errorEl.style.display = 'none';
-      
-      try {
-        // Update config with dashboard URL first
-        await invoke('update_config', {
-          config: {
-            pmDashboardUrl: dashboardUrl,
-            devName: devName,
-          }
-        });
-        
-        // Register with API key
-        const result = await invoke('register_with_api_key', {
-          apiKey: apiKey,
-          devName: devName,
-        });
-        
-        if (result.success) {
-          showMainView();
-          document.getElementById('teamInfo').textContent = 'Team: ' + (result.teamId || '').substring(0, 8) + '...';
-          await loadActivityLog();
-          checkOllama();
-        } else {
-          errorEl.textContent = result.error || result.message || 'Registration failed';
-          errorEl.style.display = 'block';
+    async function saveConfig() {
+      await invoke('update_config', {
+        config: {
+          pmUrl: document.getElementById('pmUrl').value,
+          apiKey: document.getElementById('apiKey').value,
+          devName: document.getElementById('devName').value,
+          captureInterval: parseInt(document.getElementById('interval').value) * 1000,
+          visionModel: 'llava:7b'
         }
-      } catch (e) {
-        errorEl.textContent = 'Connection error: ' + e;
-        errorEl.style.display = 'block';
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="material-icons">login</span> Connect';
-      }
-    }
-    
-    async function disconnect() {
-      if (confirm('Disconnect from team? Your local activity log will be preserved.')) {
-        await invoke('update_config', {
-          config: {
-            apiKey: null,
-            developerId: null,
-            teamId: null,
-          }
-        });
-        showRegistrationView();
-      }
+      });
     }
     
     async function checkOllama() {
-      const indicator = document.getElementById('statusIndicator');
-      const status = document.getElementById('ollamaStatus');
+      const dot = document.getElementById('ollamaDot');
+      const text = document.getElementById('ollamaStatus');
+      try {
+        const r = await invoke('check_ollama');
+        if (r.online && r.hasVisionModel) {
+          dot.className = 'status-dot ok';
+          text.textContent = 'Ollama + LLaVA ready';
+        } else if (r.online) {
+          dot.className = 'status-dot warn';
+          text.textContent = 'Need LLaVA: ollama pull llava:7b';
+        } else {
+          dot.className = 'status-dot';
+          text.textContent = 'Ollama offline';
+        }
+      } catch {
+        dot.className = 'status-dot';
+        text.textContent = 'Ollama error';
+      }
+    }
+    
+    async function testConnection() {
+      await saveConfig();
+      const dot = document.getElementById('pmDot');
+      const text = document.getElementById('pmStatus');
+      const btn = document.getElementById('testBtn');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Testing...';
       
       try {
-        const result = await invoke('check_ollama');
-        
-        if (result.online) {
-          if (result.hasVisionModel) {
-            indicator.className = 'status-indicator online';
-            status.textContent = 'Ollama + Vision Model Ready';
-          } else {
-            indicator.className = 'status-indicator warning';
-            status.textContent = 'Need LLaVA: ollama pull llava:7b';
-          }
-          
-          const select = document.getElementById('visionModel');
-          result.models.forEach(m => {
-            if (m.includes('llava') || m.includes('bakllava')) {
-              const exists = Array.from(select.options).some(o => o.value === m);
-              if (!exists) select.add(new Option(m, m));
-            }
-          });
+        const r = await invoke('test_pm_connection');
+        if (r.connected) {
+          dot.className = 'status-dot ok';
+          text.textContent = 'Connected to PM Dashboard';
         } else {
-          indicator.className = 'status-indicator';
-          status.textContent = 'Ollama offline - Run: ollama serve';
+          dot.className = 'status-dot';
+          text.textContent = 'Cannot reach PM at ' + r.url;
         }
-      } catch (e) {
-        indicator.className = 'status-indicator';
-        status.textContent = 'Connection error';
+      } catch {
+        dot.className = 'status-dot';
+        text.textContent = 'Connection error';
       }
+      
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-icons">wifi_tethering</span> Test Connection';
     }
     
     async function updateStatus() {
-      try {
-        const status = await invoke('get_status');
-        const statusEl = document.getElementById('statusText');
-        
-        if (status.isRunning) {
-          statusEl.textContent = 'Active';
-          statusEl.className = 'value running';
-        } else {
-          statusEl.textContent = 'Stopped';
-          statusEl.className = 'value stopped';
-        }
-        
-        document.getElementById('reportCount').textContent = status.reportsSent || 0;
-      } catch (e) {
-        console.error('Status error:', e);
-      }
+      const status = await invoke('get_status');
+      document.getElementById('statStatus').textContent = status.isRunning ? 'On' : 'Off';
+      document.getElementById('statStatus').style.color = status.isRunning ? 'var(--success)' : 'var(--text)';
+      document.getElementById('statSent').textContent = status.reportsSent || 0;
     }
     
-    async function loadActivityLog() {
-      try {
-        const reports = await invoke('get_activity_log', { limit: 20 });
-        activityLog = reports;
-        renderActivityLog();
-      } catch (e) {
-        console.error('Load log error:', e);
-      }
-    }
-    
-    async function captureAndAnalyze() {
+    async function captureNow() {
       const btn = document.getElementById('captureBtn');
-      const originalContent = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+      btn.innerHTML = '<span class="loading"></span>';
       
       try {
+        await saveConfig();
         const report = await invoke('capture_and_analyze');
         activityLog.unshift(report);
         if (activityLog.length > 20) activityLog.pop();
-        renderActivityLog();
-        await updateStatus();
+        renderActivity();
+        updateStatus();
       } catch (e) {
-        console.error('Capture error:', e);
         alert('Error: ' + e);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
       }
+      
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now';
     }
     
-    async function syncReports() {
-      const btn = document.getElementById('syncBtn');
-      const originalContent = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading-spinner"></span> Syncing...';
-      
-      try {
-        const result = await invoke('sync_reports');
-        document.getElementById('syncStatus').textContent = 
-          result.synced + ' synced, ' + result.pending + ' pending';
-        await loadActivityLog();
-      } catch (e) {
-        console.error('Sync error:', e);
-        alert('Sync error: ' + e);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalContent;
-      }
-    }
-    
-    function renderActivityLog() {
-      const container = document.getElementById('activityLog');
-      
+    function renderActivity() {
+      const list = document.getElementById('activityList');
       if (activityLog.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <span class="material-icons">hourglass_empty</span>
-            <div>No activity recorded yet</div>
-          </div>
-        `;
+        list.innerHTML = '<div class="empty">No activity yet.</div>';
         return;
       }
-      
-      container.innerHTML = activityLog.map(item => `
+      list.innerHTML = activityLog.map(r => `
         <div class="activity-item">
-          <div class="activity-header">
-            <span class="activity-time">${item.timestamp}</span>
-            <div>
-              <span class="activity-type">${item.activity_type}</span>
-              <span class="sync-badge ${item.synced ? 'synced' : 'pending'}">
-                ${item.synced ? 'Synced' : 'Pending'}
-              </span>
-            </div>
-          </div>
-          <div class="activity-description">${item.description}</div>
+          <div class="activity-time">${r.timestamp}</div>
+          <div class="activity-desc">${r.description}</div>
+          <span class="activity-badge ${r.synced ? 'synced' : ''}">${r.activity_type} ${r.synced ? '- synced' : ''}</span>
         </div>
       `).join('');
     }
     
     async function startMonitoring() {
-      if (isMonitoring) return;
+      await saveConfig();
+      await invoke('start_monitoring');
+      isMonitoring = true;
       
-      try {
-        await invoke('start_monitoring');
-        isMonitoring = true;
-        
-        const interval = parseInt(document.getElementById('interval').value) * 1000;
-        document.getElementById('intervalValue').textContent = (interval/1000) + 's';
-        
-        await captureAndAnalyze();
-        
-        monitoringInterval = setInterval(async () => {
-          if (isMonitoring) await captureAndAnalyze();
-        }, interval);
-        
-        await updateStatus();
-      } catch (e) {
-        console.error('Start error:', e);
-      }
+      const interval = parseInt(document.getElementById('interval').value) * 1000;
+      document.getElementById('statInterval').textContent = (interval/1000) + 's';
+      
+      await captureNow();
+      monitoringInterval = setInterval(captureNow, interval);
+      updateStatus();
     }
     
     async function stopMonitoring() {
-      if (!isMonitoring) return;
-      
-      try {
-        await invoke('stop_monitoring');
-        isMonitoring = false;
-        
-        if (monitoringInterval) {
-          clearInterval(monitoringInterval);
-          monitoringInterval = null;
-        }
-        
-        await updateStatus();
-      } catch (e) {
-        console.error('Stop error:', e);
-      }
+      await invoke('stop_monitoring');
+      isMonitoring = false;
+      if (monitoringInterval) clearInterval(monitoringInterval);
+      monitoringInterval = null;
+      updateStatus();
     }
     
-    // Event listeners
-    document.getElementById('registerBtn').addEventListener('click', register);
-    document.getElementById('disconnectBtn').addEventListener('click', disconnect);
-    document.getElementById('startBtn').addEventListener('click', startMonitoring);
-    document.getElementById('stopBtn').addEventListener('click', stopMonitoring);
-    document.getElementById('captureBtn').addEventListener('click', captureAndAnalyze);
-    document.getElementById('syncBtn').addEventListener('click', syncReports);
+    document.getElementById('testBtn').onclick = testConnection;
+    document.getElementById('startBtn').onclick = startMonitoring;
+    document.getElementById('stopBtn').onclick = stopMonitoring;
+    document.getElementById('captureBtn').onclick = captureNow;
     
-    document.getElementById('apiKeyInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') register();
+    ['pmUrl', 'apiKey', 'devName', 'interval'].forEach(id => {
+      document.getElementById(id).onchange = saveConfig;
     });
     
-    // Initialize
-    init();
+    loadConfig();
+    checkOllama();
+    updateStatus();
     setInterval(checkOllama, 30000);
     setInterval(updateStatus, 5000);
   </script>

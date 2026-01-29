@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowSight PM Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --primary: #2563eb;
+      --success: #16a34a;
+      --error: #dc2626;
+      --warning: #d97706;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+    }
+    
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header .subtitle { font-size: 13px; color: var(--text-secondary); }
+    
+    .server-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+    
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+    
+    .status-dot.running { background: var(--success); }
+    
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    
+    .stat-card .label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 300;
+    }
+    
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .card-header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .card-header .material-icons { font-size: 20px; color: var(--primary); }
+    
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .btn .material-icons { font-size: 16px; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-error { background: var(--error); color: white; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .config-section {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    
+    .api-key-display {
+      font-family: monospace;
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    
+    .developers-list, .reports-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .developer-item, .report-item {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .developer-item:last-child, .report-item:last-child { border-bottom: none; }
+    
+    .dev-info { display: flex; align-items: center; gap: 12px; }
+    .dev-status { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+    .dev-status.online { background: var(--success); }
+    .dev-name { font-weight: 500; }
+    .dev-id { font-size: 12px; color: var(--text-secondary); }
+    
+    .report-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .report-header { display: flex; justify-content: space-between; width: 100%; }
+    .report-dev { font-weight: 500; }
+    .report-time { font-size: 12px; color: var(--text-secondary); font-family: monospace; }
+    .report-desc { font-size: 14px; color: var(--text); line-height: 1.5; }
+    
+    .activity-badge {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    
+    .activity-badge.coding { background: #dcfce7; color: #166534; }
+    .activity-badge.browsing { background: #dbeafe; color: #1e40af; }
+    .activity-badge.meeting { background: #f3e8ff; color: #6b21a8; }
+    .activity-badge.terminal { background: #fef3c7; color: #92400e; }
+    .activity-badge.other { background: #f1f5f9; color: #475569; }
+    
+    .empty-state {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-secondary);
+    }
+    
+    .empty-state .material-icons { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    
+    .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 24px; }
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>FlowSight PM Dashboard</h1>
+      <div class="subtitle">Team Activity Monitor</div>
+    </div>
+    <div class="server-status">
+      <div class="status-dot" id="serverDot"></div>
+      <span id="serverStatusText">Server stopped</span>
+      <button class="btn btn-success" id="startServerBtn">
+        <span class="material-icons">play_arrow</span> Start
+      </button>
+      <button class="btn btn-error" id="stopServerBtn" style="display:none;">
+        <span class="material-icons">stop</span> Stop
+      </button>
+    </div>
+  </div>
+  
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Team Members</div>
+        <div class="value" id="statDevs">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Online Now</div>
+        <div class="value" id="statOnline" style="color: var(--success);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Reports</div>
+        <div class="value" id="statReports" style="color: var(--primary);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Today</div>
+        <div class="value" id="statToday" style="color: var(--warning);">0</div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <div class="card-header">
+        <h2><span class="material-icons">settings</span> Configuration</h2>
+        <button class="btn btn-outline" id="newKeyBtn">
+          <span class="material-icons">refresh</span> New API Key
+        </button>
+      </div>
+      <div class="config-section">
+        <div class="form-group">
+          <label>Team Name</label>
+          <input type="text" id="teamName" placeholder="My Team">
+        </div>
+        <div class="form-group">
+          <label>Server Port</label>
+          <input type="number" id="serverPort" value="8080" min="1024" max="65535">
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label>API Key (share with your developers)</label>
+          <div class="api-key-display" id="apiKeyDisplay">-</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <h2><span class="material-icons">group</span> Team Members</h2>
+        </div>
+        <div class="developers-list" id="developersList">
+          <div class="empty-state">
+            <span class="material-icons">person_add</span>
+            <div>No developers connected yet</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h2><span class="material-icons">history</span> Activity Feed</h2>
+          <button class="btn btn-outline" id="refreshBtn">
+            <span class="material-icons">refresh</span>
+          </button>
+        </div>
+        <div class="reports-list" id="reportsList">
+          <div class="empty-state">
+            <span class="material-icons">inbox</span>
+            <div>No activity reports yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
+    
+    // Initialize
+    await invoke('initialize_pm');
+    
+    // Load config
+    async function loadConfig() {
+      const config = await invoke('get_config');
+      document.getElementById('teamName').value = config.team_name || '';
+      document.getElementById('serverPort').value = config.server_port || 8080;
+      document.getElementById('apiKeyDisplay').textContent = config.api_key || '-';
+    }
+    
+    // Update stats
+    async function updateStats() {
+      try {
+        const stats = await invoke('get_stats');
+        document.getElementById('statDevs').textContent = stats.total_developers || 0;
+        document.getElementById('statOnline').textContent = stats.online_developers || 0;
+        document.getElementById('statReports').textContent = stats.total_reports || 0;
+        document.getElementById('statToday').textContent = stats.reports_today || 0;
+      } catch (e) {
+        console.error('Stats error:', e);
+      }
+    }
+    
+    // Load developers
+    async function loadDevelopers() {
+      try {
+        const devs = await invoke('get_developers');
+        const list = document.getElementById('developersList');
+        
+        if (devs.length === 0) {
+          list.innerHTML = `<div class="empty-state">
+            <span class="material-icons">person_add</span>
+            <div>No developers connected yet</div>
+          </div>`;
+          return;
+        }
+        
+        list.innerHTML = devs.map(dev => `
+          <div class="developer-item">
+            <div class="dev-info">
+              <div class="dev-status ${dev.is_online ? 'online' : ''}"></div>
+              <div>
+                <div class="dev-name">${dev.name}</div>
+                <div class="dev-id">${dev.id}</div>
+              </div>
+            </div>
+            <div class="dev-id">${dev.last_seen_at || 'Never'}</div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Developers error:', e);
+      }
+    }
+    
+    // Load reports
+    async function loadReports() {
+      try {
+        const reports = await invoke('get_reports', { limit: 50 });
+        const list = document.getElementById('reportsList');
+        
+        if (reports.length === 0) {
+          list.innerHTML = `<div class="empty-state">
+            <span class="material-icons">inbox</span>
+            <div>No activity reports yet</div>
+          </div>`;
+          return;
+        }
+        
+        list.innerHTML = reports.map(r => `
+          <div class="report-item">
+            <div class="report-header">
+              <span class="report-dev">${r.developer_name}</span>
+              <span class="report-time">${r.created_at}</span>
+            </div>
+            <div class="report-desc">${r.description}</div>
+            <span class="activity-badge ${r.activity_type}">${r.activity_type}</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Reports error:', e);
+      }
+    }
+    
+    // Update server status
+    async function updateServerStatus() {
+      try {
+        const status = await invoke('get_server_status');
+        const dot = document.getElementById('serverDot');
+        const text = document.getElementById('serverStatusText');
+        const startBtn = document.getElementById('startServerBtn');
+        const stopBtn = document.getElementById('stopServerBtn');
+        
+        if (status.running) {
+          dot.classList.add('running');
+          text.textContent = `Running on port ${status.port}`;
+          startBtn.style.display = 'none';
+          stopBtn.style.display = 'inline-flex';
+        } else {
+          dot.classList.remove('running');
+          text.textContent = 'Server stopped';
+          startBtn.style.display = 'inline-flex';
+          stopBtn.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Server status error:', e);
+      }
+    }
+    
+    // Save config on change
+    async function saveConfig() {
+      const config = {
+        team_name: document.getElementById('teamName').value,
+        server_port: parseInt(document.getElementById('serverPort').value) || 8080,
+      };
+      await invoke('update_config', { config });
+    }
+    
+    // Event listeners
+    document.getElementById('startServerBtn').onclick = async () => {
+      await saveConfig();
+      const result = await invoke('start_server');
+      console.log(result);
+      updateServerStatus();
+    };
+    
+    document.getElementById('stopServerBtn').onclick = async () => {
+      await invoke('stop_server');
+      updateServerStatus();
+    };
+    
+    document.getElementById('newKeyBtn').onclick = async () => {
+      if (confirm('Generate new API key? Old key will stop working.')) {
+        const newKey = await invoke('generate_api_key');
+        document.getElementById('apiKeyDisplay').textContent = newKey;
+      }
+    };
+    
+    document.getElementById('refreshBtn').onclick = () => {
+      loadDevelopers();
+      loadReports();
+      updateStats();
+    };
+    
+    document.getElementById('teamName').onchange = saveConfig;
+    document.getElementById('serverPort').onchange = saveConfig;
+    
+    // Initial load
+    loadConfig();
+    updateServerStatus();
+    updateStats();
+    loadDevelopers();
+    loadReports();
+    
+    // Auto-refresh every 5 seconds
+    setInterval(() => {
+      updateStats();
+      loadDevelopers();
+      loadReports();
+    }, 5000);
+  </script>
+</body>
+</html>

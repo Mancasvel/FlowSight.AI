@@ -1,26 +1,27 @@
-﻿mod agent;
+mod pm;
 
-use agent::{
-    AgentState, initialize_agent, get_config, update_config,
-    get_status, start_monitoring, stop_monitoring,
-    capture_and_analyze, get_activity_log, check_ollama, test_pm_connection
+use pm::{
+    PmState, initialize_pm, get_config, update_config, get_developers,
+    get_reports, get_stats, start_server, stop_server, get_server_status,
+    generate_api_key, clear_old_reports
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(AgentState::default())
+        .manage(PmState::default())
         .invoke_handler(tauri::generate_handler![
-            initialize_agent,
+            initialize_pm,
             get_config,
             update_config,
-            get_status,
-            start_monitoring,
-            stop_monitoring,
-            capture_and_analyze,
-            get_activity_log,
-            check_ollama,
-            test_pm_connection
+            get_developers,
+            get_reports,
+            get_stats,
+            start_server,
+            stop_server,
+            get_server_status,
+            generate_api_key,
+            clear_old_reports
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

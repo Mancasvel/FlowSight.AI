@@ -1,0 +1,15 @@
+{
+  "name": "@flowsight/pm",
+  "version": "1.0.0",
+  "description": "FlowSight PM Dashboard - Team Activity Monitor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:frontend": "echo 'Static HTML, no build needed'"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
