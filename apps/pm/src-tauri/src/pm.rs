@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::path::PathBuf;
+use std::io::Read;
 use tauri::State;
 use rusqlite::{Connection, params};
 use tiny_http::{Server, Response, Header};
@@ -189,7 +190,7 @@ fn run_http_server(db_path: PathBuf, port: u16, api_key: String, running: Arc<Mu
     
     println!("[PM] HTTP Server started on port {}", port);
     
-    for request in server.incoming_requests() {
+    for mut request in server.incoming_requests() {
         // Check if we should stop
         if !*running.lock().unwrap() {
             break;
@@ -218,7 +219,7 @@ fn run_http_server(db_path: PathBuf, port: u16, api_key: String, running: Arc<Mu
         // Check API key
         let req_api_key = request.headers()
             .iter()
-            .find(|h| h.field.as_str().to_lowercase() == "x-api-key")
+            .find(|h| h.field.as_str().to_ascii_lowercase() == "x-api-key")
             .map(|h| h.value.as_str().to_string());
         
         if req_api_key.as_ref() != Some(&api_key) && !url.contains("/health") {
@@ -237,10 +238,7 @@ fn run_http_server(db_path: PathBuf, port: u16, api_key: String, running: Arc<Mu
             ("POST", "/api/report") => {
                 // Read body
                 let mut body = String::new();
-                if let Ok(mut reader) = request.as_reader().take(1024 * 1024) {
-                    use std::io::Read;
-                    let _ = reader.read_to_string(&mut body);
-                }
+                let _ = request.as_reader().read_to_string(&mut body);
                 
                 handle_report(&db_path, &body)
             }
@@ -528,5 +526,79 @@ pub fn clear_old_reports(state: State<'_, PmState>, days: Option<u32>) -> Result
         Ok(result as u32)
     } else {
         Err("PM not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn check_ollama() -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    // Try to call ollama list
+    let output = Command::new("ollama")
+        .args(["list"])
+        .output();
+    
+    match output {
+        Ok(out) if out.status.success() => {
+            let body = String::from_utf8_lossy(&out.stdout);
+            let has_phi = body.contains("phi");
+            Ok(serde_json::json!({"online": true, "hasTextModel": has_phi}))
+        }
+        _ => Ok(serde_json::json!({"online": false}))
+    }
+}
+
+#[tauri::command]
+pub fn install_ollama() -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    let url = "https://ollama.ai/download";
+    let _ = if cfg!(windows) {
+        Command::new("cmd").args(["/c", "start", url]).spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open").arg(url).spawn()
+    } else {
+        Command::new("xdg-open").arg(url).spawn()
+    };
+    
+    Ok(serde_json::json!({
+        "message": "Opening Ollama download page"
+    }))
+}
+
+#[tauri::command]
+pub fn pull_model(model: String) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    let output = Command::new("ollama")
+        .args(["pull", &model])
+        .output()
+        .map_err(|e| format!("Failed: {}", e))?;
+    
+    if output.status.success() {
+        Ok(serde_json::json!({"success": true, "model": model}))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to pull {}: {}", model, stderr))
+    }
+}
+
+#[tauri::command]
+pub fn start_ollama() -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    
+    let result = if cfg!(windows) {
+        Command::new("cmd")
+            .args(["/c", "start", "/b", "ollama", "serve"])
+            .spawn()
+    } else {
+        Command::new("ollama")
+            .arg("serve")
+            .spawn()
+    };
+    
+    match result {
+        Ok(_) => Ok(serde_json::json!({"started": true})),
+        Err(e) => Err(format!("Failed: {}", e))
     }
 }

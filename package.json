@@ -2,35 +2,23 @@
   "name": "flowsight-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "FlowSight AI - Privacy-first, local-first developer productivity agent",
+  "description": "FlowSight AI - Privacy-first developer activity monitor with local AI",
   "scripts": {
-    "dev": "turbo dev",
     "dev:agent": "pnpm --filter @flowsight/agent dev",
-    "dev:dashboard": "pnpm --filter @flowsight/dashboard dev",
-    "build": "turbo build",
+    "dev:pm": "pnpm --filter @flowsight/pm dev",
     "build:agent": "pnpm --filter @flowsight/agent build",
-    "build:dashboard": "pnpm --filter @flowsight/dashboard build",
-    "build:all": "turbo build",
-    "type-check": "turbo type-check",
-    "test": "turbo test",
-    "setup:ocr": "pip3 install paddlepaddle paddleocr",
-    "download:models": "node scripts/download-models.js",
-    "setup": "npm run setup:ocr && npm run download:models",
-    "release": "turbo build && npm run publish:electron",
-    "lint": "turbo lint",
-    "docker": "docker build -t flowsight-agent ."
+    "build:pm": "pnpm --filter @flowsight/pm build",
+    "build": "pnpm build:agent && pnpm build:pm"
   },
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ],
   "packageManager": "pnpm@8.15.0",
   "engines": {
-    "node": ">=20.10.0",
+    "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
-    "turbo": "^1.11.0"
+    "@tauri-apps/cli": "^2.0.0"
   }
 }
