@@ -466,6 +466,23 @@
 
   <script type="module">
     import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+
+    // Supabase Config
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+
+    // Realtime Channel
+    const channel = supabase ? supabase.channel('room1') : null;
+    if (channel) {
+      channel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          document.getElementById('pmDot').className = 'status-dot ok';
+          document.getElementById('pmStatus').textContent = 'Connected to Supabase';
+        }
+      });
+    }
 
     let isMonitoring = false;
     let monitoringInterval = null;
@@ -633,27 +650,14 @@
       await saveConfig();
       const dot = document.getElementById('pmDot');
       const text = document.getElementById('pmStatus');
-      const btn = document.getElementById('testBtn');
 
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Testing...';
-
-      try {
-        const r = await invoke('test_pm_connection');
-        if (r.connected) {
-          dot.className = 'status-dot ok';
-          text.textContent = 'Connected to PM Dashboard';
-        } else {
-          dot.className = 'status-dot error';
-          text.textContent = 'Cannot reach PM at ' + r.url;
-        }
-      } catch {
+      if (channel) {
+        dot.className = 'status-dot ok';
+        text.textContent = 'Supabase Configured';
+      } else {
         dot.className = 'status-dot error';
-        text.textContent = 'Connection error';
+        text.textContent = 'Missing Supabase Keys';
       }
-
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-icons">wifi_tethering</span> Test Connection';
     }
 
     async function updateStatus() {
@@ -674,13 +678,31 @@
 
       try {
         await saveConfig();
+        // Capture and analyze (Local)
         const report = await invoke('capture_and_analyze', { currentTask: currentTask || undefined });
+
+        // Broadcast to PM (Supabase)
+        if (channel) {
+          await channel.send({
+            type: 'broadcast',
+            event: 'report',
+            payload: {
+              developer_name: document.getElementById('devName').value || 'Dev',
+              device_id: 'dev-agent-' + Math.random().toString(36).substr(2, 9), // Simple ID
+              description: report.description,
+              activity_type: report.activity_type
+            }
+          });
+          report.synced = true;
+        }
+
         activityLog.unshift(report);
         if (activityLog.length > 20) activityLog.pop();
         renderActivity();
         updateStatus();
       } catch (e) {
         alert('Error: ' + e);
+        console.error(e);
       }
 
       btn.disabled = false;

@@ -3,7 +3,8 @@ mod pm;
 use pm::{
     PmState, initialize_pm, get_config, update_config, get_developers,
     get_reports, get_stats, start_server, stop_server, get_server_status,
-    generate_api_key, clear_old_reports, check_ollama, install_ollama, pull_model, start_ollama
+    generate_api_key, clear_old_reports, check_ollama, install_ollama, pull_model, start_ollama,
+    save_remote_report
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -25,7 +26,8 @@ pub fn run() {
             check_ollama,
             install_ollama,
             pull_model,
-            start_ollama
+            start_ollama,
+            save_remote_report
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

@@ -166,29 +166,8 @@ impl FlowSightAgent {
 }
 
 // Send report to PM Dashboard
-fn send_to_pm(pm_url: &str, api_key: &str, dev_name: &str, desc: &str, activity_type: &str) -> bool {
-    let client = match reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build() {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    
-    let url = format!("{}/api/report", pm_url.trim_end_matches('/'));
-    
-    client.post(&url)
-        .header("X-API-Key", api_key)
-        .header("Content-Type", "application/json")
-        .body(serde_json::json!({
-            "developer_name": dev_name,
-            "device_id": whoami::devicename().unwrap_or_else(|_| "unknown".to_string()),
-            "description": desc,
-            "activity_type": activity_type
-        }).to_string())
-        .send()
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
-}
+// send_to_pm removed
+
 
 // Capture and analyze screen
 fn capture_screen() -> Result<String, String> {
@@ -338,17 +317,9 @@ pub fn capture_and_analyze(state: State<'_, AgentState>, current_task: Option<St
     }
     
     // Send to PM
-    if !api_key.is_empty() && !pm_url.is_empty() {
-        synced = send_to_pm(&pm_url, &api_key, &dev_name, &description, &activity_type);
-        if synced {
-            if let Some(id) = report_id {
-                let agent = state.lock().unwrap();
-                if let Some(a) = agent.as_ref() {
-                    a.mark_synced(id);
-                }
-            }
-        }
-    }
+    // Send to PM logic removed - now handled via Supabase Realtime in Frontend
+    let synced = false; // Will be synced by frontend
+
     
     // Update stats
     {

@@ -602,3 +602,38 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
         Err(e) => Err(format!("Failed: {}", e))
     }
 }
+#[tauri::command]
+pub fn save_remote_report(
+    state: State<'_, PmState>,
+    developer_name: String,
+    device_id: String,
+    description: String,
+    activity_type: String
+) -> Result<bool, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        // 1. Upsert Developer
+        // We use device_id as the unique ID for now, or we could pass a specific ID
+        let dev_id = device_id.clone();
+        
+        let _ = conn.execute(
+            "INSERT INTO developers (id, name, device_id, is_online, last_seen_at)
+             VALUES (?1, ?2, ?3, 1, datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET
+               name = ?2, is_online = 1, last_seen_at = datetime('now')",
+            params![&dev_id, &developer_name, &device_id]
+        );
+        
+        // 2. Insert Report
+        let _ = conn.execute(
+            "INSERT INTO reports (developer_id, description, activity_type) VALUES (?1, ?2, ?3)",
+            params![&dev_id, &description, &activity_type]
+        ).map_err(|e| e.to_string())?;
+        
+        Ok(true)
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}

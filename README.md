@@ -12,57 +12,42 @@ FlowSight AI consists of two lightweight desktop applications that work together
 *   **Automatic Categorization**: Activities are automatically tagged (Coding, Browsing, Meeting, Terminal, etc.).
 *   **No Cloud Dependencies**: Operates entirely within your local network (or via direct tunnel).
 
-## 🌍 Remote Access (Internet)
+## 🌍 Remote Access (Supabase)
 
-If the **Dev Agent** and **PM Dashboard** are on different networks (e.g., working from home):
+To connect Developers and Managers over the internet without VPNs or Port Forwarding, we use **Supabase Realtime**.
 
-1.  **PM Dashboard (Host)**:
-    *   The server listens on `0.0.0.0:8080`.
-    *   You must expose this port to the internet.
-    *   **Option A (Easiest)**: Use [Ngrok](https://ngrok.com).
-        ```bash
-        ngrok http 8080
-        ```
-        Copy the generated URL (e.g., `https://fe23-12-34.ngrok-free.app`).
-    *   **Option B (VPN)**: Use [Tailscale](https://tailscale.com) and use the Tailscale IP of the PM machine.
-2.  **Dev Agent (Client)**:
-    *   Enter the public URL (Ngrok URL or Tailscale IP) in the **PM Dashboard URL** field.
-    *   E.g., `https://fe23-12-34.ngrok-free.app` (no port needed for Ngrok).
+### 1. Setup Supabase
+1.  Create a free project at [Supabase.com](https://supabase.com).
+2.  Go to **Project Settings > API**.
+3.  Copy your **Project URL** and **anon public key**.
 
-## 📦 Architecture
+### 2. Configure Environment
+Create a `.env` file in the project root:
+```ini
+VITE_SUPABASE_URL="https://your-project.supabase.co"
+VITE_SUPABASE_ANON_KEY="your-anon-key"
+```
+Or edit `.env.local` locally if you are testing.
 
-The system is composed of two Tauri (Rust + Web Frontend) applications:
 
-### 1. DEV Agent (`@flowsight/agent`)
-*   **Role**: Client application running on developer machines.
-*   **Function**:
-    *   Captures screen content every **10 seconds** (configurable).
-    *   Sends the image to a local Ollama instance running `llava:7b`.
-    *   Receives a text description of the activity.
-    *   Sends the *text description* and metadata to the PM Dashboard.
-    *   Stores a local history of reports in a SQLite database.
-*   **Tech**: Tauri (Rust), SQLite, Ollama API.
+## 📦 Architecture (Hybrid Signal & Sync)
 
-### 2. PM Dashboard (`@flowsight/pm`)
-*   **Role**: Server/Dashboard application for the team lead.
-*   **Function**:
-    *   Runs a local HTTP server (default port `8080`) to receive reports.
-    *   Displays a real-time feed of team activity.
-    *   Shows team stats (online status, activity breakdown).
-    *   Manages API keys for authentication.
-*   **Tech**: Tauri (Rust), SQLite, embedded HTTP Server.
+The system uses a **Hybrid Local-First + Cloud** architecture:
+1.  **Privacy**: Detailed logs and images are processed locally by Ollama/LLaVA.
+2.  **Transport**: Reports are broadcast securely via **Supabase Realtime** (WebSockets).
+3.  **Storage**: The PM Dashboard listens to the broadcast and saves data to its local SQLite database.
 
 ```mermaid
 graph LR
-    subgraph Developer Machine
-        A[Screen Capture] --> B[Local LLaVA Model]
-        B -- "Text Description" --> C[DEV Agent App]
-        C -- "Store" --> D[(Local DB)]
+    subgraph Developer
+        A[Screen Capture] --> B[Local Moondream AI]
+        B -- "Text" --> C[DEV Agent]
+        C -- "Supabase Realtime (Signal)" --> D((Cloud Pipe))
     end
     
-    subgraph Manager Machine
-        C -- "HTTP POST (JSON)" --> E[PM Dashboard Server]
-        E -- "Store" --> F[(Dashboard DB)]
+    subgraph Manager
+        D -- "Broadcast Receive" --> E[PM Dashboard]
+        E -- "Store" --> F[(Local DB)]
         E --> G[Live UI]
     end
 ```
