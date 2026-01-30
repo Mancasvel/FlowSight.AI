@@ -230,8 +230,14 @@ fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Resu
     let json: serde_json::Value = response.json().map_err(|e| e.to_string())?;
     
     // Log the structure to see why it might fail
+    if let Some(err) = json.get("error") {
+        let err_msg = err.as_str().unwrap_or("Unknown error");
+        println!("[Agent] Ollama error: {}", err_msg);
+        return Err(format!("Ollama Error: {}. Please check Setup > Pull Model.", err_msg));
+    }
+    
     if json.get("response").is_none() {
-        println!("[Agent] Ollama error response: {:?}", json);
+        println!("[Agent] Ollama unexpected response: {:?}", json);
     }
 
     json["response"].as_str().map(|s| s.trim().to_string())

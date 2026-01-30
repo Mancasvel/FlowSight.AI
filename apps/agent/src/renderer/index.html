@@ -488,6 +488,15 @@
     let monitoringInterval = null;
     let activityLog = [];
 
+    function getDeviceId() {
+      let id = localStorage.getItem('fsk_device_id');
+      if (!id) {
+        id = 'dev-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('fsk_device_id', id);
+      }
+      return id;
+    }
+
     await invoke('initialize_agent');
 
     // ============ SETUP ============
@@ -688,7 +697,7 @@
             event: 'report',
             payload: {
               developer_name: document.getElementById('devName').value || 'Dev',
-              device_id: 'dev-agent-' + Math.random().toString(36).substr(2, 9), // Simple ID
+              device_id: getDeviceId(), // Persistent ID
               description: report.description,
               activity_type: report.activity_type
             }
