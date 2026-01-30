@@ -59,7 +59,7 @@ impl FlowSightAgent {
                 api_key: None,
                 dev_name: Some(whoami::realname()),
                 capture_interval: Some(10000),
-                vision_model: Some("moondream".to_string()),
+                vision_model: Some("llava:7b".to_string()),
             },
             is_running: false,
             reports_sent: 0,
@@ -170,47 +170,14 @@ impl FlowSightAgent {
 
 
 // Capture and analyze screen
-fn capture_screen() -> Result<String, String> {
-    use screenshots::Screen;
-    
-    let screens = Screen::all().map_err(|e| e.to_string())?;
-    let screen = screens.first().ok_or("No screen")?;
-    let captured = screen.capture().map_err(|e| e.to_string())?;
-    
-    // Convert to DynamicImage
-    let (width, height) = captured.dimensions();
-    let img = image::DynamicImage::ImageRgba8(
-        image::RgbaImage::from_raw(width, height, captured.into_raw())
-            .ok_or("Failed to create image")?
-    );
-    
-    let resized = img.resize(1024, 768, image::imageops::FilterType::Triangle);
-    
-    let mut png = Vec::new();
-    resized.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .map_err(|e| e.to_string())?;
-    
-    Ok(BASE64.encode(&png))
-}
-
 fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(120)) // Increased timeout for LLaVA
         .build().map_err(|e| e.to_string())?;
 
-    // Highly specific prompt for moondream/expert analysis
+    // Robust prompt for LLaVA
     let prompt = format!(
-        "The developer states they are working on: '{}'. 
-        Analyze the screen in high technical detail to verify this.
-        If code is visible, extract:
-        1. The Programming Language.
-        2. The specific Class/Function/Component name being edited.
-        3. The logic/algorithm being implemented.
-        
-        If a browser/tool is visible, describe exactly what is being viewed (e.g., 'StackOverflow - Rust Mutex', 'Jira Ticket PROJ-123').
-        
-        Output format: '[Task Status] | [Context] | [Details]' 
-        Example: 'Aligned | Rust - AuthController | Implementing login verification logic'", 
+        "The user is working on task: '{}'. Analyze the image of the computer screen. Describe the main application open, any visible code or text, and what the user is doing. Be concise but specific.", 
         current_task
     );
     
@@ -239,9 +206,37 @@ fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Resu
     if json.get("response").is_none() {
         println!("[Agent] Ollama unexpected response: {:?}", json);
     }
+    
+    let result = json["response"].as_str().map(|s| s.trim().to_string())
+        .ok_or_else(|| "No response field in Ollama output".to_string())?;
+        
+    println!("[Agent] Ollama response: '{}'", result);
+    Ok(result)
+}
 
-    json["response"].as_str().map(|s| s.trim().to_string())
-        .ok_or_else(|| "No response field in Ollama output".to_string())
+fn capture_screen() -> Result<String, String> {
+    use screenshots::Screen;
+    
+    let screens = Screen::all().map_err(|e| e.to_string())?;
+    let screen = screens.first().ok_or("No screen")?;
+    let captured = screen.capture().map_err(|e| e.to_string())?;
+    
+    // Convert to DynamicImage
+    let (width, height) = captured.dimensions();
+    let img = image::DynamicImage::ImageRgba8(
+        image::RgbaImage::from_raw(width, height, captured.into_raw())
+            .ok_or("Failed to create image")?
+    );
+    
+    let resized = img.resize(1024, 768, image::imageops::FilterType::Triangle);
+    
+    let mut png = Vec::new();
+    resized.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+        
+    println!("[Agent] Captured screenshot size: {} bytes", png.len());
+    
+    Ok(BASE64.encode(&png))
 }
 
 fn detect_type(desc: &str) -> String {

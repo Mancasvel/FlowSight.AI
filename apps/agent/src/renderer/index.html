@@ -373,8 +373,8 @@
         <div class="install-step">
           <div class="step-num" id="step2Num">2</div>
           <div class="step-info">
-            <div class="step-title">Moondream Model</div>
-            <div class="step-desc" id="step2Desc">Fast Vision AI (~2GB)</div>
+            <div class="step-title">LLaVA Model</div>
+            <div class="step-desc" id="step2Desc">General Purpose Vision AI (~4.7GB)</div>
           </div>
           <button class="btn btn-primary btn-sm" id="pullLlavaBtn" disabled>Pull Model</button>
         </div>
@@ -575,10 +575,10 @@
       const btn = document.getElementById('pullLlavaBtn');
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Downloading...';
-      log('Pulling Moondream model... This may take several minutes.');
+      log('Pulling LLaVA model... This may take several minutes.');
 
       try {
-        const r = await invoke('pull_model', { model: 'moondream' });
+        const r = await invoke('pull_model', { model: 'llava:7b' });
         log('Model installed successfully!');
         checkSetup();
       } catch (e) {
@@ -627,7 +627,7 @@
           apiKey: document.getElementById('apiKey').value,
           devName: document.getElementById('devName').value,
           captureInterval: parseInt(document.getElementById('interval').value) * 1000,
-          visionModel: 'moondream'
+          visionModel: 'llava:7b'
         }
       });
     }
