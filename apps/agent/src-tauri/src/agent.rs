@@ -182,11 +182,11 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
             .ok_or("Failed to create image")?
     );
     
-    // Resize to HD (1280x720) with high-quality filter for best balance
-    let resized = img.resize(1280, 720, image::imageops::FilterType::Lanczos3);
+    // Use original resolution (No Resizing) to ensure max clarity for OCR
+    // let resized = img.resize(1280, 720, image::imageops::FilterType::Lanczos3);
     
     let mut png = Vec::new();
-    resized.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| e.to_string())?;
         
     // println!("[Agent] Captured screenshot size: {} bytes", png.len());

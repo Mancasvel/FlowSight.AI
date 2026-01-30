@@ -716,18 +716,28 @@
         });
 
         // 3. AI Analysis (Ollama Direct)
-        log('Analyzing with AI...');
-        const prompt = `Analyze the screen content.
-            IMAGE TEXT CONTENT (OCR): 
-            '''${text.substring(0, 2000)}'''
-            
-            Extract specifically:
-            [APP] <Active Application Name from OCR/Image>
-            [FILE] <Filename or Window Title from OCR/Image>
-            [CODE] <Visible code snippets or text. Use OCR text to be exact.>
-            [Summary] <Short description of activity>
-            
-            Use the OCR text to ground your observations. Do not hallucinate.`;
+        log(`Analyzing with AI... (OCR Length: ${text.length})`);
+        console.log("RAW OCR:", text); // Debug
+
+        const prompt = `You are a screen reading assistant. 
+        Your job is to extracted active context from the provided OCR text and Image.
+        
+        OCR DATA: 
+        """${text.substring(0, 3000)}"""
+        
+        INSTRUCTIONS:
+        1. Identify the ACTIVE APPLICATION (APP).
+        2. Identify the OPEN FILE or CONTEXT (FILE).
+        3. Identify specific KEYWORDS or CODE (CODE).
+        4. Write a 1-sentence SUMMARY.
+        
+        OUTPUT FORMAT (Strict):
+        APP: <Name>
+        FILE: <Name>
+        CODE: <Content>
+        SUMMARY: <Content>
+        
+        If unsure, write "Unknown". DO NOT HALLUCINATE. Use the OCR data as ground truth.`;
 
         const response = await fetch('http://localhost:11434/api/generate', {
           method: 'POST',
@@ -736,7 +746,7 @@
             prompt: prompt,
             images: [base64],
             stream: false,
-            options: { temperature: 0.0, num_predict: 300 }
+            options: { temperature: 0.0, num_predict: 200 }
           })
         });
 
