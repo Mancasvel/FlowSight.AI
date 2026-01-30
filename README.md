@@ -19,13 +19,13 @@ To connect Developers and Managers over the internet without VPNs or Port Forwar
 ### 1. Setup Supabase
 1.  Create a free project at [Supabase.com](https://supabase.com).
 2.  Go to **Project Settings > API**.
-3.  Copy your **Project URL** and **anon public key**.
+3.  Copy your **Project URL** and **Publishable Key**.
 
 ### 2. Configure Environment
 Create a `.env` file in the project root:
 ```ini
 VITE_SUPABASE_URL="https://your-project.supabase.co"
-VITE_SUPABASE_ANON_KEY="your-anon-key"
+VITE_SUPABASE_PUBLIC_KEY="your-publishable-key"
 ```
 Or edit `.env.local` locally if you are testing.
 
