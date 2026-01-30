@@ -168,7 +168,7 @@ impl FlowSightAgent {
 // Send report to PM Dashboard
 fn send_to_pm(pm_url: &str, api_key: &str, dev_name: &str, desc: &str, activity_type: &str) -> bool {
     let client = match reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
         .build() {
         Ok(c) => c,
         Err(_) => return false,

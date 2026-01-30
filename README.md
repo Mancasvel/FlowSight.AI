@@ -10,7 +10,24 @@ FlowSight AI consists of two lightweight desktop applications that work together
 *   **Local Intelligence**: Uses [Ollama](https://ollama.ai) and LLaVA (Large Language-and-Vision Assistant) to understand screen context.
 *   **Real-time Dashboard**: Team leads or project managers can see live activity feeds in text format.
 *   **Automatic Categorization**: Activities are automatically tagged (Coding, Browsing, Meeting, Terminal, etc.).
-*   **No Cloud Dependencies**: Operates entirely within your local network.
+*   **No Cloud Dependencies**: Operates entirely within your local network (or via direct tunnel).
+
+## 🌍 Remote Access (Internet)
+
+If the **Dev Agent** and **PM Dashboard** are on different networks (e.g., working from home):
+
+1.  **PM Dashboard (Host)**:
+    *   The server listens on `0.0.0.0:8080`.
+    *   You must expose this port to the internet.
+    *   **Option A (Easiest)**: Use [Ngrok](https://ngrok.com).
+        ```bash
+        ngrok http 8080
+        ```
+        Copy the generated URL (e.g., `https://fe23-12-34.ngrok-free.app`).
+    *   **Option B (VPN)**: Use [Tailscale](https://tailscale.com) and use the Tailscale IP of the PM machine.
+2.  **Dev Agent (Client)**:
+    *   Enter the public URL (Ngrok URL or Tailscale IP) in the **PM Dashboard URL** field.
+    *   E.g., `https://fe23-12-34.ngrok-free.app` (no port needed for Ngrok).
 
 ## 📦 Architecture
 
