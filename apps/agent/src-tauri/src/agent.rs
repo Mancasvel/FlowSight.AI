@@ -214,6 +214,7 @@ fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Resu
         current_task
     );
     
+    println!("[Agent] Sending request to Ollama...");
     let response = client.post("http://localhost:11434/api/generate")
         .json(&serde_json::json!({
             "model": model,
@@ -224,9 +225,17 @@ fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Resu
         }))
         .send().map_err(|e| e.to_string())?;
     
+    println!("[Agent] Ollama status: {}", response.status());
+    
     let json: serde_json::Value = response.json().map_err(|e| e.to_string())?;
+    
+    // Log the structure to see why it might fail
+    if json.get("response").is_none() {
+        println!("[Agent] Ollama error response: {:?}", json);
+    }
+
     json["response"].as_str().map(|s| s.trim().to_string())
-        .ok_or_else(|| "No response".to_string())
+        .ok_or_else(|| "No response field in Ollama output".to_string())
 }
 
 fn detect_type(desc: &str) -> String {
