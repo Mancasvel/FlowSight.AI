@@ -58,7 +58,7 @@ impl FlowSightAgent {
                 pm_url: Some("http://localhost:8080".to_string()),
                 api_key: None,
                 dev_name: whoami::realname().ok(),
-                capture_interval: Some(30000),
+                capture_interval: Some(10000),
                 vision_model: Some("llava:7b".to_string()),
             },
             is_running: false,
