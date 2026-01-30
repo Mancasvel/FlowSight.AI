@@ -175,11 +175,14 @@ fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Resu
         .timeout(std::time::Duration::from_secs(120)) // Increased timeout for LLaVA
         .build().map_err(|e| e.to_string())?;
 
-    // Robust prompt for LLaVA
-    let prompt = format!(
-        "The user is working on task: '{}'. Analyze the image of the computer screen. Describe the main application open, any visible code or text, and what the user is doing. Be concise but specific.", 
-        current_task
-    );
+    // Simplified Prompt (No Context Bias)
+    let prompt = "Analyze the screen content. Extract specifically:
+    [APP] <Active Application Name>
+    [FILE] <Filename or Window Title>
+    [CODE] <Visible code snippets or text. VERBATIM. DO NOT INVENT.>
+    [Summary] <Short description of activity>
+    
+    If text is too small, describe the layout and active application windows instead.";
     
     println!("[Agent] Sending request to Ollama...");
     let response = client.post("http://localhost:11434/api/generate")
@@ -188,7 +191,7 @@ fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Resu
             "prompt": prompt,
             "images": [screenshot],
             "stream": false,
-            "options": { "temperature": 0.1, "num_predict": 150 } 
+            "options": { "temperature": 0.0, "num_predict": 150 } // Temp 0 for max determinism
         }))
         .send().map_err(|e| e.to_string())?;
     
@@ -228,13 +231,47 @@ fn capture_screen() -> Result<String, String> {
             .ok_or("Failed to create image")?
     );
     
-    let resized = img.resize(1024, 768, image::imageops::FilterType::Triangle);
+    // Resize to HD (1280x720) with high-quality filter for best balance
+    let resized = img.resize(1280, 720, image::imageops::FilterType::Lanczos3);
     
     let mut png = Vec::new();
     resized.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| e.to_string())?;
         
     println!("[Agent] Captured screenshot size: {} bytes", png.len());
+    
+    // DEBUG: Save to disk with rotation (Max 5 files)
+    let desktop = dirs::desktop_dir().unwrap_or(std::path::PathBuf::from("."));
+    let debug_dir = desktop.join("flowsight_screenshots_tmp");
+    if !debug_dir.exists() {
+        let _ = std::fs::create_dir_all(&debug_dir);
+    }
+    
+    // Cleanup old files
+    if let Ok(entries) = std::fs::read_dir(&debug_dir) {
+        let mut files: Vec<_> = entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "png"))
+            .collect();
+            
+        // Sort by modification time (oldest first)
+        files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+        
+        while files.len() >= 5 {
+            if let Some(file) = files.get(0) {
+                let _ = std::fs::remove_file(file.path());
+                files.remove(0);
+            } else {
+                break;
+            }
+        }
+    }
+    
+    let timestamp = chrono::Local::now().format("%H%M%S");
+    let filename = format!("capture_{}.png", timestamp);
+    let debug_path = debug_dir.join(filename);
+    let _ = std::fs::write(&debug_path, &png);
+    println!("[Agent] Saved debug screenshot: {:?}", debug_path);
     
     Ok(BASE64.encode(&png))
 }
