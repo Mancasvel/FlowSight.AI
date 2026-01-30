@@ -465,8 +465,10 @@
   </div>
 
   <script type="module">
+
     import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+    import Tesseract from 'https://esm.sh/tesseract.js@5.0.4';
 
     // Supabase Config
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -495,6 +497,16 @@
         localStorage.setItem('fsk_device_id', id);
       }
       return id;
+    }
+
+    // Helper: Detect Activity Type
+    function detectType(desc) {
+      const d = desc.toLowerCase();
+      if (d.includes('code') || d.includes('ide') || d.includes('editor') || d.includes('rust') || d.includes('html') || d.includes('function')) return 'coding';
+      if (d.includes('browser') || d.includes('chrome') || d.includes('firefox') || d.includes('http')) return 'browsing';
+      if (d.includes('meeting') || d.includes('zoom') || d.includes('teams')) return 'meeting';
+      if (d.includes('terminal') || d.includes('command') || d.includes('powershell')) return 'terminal';
+      return 'other';
     }
 
     await invoke('initialize_agent');
@@ -676,19 +688,68 @@
       document.getElementById('statSent').textContent = status.reportsSent || 0;
     }
 
-    // ============ CAPTURE ============
+    // ============ CAPTURE & ANALYZE (FRONTEND) ============
 
     async function captureNow() {
       const btn = document.getElementById('captureBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span>';
-
-      const currentTask = document.getElementById('currentTask').value;
+      if (btn) btn.disabled = true;
+      if (btn) btn.innerHTML = '<span class="loading"></span>';
 
       try {
         await saveConfig();
-        // Capture and analyze (Local)
-        const report = await invoke('capture_and_analyze', { currentTask: currentTask || undefined });
+
+        // 1. Capture Screen (Rust)
+        log('Capturing screen...');
+        const base64 = await invoke('capture_screen_command');
+        const imgUrl = `data:image/png;base64,${base64}`;
+
+        // 2. OCR (Tesseract JS - Cross Platform)
+        log('Reading text (OCR)...');
+        // Using light/quick settings for Tesseract
+        const { data: { text } } = await Tesseract.recognize(imgUrl, 'eng', {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              const p = Math.round(m.progress * 100);
+              if (p % 20 === 0) log(`OCR: ${p}%`);
+            }
+          }
+        });
+
+        // 3. AI Analysis (Ollama Direct)
+        log('Analyzing with AI...');
+        const prompt = `Analyze the screen content.
+            IMAGE TEXT CONTENT (OCR): 
+            '''${text.substring(0, 2000)}'''
+            
+            Extract specifically:
+            [APP] <Active Application Name from OCR/Image>
+            [FILE] <Filename or Window Title from OCR/Image>
+            [CODE] <Visible code snippets or text. Use OCR text to be exact.>
+            [Summary] <Short description of activity>
+            
+            Use the OCR text to ground your observations. Do not hallucinate.`;
+
+        const response = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          body: JSON.stringify({
+            model: 'llava:7b',
+            prompt: prompt,
+            images: [base64],
+            stream: false,
+            options: { temperature: 0.0, num_predict: 300 }
+          })
+        });
+
+        const json = await response.json();
+        if (json.error) throw new Error(json.error);
+        const description = json.response;
+
+        // 4. Save & Sync
+        const activity_type = detectType(description);
+
+        // Save to Local DB (Rust)
+        const report = await invoke('save_activity', { description, activityType: activity_type });
+        report.synced = false;
 
         // Broadcast to PM (Supabase)
         if (channel) {
@@ -697,7 +758,7 @@
             event: 'report',
             payload: {
               developer_name: document.getElementById('devName').value || 'Dev',
-              device_id: getDeviceId(), // Persistent ID
+              device_id: getDeviceId(),
               description: report.description,
               activity_type: report.activity_type
             }
@@ -709,13 +770,15 @@
         if (activityLog.length > 20) activityLog.pop();
         renderActivity();
         updateStatus();
+        log('Analysis complete.');
+
       } catch (e) {
-        alert('Error: ' + e);
+        log('Error: ' + e);
         console.error(e);
       }
 
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now';
+      if (btn) btn.disabled = false;
+      if (btn) btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now';
     }
 
     function renderActivity() {

@@ -165,59 +165,10 @@ impl FlowSightAgent {
     }
 }
 
-// Send report to PM Dashboard
-// send_to_pm removed
-
-
 // Capture and analyze screen
-fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Result<String, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(120)) // Increased timeout for LLaVA
-        .build().map_err(|e| e.to_string())?;
+// (Logic moved to Frontend for cross-platform support)
 
-    // Simplified Prompt (No Context Bias)
-    let prompt = "Analyze the screen content. Extract specifically:
-    [APP] <Active Application Name>
-    [FILE] <Filename or Window Title>
-    [CODE] <Visible code snippets or text. VERBATIM. DO NOT INVENT.>
-    [Summary] <Short description of activity>
-    
-    If text is too small, describe the layout and active application windows instead.";
-    
-    println!("[Agent] Sending request to Ollama...");
-    let response = client.post("http://localhost:11434/api/generate")
-        .json(&serde_json::json!({
-            "model": model,
-            "prompt": prompt,
-            "images": [screenshot],
-            "stream": false,
-            "options": { "temperature": 0.0, "num_predict": 150 } // Temp 0 for max determinism
-        }))
-        .send().map_err(|e| e.to_string())?;
-    
-    println!("[Agent] Ollama status: {}", response.status());
-    
-    let json: serde_json::Value = response.json().map_err(|e| e.to_string())?;
-    
-    // Log the structure to see why it might fail
-    if let Some(err) = json.get("error") {
-        let err_msg = err.as_str().unwrap_or("Unknown error");
-        println!("[Agent] Ollama error: {}", err_msg);
-        return Err(format!("Ollama Error: {}. Please check Setup > Pull Model.", err_msg));
-    }
-    
-    if json.get("response").is_none() {
-        println!("[Agent] Ollama unexpected response: {:?}", json);
-    }
-    
-    let result = json["response"].as_str().map(|s| s.trim().to_string())
-        .ok_or_else(|| "No response field in Ollama output".to_string())?;
-        
-    println!("[Agent] Ollama response: '{}'", result);
-    Ok(result)
-}
-
-fn capture_screen() -> Result<String, String> {
+fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
     use screenshots::Screen;
     
     let screens = Screen::all().map_err(|e| e.to_string())?;
@@ -238,51 +189,46 @@ fn capture_screen() -> Result<String, String> {
     resized.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| e.to_string())?;
         
-    println!("[Agent] Captured screenshot size: {} bytes", png.len());
+    // println!("[Agent] Captured screenshot size: {} bytes", png.len());
     
-    // DEBUG: Save to disk with rotation (Max 5 files)
+    // Persist to tmp for debug (optional)
     let desktop = dirs::desktop_dir().unwrap_or(std::path::PathBuf::from("."));
     let debug_dir = desktop.join("flowsight_screenshots_tmp");
     if !debug_dir.exists() {
         let _ = std::fs::create_dir_all(&debug_dir);
     }
     
-    // Cleanup old files
-    if let Ok(entries) = std::fs::read_dir(&debug_dir) {
-        let mut files: Vec<_> = entries
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "png"))
-            .collect();
-            
-        // Sort by modification time (oldest first)
-        files.sort_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
-        
-        while files.len() >= 5 {
-            if let Some(file) = files.get(0) {
-                let _ = std::fs::remove_file(file.path());
-                files.remove(0);
-            } else {
-                break;
-            }
-        }
-    }
-    
     let timestamp = chrono::Local::now().format("%H%M%S");
     let filename = format!("capture_{}.png", timestamp);
     let debug_path = debug_dir.join(filename);
     let _ = std::fs::write(&debug_path, &png);
-    println!("[Agent] Saved debug screenshot: {:?}", debug_path);
     
-    Ok(BASE64.encode(&png))
+    Ok((BASE64.encode(&png), debug_path))
 }
 
-fn detect_type(desc: &str) -> String {
-    let d = desc.to_lowercase();
-    if d.contains("code") || d.contains("ide") || d.contains("editor") || d.contains("rust") || d.contains("html") || d.contains("function") { "coding" }
-    else if d.contains("browser") || d.contains("chrome") || d.contains("firefox") || d.contains("http") { "browsing" }
-    else if d.contains("meeting") || d.contains("zoom") || d.contains("teams") { "meeting" }
-    else if d.contains("terminal") || d.contains("command") || d.contains("powershell") { "terminal" }
-    else { "other" }.to_string()
+#[tauri::command]
+pub fn capture_screen_command() -> Result<String, String> {
+    let (base64, _) = capture_screen()?;
+    Ok(base64)
+}
+
+#[tauri::command]
+pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String) -> Result<ActivityReport, String> {
+    let mut agent = state.lock().unwrap();
+    let report_id = if let Some(a) = agent.as_mut() {
+        a.reports_sent += 1;
+        a.save_report(&description, &activity_type)
+    } else {
+        None
+    };
+    
+    Ok(ActivityReport {
+        id: report_id,
+        timestamp: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        description,
+        activity_type,
+        synced: false,
+    })
 }
 
 // ============== TAURI COMMANDS ==============
@@ -331,58 +277,6 @@ pub fn start_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
 pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
     if let Some(a) = state.lock().unwrap().as_mut() { a.is_running = false; }
     Ok(true)
-}
-
-#[tauri::command]
-pub fn capture_and_analyze(state: State<'_, AgentState>, current_task: Option<String>) -> Result<ActivityReport, String> {
-            let (_pm_url, _api_key, _dev_name, model) = {
-        let agent = state.lock().unwrap();
-        let a = agent.as_ref().ok_or("Not initialized")?;
-        (
-            a.config.pm_url.clone().unwrap_or_default(),
-            a.config.api_key.clone().unwrap_or_default(),
-            a.config.dev_name.clone().unwrap_or_else(|| "Dev".to_string()),
-            a.config.vision_model.clone().unwrap_or_else(|| "moondream".to_string()),
-        )
-    };
-    
-    let task_context = current_task.unwrap_or_else(|| "General Work".to_string());
-    
-    let screenshot = capture_screen()?;
-    let description = analyze_with_llava(&screenshot, &model, &task_context)?;
-    let activity_type = detect_type(&description);
-    
-    let synced = false;
-    let mut report_id = None;
-    
-    // Save locally
-    {
-        let agent = state.lock().unwrap();
-        if let Some(a) = agent.as_ref() {
-            report_id = a.save_report(&description, &activity_type);
-        }
-    }
-    
-    // Send to PM
-    // Send to PM logic removed - now handled via Supabase Realtime in Frontend
-    let synced = false; // Will be synced by frontend
-
-    
-    // Update stats
-    {
-        let mut agent = state.lock().unwrap();
-        if let Some(a) = agent.as_mut() {
-            a.reports_sent += 1;
-        }
-    }
-    
-    Ok(ActivityReport {
-        id: report_id,
-        timestamp: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-        description,
-        activity_type,
-        synced,
-    })
 }
 
 #[tauri::command]

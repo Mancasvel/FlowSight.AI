@@ -3,7 +3,8 @@ mod agent;
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
     get_status, start_monitoring, stop_monitoring,
-    capture_and_analyze, get_activity_log, check_ollama, test_pm_connection,
+    capture_screen_command, save_activity,
+    get_activity_log, check_ollama, test_pm_connection,
     install_ollama, pull_model, start_ollama
 };
 
@@ -18,7 +19,8 @@ pub fn run() {
             get_status,
             start_monitoring,
             stop_monitoring,
-            capture_and_analyze,
+            capture_screen_command,
+            save_activity,
             get_activity_log,
             check_ollama,
             test_pm_connection,
