@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.tauri.dev",
   "build": {
-    "frontendDist": "../src/renderer",
+    "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": null,
-    "beforeBuildCommand": null
+    "beforeDevCommand": "pnpm vite",
+    "beforeBuildCommand": "pnpm vite build"
   },
   "app": {
     "windows": [

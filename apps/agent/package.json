@@ -4,6 +4,7 @@
   "private": true,
   "description": "FlowSight DEV Agent - Screen capture and AI analysis",
   "scripts": {
+    "vite": "vite",
     "dev": "tauri dev",
     "build": "tauri build"
   },
@@ -11,6 +12,7 @@
     "@tauri-apps/api": "^2.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.9.6"
+    "@tauri-apps/cli": "^2.9.6",
+    "vite": "^7.3.1"
   }
 }

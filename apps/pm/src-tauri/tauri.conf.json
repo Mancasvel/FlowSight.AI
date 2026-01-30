@@ -4,7 +4,10 @@
   "version": "1.0.0",
   "identifier": "ai.flowsight.pm",
   "build": {
-    "frontendDist": "../src"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1421",
+    "beforeDevCommand": "pnpm vite",
+    "beforeBuildCommand": "pnpm vite build"
   },
   "app": {
     "windows": [
