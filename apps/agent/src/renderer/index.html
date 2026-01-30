@@ -746,7 +746,7 @@
             prompt: prompt,
             images: [base64],
             stream: false,
-            options: { temperature: 0.0, num_predict: 200 }
+            options: { temperature: 0.0, num_predict: 500 }
           })
         });
 
@@ -763,6 +763,7 @@
 
         // Broadcast to PM (Supabase)
         if (channel) {
+          const apiKey = document.getElementById('apiKey').value;
           await channel.send({
             type: 'broadcast',
             event: 'report',
@@ -770,7 +771,8 @@
               developer_name: document.getElementById('devName').value || 'Dev',
               device_id: getDeviceId(),
               description: report.description,
-              activity_type: report.activity_type
+              activity_type: report.activity_type,
+              api_key: apiKey // Send Team Key
             }
           });
           report.synced = true;
