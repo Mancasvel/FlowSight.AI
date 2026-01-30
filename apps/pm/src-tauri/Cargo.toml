@@ -24,6 +24,7 @@ chrono = "0.4"
 tiny_http = "0.12"
 dirs = "5"
 whoami = "2.1"
+uuid = { version = "1.20.0", features = ["v4"] }
 
 [profile.release]
 panic = "abort"

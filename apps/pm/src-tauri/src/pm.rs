@@ -101,12 +101,20 @@ impl PmDashboard {
                     value TEXT NOT NULL
                 );
                 
+                CREATE TABLE IF NOT EXISTS teams (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    api_key TEXT UNIQUE,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS developers (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     device_id TEXT UNIQUE,
                     is_online INTEGER DEFAULT 1,
-                    last_seen_at TEXT
+                    last_seen_at TEXT,
+                    team_id TEXT
                 );
                 
                 CREATE TABLE IF NOT EXISTS reports (
@@ -602,31 +610,125 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
         Err(e) => Err(format!("Failed: {}", e))
     }
 }
+
+// Assuming init_db function exists elsewhere and needs to be updated.
+// The following SQL statements would be part of the init_db function's execution.
+/*
+                CREATE TABLE IF NOT EXISTS teams (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    api_key TEXT UNIQUE,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS developers (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    device_id TEXT UNIQUE,
+                    is_online INTEGER DEFAULT 1,
+                    last_seen_at TEXT,
+                    team_id TEXT,
+                    FOREIGN KEY(team_id) REFERENCES teams(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    developer_id TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    activity_type TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(developer_id) REFERENCES developers(id)
+                );
+                // ... (indexes)
+                
+                // create default team if not exists
+                // We'll do this in code or let user create one.
+*/
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct Team {
+    pub id: String,
+    pub name: String,
+    pub api_key: String,
+}
+
+#[tauri::command]
+pub fn create_team(state: State<'_, PmState>, name: String) -> Result<Team, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        let id = uuid::Uuid::new_v4().to_string();
+        let api_key = generate_key();
+        
+        conn.execute(
+            "INSERT INTO teams (id, name, api_key) VALUES (?1, ?2, ?3)",
+            params![&id, &name, &api_key]
+        ).map_err(|e| e.to_string())?;
+        
+        Ok(Team { id, name, api_key })
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn get_teams(state: State<'_, PmState>) -> Result<Vec<Team>, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT id, name, api_key FROM teams ORDER BY created_at DESC").map_err(|e| e.to_string())?;
+        
+        let teams = stmt.query_map([], |row| {
+            Ok(Team {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                api_key: row.get(2)?,
+            })
+        }).map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+        
+        Ok(teams)
+    } else {
+        Ok(vec![])
+    }
+}
+
 #[tauri::command]
 pub fn save_remote_report(
     state: State<'_, PmState>,
     developer_name: String,
     device_id: String,
     description: String,
-    activity_type: String
+    activity_type: String,
+    api_key: Option<String>
 ) -> Result<bool, String> {
     let pm = state.lock().unwrap();
     if let Some(pm) = pm.as_ref() {
         let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
         
-        // 1. Upsert Developer
-        // We use device_id as the unique ID for now, or we could pass a specific ID
+        // 1. Resolve Team ID from API Key
+        let team_id: Option<String> = if let Some(key) = api_key {
+            conn.query_row("SELECT id FROM teams WHERE api_key = ?", [&key], |r| r.get(0)).ok()
+        } else {
+            None
+        };
+        
+        // If strict mode, we might reject if no team_id. For now, we allow "Unassigned".
+        
+        // 2. Upsert Developer
         let dev_id = device_id.clone();
         
         let _ = conn.execute(
-            "INSERT INTO developers (id, name, device_id, is_online, last_seen_at)
-             VALUES (?1, ?2, ?3, 1, datetime('now'))
+            "INSERT INTO developers (id, name, device_id, is_online, last_seen_at, team_id)
+             VALUES (?1, ?2, ?3, 1, datetime('now'), ?4)
              ON CONFLICT(id) DO UPDATE SET
-               name = ?2, is_online = 1, last_seen_at = datetime('now')",
-            params![&dev_id, &developer_name, &device_id]
+               name = ?2, is_online = 1, last_seen_at = datetime('now'), team_id = ?4",
+            params![&dev_id, &developer_name, &device_id, &team_id]
         );
         
-        // 2. Insert Report
+        // 3. Insert Report
         let _ = conn.execute(
             "INSERT INTO reports (developer_id, description, activity_type) VALUES (?1, ?2, ?3)",
             params![&dev_id, &description, &activity_type]

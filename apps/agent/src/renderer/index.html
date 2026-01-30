@@ -348,10 +348,70 @@
       margin-top: 12px;
       display: none;
     }
+
+    /* SaaS Overlay */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(248, 250, 252, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-card h2 {
+      margin-bottom: 8px;
+      color: var(--primary);
+    }
+
+    .login-card p {
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
   </style>
 </head>
 
 <body>
+  <!-- Login Overlay -->
+  <div id="loginOverlay" class="overlay">
+    <div class="login-card">
+      <h2>FlowSight Agent</h2>
+      <p>Enter your Team License Key to start.</p>
+      <div class="form-group" style="margin-bottom: 20px; text-align: left;">
+        <label>Team License Key</label>
+        <input type="text" id="licenseInput" placeholder="Enter key (e.g. dev_team_...)"
+          style="font-family: monospace;">
+        <p id="loginError" style="color: var(--error); margin-top: 8px; display: none;"></p>
+      </div>
+      <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="handleLogin()">
+        Connect to Team
+      </button>
+      <div style="margin-top: 16px; font-size: 12px; color: var(--text-secondary);">
+        Verifying via Supabase...
+      </div>
+    </div>
+  </div>
+
   <div class="header">
     <h1>FlowSight DEV Agent</h1>
     <div class="sub">Screen analysis with local AI</div>
@@ -509,8 +569,6 @@
       return 'other';
     }
 
-    await invoke('initialize_agent');
-
     // ============ SETUP ============
 
     function log(msg) {
@@ -644,7 +702,83 @@
       });
     }
 
-    // ============ STATUS ============
+    // ============ SAAS LICENSING ============
+
+    async function checkLicense() {
+      const storedKey = localStorage.getItem('agent_license_key');
+      if (storedKey) {
+        const isValid = await validateLicense(storedKey);
+        if (isValid) {
+          document.getElementById('apiKey').value = storedKey; // Sync to main UI
+          document.getElementById('loginOverlay').classList.add('hidden');
+        } else {
+          localStorage.removeItem('agent_license_key');
+          document.getElementById('loginOverlay').classList.remove('hidden');
+        }
+      } else {
+        document.getElementById('loginOverlay').classList.remove('hidden');
+      }
+    }
+
+    async function validateLicense(key) {
+      if (!supabase) {
+        console.warn("Supabase not configured, validating locally");
+        return key.length > 5; // Fallback
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('licenses')
+          .select('*')
+          .eq('key_string', key)
+          .single();
+
+        if (error || !data) {
+          console.error("License validation failed:", error);
+          return false;
+        }
+
+        if (data.status !== 'active') {
+          console.error("License is inactive/suspended");
+          return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.error("License check error:", e);
+        // Fail open if network error? No, fail closed for security.
+        return false;
+      }
+    }
+
+    window.handleLogin = async () => {
+      const key = document.getElementById('licenseInput').value.trim();
+      const errorMsg = document.getElementById('loginError');
+      const btn = document.querySelector('#loginOverlay .btn');
+
+      errorMsg.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+
+      const isValid = await validateLicense(key);
+
+      if (isValid) {
+        localStorage.setItem('agent_license_key', key);
+        document.getElementById('apiKey').value = key;
+        document.getElementById('loginOverlay').classList.add('hidden');
+        saveConfig(); // Persist to backend config too
+      } else {
+        errorMsg.textContent = 'Invalid or inactive key.';
+        errorMsg.style.display = 'block';
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Connect to Team';
+    };
+
+    // Initialize
+    await invoke('initialize_agent');
+    checkLicense(); // trigger validation
 
     async function checkOllama() {
       const dot = document.getElementById('ollamaDot');

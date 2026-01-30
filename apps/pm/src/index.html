@@ -8,19 +8,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    /* ... (Previous Styles) ... */
     :root {
-      --primary: #2563eb;
-      --success: #16a34a;
-      --error: #dc2626;
-      --warning: #d97706;
-      --bg: #f8fafc;
-      --surface: #ffffff;
       --text: #1e293b;
       --text-secondary: #64748b;
       --border: #e2e8f0;
@@ -183,6 +172,7 @@
     .btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+      transform: none;
     }
 
     .config-section {
@@ -433,10 +423,140 @@
         transform: rotate(360deg);
       }
     }
+
+    /* Modern SaaS Overlay */
+    .overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.98);
+      /* Deep Blue/Black */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+    }
+
+    .login-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+
+    .login-card h2 {
+      margin-bottom: 12px;
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .login-card p {
+      color: #94a3b8;
+      margin-bottom: 32px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .form-group.login-input {
+      text-align: left;
+      margin-bottom: 24px;
+    }
+
+    .form-group.login-input label {
+      color: #cbd5e1;
+      font-size: 13px;
+      margin-bottom: 8px;
+      display: block;
+      font-weight: 500;
+    }
+
+    .form-group.login-input input {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #fff;
+      padding: 14px;
+      border-radius: 8px;
+      width: 100%;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .form-group.login-input input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      outline: none;
+    }
+
+    .btn-login {
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      padding: 14px;
+      width: 100%;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+
+    .btn-login:hover {
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-login:active {
+      transform: translateY(0);
+    }
+
+    .btn-login:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .hidden {
+      display: none !important;
+    }
   </style>
 </head>
 
 <body>
+  <!-- Login Overlay -->
+  <div id="loginOverlay" class="overlay">
+    <div class="login-card">
+      <div style="margin-bottom: 24px;">
+        <span class="material-icons" style="font-size: 48px; color: #3b82f6;">grid_view</span>
+      </div>
+      <h2>FlowSight PM</h2>
+      <p>Secure Enterprise Activity Monitoring.<br>Enter your license key to continue.</p>
+
+      <div class="form-group login-input">
+        <label>License Key</label>
+        <input type="text" id="licenseInput" placeholder="pm_live_..." autocomplete="off">
+        <p id="loginError" style="color: #ef4444; margin-top: 12px; font-size: 13px; display: none;"></p>
+      </div>
+
+      <button class="btn-login" id="activateBtn">
+        Activate Dashboard
+      </button>
+
+      <div style="margin-top: 24px; font-size: 12px; color: #64748b;">
+        <span class="material-icons" style="font-size: 12px; vertical-align: -2px;">lock</span> Secured via Supabase
+      </div>
+    </div>
+  </div>
+
   <div class="header">
     <div>
       <h1>FlowSight PM Dashboard</h1>
@@ -445,10 +565,11 @@
     <div class="server-status">
       <div class="status-dot" id="serverDot"></div>
       <span id="serverStatusText">Server stopped</span>
-      <button class="btn btn-success" id="startServerBtn">
+      <!-- Explicit inline-flex to ensure visibility -->
+      <button class="btn btn-success" id="startServerBtn" style="display: inline-flex;">
         <span class="material-icons">play_arrow</span> Start
       </button>
-      <button class="btn btn-error" id="stopServerBtn" style="display:none;">
+      <button class="btn btn-error" id="stopServerBtn" style="display: none;">
         <span class="material-icons">stop</span> Stop
       </button>
     </div>
@@ -555,8 +676,8 @@
   </div>
 
   <script type="module">
-    import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+    import { invoke } from '@tauri-apps/api/core';
+    import { createClient } from '@supabase/supabase-js';
 
     // Initialize
     await invoke('initialize_pm');
@@ -570,6 +691,7 @@
       console.log('Initializing Supabase Realtime...');
       const channel = supabase.channel('room1');
       channel.on('broadcast', { event: 'report' }, async (event) => {
+        // ... existing report logic ...
         console.log('Received remote report:', event.payload);
         try {
           await invoke('save_remote_report', {
@@ -579,9 +701,7 @@
             activityType: event.payload.activity_type
           });
           // Refresh UI to show new data
-          loadReports();
-          loadDevelopers();
-          updateStats();
+          refreshData(); // Use the exposed function
         } catch (e) {
           console.error('Failed to save remote report:', e);
         }
@@ -589,6 +709,96 @@
         console.log('Supabase Status:', status);
       });
     }
+
+    // ============ SAAS LICENSING ============
+
+    async function checkLicense() {
+      const storedKey = localStorage.getItem('saas_license_key');
+      if (storedKey) {
+        // Optimistic check: Hide overlay immediately, then validate in background
+        // Or strict: Validate then hide. Let's do Strict for security demo.
+        const isValid = await validateLicense(storedKey);
+        if (isValid) {
+          document.getElementById('loginOverlay').classList.add('hidden');
+        } else {
+          // Invalid key stored
+          localStorage.removeItem('saas_license_key');
+          document.getElementById('loginOverlay').classList.remove('hidden');
+        }
+      } else {
+        document.getElementById('loginOverlay').classList.remove('hidden');
+      }
+    }
+
+    async function validateLicense(key) {
+      if (!supabase) {
+        console.warn("Supabase not configured, allowing local dev bypass (remove in prod)");
+        return true;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('licenses')
+          .select('*')
+          .eq('key_string', key)
+          .single();
+
+        if (error || !data) {
+          console.error("License validation failed:", error);
+          return false;
+        }
+
+        if (data.status !== 'active') {
+          console.error("License is inactive/suspended");
+          return false;
+        }
+
+        return true;
+      } catch (e) {
+        console.error("License check error:", e);
+        return false;
+      }
+    }
+
+    // Event Listener for Login Button
+    document.getElementById('activateBtn').addEventListener('click', async () => {
+      console.log("Activate button clicked");
+      const keyInput = document.getElementById('licenseInput');
+      const key = keyInput.value.trim();
+      const errorMsg = document.getElementById('loginError');
+      const btn = document.getElementById('activateBtn');
+
+      errorMsg.style.display = 'none';
+      if (!key) {
+        errorMsg.textContent = 'Please enter a license key.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+
+      const isValid = await validateLicense(key);
+
+      if (isValid) {
+        localStorage.setItem('saas_license_key', key);
+        document.getElementById('loginOverlay').classList.add('hidden');
+        loadConfig(); // Reload config access
+      } else {
+        errorMsg.textContent = 'Invalid or inactive license key. Please check your subscription.';
+        errorMsg.style.display = 'block';
+        btn.textContent = 'Activate Dashboard'; // Reset text
+      }
+
+      btn.disabled = false;
+    });
+
+    // Handle Enter key in input
+    document.getElementById('licenseInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('activateBtn').click();
+      }
+    });
 
     // ============ SETUP (Optional) ============
 
@@ -800,29 +1010,36 @@
       }
     };
 
+    // Auto Refresh
+    setInterval(() => {
+      // Logic for refresh
+      // Since currentView is not defined in scope, we can check visibility or just call refreshData
+      // Assuming refreshData updates the current view based on simple DOM checks
+      refreshData();
+    }, 5000);
+
+    // Expose for debugging
+    window.refreshData = async () => {
+      await loadDevelopers();
+      await loadReports();
+      await updateStats();
+    };
+
     document.getElementById('refreshBtn').onclick = () => {
-      loadDevelopers();
-      loadReports();
-      updateStats();
+      refreshData();
     };
 
     document.getElementById('teamName').onchange = saveConfig;
     document.getElementById('serverPort').onchange = saveConfig;
 
     // Initial load
+    checkLicense(); // Validate SaaS License First
     loadConfig();
     checkSetup();
     updateServerStatus();
     updateStats();
-    loadDevelopers();
-    loadReports();
+    refreshData();
 
-    // Auto-refresh every 5 seconds
-    setInterval(() => {
-      updateStats();
-      loadDevelopers();
-      loadReports();
-    }, 5000);
   </script>
 </body>
 
