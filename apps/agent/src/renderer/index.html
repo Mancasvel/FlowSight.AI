@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlowSight DEV Agent</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     :root {
       --primary: #2563eb;
       --success: #16a34a;
@@ -19,66 +25,338 @@
       --text-secondary: #64748b;
       --border: #e2e8f0;
     }
-    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-    .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; }
-    .header h1 { font-size: 18px; font-weight: 600; }
-    .header .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
-    .container { max-width: 600px; margin: 0 auto; padding: 24px; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-    .card-title .material-icons { font-size: 18px; color: var(--primary); }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
-    .form-group input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
-    .form-group input:focus { outline: none; border-color: var(--primary); }
-    .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-    .btn .material-icons { font-size: 16px; }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-success { background: var(--success); color: white; }
-    .btn-error { background: var(--error); color: white; }
-    .btn-warning { background: var(--warning); color: white; }
-    .btn-outline { background: transparent; border: 1px solid var(--border); }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-    .status-row { display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 12px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
-    .status-dot.ok { background: var(--success); }
-    .status-dot.warn { background: var(--warning); }
-    .status-dot.error { background: var(--error); }
-    .status-text { font-size: 13px; flex: 1; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-    .stat { text-align: center; padding: 12px; background: var(--bg); border-radius: 8px; }
-    .stat-value { font-size: 24px; font-weight: 300; }
-    .stat-label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; }
-    .activity-list { max-height: 250px; overflow-y: auto; }
-    .activity-item { padding: 12px; border-bottom: 1px solid var(--border); }
-    .activity-item:last-child { border-bottom: none; }
-    .activity-time { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
-    .activity-desc { font-size: 13px; line-height: 1.4; }
-    .activity-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--bg); margin-top: 6px; }
-    .activity-badge.synced { background: #dcfce7; color: #166534; }
-    .empty { text-align: center; padding: 30px; color: var(--text-secondary); }
-    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .install-steps { background: var(--bg); border-radius: 8px; padding: 16px; }
-    .install-step { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-    .install-step:last-child { border-bottom: none; }
-    .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
-    .step-num.done { background: var(--success); color: white; }
-    .step-num.active { background: var(--primary); color: white; }
-    .step-info { flex: 1; }
-    .step-title { font-size: 13px; font-weight: 500; }
-    .step-desc { font-size: 11px; color: var(--text-secondary); }
-    .progress-log { background: #1e293b; color: #e2e8f0; font-family: monospace; font-size: 12px; padding: 12px; border-radius: 6px; max-height: 150px; overflow-y: auto; margin-top: 12px; display: none; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .header .sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title .material-icons {
+      font-size: 18px;
+      color: var(--primary);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn .material-icons {
+      font-size: 16px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-error {
+      background: var(--error);
+      color: white;
+    }
+
+    .btn-warning {
+      background: var(--warning);
+      color: white;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ccc;
+    }
+
+    .status-dot.ok {
+      background: var(--success);
+    }
+
+    .status-dot.warn {
+      background: var(--warning);
+    }
+
+    .status-dot.error {
+      background: var(--error);
+    }
+
+    .status-text {
+      font-size: 13px;
+      flex: 1;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      text-align: center;
+      padding: 12px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 300;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .activity-list {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .activity-item {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-time {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .activity-desc {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .activity-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--bg);
+      margin-top: 6px;
+    }
+
+    .activity-badge.synced {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 30px;
+      color: var(--text-secondary);
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .install-steps {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .install-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .install-step:last-child {
+      border-bottom: none;
+    }
+
+    .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .step-num.done {
+      background: var(--success);
+      color: white;
+    }
+
+    .step-num.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .step-info {
+      flex: 1;
+    }
+
+    .step-title {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .step-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .progress-log {
+      background: #1e293b;
+      color: #e2e8f0;
+      font-family: monospace;
+      font-size: 12px;
+      padding: 12px;
+      border-radius: 6px;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 12px;
+      display: none;
+    }
   </style>
 </head>
+
 <body>
   <div class="header">
     <h1>FlowSight DEV Agent</h1>
     <div class="sub">Screen analysis with local AI</div>
   </div>
-  
+
   <div class="container">
     <!-- Setup Card -->
     <div class="card" id="setupCard">
@@ -95,8 +373,8 @@
         <div class="install-step">
           <div class="step-num" id="step2Num">2</div>
           <div class="step-info">
-            <div class="step-title">LLaVA Model</div>
-            <div class="step-desc" id="step2Desc">Vision AI for screen analysis (~5GB)</div>
+            <div class="step-title">Moondream Model</div>
+            <div class="step-desc" id="step2Desc">Fast Vision AI (~2GB)</div>
           </div>
           <button class="btn btn-primary btn-sm" id="pullLlavaBtn" disabled>Pull Model</button>
         </div>
@@ -111,7 +389,7 @@
       </div>
       <div class="progress-log" id="progressLog"></div>
     </div>
-    
+
     <!-- Connection Card -->
     <div class="card">
       <div class="card-title"><span class="material-icons">link</span> Connection</div>
@@ -123,7 +401,7 @@
         <div class="status-dot" id="pmDot"></div>
         <span class="status-text" id="pmStatus">Not connected to PM</span>
       </div>
-      
+
       <div class="form-row">
         <div class="form-group">
           <label>PM Dashboard URL</label>
@@ -142,7 +420,7 @@
         <span class="material-icons">wifi_tethering</span> Test Connection
       </button>
     </div>
-    
+
     <!-- Monitoring Card -->
     <div class="card">
       <div class="card-title"><span class="material-icons">play_circle</span> Monitoring</div>
@@ -156,21 +434,27 @@
           <div class="stat-label">Reports</div>
         </div>
         <div class="stat">
-          <div class="stat-value" id="statInterval">30s</div>
+          <div class="stat-value" id="statInterval">10s</div>
           <div class="stat-label">Interval</div>
         </div>
       </div>
       <div class="form-group">
+        <label>Current Task / Ticket</label>
+        <input type="text" id="currentTask" placeholder="e.g. FSK-123 Implementing Auth"
+          style="border-color: var(--primary); background: #f0f9ff;">
+      </div>
+      <div class="form-group">
         <label>Capture Interval (seconds)</label>
-        <input type="number" id="interval" value="30" min="10" max="300">
+        <input type="number" id="interval" value="10" min="5" max="300">
       </div>
       <div class="btn-group">
         <button class="btn btn-success" id="startBtn"><span class="material-icons">play_arrow</span> Start</button>
         <button class="btn btn-error" id="stopBtn"><span class="material-icons">stop</span> Stop</button>
-        <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture Now</button>
+        <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture
+          Now</button>
       </div>
     </div>
-    
+
     <!-- Activity Card -->
     <div class="card">
       <div class="card-title"><span class="material-icons">history</span> Recent Activity</div>
@@ -182,54 +466,54 @@
 
   <script type="module">
     import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
-    
+
     let isMonitoring = false;
     let monitoringInterval = null;
     let activityLog = [];
-    
+
     await invoke('initialize_agent');
-    
+
     // ============ SETUP ============
-    
+
     function log(msg) {
       const el = document.getElementById('progressLog');
       el.style.display = 'block';
       el.textContent += msg + '\n';
       el.scrollTop = el.scrollHeight;
     }
-    
+
     async function checkSetup() {
       const step1 = document.getElementById('step1Num');
       const step2 = document.getElementById('step2Num');
       const step3 = document.getElementById('step3Num');
       const pullBtn = document.getElementById('pullLlavaBtn');
       const startBtn = document.getElementById('startOllamaBtn');
-      
+
       try {
         const r = await invoke('check_ollama');
-        
+
         if (r.online) {
           step1.classList.add('done');
           step1.textContent = '✓';
           document.getElementById('step1Desc').textContent = 'Installed and running';
           document.getElementById('installOllamaBtn').textContent = 'Installed';
           document.getElementById('installOllamaBtn').disabled = true;
-          
+
           step3.classList.add('done');
           step3.textContent = '✓';
           document.getElementById('step3Desc').textContent = 'Running';
           startBtn.textContent = 'Running';
           startBtn.disabled = true;
-          
+
           pullBtn.disabled = false;
-          
+
           if (r.hasVisionModel) {
             step2.classList.add('done');
             step2.textContent = '✓';
-            document.getElementById('step2Desc').textContent = 'LLaVA ready';
+            document.getElementById('step2Desc').textContent = 'Moondream ready';
             pullBtn.textContent = 'Installed';
             pullBtn.disabled = true;
-            
+
             // Hide setup card if everything is ready
             document.getElementById('setupCard').style.display = 'none';
           }
@@ -241,12 +525,12 @@
         console.error('Setup check error:', e);
       }
     }
-    
+
     document.getElementById('installOllamaBtn').onclick = async () => {
       const btn = document.getElementById('installOllamaBtn');
       btn.disabled = true;
       btn.textContent = 'Opening...';
-      
+
       try {
         const r = await invoke('install_ollama');
         log(r.message);
@@ -256,20 +540,20 @@
       } catch (e) {
         log('Error: ' + e);
       }
-      
+
       btn.disabled = false;
       btn.textContent = 'Install';
     };
-    
+
     document.getElementById('pullLlavaBtn').onclick = async () => {
       const btn = document.getElementById('pullLlavaBtn');
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Downloading...';
-      log('Pulling LLaVA model... This may take several minutes.');
-      
+      log('Pulling Moondream model... This may take several minutes.');
+
       try {
-        const r = await invoke('pull_model', { model: 'llava:7b' });
-        log('LLaVA model installed successfully!');
+        const r = await invoke('pull_model', { model: 'moondream' });
+        log('Model installed successfully!');
         checkSetup();
       } catch (e) {
         log('Error: ' + e);
@@ -277,17 +561,17 @@
         btn.textContent = 'Retry';
       }
     };
-    
+
     document.getElementById('startOllamaBtn').onclick = async () => {
       const btn = document.getElementById('startOllamaBtn');
       btn.disabled = true;
       btn.textContent = 'Starting...';
       log('Starting Ollama server...');
-      
+
       try {
         await invoke('start_ollama');
         log('Ollama started. Waiting for it to be ready...');
-        
+
         // Wait a bit and check
         setTimeout(async () => {
           await checkSetup();
@@ -299,17 +583,17 @@
         btn.textContent = 'Start';
       }
     };
-    
+
     // ============ CONFIG ============
-    
+
     async function loadConfig() {
       const config = await invoke('get_config');
       document.getElementById('pmUrl').value = config.pmUrl || 'http://localhost:8080';
       document.getElementById('apiKey').value = config.apiKey || '';
       document.getElementById('devName').value = config.devName || '';
-      document.getElementById('interval').value = (config.captureInterval || 30000) / 1000;
+      document.getElementById('interval').value = (config.captureInterval || 10000) / 1000;
     }
-    
+
     async function saveConfig() {
       await invoke('update_config', {
         config: {
@@ -317,13 +601,13 @@
           apiKey: document.getElementById('apiKey').value,
           devName: document.getElementById('devName').value,
           captureInterval: parseInt(document.getElementById('interval').value) * 1000,
-          visionModel: 'llava:7b'
+          visionModel: 'moondream'
         }
       });
     }
-    
+
     // ============ STATUS ============
-    
+
     async function checkOllama() {
       const dot = document.getElementById('ollamaDot');
       const text = document.getElementById('ollamaStatus');
@@ -331,10 +615,10 @@
         const r = await invoke('check_ollama');
         if (r.online && r.hasVisionModel) {
           dot.className = 'status-dot ok';
-          text.textContent = 'Ollama + LLaVA ready';
+          text.textContent = 'Ollama + Moondream ready';
         } else if (r.online) {
           dot.className = 'status-dot warn';
-          text.textContent = 'Need LLaVA model';
+          text.textContent = 'Need Moondream model';
         } else {
           dot.className = 'status-dot error';
           text.textContent = 'Ollama not running';
@@ -344,16 +628,16 @@
         text.textContent = 'Ollama error';
       }
     }
-    
+
     async function testConnection() {
       await saveConfig();
       const dot = document.getElementById('pmDot');
       const text = document.getElementById('pmStatus');
       const btn = document.getElementById('testBtn');
-      
+
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Testing...';
-      
+
       try {
         const r = await invoke('test_pm_connection');
         if (r.connected) {
@@ -367,28 +651,30 @@
         dot.className = 'status-dot error';
         text.textContent = 'Connection error';
       }
-      
+
       btn.disabled = false;
       btn.innerHTML = '<span class="material-icons">wifi_tethering</span> Test Connection';
     }
-    
+
     async function updateStatus() {
       const status = await invoke('get_status');
       document.getElementById('statStatus').textContent = status.isRunning ? 'On' : 'Off';
       document.getElementById('statStatus').style.color = status.isRunning ? 'var(--success)' : 'var(--text)';
       document.getElementById('statSent').textContent = status.reportsSent || 0;
     }
-    
+
     // ============ CAPTURE ============
-    
+
     async function captureNow() {
       const btn = document.getElementById('captureBtn');
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span>';
-      
+
+      const currentTask = document.getElementById('currentTask').value;
+
       try {
         await saveConfig();
-        const report = await invoke('capture_and_analyze');
+        const report = await invoke('capture_and_analyze', { currentTask: currentTask || undefined });
         activityLog.unshift(report);
         if (activityLog.length > 20) activityLog.pop();
         renderActivity();
@@ -396,11 +682,11 @@
       } catch (e) {
         alert('Error: ' + e);
       }
-      
+
       btn.disabled = false;
       btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now';
     }
-    
+
     function renderActivity() {
       const list = document.getElementById('activityList');
       if (activityLog.length === 0) {
@@ -415,20 +701,20 @@
         </div>
       `).join('');
     }
-    
+
     async function startMonitoring() {
       await saveConfig();
       await invoke('start_monitoring');
       isMonitoring = true;
-      
+
       const interval = parseInt(document.getElementById('interval').value) * 1000;
-      document.getElementById('statInterval').textContent = (interval/1000) + 's';
-      
+      document.getElementById('statInterval').textContent = (interval / 1000) + 's';
+
       await captureNow();
       monitoringInterval = setInterval(captureNow, interval);
       updateStatus();
     }
-    
+
     async function stopMonitoring() {
       await invoke('stop_monitoring');
       isMonitoring = false;
@@ -436,26 +722,27 @@
       monitoringInterval = null;
       updateStatus();
     }
-    
+
     // ============ EVENTS ============
-    
+
     document.getElementById('testBtn').onclick = testConnection;
     document.getElementById('startBtn').onclick = startMonitoring;
     document.getElementById('stopBtn').onclick = stopMonitoring;
     document.getElementById('captureBtn').onclick = captureNow;
-    
+
     ['pmUrl', 'apiKey', 'devName', 'interval'].forEach(id => {
       document.getElementById(id).onchange = saveConfig;
     });
-    
+
     // ============ INIT ============
-    
-      loadConfig();
+
+    loadConfig();
     checkSetup();
     checkOllama();
-      updateStatus();
+    updateStatus();
     setInterval(checkOllama, 30000);
     setInterval(updateStatus, 5000);
-    </script>
-  </body>
+  </script>
+</body>
+
 </html>

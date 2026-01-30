@@ -59,7 +59,7 @@ impl FlowSightAgent {
                 api_key: None,
                 dev_name: whoami::realname().ok(),
                 capture_interval: Some(10000),
-                vision_model: Some("llava:7b".to_string()),
+                vision_model: Some("moondream".to_string()),
             },
             is_running: false,
             reports_sent: 0,
@@ -214,18 +214,34 @@ fn capture_screen() -> Result<String, String> {
     Ok(BASE64.encode(&png))
 }
 
-fn analyze_with_llava(screenshot: &str, model: &str) -> Result<String, String> {
+fn analyze_with_llava(screenshot: &str, model: &str, current_task: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build().map_err(|e| e.to_string())?;
+
+    // Highly specific prompt for moondream/expert analysis
+    let prompt = format!(
+        "The developer states they are working on: '{}'. 
+        Analyze the screen in high technical detail to verify this.
+        If code is visible, extract:
+        1. The Programming Language.
+        2. The specific Class/Function/Component name being edited.
+        3. The logic/algorithm being implemented.
+        
+        If a browser/tool is visible, describe exactly what is being viewed (e.g., 'StackOverflow - Rust Mutex', 'Jira Ticket PROJ-123').
+        
+        Output format: '[Task Status] | [Context] | [Details]' 
+        Example: 'Aligned | Rust - AuthController | Implementing login verification logic'", 
+        current_task
+    );
     
     let response = client.post("http://localhost:11434/api/generate")
         .json(&serde_json::json!({
             "model": model,
-            "prompt": "Describe in 1-2 sentences what the developer is doing on screen. Be specific about the app and task.",
+            "prompt": prompt,
             "images": [screenshot],
             "stream": false,
-            "options": { "temperature": 0.3, "num_predict": 100 }
+            "options": { "temperature": 0.1, "num_predict": 150 } 
         }))
         .send().map_err(|e| e.to_string())?;
     
@@ -236,8 +252,8 @@ fn analyze_with_llava(screenshot: &str, model: &str) -> Result<String, String> {
 
 fn detect_type(desc: &str) -> String {
     let d = desc.to_lowercase();
-    if d.contains("code") || d.contains("ide") || d.contains("editor") || d.contains("vscode") { "coding" }
-    else if d.contains("browser") || d.contains("chrome") || d.contains("firefox") { "browsing" }
+    if d.contains("code") || d.contains("ide") || d.contains("editor") || d.contains("rust") || d.contains("html") || d.contains("function") { "coding" }
+    else if d.contains("browser") || d.contains("chrome") || d.contains("firefox") || d.contains("http") { "browsing" }
     else if d.contains("meeting") || d.contains("zoom") || d.contains("teams") { "meeting" }
     else if d.contains("terminal") || d.contains("command") || d.contains("powershell") { "terminal" }
     else { "other" }.to_string()
@@ -292,7 +308,7 @@ pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn capture_and_analyze(state: State<'_, AgentState>) -> Result<ActivityReport, String> {
+pub fn capture_and_analyze(state: State<'_, AgentState>, current_task: Option<String>) -> Result<ActivityReport, String> {
     let (pm_url, api_key, dev_name, model) = {
         let agent = state.lock().unwrap();
         let a = agent.as_ref().ok_or("Not initialized")?;
@@ -300,12 +316,14 @@ pub fn capture_and_analyze(state: State<'_, AgentState>) -> Result<ActivityRepor
             a.config.pm_url.clone().unwrap_or_default(),
             a.config.api_key.clone().unwrap_or_default(),
             a.config.dev_name.clone().unwrap_or_else(|| "Dev".to_string()),
-            a.config.vision_model.clone().unwrap_or_else(|| "llava:7b".to_string()),
+            a.config.vision_model.clone().unwrap_or_else(|| "moondream".to_string()),
         )
     };
     
+    let task_context = current_task.unwrap_or_else(|| "General Work".to_string());
+    
     let screenshot = capture_screen()?;
-    let description = analyze_with_llava(&screenshot, &model)?;
+    let description = analyze_with_llava(&screenshot, &model, &task_context)?;
     let activity_type = detect_type(&description);
     
     let mut synced = false;

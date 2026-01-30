@@ -94,7 +94,7 @@ pnpm dev:agent
 
 ### Agent Configuration (`dev-agent.db`)
 *   `capture_interval`: Time in milliseconds between captures (Default: `10000` aka 10s).
-*   `vision_model`: Local LLM model to use (Default: `llava:7b`).
+*   `vision_model`: Local LLM model to use (Default: `moondream`).
 *   `pm_url`: URL of the PM Dashboard.
 
 ### PM Configuration (`pm-dashboard.db`)
