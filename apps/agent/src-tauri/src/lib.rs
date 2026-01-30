@@ -1,4 +1,4 @@
-﻿mod agent;
+mod agent;
 
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
@@ -9,7 +9,7 @@ use agent::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+  tauri::Builder::default()
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![
             initialize_agent,
@@ -26,16 +26,16 @@ pub fn run() {
             pull_model,
             start_ollama
         ])
-        .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    .setup(|app| {
+      if cfg!(debug_assertions) {
+        app.handle().plugin(
+          tauri_plugin_log::Builder::default()
+            .level(log::LevelFilter::Info)
+            .build(),
+        )?;
+      }
+      Ok(())
+    })
+    .run(tauri::generate_context!())
+    .expect("error while running tauri application");
 }

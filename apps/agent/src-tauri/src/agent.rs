@@ -57,7 +57,7 @@ impl FlowSightAgent {
             config: AgentConfig {
                 pm_url: Some("http://localhost:8080".to_string()),
                 api_key: None,
-                dev_name: Some(whoami::realname()),
+                dev_name: whoami::realname().ok(),
                 capture_interval: Some(30000),
                 vision_model: Some("llava:7b".to_string()),
             },
@@ -153,7 +153,11 @@ impl FlowSightAgent {
                         timestamp: row.get(4)?,
                     })
                 }) {
-                    reports = rows.filter_map(|r| r.ok()).collect();
+                    for row_result in rows {
+                        if let Ok(report) = row_result {
+                            reports.push(report);
+                        }
+                    }
                 }
             }
         }
@@ -177,7 +181,7 @@ fn send_to_pm(pm_url: &str, api_key: &str, dev_name: &str, desc: &str, activity_
         .header("Content-Type", "application/json")
         .body(serde_json::json!({
             "developer_name": dev_name,
-            "device_id": whoami::devicename(),
+            "device_id": whoami::devicename().unwrap_or_else(|_| "unknown".to_string()),
             "description": desc,
             "activity_type": activity_type
         }).to_string())
@@ -189,7 +193,6 @@ fn send_to_pm(pm_url: &str, api_key: &str, dev_name: &str, desc: &str, activity_
 // Capture and analyze screen
 fn capture_screen() -> Result<String, String> {
     use screenshots::Screen;
-    use image::GenericImageView;
     
     let screens = Screen::all().map_err(|e| e.to_string())?;
     let screen = screens.first().ok_or("No screen")?;
