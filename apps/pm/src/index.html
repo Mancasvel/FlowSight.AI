@@ -770,16 +770,22 @@
       const config = {
         team_name: document.getElementById('teamName').value,
         server_port: parseInt(document.getElementById('serverPort').value) || 8080,
+        retention_days: 7,
       };
       await invoke('update_config', { config });
     }
 
     // Event listeners
     document.getElementById('startServerBtn').onclick = async () => {
-      await saveConfig();
-      const result = await invoke('start_server');
-      console.log(result);
-      updateServerStatus();
+      try {
+        await saveConfig();
+        const result = await invoke('start_server');
+        console.log('Start server result:', result);
+        updateServerStatus();
+      } catch (e) {
+        console.error('Failed to start server:', e);
+        alert('Failed to start server: ' + e);
+      }
     };
 
     document.getElementById('stopServerBtn').onclick = async () => {

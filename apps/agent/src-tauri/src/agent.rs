@@ -57,7 +57,7 @@ impl FlowSightAgent {
             config: AgentConfig {
                 pm_url: Some("http://localhost:8080".to_string()),
                 api_key: None,
-                dev_name: whoami::realname().ok(),
+                dev_name: Some(whoami::realname()),
                 capture_interval: Some(10000),
                 vision_model: Some("moondream".to_string()),
             },
@@ -288,7 +288,7 @@ pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn capture_and_analyze(state: State<'_, AgentState>, current_task: Option<String>) -> Result<ActivityReport, String> {
-    let (pm_url, api_key, dev_name, model) = {
+            let (_pm_url, _api_key, _dev_name, model) = {
         let agent = state.lock().unwrap();
         let a = agent.as_ref().ok_or("Not initialized")?;
         (
@@ -305,7 +305,7 @@ pub fn capture_and_analyze(state: State<'_, AgentState>, current_task: Option<St
     let description = analyze_with_llava(&screenshot, &model, &task_context)?;
     let activity_type = detect_type(&description);
     
-    let mut synced = false;
+    let synced = false;
     let mut report_id = None;
     
     // Save locally
