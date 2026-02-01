@@ -206,10 +206,54 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
     Ok((BASE64.encode(&png), debug_path))
 }
 
+#[derive(Serialize, Clone)]
+pub struct CaptureResult {
+    path: String,
+    base64: String,
+}
+
 #[tauri::command]
-pub fn capture_screen_command() -> Result<String, String> {
-    let (base64, _) = capture_screen()?;
-    Ok(base64)
+pub fn capture_screen_command() -> Result<CaptureResult, String> {
+    let (base64, path) = capture_screen()?;
+    Ok(CaptureResult {
+        path: path.to_string_lossy().to_string(),
+        base64
+    })
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Fingerprint {
+    pub vector: Vec<f32>,
+    pub dimension: usize,
+    pub model: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ActivityMetadata {
+    pub app_name: Option<String>,
+    pub window_title: Option<String>,
+    pub window_title_hash: Option<String>, // Privacy
+}
+
+#[tauri::command]
+pub fn get_semantic_fingerprint(image_path: String, metadata: Option<ActivityMetadata>) -> Result<Fingerprint, String> {
+    use crate::fingerprint::generate_fingerprint;
+    use std::path::PathBuf;
+    
+    let path = PathBuf::from(&image_path);
+    if !path.exists() {
+        return Err(format!("File not found: {}", image_path));
+    }
+    
+    // Run local Python CLIP
+    let result = generate_fingerprint(&path).map_err(|e| e.to_string())?;
+    
+    // Construct response (simple mapping for now)
+    Ok(Fingerprint {
+        vector: result.vector,
+        dimension: result.dimension,
+        model: result.model
+    })
 }
 
 #[tauri::command]

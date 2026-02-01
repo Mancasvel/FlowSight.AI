@@ -5,8 +5,8 @@
   "identifier": "ai.flowsight.pm",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://127.0.0.1:1421",
-    "beforeDevCommand": "pnpm start-server",
+    "devUrl": "http://localhost:1421",
+    "beforeDevCommand": "pnpm vite",
     "beforeBuildCommand": "pnpm vite build"
   },
   "app": {
@@ -20,7 +20,10 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {

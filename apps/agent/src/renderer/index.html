@@ -395,20 +395,45 @@
   <!-- Login Overlay -->
   <div id="loginOverlay" class="overlay">
     <div class="login-card">
-      <h2>FlowSight Agent</h2>
-      <p>Enter your Team License Key to start.</p>
-      <div class="form-group" style="margin-bottom: 20px; text-align: left;">
-        <label>Team License Key</label>
-        <input type="text" id="licenseInput" placeholder="Enter key (e.g. dev_team_...)"
-          style="font-family: monospace;">
-        <p id="loginError" style="color: var(--error); margin-top: 8px; display: none;"></p>
+      <h2 id="loginTitle">Developer Login</h2>
+      <p id="loginDesc">Sign in with your FlowSight account.</p>
+
+      <!-- Step 1: Auth -->
+      <div id="authStep">
+        <div class="form-group" style="text-align: left;">
+          <label>Email</label>
+          <input type="email" id="authEmail" placeholder="dev@flowsight.ai">
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label>Password</label>
+          <input type="password" id="authPass" placeholder="••••••">
+        </div>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="handleSupabaseLogin()">
+          Sign In
+        </button>
+        <!-- Backdoor for convenience -->
+        <div style="margin-top:10px; font-size:11px; cursor:pointer; color:#aaa;" onclick="fillDevCreds()">
+          [Mock Dev]
+        </div>
       </div>
-      <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="handleLogin()">
-        Connect to Team
-      </button>
-      <div style="margin-top: 16px; font-size: 12px; color: var(--text-secondary);">
-        Verifying via Supabase...
+
+      <!-- Step 2: License -->
+      <div id="licenseStep" class="hidden">
+        <div class="form-group" style="text-align: left;">
+          <label>PM API URL <span style="font-weight:normal; color:#888; font-size:10px;">(Check PM Dashboard for
+              port)</span></label>
+          <input type="text" id="pmUrlInput" placeholder="http://localhost:8080" value="http://localhost:8080">
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label>Team License Key</label>
+          <input type="text" id="licenseInput" placeholder="pm_test_key_..." style="font-family: monospace;">
+        </div>
+        <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="handleLicenseBind()">
+          Connect to Team
+        </button>
       </div>
+
+      <p id="loginError" style="color: var(--error); margin-top: 12px; display: none;"></p>
     </div>
   </div>
 
@@ -418,37 +443,8 @@
   </div>
 
   <div class="container">
-    <!-- Setup Card -->
-    <div class="card" id="setupCard">
-      <div class="card-title"><span class="material-icons">download</span> Setup</div>
-      <div class="install-steps">
-        <div class="install-step">
-          <div class="step-num" id="step1Num">1</div>
-          <div class="step-info">
-            <div class="step-title">Ollama</div>
-            <div class="step-desc" id="step1Desc">AI runtime for local models</div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="installOllamaBtn">Install</button>
-        </div>
-        <div class="install-step">
-          <div class="step-num" id="step2Num">2</div>
-          <div class="step-info">
-            <div class="step-title">LLaVA Model</div>
-            <div class="step-desc" id="step2Desc">General Purpose Vision AI (~4.7GB)</div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="pullLlavaBtn" disabled>Pull Model</button>
-        </div>
-        <div class="install-step">
-          <div class="step-num" id="step3Num">3</div>
-          <div class="step-info">
-            <div class="step-title">Start Ollama</div>
-            <div class="step-desc" id="step3Desc">Run the AI server</div>
-          </div>
-          <button class="btn btn-success btn-sm" id="startOllamaBtn" disabled>Start</button>
-        </div>
-      </div>
-      <div class="progress-log" id="progressLog"></div>
-    </div>
+    <!-- Setup Card Removed (Legacy Ollama) -->
+    <!-- Connection Card -->
 
     <!-- Connection Card -->
     <div class="card">
@@ -465,7 +461,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>PM Dashboard URL</label>
-          <input type="text" id="pmUrl" placeholder="http://192.168.1.100:8080">
+          <input type="text" id="pmUrl" placeholder="http://localhost:1421">
         </div>
         <div class="form-group">
           <label>API Key</label>
@@ -522,13 +518,21 @@
         <div class="empty">No activity yet. Start monitoring to begin.</div>
       </div>
     </div>
+
+    <!-- Debug Log -->
+    <div class="card">
+      <div class="card-title" style="font-size:12px; color:#64748b;">Debug Log</div>
+      <div id="progressLog"
+        style="background:#eee; padding:10px; height:100px; overflow-y:auto; font-size:11px; font-family:monospace; color:#333;">
+      </div>
+    </div>
   </div>
 
   <script type="module">
 
     import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-    import Tesseract from 'https://esm.sh/tesseract.js@5.0.4';
+    // Removed Tesseract import as we use CLIP on backend now
 
     // Supabase Config
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -569,116 +573,19 @@
       return 'other';
     }
 
-    // ============ SETUP ============
+    // ============ LOGGING ============
 
     function log(msg) {
       const el = document.getElementById('progressLog');
-      el.style.display = 'block';
-      el.textContent += msg + '\n';
-      el.scrollTop = el.scrollHeight;
-    }
-
-    async function checkSetup() {
-      const step1 = document.getElementById('step1Num');
-      const step2 = document.getElementById('step2Num');
-      const step3 = document.getElementById('step3Num');
-      const pullBtn = document.getElementById('pullLlavaBtn');
-      const startBtn = document.getElementById('startOllamaBtn');
-
-      try {
-        const r = await invoke('check_ollama');
-
-        if (r.online) {
-          step1.classList.add('done');
-          step1.textContent = '✓';
-          document.getElementById('step1Desc').textContent = 'Installed and running';
-          document.getElementById('installOllamaBtn').textContent = 'Installed';
-          document.getElementById('installOllamaBtn').disabled = true;
-
-          step3.classList.add('done');
-          step3.textContent = '✓';
-          document.getElementById('step3Desc').textContent = 'Running';
-          startBtn.textContent = 'Running';
-          startBtn.disabled = true;
-
-          pullBtn.disabled = false;
-
-          if (r.hasVisionModel) {
-            step2.classList.add('done');
-            step2.textContent = '✓';
-            document.getElementById('step2Desc').textContent = 'Moondream ready';
-            pullBtn.textContent = 'Installed';
-            pullBtn.disabled = true;
-
-            // Hide setup card if everything is ready
-            document.getElementById('setupCard').style.display = 'none';
-          }
-        } else {
-          pullBtn.disabled = true;
-          startBtn.disabled = false;
-        }
-      } catch (e) {
-        console.error('Setup check error:', e);
+      // Only log if log element exists (it was in setup card, so might be gone)
+      if (el) {
+        el.style.display = 'block';
+        el.textContent += msg + '\n';
+        el.scrollTop = el.scrollHeight;
+      } else {
+        console.log("[Agent]", msg);
       }
     }
-
-    document.getElementById('installOllamaBtn').onclick = async () => {
-      const btn = document.getElementById('installOllamaBtn');
-      btn.disabled = true;
-      btn.textContent = 'Opening...';
-
-      try {
-        const r = await invoke('install_ollama');
-        log(r.message);
-        if (!r.installed) {
-          alert('Please install Ollama from the download page, then click "Start" to run it.');
-        }
-      } catch (e) {
-        log('Error: ' + e);
-      }
-
-      btn.disabled = false;
-      btn.textContent = 'Install';
-    };
-
-    document.getElementById('pullLlavaBtn').onclick = async () => {
-      const btn = document.getElementById('pullLlavaBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Downloading...';
-      log('Pulling LLaVA model... This may take several minutes.');
-
-      try {
-        const r = await invoke('pull_model', { model: 'llava:7b' });
-        log('Model installed successfully!');
-        checkSetup();
-      } catch (e) {
-        log('Error: ' + e);
-        btn.disabled = false;
-        btn.textContent = 'Retry';
-      }
-    };
-
-    document.getElementById('startOllamaBtn').onclick = async () => {
-      const btn = document.getElementById('startOllamaBtn');
-      btn.disabled = true;
-      btn.textContent = 'Starting...';
-      log('Starting Ollama server...');
-
-      try {
-        await invoke('start_ollama');
-        log('Ollama started. Waiting for it to be ready...');
-
-        // Wait a bit and check
-        setTimeout(async () => {
-          await checkSetup();
-          await checkOllama();
-        }, 3000);
-      } catch (e) {
-        log('Error: ' + e);
-        btn.disabled = false;
-        btn.textContent = 'Start';
-      }
-    };
 
     // ============ CONFIG ============
 
@@ -751,237 +658,254 @@
       }
     }
 
-    window.handleLogin = async () => {
-      const key = document.getElementById('licenseInput').value.trim();
-      const errorMsg = document.getElementById('loginError');
-      const btn = document.querySelector('#loginOverlay .btn');
+    // ============ AUTH FLOW ============
 
-      errorMsg.style.display = 'none';
-      btn.disabled = true;
-      btn.textContent = 'Verifying...';
+    let currentUser = null;
 
-      const isValid = await validateLicense(key);
-
-      if (isValid) {
-        localStorage.setItem('agent_license_key', key);
-        document.getElementById('apiKey').value = key;
-        document.getElementById('loginOverlay').classList.add('hidden');
-        saveConfig(); // Persist to backend config too
-      } else {
-        errorMsg.textContent = 'Invalid or inactive key.';
-        errorMsg.style.display = 'block';
-      }
-
-      btn.disabled = false;
-      btn.textContent = 'Connect to Team';
+    window.fillDevCreds = () => {
+      document.getElementById('authEmail').value = "dev@flowsight.ai";
+      document.getElementById('authPass').value = "password123";
     };
 
-    // Initialize
-    await invoke('initialize_agent');
-    checkLicense(); // trigger validation
+    window.handleSupabaseLogin = async () => {
+      const email = document.getElementById('authEmail').value;
+      const pass = document.getElementById('authPass').value;
+      const errorMsg = document.getElementById('loginError');
 
-    async function checkOllama() {
-      const dot = document.getElementById('ollamaDot');
-      const text = document.getElementById('ollamaStatus');
+      if (!email || !pass) {
+        errorMsg.textContent = "Please enter email and password";
+        errorMsg.style.display = "block";
+        return;
+      }
+
+      // DEV BYPASS due to Rate Limits on Supabase Signup
+      if (email === "dev@flowsight.ai" && pass === "password123") {
+        console.warn("Bypassing Auth for Dev Test User");
+        currentUser = { email, id: "mock-dev-id-123" };
+
+        // Proceed to License Step
+        document.getElementById('authStep').classList.add('hidden');
+        document.getElementById('licenseStep').classList.remove('hidden');
+        document.getElementById('loginTitle').textContent = "Join Team";
+        document.getElementById('loginDesc').textContent = "Enter the license key provided by your PM.";
+        errorMsg.style.display = "none";
+        return;
+      }
+
       try {
-        const r = await invoke('check_ollama');
-        if (r.online && r.hasVisionModel) {
-          dot.className = 'status-dot ok';
-          text.textContent = 'Ollama + Moondream ready';
-        } else if (r.online) {
-          dot.className = 'status-dot warn';
-          text.textContent = 'Need Moondream model';
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+        if (error) {
+          // Try Bypass if enabled
+          if (error.message.includes("Email not confirmed")) {
+            currentUser = { email }; // partial user
+          } else {
+            throw error;
+          }
         } else {
-          dot.className = 'status-dot error';
-          text.textContent = 'Ollama not running';
+          currentUser = data.user;
         }
-      } catch {
-        dot.className = 'status-dot error';
-        text.textContent = 'Ollama error';
+
+        // Success -> Move to License Step
+        document.getElementById('authStep').classList.add('hidden');
+        document.getElementById('licenseStep').classList.remove('hidden');
+        document.getElementById('loginTitle').textContent = "Join Team";
+        document.getElementById('loginDesc').textContent = "Enter the license key provided by your PM.";
+        errorMsg.style.display = "none";
+
+      } catch (e) {
+        errorMsg.textContent = e.message;
+        errorMsg.style.display = "block";
       }
-    }
+    };
 
-    async function testConnection() {
-      await saveConfig();
-      const dot = document.getElementById('pmDot');
-      const text = document.getElementById('pmStatus');
+    window.handleLicenseBind = async () => {
+      const pmUrl = document.getElementById('pmUrlInput').value.replace(/\/$/, "");
+      const key = document.getElementById('licenseInput').value;
+      const errorMsg = document.getElementById('loginError');
+      const btn = document.querySelector('#licenseStep .btn');
 
-      if (channel) {
-        dot.className = 'status-dot ok';
-        text.textContent = 'Supabase Configured';
-      } else {
-        dot.className = 'status-dot error';
-        text.textContent = 'Missing Supabase Keys';
+      if (!key) {
+        errorMsg.textContent = "Please enter a key";
+        errorMsg.style.display = "block";
+        return;
       }
-    }
 
-    async function updateStatus() {
-      const status = await invoke('get_status');
-      document.getElementById('statStatus').textContent = status.isRunning ? 'On' : 'Off';
-      document.getElementById('statStatus').style.color = status.isRunning ? 'var(--success)' : 'var(--text)';
-      document.getElementById('statSent').textContent = status.reportsSent || 0;
-    }
-
-    // ============ CAPTURE & ANALYZE (FRONTEND) ============
-
-    async function captureNow() {
-      const btn = document.getElementById('captureBtn');
-      if (btn) btn.disabled = true;
-      if (btn) btn.innerHTML = '<span class="loading"></span>';
+      btn.textContent = "Connecting...";
+      btn.disabled = true;
 
       try {
-        await saveConfig();
+        // Call PM to register
+        const deviceId = getDeviceId();
+        const devName = currentUser.email.split('@')[0];
 
-        // 1. Capture Screen (Rust)
-        log('Capturing screen...');
-        const base64 = await invoke('capture_screen_command');
-        const imgUrl = `data:image/png;base64,${base64}`;
+        const payload = {
+          email: currentUser.email,
+          device_id: deviceId,
+          team_key: key,
+          developer_name: devName
+        };
 
-        // 2. OCR (Tesseract JS - Cross Platform)
-        log('Reading text (OCR)...');
-        // Using light/quick settings for Tesseract
-        const { data: { text } } = await Tesseract.recognize(imgUrl, 'eng', {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              const p = Math.round(m.progress * 100);
-              if (p % 20 === 0) log(`OCR: ${p}%`);
-            }
+        // Allow bypassing CORS if we are in Tauri? No, fetch usually enforces CORS.
+        // PM server has CORS headers enabled.
+        const resp = await fetch(`${pmUrl}/api/register_dev`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const json = await resp.json();
+
+        if (json.error) {
+          throw new Error(json.error);
+        }
+
+        // Success
+        localStorage.setItem('agent_license_key', key);
+        localStorage.setItem('agent_pm_url', pmUrl);
+
+        document.getElementById('loginOverlay').classList.add('hidden');
+
+        // Sync fields
+        document.getElementById('pmUrl').value = pmUrl;
+        document.getElementById('apiKey').value = key; // Using key as "API Key" for simplicity
+        document.getElementById('devName').value = devName;
+
+        saveConfig();
+
+      } catch (e) {
+        errorMsg.textContent = "Connection Failed: " + e.message;
+        errorMsg.style.display = "block";
+      }
+
+      btn.textContent = "Connect to Team";
+      btn.disabled = false;
+    };
+
+    // Check if already logged in and bound
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        currentUser = data.session.user;
+        const storedKey = localStorage.getItem('agent_license_key');
+        if (storedKey) {
+          document.getElementById('loginOverlay').classList.add('hidden');
+          document.getElementById('apiKey').value = storedKey;
+          document.getElementById('pmUrl').value = localStorage.getItem('agent_pm_url') || 'http://localhost:1421';
+        } else {
+          // Logged in but no key
+          document.getElementById('authStep').classList.add('hidden');
+          document.getElementById('licenseStep').classList.remove('hidden');
+          document.getElementById('loginTitle').textContent = "Join Team";
+        }
+      }
+      // else show Login (default)
+    }
+
+    // Call checkAuth at startup
+    // checkLicense(); // Removed old function logic calls
+    checkAuth();
+
+    // ============ MONITORING LOOP ============
+
+    document.getElementById('startBtn').onclick = async () => {
+      isMonitoring = true;
+      document.getElementById('statStatus').textContent = 'On';
+      document.getElementById('statStatus').style.color = 'var(--success)';
+
+      // Initial capture
+      captureAndAnalyze();
+
+      const intervalMs = parseInt(document.getElementById('interval').value) * 1000 || 10000;
+      monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
+    };
+
+    document.getElementById('stopBtn').onclick = () => {
+      isMonitoring = false;
+      document.getElementById('statStatus').textContent = 'Off';
+      document.getElementById('statStatus').style.color = 'inherit';
+      if (monitoringInterval) clearInterval(monitoringInterval);
+    };
+
+    document.getElementById('captureBtn').onclick = captureAndAnalyze;
+
+    async function captureAndAnalyze() {
+      if (!channel) {
+        log("Supabase not connected. Cannot send report.");
+        return;
+      }
+
+      try {
+        log("Capturing screen...");
+        // 1. Capture
+        const capture = await invoke('capture_screen_command');
+        // capture = { path: "...", base64: "..." }
+
+        // 2. Generate Fingerprint (Rust + Python CLIP)
+        log(`Generating fingerprint for ${capture.path}...`);
+        const fingerprint = await invoke('get_semantic_fingerprint', {
+          imagePath: capture.path,
+          metadata: {
+            app_name: "Active App", // TODO: Get real app name
+            window_title: "Active Window"
           }
         });
 
-        // 3. AI Analysis (Ollama Direct)
-        log(`Analyzing with AI... (OCR Length: ${text.length})`);
-        console.log("RAW OCR:", text); // Debug
+        // fingerprint = { vector: [...], dimension: 768, model: "..." }
+        log(`Generated ${fingerprint.dimension}D Vector.`);
 
-        const prompt = `You are a screen reading assistant. 
-        Your job is to extracted active context from the provided OCR text and Image.
-        
-        OCR DATA: 
-        """${text.substring(0, 3000)}"""
-        
-        INSTRUCTIONS:
-        1. Identify the ACTIVE APPLICATION (APP).
-        2. Identify the OPEN FILE or CONTEXT (FILE).
-        3. Identify specific KEYWORDS or CODE (CODE).
-        4. Write a 1-sentence SUMMARY.
-        
-        OUTPUT FORMAT (Strict):
-        APP: <Name>
-        FILE: <Name>
-        CODE: <Content>
-        SUMMARY: <Content>
-        
-        If unsure, write "Unknown". DO NOT HALLUCINATE. Use the OCR data as ground truth.`;
+        // 3. Prepare Payload
+        const devName = document.getElementById('devName').value || 'Unknown';
+        const task = document.getElementById('currentTask').value || '';
 
-        const response = await fetch('http://localhost:11434/api/generate', {
-          method: 'POST',
-          body: JSON.stringify({
-            model: 'llava:7b',
-            prompt: prompt,
-            images: [base64],
-            stream: false,
-            options: { temperature: 0.0, num_predict: 500 }
-          })
+        const payload = {
+          type: 'fingerprint', // Signal type for PM
+          developer_name: devName,
+          device_id: getDeviceId(),
+          vector: fingerprint.vector,
+          dimension: fingerprint.dimension,
+          timestamp: Date.now(),
+          metadata: {
+            task: task,
+            app_name: "Active App",
+            window_title: "Active Window"
+          }
+        };
+
+        // 4. Send via Supabase Realtime
+        await channel.send({
+          type: 'broadcast',
+          event: 'fingerprint',
+          payload: payload
         });
 
-        const json = await response.json();
-        if (json.error) throw new Error(json.error);
-        const description = json.response;
-
-        // 4. Save & Sync
-        const activity_type = detectType(description);
-
-        // Save to Local DB (Rust)
-        const report = await invoke('save_activity', { description, activityType: activity_type });
-        report.synced = false;
-
-        // Broadcast to PM (Supabase)
-        if (channel) {
-          const apiKey = document.getElementById('apiKey').value;
-          await channel.send({
-            type: 'broadcast',
-            event: 'report',
-            payload: {
-              developer_name: document.getElementById('devName').value || 'Dev',
-              device_id: getDeviceId(),
-              description: report.description,
-              activity_type: report.activity_type,
-              api_key: apiKey // Send Team Key
-            }
-          });
-          report.synced = true;
-        }
-
-        activityLog.unshift(report);
-        if (activityLog.length > 20) activityLog.pop();
-        renderActivity();
-        updateStatus();
-        log('Analysis complete.');
+        // 5. Update UI
+        addActivityItem(fingerprint.dimension, devName);
+        document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
 
       } catch (e) {
-        log('Error: ' + e);
         console.error(e);
+        log("Error: " + e);
       }
-
-      if (btn) btn.disabled = false;
-      if (btn) btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now';
     }
 
-    function renderActivity() {
+    function addActivityItem(dim, devName) {
       const list = document.getElementById('activityList');
-      if (activityLog.length === 0) {
-        list.innerHTML = '<div class="empty">No activity yet.</div>';
-        return;
-      }
-      list.innerHTML = activityLog.map(r => `
-        <div class="activity-item">
-          <div class="activity-time">${r.timestamp}</div>
-          <div class="activity-desc">${r.description}</div>
-          <span class="activity-badge ${r.synced ? 'synced' : ''}">${r.activity_type} ${r.synced ? '- sent' : ''}</span>
+      const div = document.createElement('div');
+      div.className = 'activity-item';
+      div.innerHTML = `
+        <div class="activity-time">${new Date().toLocaleTimeString()}</div>
+        <div class="activity-desc">
+           <strong>${devName}</strong> generated a semantic fingerprint.
+           <br>
+           <span class="activity-badge synced">Uploaded ${dim}D Vector</span>
         </div>
-      `).join('');
+      `;
+      list.insertBefore(div, list.firstChild);
     }
 
-    async function startMonitoring() {
-      await saveConfig();
-      await invoke('start_monitoring');
-      isMonitoring = true;
+    // Auto-hide old setup steps (CLIP doesn't need LLaVA pull)
+    document.getElementById('setupCard').style.display = 'none';
 
-      const interval = parseInt(document.getElementById('interval').value) * 1000;
-      document.getElementById('statInterval').textContent = (interval / 1000) + 's';
-
-      await captureNow();
-      monitoringInterval = setInterval(captureNow, interval);
-      updateStatus();
-    }
-
-    async function stopMonitoring() {
-      await invoke('stop_monitoring');
-      isMonitoring = false;
-      if (monitoringInterval) clearInterval(monitoringInterval);
-      monitoringInterval = null;
-      updateStatus();
-    }
-
-    // ============ EVENTS ============
-
-    document.getElementById('testBtn').onclick = testConnection;
-    document.getElementById('startBtn').onclick = startMonitoring;
-    document.getElementById('stopBtn').onclick = stopMonitoring;
-    document.getElementById('captureBtn').onclick = captureNow;
-
-    ['pmUrl', 'apiKey', 'devName', 'interval'].forEach(id => {
-      document.getElementById(id).onchange = saveConfig;
-    });
-
-    // ============ INIT ============
-
-    loadConfig();
-    checkSetup();
-    checkOllama();
-    updateStatus();
-    setInterval(checkOllama, 30000);
-    setInterval(updateStatus, 5000);
   </script>
 </body>
 

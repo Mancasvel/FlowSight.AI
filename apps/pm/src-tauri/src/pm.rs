@@ -101,6 +101,24 @@ impl PmDashboard {
                     value TEXT NOT NULL
                 );
                 
+                CREATE TABLE IF NOT EXISTS license_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key_string TEXT UNIQUE NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    max_users INTEGER DEFAULT 5
+                );
+                
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    license_key_id INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(license_key_id) REFERENCES license_keys(id)
+                );
+
                 CREATE TABLE IF NOT EXISTS teams (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -112,9 +130,12 @@ impl PmDashboard {
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     device_id TEXT UNIQUE,
+                    email TEXT,
                     is_online INTEGER DEFAULT 1,
                     last_seen_at TEXT,
-                    team_id TEXT
+                    team_id TEXT,
+                    license_key_id INTEGER,
+                    FOREIGN KEY(license_key_id) REFERENCES license_keys(id)
                 );
                 
                 CREATE TABLE IF NOT EXISTS reports (
@@ -126,7 +147,36 @@ impl PmDashboard {
                 );
                 
                 CREATE INDEX IF NOT EXISTS idx_reports_dev ON reports(developer_id);
-                CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(created_at DESC);"
+                CREATE INDEX IF NOT EXISTS idx_reports_date ON reports(created_at DESC);
+                
+                CREATE TABLE IF NOT EXISTS embeddings_raw (
+                    embedding_id TEXT PRIMARY KEY,
+                    device_hash TEXT NOT NULL,
+                    vector BLOB NOT NULL,
+                    vector_dimension INTEGER NOT NULL,
+                    captured_at INTEGER NOT NULL,
+                    app_name TEXT,
+                    window_title_hash TEXT,
+                    file_path_hash TEXT,
+                    jira_issue_id TEXT,
+                    git_branch TEXT
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_device_time 
+                ON embeddings_raw(device_hash, captured_at DESC);"
+            );
+            
+            // Schema Migrations (Idempotent)
+            let _ = conn.execute("ALTER TABLE license_keys ADD COLUMN max_users INTEGER DEFAULT 5", []);
+            let _ = conn.execute("ALTER TABLE developers ADD COLUMN email TEXT", []);
+            let _ = conn.execute("ALTER TABLE developers ADD COLUMN license_key_id INTEGER REFERENCES license_keys(id)", []);
+
+            // SEED DEV KEY (For ease of testing)
+            let _ = conn.execute(
+                "INSERT INTO license_keys (key_string, expires_at, max_users, is_active) 
+                 VALUES ('pm_test_key_12345', datetime('now', '+365 days'), 10, 1)
+                 ON CONFLICT(key_string) DO UPDATE SET is_active=1", 
+                []
             );
         }
     }
@@ -230,7 +280,7 @@ fn run_http_server(db_path: PathBuf, port: u16, api_key: String, running: Arc<Mu
             .find(|h| h.field.as_str().to_ascii_lowercase() == "x-api-key")
             .map(|h| h.value.as_str().to_string());
         
-        if req_api_key.as_ref() != Some(&api_key) && !url.contains("/health") {
+        if req_api_key.as_ref() != Some(&api_key) && !url.contains("/health") && !url.contains("/api/register_dev") {
             let mut response = Response::from_string(r#"{"error":"Invalid API key"}"#)
                 .with_status_code(401);
             for h in cors_headers {
@@ -249,6 +299,16 @@ fn run_http_server(db_path: PathBuf, port: u16, api_key: String, running: Arc<Mu
                 let _ = request.as_reader().read_to_string(&mut body);
                 
                 handle_report(&db_path, &body)
+            }
+
+            ("POST", "/api/register_dev") => {
+                println!("[PM] Handling Register Dev"); // DEBUG
+                let mut body = String::new();
+                let _ = request.as_reader().read_to_string(&mut body);
+                println!("[PM] Body: {}", body); // DEBUG
+                let resp = handle_register_dev(&db_path, &body);
+                println!("[PM] Resp: {}", resp); // DEBUG
+                resp
             }
             
             ("GET", "/api/developers") => get_developers_json(&db_path),
@@ -316,6 +376,82 @@ fn handle_report(db_path: &PathBuf, body: &str) -> String {
             format!(r#"{{"success":true,"id":{}}}"#, id)
         }
         Err(e) => format!(r#"{{"error":"{}"}}"#, e),
+    }
+}
+
+fn handle_register_dev(db_path: &PathBuf, body: &str) -> String {
+    #[derive(Deserialize)]
+    struct RegisterRequest {
+        email: String,
+        device_id: String,
+        team_key: String,
+        developer_name: Option<String>
+    }
+    
+    let req: RegisterRequest = match serde_json::from_str(body) {
+        Ok(r) => r,
+        Err(e) => return format!(r#"{{"error":"Invalid JSON: {}"}}"#, e),
+    };
+    
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(e) => return format!(r#"{{"error":"DB error: {}"}}"#, e),
+    };
+
+    // 1. Find License
+    let mut stmt = match conn.prepare("SELECT id, expires_at, max_users, is_active FROM license_keys WHERE key_string = ?1") {
+        Ok(s) => s,
+        Err(e) => return format!(r#"{{"error":"DB Prepare Error: {}"}}"#, e),
+    };
+        
+    let license_row = stmt.query_row([&req.team_key], |row| {
+            Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, i32>(2)?,
+            row.get::<_, i32>(3)?
+            ))
+    });
+    
+    match license_row {
+        Ok((lic_id, expires_at, max_users, is_active)) => {
+            if is_active == 0 {
+                return r#"{"error":"License is inactive"}"#.to_string();
+            }
+            
+            // 2. Check Expiration
+            if let Some(exp_str) = expires_at {
+                 let today = Local::now().format("%Y-%m-%d").to_string();
+                 let exp_day = exp_str.split(' ').next().unwrap_or("");
+                 if today > exp_day.to_string() {
+                     return format!(r#"{{"error":"License expired on {}"}}"#, exp_day);
+                 }
+            }
+            
+            // 3. Check Max Users
+            let current_count: i32 = conn.query_row(
+                "SELECT COUNT(DISTINCT id) FROM developers WHERE license_key_id = ?1 AND id != ?2",
+                params![lic_id, &req.device_id], 
+                |r| r.get(0)
+            ).unwrap_or(0);
+            
+            if current_count >= max_users {
+                return format!(r#"{{"error":"License Limit Reached ({}/{})"}}"#, current_count, max_users);
+            }
+            
+            // 4. Bind Developer
+            let name = req.developer_name.unwrap_or_else(|| req.email.split('@').next().unwrap_or("Dev").to_string());
+            let _ = conn.execute(
+                "INSERT INTO developers (id, name, device_id, email, license_key_id, is_online, last_seen_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, 1, datetime('now'))
+                 ON CONFLICT(id) DO UPDATE SET
+                   email = ?4, license_key_id = ?5, is_online = 1, last_seen_at = datetime('now'), name = ?2",
+                params![&req.device_id, name, &req.device_id, &req.email, lic_id]
+            );
+            
+            r#"{"success":true}"#.to_string()
+        },
+        Err(_) => r#"{"error":"Invalid License Key"}"#.to_string()
     }
 }
 
@@ -735,6 +871,269 @@ pub fn save_remote_report(
         ).map_err(|e| e.to_string())?;
         
         Ok(true)
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn validate_license_key(key: String) -> Result<bool, String> {
+    println!("[PM] Validating license key: {}", key);
+    
+    let base_url = "https://dzpyrdxelcgfpmcdojvb.supabase.co";
+    let api_key = "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ";
+    let url = format!("{}/rest/v1/licenses?key_string=eq.{}", base_url, key);
+
+    let client = reqwest::Client::new();
+    
+    let resp = client.get(&url)
+        .header("apikey", api_key)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        println!("[PM] Validation failed: {} - {}", status, text);
+        return Err(format!("Supabase error: {} - {}", status, text));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| format!("JSON error: {}", e))?;
+    println!("[PM] Supabase response: {:?}", json);
+    
+    // Expecting an array
+    if let Some(arr) = json.as_array() {
+        if arr.is_empty() {
+             println!("[PM] Key not found");
+             return Ok(false);
+        }
+        let item = &arr[0];
+        if let Some(status) = item.get("status").and_then(|s| s.as_str()) {
+            if status == "active" {
+                println!("[PM] License Active!");
+                return Ok(true);
+            } else {
+                 println!("[PM] License status: {}", status);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+#[tauri::command]
+pub fn save_fingerprint_report(
+    state: State<'_, PmState>,
+    developer_name: String,
+    vector: Vec<f32>,
+    dimension: usize,
+    app_name: Option<String>,
+    window_title: Option<String>,
+    timestamp: i64
+) -> Result<String, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        // Generate IDs
+        let embedding_id = uuid::Uuid::new_v4().to_string();
+        // Simple hash for device/dev
+        let device_hash = io_hash(&developer_name); 
+
+        // Serialize vector
+        let vector_blob = serde_json::to_vec(&vector).map_err(|e| e.to_string())?;
+
+        conn.execute(
+            "INSERT INTO embeddings_raw (
+                embedding_id, device_hash, vector, vector_dimension,
+                captured_at, app_name, window_title_hash, file_path_hash,
+                jira_issue_id, git_branch
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                &embedding_id,
+                &device_hash,
+                &vector_blob,
+                dimension as i64,
+                timestamp,
+                app_name,
+                window_title, // Using window_title as hash for MVP
+                Option::<String>::None,
+                Option::<String>::None,
+                Option::<String>::None,
+            ],
+        ).map_err(|e| e.to_string())?;
+        
+        println!("[PM] Stored fingerprint: {} ({}D)", embedding_id, dimension);
+        Ok(embedding_id)
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}
+
+fn io_hash(s: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    s.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+#[tauri::command]
+pub fn generate_test_data(state: State<'_, PmState>) -> Result<String, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        // 1. Create a License Key
+        let key = "pm_test_key_12345";
+        let _ = conn.execute(
+            "INSERT INTO license_keys (key_string, expires_at, max_users) VALUES (?1, datetime('now', '+30 days'), 2)
+             ON CONFLICT(key_string) DO UPDATE SET max_users = 2",
+            [key]
+        );
+        
+        // 2. Create a User "admin" with password "admin"
+        // hash for "admin" is $2a$10$Un... (using a fixed one for speed or re-hash)
+        let hash = bcrypt::hash("admin", bcrypt::DEFAULT_COST).map_err(|e| e.to_string())?;
+        
+        let _ = conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES ('admin', ?1)
+             ON CONFLICT(username) DO NOTHING",
+            [&hash]
+        );
+
+        Ok("Test data generated. User: admin / admin".to_string())
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn register_developer_with_key(
+    state: State<'_, PmState>,
+    email: String,
+    device_id: String,
+    team_key: String
+) -> Result<String, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        // 1. Find License
+        let mut stmt = conn.prepare("SELECT id, expires_at, max_users, is_active FROM license_keys WHERE key_string = ?1")
+            .map_err(|e| e.to_string())?;
+            
+        let license_row = stmt.query_row([&team_key], |row| {
+             Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, i32>(3)?
+             ))
+        }).map_err(|_| "Invalid License Key".to_string())?;
+        
+        let (lic_id, expires_at, max_users, is_active) = license_row;
+        
+        if is_active == 0 {
+            return Err("License is inactive".to_string());
+        }
+        
+        // 2. Check Expiration (Date Only: YYYY-MM-DD)
+        if let Some(exp_str) = expires_at {
+             // Parse exp_str (assuming YYYY-MM-DD HH:MM:SS or similar from SQLite)
+             // We just want to check if TODAY > EXPIRATION_DAY
+             let today = Local::now().format("%Y-%m-%d").to_string();
+             let exp_day = exp_str.split(' ').next().unwrap_or("");
+             
+             if today > exp_day.to_string() {
+                 return Err(format!("License expired on {}", exp_day));
+             }
+        }
+        
+        // 3. Check Max Users
+        // Count developers linked to this key (excluding self if re-registering)
+        // Actually, if self is already linked, it's fine.
+        let current_count: i32 = conn.query_row(
+            "SELECT COUNT(DISTINCT id) FROM developers WHERE license_key_id = ?1 AND id != ?2",
+            params![lic_id, device_id], 
+            |r| r.get(0)
+        ).unwrap_or(0);
+        
+        if current_count >= max_users {
+            return Err(format!("License Limit Reached ({}/{})", current_count, max_users));
+        }
+        
+        // 4. Bind Developer
+        let _ = conn.execute(
+            "INSERT INTO developers (id, name, device_id, email, license_key_id, is_online, last_seen_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 1, datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET
+               email = ?4, license_key_id = ?5, is_online = 1, last_seen_at = datetime('now')",
+            params![device_id, email.split('@').next().unwrap_or("Dev"), device_id, email, lic_id]
+        ).map_err(|e| e.to_string())?;
+        
+        Ok("Success".to_string())
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn register_user(
+    state: State<'_, PmState>,
+    username: String,
+    password: String
+) -> Result<bool, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        // Hash password
+        let hash = bcrypt::hash(&password, bcrypt::DEFAULT_COST).map_err(|e| e.to_string())?;
+        
+        conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?1, ?2)",
+            params![&username, &hash]
+        ).map_err(|e| {
+            if e.to_string().contains("UNIQUE constraint failed") {
+                "Username already exists".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
+        
+        Ok(true)
+    } else {
+        Err("PM not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub fn login_user(
+    state: State<'_, PmState>,
+    username: String,
+    password: String
+) -> Result<bool, String> {
+    let pm = state.lock().unwrap();
+    if let Some(pm) = pm.as_ref() {
+        let conn = Connection::open(&pm.db_path).map_err(|e| e.to_string())?;
+        
+        let hash: String = conn.query_row(
+            "SELECT password_hash FROM users WHERE username = ?",
+            [&username],
+            |row| row.get(0)
+        ).map_err(|_| "Invalid username or password".to_string())?;
+        
+        let valid = bcrypt::verify(&password, &hash).unwrap_or(false);
+        
+        if valid {
+            Ok(true)
+        } else {
+            Err("Invalid username or password".to_string())
+        }
     } else {
         Err("PM not initialized".to_string())
     }

@@ -1,11 +1,13 @@
 mod agent;
+pub mod fingerprint;
 
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
     get_status, start_monitoring, stop_monitoring,
     capture_screen_command, save_activity,
     get_activity_log, check_ollama, test_pm_connection,
-    install_ollama, pull_model, start_ollama
+    install_ollama, pull_model, start_ollama,
+    get_semantic_fingerprint
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -26,7 +28,8 @@ pub fn run() {
             test_pm_connection,
             install_ollama,
             pull_model,
-            start_ollama
+            start_ollama,
+            get_semantic_fingerprint
         ])
     .setup(|app| {
       if cfg!(debug_assertions) {
