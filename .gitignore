@@ -3,6 +3,8 @@
 # ================================
 node_modules/
 .pnpm-store/
+credentials.txt
+seed_supabase.sql
 
 # ================================
 # Rust / Tauri
