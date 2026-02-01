@@ -2,24 +2,83 @@
 
 **Real-time privacy-first developer activity monitoring powered by local AI.**
 
-FlowSight AI consists of two lightweight desktop applications that work together to provide insights into developer activity without compromising privacy. It uses local LLMs to analyze screen content and transmits *only* text descriptions to a central dashboard.
+FlowSight AI provides deep insights into developer activity without compromising privacy. It uses a **Hybrid Context Extraction** system to analyze screen content, system state, and project context locally, transmitting only secure fingerprints and metadata to a central dashboard.
 
 ## 🚀 Features
 
-*   **Privacy First**: Screenshots are analyzed locally on your machine. **Images never leave your device.**
-*   **Local Intelligence**: Uses [Ollama](https://ollama.ai) and LLaVA (Large Language-and-Vision Assistant) to understand screen context.
-*   **Real-time Dashboard**: Team leads or project managers can see live activity feeds in text format.
-*   **Automatic Categorization**: Activities are automatically tagged (Coding, Browsing, Meeting, Terminal, etc.).
-*   **No Cloud Dependencies**: Operates entirely within your local network (or via direct tunnel).
+*   **Privacy First**: No images leave the developer's machine. Only vector embeddings (512-dim) and text metadata are transmitted.
+*   **Hybrid Context Engine**:
+    *   **Generative Vision**: Uses **Ollama (LLaVA/Moondream)** to generate human-readable descriptions of screen activity (e.g., "Editing a Rust struct").
+    *   **Semantic Search**: Uses **OpenAI CLIP** to generate vector embeddings for enabling "Find similar moments" features.
+    *   **System Context**: Exact Window Titles, App Names, and Git Branch correlation.
+*   **PM Dashboard 2.0**:
+    *   **Master-Detail UI**: Real-time Team Grid and simplified individual Activity Feeds.
+    *   **Local Persistence**: All data is stored in an encrypted local **SQLite** database.
+    *   **Secure Auth**: Local bcrypt-hashed authentication with session persistence.
+*   **Real-time Sync**: Uses **Supabase Realtime** (WebSockets) for sub-second state synchronization between Agent and PM.
 
-## 🌍 Remote Access (Supabase)
+## 🏗️ Technical Architecture
 
-To connect Developers and Managers over the internet without VPNs or Port Forwarding, we use **Supabase Realtime**.
+FlowSight AI is built as a distributed system of lightweight desktop agents communicating via a secure relay.
 
-### 1. Setup Supabase
-1.  Create a free project at [Supabase.com](https://supabase.com).
-2.  Go to **Project Settings > API**.
-3.  Copy your **Project URL** and **Publishable Key**.
+### Technology Stack
+
+| Component | Technology | Role |
+| :--- | :--- | :--- |
+| **Core Framework** | **Tauri (Rust)** | High-performance, secure desktop application shell. |
+| **Generative AI** | **Ollama** | Runs local VLMs (LLaVA, Moondream) for image-to-text description. |
+| **Semantic AI** | **Python 3 / CLIP** | Semantic image analysis and embedding generation. |
+| **Frontend** | **Vanilla JS / HTML5** | Lightweight, framework-free UI for maximum speed. |
+| **Database** | **SQLite** | Local, serverless storage for the PM Dashboard. |
+| **Networking** | **Supabase Realtime** | WebSocket-based Pub/Sub for secure signal transmission. |
+
+### Data Flow Diagram
+
+1.  **Capture**: Agent captures the screen (in-memory) every 10s.
+2.  **Contextualize**:
+    *   Rust backend queries OS for Window Title/App Name.
+    *   Rust checks CWD for Git Branch.
+    *   **Ollama** analyzes the screenshot to generate a text summary (e.g. "Debugging code").
+    *   **CLIP** generates a vector representation.
+3.  **Broadcast**: Agent bundles `(summary, vector, metadata, device_id)` and pushes to Supabase Channel `room1`.
+4.  **Receive**: PM Dashboard subscribes to `room1`.
+5.  **Persist**: PM receives payload, saves to `apps/pm/pm-dashboard.db` (SQLite).
+6.  **Visualize**: PM Frontend queries the local DB to render the Team Grid and Activity Feed.
+
+```mermaid
+graph TD
+    subgraph Developer Machine [Agent]
+        Screen[Screen Buffer] -->|Image| Ollama[Ollama (Local AI)]
+        Screen -->|Image| CLIP[Python CLIP Process]
+        OS[OS APIs] -->|Window/App| Rust[Rust Backend]
+        Ollama -->|Text Description| Rust
+        CLIP -->|Vector| Rust
+        Rust -->|JSON Payload| Supabase[Supabase Realtime]
+    end
+
+    subgraph Manager Machine [PM Dashboard]
+        Supabase -->|WebSocket Event| PM_Rust[Tauri Backend]
+        PM_Rust -->|Insert| DB[(SQLite DB)]
+        DB -->|Query| UI[Dashboard UI]
+    end
+```
+
+## 🛠️ Prerequisites
+
+*   **Rust 1.77+**: For compiling the Tauri backend.
+*   **Node.js 18+ (pnpm)**: For frontend asset bundling and package management.
+*   **Ollama**: Installed and running (for text generation).
+*   **Python 3.10+**: Required for the CLIP embedding script (`apps/agent/python/requirements.txt`).
+    *   Dependencies: `torch`, `transformers`, `Pillow`.
+
+## 🏁 Quick Start
+
+### 1. Setup
+
+Install functionality:
+```bash
+pnpm install
+```
 
 ### 2. Configure Environment
 Create a `.env` file in the project root:
@@ -27,109 +86,54 @@ Create a `.env` file in the project root:
 VITE_SUPABASE_URL="https://your-project.supabase.co"
 VITE_SUPABASE_PUBLIC_KEY="your-publishable-key"
 ```
-Or edit `.env.local` locally if you are testing.
 
-
-## 📦 Architecture (Hybrid Signal & Sync)
-
-The system uses a **Hybrid Local-First + Cloud** architecture:
-1.  **Privacy**: Detailed logs and images are processed locally by Ollama/LLaVA.
-2.  **Transport**: Reports are broadcast securely via **Supabase Realtime** (WebSockets).
-3.  **Storage**: The PM Dashboard listens to the broadcast and saves data to its local SQLite database.
-
-```mermaid
-graph LR
-    subgraph Developer
-        A[Screen Capture] --> B[Local Moondream AI]
-        B -- "Text" --> C[DEV Agent]
-        C -- "Supabase Realtime (Signal)" --> D((Cloud Pipe))
-    end
-    
-    subgraph Manager
-        D -- "Broadcast Receive" --> E[PM Dashboard]
-        E -- "Store" --> F[(Local DB)]
-        E --> G[Live UI]
-    end
-```
-
-## 🛠️ Prerequisites
-
-*   [Rust 1.77+](https://rustup.rs)
-*   [Node.js 18+](https://nodejs.org) (with pnpm)
-*   [Ollama](https://ollama.ai) installed and running.
-
-## 🏁 Quick Start
-
-### 1. Setup
-
-Install project dependencies:
-```bash
-pnpm install
-```
-
-### 2. Start PM Dashboard (Manager)
-
-Run the dashboard to generate an API Key and start the server.
+### 3. Start PM Dashboard (Manager)
 
 ```bash
 pnpm dev:pm
 ```
-*   The app will launch.
-*   Go to the **Settings** tab (implied) or look at the console/UI to find your **API Key**.
-*   Ensure the server is running (default: `http://localhost:8080`).
+*   **Login**: Create a local account.
+*   **Mock Data**: Use "Generate Mock Data" on the login screen to verify UI instantly.
+*   **Database Location**: `~/.local/share/FlowSight/pm-dashboard.db` (Linux/Mac) or `%AppData%\Local\FlowSight\pm-dashboard.db` (Windows).
 
-### 3. Start DEV Agent (Developer)
-
-Run the agent on the developer machine.
+### 4. Start DEV Agent (Developer)
 
 ```bash
 pnpm dev:agent
 ```
-
-*   **Configuration**:
-    *   **PM URL**: The IP/URL of the PM Dashboard (e.g., `http://192.168.1.5:8080` or `http://localhost:8080` if testing locally).
-    *   **API Key**: Paste the key generated by the PM Dashboard.
-    *   **Vision Model**: Default is `llava:7b`.
-*   **Ollama Setup**: The agent will prompt you to install Ollama and pull the `llava:7b` model if not present.
+The agent starts silently. Ensure **Ollama** is running for full functionality.
 
 ## ⚙️ Configuration
 
-### Agent Configuration (`dev-agent.db`)
-*   `capture_interval`: Time in milliseconds between captures (Default: `10000` aka 10s).
-*   `vision_model`: Local LLM model to use (Default: `moondream`).
-*   `pm_url`: URL of the PM Dashboard.
+### Agent (`dev-agent.db`)
+*   `capture_interval`: Frequency of snapshots (Default: 10s).
+*   `vision_model`: AI Model selection (Default: `llava:7b` or `moondream`).
 
-### PM Configuration (`pm-dashboard.db`)
-*   `server_port`: HTTP port for the receiver server (Default: `8080`).
-*   `retention_days`: How long to keep reports (Default: 7 days).
-*   `team_name`: Display name for the dashboard.
+### PM (`pm-dashboard.db`)
+*   `retention_days`: Auto-delete logs older than X days (Default: 7).
+*   `server_port`: Internal API port (Default: 8080).
 
-## 🔌 API Reference (PM Dashboard)
+## 🔌 API Reference (Internal)
 
-The PM Dashboard exposes the following endpoints (headers required: `X-API-Key`):
+The PM Dashboard allows internal Tauri commands for extensions:
 
-*   `POST /api/report`: Submit a new activity report.
-    *   Body: `{ "developer_name": "...", "description": "...", "activity_type": "..." }`
-*   `GET /api/developers`: List all tracked developers and online status.
-*   `GET /api/stats`: Get dashboard statistics.
-*   `GET /health`: Health check (No auth required).
+*   `login_user(username, password)`: Returns a session token.
+*   `verify_session(token)`: Validates active session.
+*   `get_developers()`: Returns `Vec<Developer>` with realtime online status.
+*   `get_reports_by_developer(id, limit)`: Returns detailed activity logs.
 
 ## 🏗️ Building for Production
 
-Build optimized binaries for your platform:
+To create optimized standalone executables (`.exe`, `.dmg`, `.deb`):
 
 ```bash
-# Build both apps
+# Build entire suite
 pnpm build
 
-# Build individual apps
-pnpm build:agent
-pnpm build:pm
+# Build specific app
+pnpm build:pm      # Output: apps/pm/src-tauri/target/release
+pnpm build:agent   # Output: apps/agent/src-tauri/target/release
 ```
-
-Executables will be located in:
-*   `apps/agent/src-tauri/target/release/`
-*   `apps/pm/src-tauri/target/release/`
 
 ## 📄 License
 
