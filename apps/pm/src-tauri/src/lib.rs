@@ -5,7 +5,8 @@ use pm::{
     get_reports, get_stats, start_server, stop_server, get_server_status,
     generate_api_key, clear_old_reports, check_ollama, install_ollama, pull_model, start_ollama,
     save_remote_report, create_team, get_teams, validate_license_key, save_fingerprint_report,
-    register_user, login_user, generate_test_data, register_developer_with_key
+    register_user, login_user, generate_test_data, register_developer_with_key, get_reports_by_developer,
+    verify_session
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,7 +37,9 @@ pub fn run() {
             register_user,
             login_user,
             generate_test_data,
-            register_developer_with_key
+            register_developer_with_key,
+            get_reports_by_developer,
+            verify_session
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

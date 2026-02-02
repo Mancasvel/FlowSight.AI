@@ -1,5 +1,6 @@
 mod agent;
 pub mod fingerprint;
+pub mod context;
 
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
@@ -29,7 +30,9 @@ pub fn run() {
             install_ollama,
             pull_model,
             start_ollama,
-            get_semantic_fingerprint
+            get_semantic_fingerprint,
+            agent::analyze_screen_with_ai,
+            agent::capture_context_snapshot
         ])
     .setup(|app| {
       if cfg!(debug_assertions) {

@@ -58,8 +58,8 @@ impl FlowSightAgent {
                 pm_url: Some("http://localhost:8080".to_string()),
                 api_key: None,
                 dev_name: Some(whoami::realname()),
-                capture_interval: Some(10000),
-                vision_model: Some("llava:7b".to_string()),
+                capture_interval: Some(30000), // Updated default to 30s
+                vision_model: Some("qwen3-vl:2b".to_string()), // Updated default
             },
             is_running: false,
             reports_sent: 0,
@@ -229,6 +229,71 @@ pub struct Fingerprint {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ContextSnapshot {
+    pub vector: Vec<f32>,
+    pub dimension: usize,
+    pub description: String,
+    pub metadata: SnapshotMetadata,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SnapshotMetadata {
+    pub task: Option<String>,
+    pub file: Option<String>,
+    pub app: Option<String>,
+    pub branch: Option<String>,
+    pub language: Option<String>,
+}
+
+#[tauri::command]
+pub fn capture_context_snapshot(user_task: Option<String>) -> Result<ContextSnapshot, String> {
+    use crate::fingerprint::generate_fingerprint;
+    use crate::context::{get_system_context, get_git_context};
+    use std::path::PathBuf;
+
+    // 1. Capture Screen
+    let (base64, path_str) = capture_screen()?;
+    let path = PathBuf::from(&path_str);
+
+    // 2. Run Qwen2-VL (Visual Description) - REPLACES CLIP
+    // We use a helper function to call Ollama with qwen2-vl:2b or similar
+    let description = analyze_image_with_qwen(&base64).unwrap_or_else(|_| "Screen analysis failed".to_string());
+
+    // 3. System Context (Window/App)
+    let sys = get_system_context();
+    
+    // 4. Git Context (Project)
+    let mut git = None;
+    if let Some(title) = &sys.window_title {
+        let home = dirs::desktop_dir().unwrap_or(PathBuf::from("."));
+        let possible_path = home.join("FlowSight.AI"); 
+        if possible_path.exists() {
+             git = get_git_context(possible_path.to_str().unwrap());
+        }
+    }
+    if git.is_none() {
+        git = get_git_context(".");
+    }
+
+    // McLean Config / Cleanup
+    // Remove the temp file to protect privacy (as per plan)
+    let _ = std::fs::remove_file(&path);
+
+    Ok(ContextSnapshot {
+        vector: vec![], // No vectors anymore
+        dimension: 0,
+        description,
+        metadata: SnapshotMetadata {
+            task: Some(user_task.unwrap_or_default()),
+            file: sys.file_name,
+            app: sys.app_name,
+            branch: git.and_then(|g| g.branch),
+            language: None,
+        }
+    })
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActivityMetadata {
     pub app_name: Option<String>,
     pub window_title: Option<String>,
@@ -237,6 +302,7 @@ pub struct ActivityMetadata {
 
 #[tauri::command]
 pub fn get_semantic_fingerprint(image_path: String, metadata: Option<ActivityMetadata>) -> Result<Fingerprint, String> {
+    // Kept for backward compat or direct calls
     use crate::fingerprint::generate_fingerprint;
     use std::path::PathBuf;
     
@@ -245,10 +311,8 @@ pub fn get_semantic_fingerprint(image_path: String, metadata: Option<ActivityMet
         return Err(format!("File not found: {}", image_path));
     }
     
-    // Run local Python CLIP
     let result = generate_fingerprint(&path).map_err(|e| e.to_string())?;
     
-    // Construct response (simple mapping for now)
     Ok(Fingerprint {
         vector: result.vector,
         dimension: result.dimension,
@@ -328,6 +392,7 @@ pub fn get_activity_log(state: State<'_, AgentState>, limit: Option<u32>) -> Res
     Ok(state.lock().unwrap().as_ref().map(|a| a.get_recent(limit.unwrap_or(20))).unwrap_or_default())
 }
 
+
 #[tauri::command]
 pub fn check_ollama() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
@@ -340,7 +405,10 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
             let models: Vec<String> = json["models"].as_array()
                 .map(|arr| arr.iter().filter_map(|m| m["name"].as_str().map(String::from)).collect())
                 .unwrap_or_default();
-            let has_vision = models.iter().any(|m| m.contains("llava"));
+            
+            // Allow llava, moondream, OR qwen (assumed to be VL if selected, or just qwen2-vl explicitly)
+            let has_vision = models.iter().any(|m| m.contains("llava") || m.contains("moondream") || m.contains("qwen"));
+            
             Ok(serde_json::json!({"online": true, "models": models, "hasVisionModel": has_vision}))
         }
         _ => Ok(serde_json::json!({"online": false}))
@@ -435,4 +503,95 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
         Ok(_) => Ok(serde_json::json!({"started": true})),
         Err(e) => Err(format!("Failed to start Ollama: {}", e))
     }
+}
+
+// RESTORED AI ANALYSIS (Backend)
+#[tauri::command]
+pub async fn analyze_screen_with_ai(path: String) -> Result<String, String> {
+    use std::path::PathBuf;
+    use std::fs;
+    
+    // 1. Read File
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    let image_bytes = fs::read(&p).map_err(|e| e.to_string())?;
+    let base64_img = BASE64.encode(&image_bytes);
+    
+    // 2. Prepare Prompt
+    // Using the exact prompt the user liked
+    let prompt = "You are a screen reading assistant.
+Your job is to extracted active context from the provided OCR text and Image.
+
+INSTRUCTIONS:
+1. Identify the ACTIVE APPLICATION (APP).
+2. Identify the OPEN FILE or CONTEXT (FILE).
+3. Identify specific KEYWORDS or CODE (CODE).
+4. Write a 1-sentence SUMMARY.
+
+OUTPUT FORMAT (Strict):
+APP: <Name>
+  FILE: <Name>
+    CODE: <Content>
+      SUMMARY: <Content>
+
+        If unsure, write \"Unknown\". DO NOT HALLUCINATE.";
+
+    // 3. Call Ollama
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "model": "llava:7b",
+        "prompt": prompt,
+        "images": [base64_img],
+        "stream": false,
+        "options": {
+            "temperature": 0.0,
+            "num_predict": 500
+        }
+    });
+    
+    let resp = client.post("http://localhost:11434/api/generate")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Ollama request failed: {}", e))?;
+        
+    if !resp.status().is_success() {
+        return Err(format!("Ollama Error: {}", resp.status()));
+    }
+    
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    
+    // 4. Extract Response
+    let text = json["response"].as_str().unwrap_or("No response").to_string();
+    Ok(text)
+}
+
+fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
+    let client = reqwest::blocking::Client::new();
+    let prompt = "Describe the screen content in detail. Identify the active application, open files, and code. Summarize what the user is doing.";
+    
+    let body = serde_json::json!({
+        "model": "qwen3-vl:2b", // User confirmed or assumed default
+        "prompt": prompt,
+        "images": [base64_img],
+        "stream": false,
+        "options": {
+            "temperature": 0.1,
+            "num_predict": 100
+        }
+    });
+    
+    let resp = client.post("http://localhost:11434/api/generate")
+        .json(&body)
+        .send()
+        .map_err(|e| format!("Ollama request failed: {}", e))?;
+        
+    if !resp.status().is_success() {
+        return Err(format!("Ollama Error: {}", resp.status()));
+    }
+    
+    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    Ok(json["response"].as_str().unwrap_or("No response").to_string())
 }

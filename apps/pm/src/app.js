@@ -57,30 +57,32 @@ function setupSupabase() {
 
         // Subscribe to Realtime
         const channel = supabase.channel('room1');
-        channel.on('broadcast', { event: 'fingerprint' }, (event) => {
-            console.log("Received fingerprint:", event.payload);
-            handleFingerprint(event.payload);
+        channel.on('broadcast', { event: 'activity_log' }, (event) => {
+            console.log("Received activity:", event.payload);
+            handleActivityLog(event.payload);
         }).subscribe((status) => {
             console.log("Supabase Channel Status:", status);
         });
     }
 }
 
-async function handleFingerprint(data) {
+async function handleActivityLog(data) {
     try {
-        console.log("Saving fingerprint to SQLite...", data.dimension);
-        // Call Rust command
-        await invoke('save_fingerprint_report', {
+        console.log("Saving activity to SQLite...");
+        await invoke('save_activity_log', {
             developerName: data.developer_name || "Unknown",
-            vector: data.vector,
-            dimension: data.dimension,
-            appName: data.metadata?.app_name,
-            windowTitle: data.metadata?.window_title,
+            deviceId: data.device_id || "unknown_device",
+            description: data.metadata?.ai_summary || "No description",
+            activityType: "active_work", // Default type
             timestamp: data.timestamp
         });
-        console.log("Fingerprint saved!");
+        console.log("Activity saved!");
+
+        if (!document.getElementById('teamView').classList.contains('hidden')) {
+            loadTeamGrid();
+        }
     } catch (e) {
-        console.error("Failed to save fingerprint:", e);
+        console.error("Failed to save activity:", e);
     }
 }
 
@@ -114,176 +116,230 @@ function setupAuthUI() {
         authError.textContent = "";
     };
 
-    // Login via Supabase
+    // Login (Hybrid: try Supabase, then Local)
     document.getElementById('loginBtn').onclick = async () => {
-        const email = document.getElementById('loginUser').value; // Treating username as email for Supabase usually
+        const username = document.getElementById('loginUser').value;
         const pass = document.getElementById('loginPass').value;
-        if (!email || !pass) return alert("Please fill all fields");
+        const remember = document.getElementById('rememberMe').checked;
 
-        const isEmail = email.includes("@");
-        const finalEmail = isEmail ? email : `${email}@example.com`; // Fallback for simple usernames
+        if (!username || !pass) return alert("Please fill all fields");
 
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: finalEmail,
-                password: pass,
-            });
+            // 1. Try Local Login (PM Backend)
+            const token = await invoke('login_user', { username, password: pass });
+            if (remember) localStorage.setItem('pm_token', token);
+            else localStorage.removeItem('pm_token');
 
-            if (error) throw error;
-            console.log("Logged in:", data);
+            document.getElementById('loginOverlay').classList.add('hidden');
+            loadTeamGrid();
         } catch (e) {
-            // BACKDOOR / BYPASS for "Email not confirmed" if requested
-            if (e.message && e.message.includes("Email not confirmed")) {
-                console.warn("Bypassing Email Confirmation restriction as requested.");
-                localStorage.setItem('pm_user', finalEmail); // Set local user anyway
-                document.getElementById('loginOverlay').classList.add('hidden');
-                return;
-            }
-
-            authError.textContent = e.message;
+            console.warn("Local login failed:", e);
+            // 2. Fallback to Supabase (if needed, or just report error)
+            // For now, let's just report the error from Local, as Supabase logic was mostly leftover
+            authError.textContent = e || "Invalid credentials";
             authError.style.display = 'block';
         }
     };
 
-    // Register via Supabase
+    // Register via Local Backend
     document.getElementById('registerBtn').onclick = async () => {
         const email = document.getElementById('regUser').value;
         const pass = document.getElementById('regPass').value;
         if (!email || !pass) return alert("Please fill all fields");
 
-        const isEmail = email.includes("@");
-        const finalEmail = isEmail ? email : `${email}@example.com`;
-
         try {
-            const { data, error } = await supabase.auth.signUp({
-                email: finalEmail,
-                password: pass,
-            });
+            // Call Rust command
+            await invoke('register_user', { username: email, password: pass });
 
-            if (error) throw error;
-
-            alert("Registration successful! Check your email if confirmation is enabled, or login now.");
+            alert("Registration successful! Please login.");
             tabLogin.click();
         } catch (e) {
-            authError.textContent = e.message;
+            authError.textContent = e || "Registration failed";
             authError.style.display = 'block';
         }
     };
 
-    // Generate Data (Local Mock - Keep for dev?)
-    // Converting to just fill the form for convenience
+    // Check Token on Load
+    const savedToken = localStorage.getItem('pm_token');
+    if (savedToken) {
+        // verify_session
+        invoke('verify_session', { token: savedToken }).then(isValid => {
+            if (isValid) {
+                console.log("Session verified");
+                document.getElementById('loginOverlay').classList.add('hidden');
+            } else {
+                localStorage.removeItem('pm_token');
+            }
+        }).catch(console.error);
+    }
+
+    // Mock Data
     document.getElementById('genDataLink').onclick = (e) => {
         e.preventDefault();
-        document.getElementById('loginUser').value = "admin@flowsight.ai";
+        document.getElementById('loginUser').value = "admin";
         document.getElementById('loginPass').value = "password123";
-        document.getElementById('regUser').value = "admin@flowsight.ai";
-        document.getElementById('regPass').value = "password123";
     };
 }
 
 function setupDashboardUI() {
-    // 1. Stats & Config
-    refreshData();
-    setInterval(refreshData, 5000); // Poll every 5s
+    console.log("Setting up Dashboard UI...");
+    try {
+        // 0. View Logic (High Priority)
+        const btnRefreshTeam = document.getElementById('refreshTeamBtn');
+        const btnBack = document.getElementById('backBtn');
+        const btnRefreshDetail = document.getElementById('refreshDetailBtn');
 
-    // 2. New Key
-    document.getElementById('newKeyBtn').onclick = async () => {
-        if (confirm("Generate new API Key? Old keys will stop working immediately.")) {
+        if (btnRefreshTeam) btnRefreshTeam.onclick = loadTeamGrid;
+        if (btnBack) btnBack.onclick = () => {
+            document.getElementById('detailView').classList.add('hidden');
+            document.getElementById('teamView').classList.remove('hidden');
+            loadTeamGrid();
+        };
+        if (btnRefreshDetail) btnRefreshDetail.onclick = () => {
+            if (currentDevId) loadUserDetail(currentDevId);
+        };
+        console.log("View Logic attached");
+
+        // 1. New Key
+        const btnNewKey = document.getElementById('newKeyBtn');
+        if (btnNewKey) btnNewKey.onclick = async () => {
+            if (confirm("Generate new API Key? Old keys will stop working immediately.")) {
+                try {
+                    const newKey = await invoke('generate_api_key');
+                    document.getElementById('apiKeyDisplay').textContent = newKey;
+                } catch (e) {
+                    alert("Error: " + e);
+                }
+            }
+        };
+
+        // 2. Mock Data Link
+        const linkGenData = document.getElementById('genDataLink');
+        if (linkGenData) linkGenData.onclick = async (e) => {
+            e.preventDefault();
             try {
-                const newKey = await invoke('generate_api_key');
-                document.getElementById('apiKeyDisplay').textContent = newKey;
+                await invoke('generate_test_data');
+                alert("Mock Data Generated! Refreshing...");
+                document.getElementById('loginOverlay').classList.add('hidden');
+                loadTeamGrid();
+            } catch (err) {
+                alert("Error generating data: " + err);
+            }
+        };
+
+        // 3. Server Control
+        const startBtn = document.getElementById('startServerBtn');
+        const stopBtn = document.getElementById('stopServerBtn');
+
+        if (startBtn) startBtn.onclick = async () => {
+            try {
+                const msg = await invoke('start_server');
+                console.log(msg);
+                checkServerStatus();
             } catch (e) {
                 alert("Error: " + e);
             }
+        };
+
+        if (stopBtn) stopBtn.onclick = async () => {
+            try {
+                await invoke('stop_server');
+                checkServerStatus();
+            } catch (e) {
+                alert("Error: " + e);
+            }
+        };
+
+        // 4. Initial Load
+        checkServerStatus();
+        loadTeamGrid();
+        setInterval(loadTeamGrid, 10000);
+
+    } catch (e) {
+        console.error("Setup UI Error:", e);
+        alert("UI Setup Error: " + e);
+    }
+}
+
+let currentDevId = null;
+
+async function loadTeamGrid() {
+    // Only refresh if team view is active
+    if (document.getElementById('teamView').classList.contains('hidden')) return;
+
+    try {
+        const devs = await invoke('get_developers');
+        const grid = document.getElementById('teamGrid');
+
+        if (!devs || devs.length === 0) {
+            grid.innerHTML = `
+            <div class="empty-state" style="grid-column: 1/-1;">
+                <span class="material-icons">group_off</span>
+                <p>No team members found.</p>
+            </div>`;
+            return;
         }
-    };
 
-    // 3. Server Control
-    const startBtn = document.getElementById('startServerBtn');
-    const stopBtn = document.getElementById('stopServerBtn');
-    const statusText = document.getElementById('serverStatusText');
-    const dot = document.getElementById('serverDot');
+        grid.innerHTML = devs.map(d => `
+            <div class="stat-card" style="cursor:pointer; transition: transform 0.2s;" onclick="window.openDetail('${d.id}', '${d.name}')">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <span class="dev-status ${d.is_online ? 'online' : ''}" style="width:12px; height:12px;"></span>
+                    <span style="font-size:12px; color:#64748b;">${d.is_online ? 'Online' : 'Offline'}</span>
+                </div>
+                <div class="value" style="font-size:20px; font-weight:600; margin-bottom:5px;">${d.name}</div>
+                <div style="font-size:12px; color:#64748b; margin-bottom:15px;">ID: ${d.id.substring(0, 8)}...</div>
+                
+                <div style="font-size:11px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:8px;">
+                    Last seen: ${d.last_seen_at?.split('T')[1]?.split('.')[0] || 'Unknown'}
+                </div>
+            </div>
+        `).join('');
 
-    startBtn.onclick = async () => {
-        try {
-            const msg = await invoke('start_server');
-            console.log(msg);
-            checkServerStatus();
-        } catch (e) {
-            alert("Error: " + e);
+        // Add hover effect via JS or CSS (already inline style for simplicity)
+
+    } catch (e) {
+        console.error("Grid Error:", e);
+    }
+}
+
+window.openDetail = async (id, name) => {
+    currentDevId = id;
+    document.getElementById('teamView').classList.add('hidden');
+    document.getElementById('detailView').classList.remove('hidden');
+
+    document.getElementById('detailName').textContent = name;
+    await loadUserDetail(id);
+};
+
+async function loadUserDetail(id) {
+    try {
+        const reports = await invoke('get_reports_by_developer', { devId: id, limit: 50 });
+        const list = document.getElementById('detailReportsList');
+
+        document.getElementById('detailToday').textContent = reports.length; // Approximate "Recent"
+
+        if (!reports || reports.length === 0) {
+            list.innerHTML = `<div class="empty-state">No recent activity</div>`;
+            return;
         }
-    };
 
-    stopBtn.onclick = async () => {
-        try {
-            await invoke('stop_server');
-            checkServerStatus();
-        } catch (e) {
-            alert("Error: " + e);
-        }
-    };
+        list.innerHTML = reports.map(r => `
+            <div class="report-item">
+                <div class="report-header">
+                    <span class="report-time">${r.created_at?.split('T')[1]?.split('.')[0]}</span>
+                    <span class="activity-badge coding">${r.activity_type}</span>
+                </div>
+                <div class="report-desc">${r.description}</div>
+            </div>
+        `).join('');
 
-    // 4. Manual Refresh
-    document.getElementById('refreshBtn').onclick = refreshData;
-
-    // Check status immediately
-    checkServerStatus();
-    setInterval(checkServerStatus, 5000);
+    } catch (e) {
+        console.error("Detail Error:", e);
+    }
 }
 
 async function refreshData() {
-    try {
-        // Config
-        const config = await invoke('get_config');
-        document.getElementById('teamName').value = config.team_name || "";
-        document.getElementById('serverPort').value = config.server_port || 8080;
-        document.getElementById('apiKeyDisplay').textContent = config.api_key || "No key generated";
-
-        // Stats
-        const stats = await invoke('get_stats');
-        document.getElementById('statDevs').textContent = stats.total_developers || 0;
-        document.getElementById('statOnline').textContent = stats.online_developers || 0;
-        document.getElementById('statReports').textContent = stats.total_reports || 0;
-        document.getElementById('statToday').textContent = stats.reports_today || 0;
-
-        // Devs List
-        const devs = await invoke('get_developers');
-        const devList = document.getElementById('developersList');
-        if (devs && devs.length > 0) {
-            devList.innerHTML = devs.map(d => `
-                <div class="developer-item">
-                    <div class="dev-info">
-                        <div class="dev-status ${d.is_online ? 'online' : ''}"></div>
-                        <div>
-                            <div class="dev-name">${d.name}</div>
-                            <div class="dev-id">${d.id}</div>
-                        </div>
-                    </div>
-                    <div style="font-size:12px;color:#64748b;">
-                        ${d.last_seen_at?.split('T')[1]?.split('.')[0] || 'Offline'}
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Reports List (Activity Feed)
-        const reports = await invoke('get_reports', { limit: 20 });
-        const repList = document.getElementById('reportsList');
-        if (reports && reports.length > 0) {
-            repList.innerHTML = reports.map(r => `
-                <div class="report-item">
-                    <div class="report-header">
-                        <span class="report-dev">${r.developer_name}</span>
-                        <span class="report-time">${r.created_at?.split('T')[1]?.split('.')[0]}</span>
-                    </div>
-                    <div class="activity-badge coding">${r.activity_type}</div>
-                    <div class="report-desc">${r.description}</div>
-                </div>
-            `).join('');
-        }
-    } catch (e) {
-        console.error("Refresh Error:", e);
-    }
+    // Deprecated in favor of loadTeamGrid
 }
 
 async function checkServerStatus() {

@@ -568,6 +568,12 @@
           <label>Password</label>
           <input type="password" id="loginPass" placeholder="••••••" autocomplete="off">
         </div>
+        <div style="text-align: left; margin-bottom: 20px;">
+          <label
+            style="color: #94a3b8; font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="rememberMe"> Remember me
+          </label>
+        </div>
         <button class="btn-login" id="loginBtn">Login</button>
       </div>
 
@@ -606,94 +612,70 @@
       <div class="status-dot" id="serverDot"></div>
       <span id="serverStatusText">Server stopped</span>
       <!-- Explicit inline-flex to ensure visibility -->
-      <button class="btn btn-success" id="startServerBtn" style="display: inline-flex;">
-        <span class="material-icons">play_arrow</span> Start
+      <button class="btn" id="startServerBtn"
+        style="display: inline-flex; background-color: #10b981; color: white; font-weight: 600; padding: 8px 16px; border-radius: 6px;">
+        <span class="material-icons">play_arrow</span> Start Server
       </button>
-      <button class="btn btn-error" id="stopServerBtn" style="display: none;">
-        <span class="material-icons">stop</span> Stop
+      <button class="btn" id="stopServerBtn"
+        style="display: none; background-color: #ef4444; color: white; font-weight: 600; padding: 8px 16px; border-radius: 6px;">
+        <span class="material-icons">stop</span> Stop Server
       </button>
     </div>
   </div>
 
   <div class="container">
-    <!-- Setup Card (Optional for PM) -->
-    <div class="card" id="setupCard">
+
+    <!-- Setup Card -->
+    <div class="card" id="setupCard" style="display:none;">
       <div class="card-header">
-        <h2><span class="material-icons">download</span> Setup (Optional)</h2>
-        <span style="font-size: 12px; color: var(--text-secondary);">For AI summaries</span>
+        <h2><span class="material-icons">download</span> Setup</h2>
       </div>
       <div class="install-steps">
-        <div class="install-step">
-          <div class="step-num" id="step1Num">1</div>
-          <div class="step-info">
-            <div class="step-title">Ollama</div>
-            <div class="step-desc" id="step1Desc">AI runtime (optional for summaries)</div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="installOllamaBtn">Install</button>
-        </div>
-        <div class="install-step">
-          <div class="step-num" id="step2Num">2</div>
-          <div class="step-info">
-            <div class="step-title">Phi3 Model</div>
-            <div class="step-desc" id="step2Desc">Text model for summaries (~2GB)</div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="pullModelBtn" disabled>Pull Model</button>
-        </div>
-      </div>
-      <div class="progress-log" id="progressLog"></div>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="label">Team Members</div>
-        <div class="value" id="statDevs">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Online Now</div>
-        <div class="value" id="statOnline" style="color: var(--success);">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Total Reports</div>
-        <div class="value" id="statReports" style="color: var(--primary);">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Today</div>
-        <div class="value" id="statToday" style="color: var(--warning);">0</div>
+        <!-- Setup content kept but hidden by default -->
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header">
-        <h2><span class="material-icons">settings</span> Configuration</h2>
-        <button class="btn btn-outline" id="newKeyBtn">
-          <span class="material-icons">refresh</span> New API Key
+    <!-- VIEW: TEAM GRID (Home) -->
+    <div id="teamView">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="font-size:18px; font-weight:600;">Team Members</h2>
+        <button class="btn btn-outline" id="refreshTeamBtn">
+          <span class="material-icons">refresh</span> Refresh
         </button>
       </div>
-      <div class="config-section">
-        <div class="form-group">
-          <label>Team Name</label>
-          <input type="text" id="teamName" placeholder="My Team">
-        </div>
-        <div class="form-group">
-          <label>Server Port</label>
-          <input type="number" id="serverPort" value="8080" min="1024" max="65535">
-        </div>
-        <div class="form-group" style="grid-column: 1 / -1;">
-          <label>API Key (share this with your developers)</label>
-          <div class="api-key-display" id="apiKeyDisplay">-</div>
+
+      <div id="teamGrid" class="stats-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+        <!-- Cards injected here -->
+        <div class="empty-state" style="grid-column: 1/-1;">
+          <span class="material-icons">group_off</span>
+          <p>No team members found.</p>
         </div>
       </div>
     </div>
 
-    <div class="grid-2">
+    <!-- VIEW: USER DETAIL (Hidden) -->
+    <div id="detailView" class="hidden">
+      <div style="margin-bottom:20px;">
+        <button class="btn btn-outline" id="backBtn">
+          <span class="material-icons">arrow_back</span> Back to Team
+        </button>
+      </div>
+
       <div class="card">
         <div class="card-header">
-          <h2><span class="material-icons">group</span> Team Members</h2>
+          <h2 id="detailName">User Detail</h2>
+          <span class="activity-badge coding" id="detailStatus">ONLINE</span>
         </div>
-        <div class="developers-list" id="developersList">
-          <div class="empty-state">
-            <span class="material-icons">person_add</span>
-            <div>No developers connected yet</div>
+        <div style="padding:20px;">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="label">Reports Today</div>
+              <div class="value" id="detailToday">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="label">Last Seen</div>
+              <div class="value" id="detailLastSeen" style="font-size:18px;">Just now</div>
+            </div>
           </div>
         </div>
       </div>
@@ -701,18 +683,16 @@
       <div class="card">
         <div class="card-header">
           <h2><span class="material-icons">history</span> Activity Feed</h2>
-          <button class="btn btn-outline" id="refreshBtn">
+          <button class="btn btn-outline" id="refreshDetailBtn">
             <span class="material-icons">refresh</span>
           </button>
         </div>
-        <div class="reports-list" id="reportsList">
-          <div class="empty-state">
-            <span class="material-icons">inbox</span>
-            <div>No activity reports yet</div>
-          </div>
+        <div class="reports-list" id="detailReportsList">
+          <!-- User specific reports -->
         </div>
       </div>
     </div>
+
   </div>
 
   <script type="module" src="/app.js"></script>
