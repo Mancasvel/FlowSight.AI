@@ -291,7 +291,7 @@
       async function loadConfig() {
         const config = await invoke('get_config');
         // No manual devName input anymore
-        document.getElementById('statInterval').textContent = (config.captureInterval || 30000) / 1000 + 's';
+        document.getElementById('statInterval').textContent = (config.captureInterval || 60000) / 1000 + 's';
       }
 
       async function saveConfig() {

@@ -52,7 +52,7 @@ impl FlowSightAgent {
         let mut agent = Self {
             config: AgentConfig {
                 dev_name: Some(whoami::realname()),
-                capture_interval: Some(30000),
+                capture_interval: Some(60000),
                 vision_model: Some("qwen3-vl:2b".to_string()),
             },
             is_running: false,
@@ -519,8 +519,8 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
 
 fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
-    // Simplified Prompt to debug
-    let prompt = "Describe the image briefly. Then state the Category from: Coding, Design, Sales, Communication, Meeting, Browsing, Other.";
+    // Detailed Prompt for extended answer
+    let prompt = "Analyze the image in detail. Describe the visible applications, specific file names, code context, and user activity. Then, explicitly state the Category from: Coding, Design, Sales, Communication, Meeting, Browsing, Other.";
     
     let body = serde_json::json!({
         "model": "qwen3-vl:2b",
@@ -533,8 +533,8 @@ fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
         ],
         "stream": false,
         "options": {
-            "temperature": 0.5, 
-            "num_predict": 200
+            "temperature": 0.6, 
+            "num_predict": 500
         }
     });
     
