@@ -32,7 +32,6 @@ pub fn run() {
             pull_model,
             start_ollama,
             get_semantic_fingerprint,
-            agent::analyze_screen_with_ai,
             agent::capture_context_snapshot,
             jira::fetch_jira_tasks,
             jira::start_jira_oauth,

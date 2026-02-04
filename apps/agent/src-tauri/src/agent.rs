@@ -52,8 +52,8 @@ impl FlowSightAgent {
         let mut agent = Self {
             config: AgentConfig {
                 dev_name: Some(whoami::realname()),
-                capture_interval: Some(30000), // Updated default to 30s
-                vision_model: Some("qwen3-vl:2b".to_string()), // Updated default
+                capture_interval: Some(30000),
+                vision_model: Some("qwen3-vl:2b".to_string()),
             },
             is_running: false,
             reports_sent: 0,
@@ -503,66 +503,6 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
 
 // RESTORED AI ANALYSIS (Backend)
 #[tauri::command]
-pub async fn analyze_screen_with_ai(path: String) -> Result<String, String> {
-    use std::path::PathBuf;
-    use std::fs;
-    
-    // 1. Read File
-    let p = PathBuf::from(&path);
-    if !p.exists() {
-        return Err(format!("File not found: {}", path));
-    }
-    let image_bytes = fs::read(&p).map_err(|e| e.to_string())?;
-    let base64_img = BASE64.encode(&image_bytes);
-    
-    // 2. Prepare Prompt
-    // Using the exact prompt the user liked
-    let prompt = "You are a screen reading assistant.
-Your job is to extracted active context from the provided OCR text and Image.
-
-INSTRUCTIONS:
-1. Identify the ACTIVE APPLICATION (APP).
-2. Identify the OPEN FILE or CONTEXT (FILE).
-3. Identify specific KEYWORDS or CODE (CODE).
-4. Write a 1-sentence SUMMARY.
-
-OUTPUT FORMAT (Strict):
-APP: <Name>
-  FILE: <Name>
-    CODE: <Content>
-      SUMMARY: <Content>
-
-        If unsure, write \"Unknown\". DO NOT HALLUCINATE.";
-
-    // 3. Call Ollama
-    let client = reqwest::Client::new();
-    let body = serde_json::json!({
-        "model": "llava:7b",
-        "prompt": prompt,
-        "images": [base64_img],
-        "stream": false,
-        "options": {
-            "temperature": 0.0,
-            "num_predict": 500
-        }
-    });
-    
-    let resp = client.post("http://localhost:11434/api/generate")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Ollama request failed: {}", e))?;
-        
-    if !resp.status().is_success() {
-        return Err(format!("Ollama Error: {}", resp.status()));
-    }
-    
-    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-    
-    // 4. Extract Response
-    let text = json["response"].as_str().unwrap_or("No response").to_string();
-    Ok(text)
-}
 
 fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
@@ -574,7 +514,7 @@ fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
     Category: <Category>";
     
     let body = serde_json::json!({
-        "model": "qwen3-vl:2b", // User confirmed or assumed default
+        "model": "qwen3-vl:2b",
         "prompt": prompt,
         "images": [base64_img],
         "stream": false,

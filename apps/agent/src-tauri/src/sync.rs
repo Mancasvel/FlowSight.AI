@@ -92,7 +92,7 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
     let prompt = format!("Summarize this developer activity log into a concise 1-paragraph standup report:\n\n{}", text);
     
     let body = serde_json::json!({
-        "model": "qwen3:1.7b", 
+        "model": "qwen3-vl:2b", 
         "prompt": prompt,
         "stream": false
     });

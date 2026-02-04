@@ -32,7 +32,8 @@ fn get_verifier() -> Option<String> {
 const AUTH_URL: &str = "https://auth.atlassian.com/authorize";
 const TOKEN_URL: &str = "https://auth.atlassian.com/oauth/token";
 const REDIRECT_URL: &str = "http://localhost:12345/callback";
-const SCOPES: &[&str] = &["read:jira-work", "read:jira-user", "offline_access"];
+// Added read:me for direct profile access (User Identity API)
+const SCOPES: &[&str] = &["read:jira-work", "read:jira-user", "offline_access", "read:me"];
 
 fn get_client_id() -> String {
     // Try to read env var (e.g. set in .env.local and loaded by Vite/Tauri dev process)
@@ -198,22 +199,33 @@ pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
 
     // 2. Fetch Issues
     let client = Client::new();
-    let url = format!("https://api.atlassian.com/ex/jira/{}/rest/api/3/search", cloud_id);
+    let url = format!("https://api.atlassian.com/ex/jira/{}/rest/api/3/search/jql", cloud_id);
     // Relaxed JQL: Get ALL open issues (useful for single-user/small teams)
     let jql = "statusCategory != Done ORDER BY updated DESC";
     
-    let resp = client.get(&url)
+    // Switch to POST as GET is deprecated/removed for some contexts (410 Gone)
+    let resp = client.post(&url)
         .bearer_auth(&access_token)
-        .query(&[("jql", jql), ("fields", "summary,status")])
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "jql": jql,
+            "fields": ["summary", "status"],
+            "maxResults": 50
+        }))
         .send()
         .map_err(|e| e.to_string())?;
         
+    println!("Jira Fetch Status: {}", resp.status());
+
     if resp.status().as_u16() == 401 {
         // TODO: Try Refresh Token logic here if 401
         return Err("Jira Token Expired. Please reconnect.".to_string());
     }
     
-    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    let text_resp = resp.text().map_err(|e| e.to_string())?;
+    println!("Jira Raw Response: {}", text_resp);
+
+    let json: serde_json::Value = serde_json::from_str(&text_resp).map_err(|e| e.to_string())?;
     
     let mut issues = Vec::new();
     if let Some(opts) = json["issues"].as_array() {

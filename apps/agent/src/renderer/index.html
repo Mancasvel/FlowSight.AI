@@ -362,6 +362,11 @@
 
         } catch (e) {
           console.log("No identity:", e);
+          // Only alert if it's NOT just the initial "Not connected" check
+          // We can check if the error is "Not connected to Jira" which is the standard error when no token exists.
+          if (!e.includes("Not connected to Jira")) {
+            alert("Failed to Load Identity: " + e);
+          }
           document.getElementById('guestProfile').style.display = 'block';
           document.getElementById('userProfile').style.display = 'none';
         }
