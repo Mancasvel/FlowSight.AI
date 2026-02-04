@@ -35,7 +35,8 @@ pub fn run() {
             agent::capture_context_snapshot,
             jira::fetch_jira_tasks,
             jira::start_jira_oauth,
-            jira::fetch_jira_profile
+            jira::fetch_jira_profile,
+            sync::force_sync_now
         ])
     .setup(|app| {
       if cfg!(debug_assertions) {

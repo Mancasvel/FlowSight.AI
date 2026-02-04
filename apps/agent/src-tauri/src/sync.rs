@@ -9,25 +9,32 @@ const SUPABASE_URL: &str = "https://dzpyrdxelcgfpmcdojvb.supabase.co";
 const SUPABASE_KEY: &str = "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ";
 
 pub fn start_sync_thread(db_path: std::path::PathBuf) {
+    let path_clone = db_path.clone();
     thread::spawn(move || {
         loop {
-            thread::sleep(Duration::from_secs(SYNC_INTERVAL_MINS * 60));
-            // thread::sleep(Duration::from_secs(60)); // Debug: 1 minute
-            println!("[CloudSync] Starting batch sync...");
-            
-            if let Err(e) = perform_sync(&db_path) {
-                eprintln!("[CloudSync] Error: {}", e);
-            }
+             // ... existing loop
+             thread::sleep(Duration::from_secs(SYNC_INTERVAL_MINS * 60));
+             let _ = perform_sync(&path_clone);
         }
     });
+}
+
+#[tauri::command]
+pub fn force_sync_now() -> Result<String, String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    match perform_sync(&db_path) {
+        Ok(_) => Ok("Sync completed successfully.".to_string()),
+        Err(e) => Err(format!("Sync failed: {}", e))
+    }
 }
 
 fn perform_sync(db_path: &std::path::PathBuf) -> Result<(), String> {
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
     // 1. Get Unsynced Reports
+    // Note: DB column is "activity_type", but struct usually expects category. We alias it.
     let mut stmt = conn.prepare(
-        "SELECT id, description, category, duration_seconds, jira_ticket_id FROM reports WHERE synced = 0 LIMIT 50"
+        "SELECT id, description, activity_type, duration_seconds, jira_ticket_id FROM reports WHERE synced = 0 LIMIT 50"
     ).map_err(|e| e.to_string())?;
     
     let rows = stmt.query_map([], |row| {

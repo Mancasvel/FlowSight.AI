@@ -71,6 +71,7 @@ impl FlowSightAgent {
     
     fn init_db(&self) {
         if let Ok(conn) = Connection::open(&self.db_path) {
+            // Base table
             let _ = conn.execute_batch(
                 "CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
                  CREATE TABLE IF NOT EXISTS reports (
@@ -81,6 +82,17 @@ impl FlowSightAgent {
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                  );"
             );
+            
+            // Migrations (Add missing columns if they don't exist)
+            // SQLite is forgiving with duplicate add column if we handle error or check first.
+            // Simplest way: Try to add, ignore error.
+            let _ = conn.execute("ALTER TABLE reports ADD COLUMN jira_ticket_id TEXT", []);
+            let _ = conn.execute("ALTER TABLE reports ADD COLUMN duration_seconds INTEGER DEFAULT 30", []);
+            // Rename activity_type to category? No, sync.rs maps it manually or we fix sync.rs. 
+            // NOTE: sync.rs selects "category" but schema has "activity_type". 
+            // We should ensure sync.rs uses correct column name or we rename here.
+            // Let's assume sync.rs needs "activity_type" aliased as category or we just add category column?
+            // Better: Let's stick to activity_type in DB and fix sync.rs query.
         }
     }
     
@@ -115,11 +127,11 @@ impl FlowSightAgent {
         }
     }
     
-    fn save_report(&self, desc: &str, activity_type: &str) -> Option<i64> {
+    fn save_report(&self, desc: &str, activity_type: &str, ticket: Option<String>, duration: u64) -> Option<i64> {
         if let Ok(conn) = Connection::open(&self.db_path) {
             let _ = conn.execute(
-                "INSERT INTO reports (description, activity_type) VALUES (?, ?)",
-                params![desc, activity_type]
+                "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds) VALUES (?, ?, ?, ?)",
+                params![desc, activity_type, ticket, duration]
             );
             return Some(conn.last_insert_rowid());
         }
@@ -337,11 +349,12 @@ pub fn get_semantic_fingerprint(image_path: String, _metadata: Option<ActivityMe
 }
 
 #[tauri::command]
-pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String) -> Result<ActivityReport, String> {
+pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
     let mut agent = state.lock().unwrap();
     let report_id = if let Some(a) = agent.as_mut() {
         a.reports_sent += 1;
-        a.save_report(&description, &activity_type)
+        // Default capture interval 30s
+        a.save_report(&description, &activity_type, jira_ticket, 30)
     } else {
         None
     };
@@ -506,25 +519,27 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
 
 fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
-    // Updated Generalist Prompt
-    let prompt = "Describe the screen content. Then, explicitly classify the activity into exactly one of these Categories: Coding, Design, Sales, Communication, Meeting, Browsing, Other.
-    
-    Format:
-    Description: <summary>
-    Category: <Category>";
+    // Simplified Prompt to debug
+    let prompt = "Describe the image briefly. Then state the Category from: Coding, Design, Sales, Communication, Meeting, Browsing, Other.";
     
     let body = serde_json::json!({
         "model": "qwen3-vl:2b",
-        "prompt": prompt,
-        "images": [base64_img],
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+                "images": [base64_img]
+            }
+        ],
         "stream": false,
         "options": {
-            "temperature": 0.1,
-            "num_predict": 100
+            "temperature": 0.5, 
+            "num_predict": 200
         }
     });
     
-    let resp = client.post("http://localhost:11434/api/generate")
+    // Switch to Chat API
+    let resp = client.post("http://localhost:11434/api/chat")
         .json(&body)
         .send()
         .map_err(|e| format!("Ollama request failed: {}", e))?;
@@ -534,5 +549,28 @@ fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
     }
     
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    Ok(json["response"].as_str().unwrap_or("No response").to_string())
+    
+    // Debug Log (Print full JSON to be safe)
+    // println!("Ollama JSON: {:?}", json);
+    
+    // Parse Chat Response
+    // Qwen3-VL sometimes puts reasoning in "thinking" field and content might be empty or partial
+    let msg = &json["message"];
+    let content = msg["content"].as_str().unwrap_or("");
+    let thinking = msg["thinking"].as_str().unwrap_or("");
+    
+    let response_text = if !content.is_empty() {
+        content.to_string()
+    } else if !thinking.is_empty() {
+        // Fallback to thinking if content is empty (common in Qwen)
+        println!("Using THINKING field as content was empty.");
+        thinking.to_string()
+    } else {
+        println!("RAW OLLAMA RESP IS EMPTY. Full JSON: {:?}", json);
+        "No content returned".to_string()
+    };
+
+    println!("RAW OLLAMA RESP: {}", response_text);
+    
+    Ok(response_text)
 }

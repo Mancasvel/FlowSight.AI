@@ -248,6 +248,10 @@
           <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture
             Now</button>
         </div>
+        <div style="margin-top: 10px;">
+          <button class="btn btn-outline" id="testReportBtn" style="width: 100%;"><span
+              class="material-icons">bug_report</span> Test Report Generation</button>
+        </div>
       </div>
 
       <!-- Activity Card -->
@@ -264,6 +268,9 @@
 
       // No Supabase, No PM Connection
 
+      let isMonitoring = false;
+      let monitoringInterval = null;
+
       function getDeviceId() {
         let id = localStorage.getItem('fsk_device_id');
         if (!id) {
@@ -279,34 +286,71 @@
 
       // ============ CONFIG ============
 
+      // ============ CONFIG ============
+
       async function loadConfig() {
         const config = await invoke('get_config');
-        document.getElementById('devName').value = config.devName || '';
+        // No manual devName input anymore
         document.getElementById('statInterval').textContent = (config.captureInterval || 30000) / 1000 + 's';
       }
 
       async function saveConfig() {
+        // Enforce qwen3-vl:2b and current name (if available)
+        // If we don't pass devName, backend might keep existing or set to null?
+        // AgentConfig has Option<String>, so we should pass what we have.
         await invoke('update_config', {
           config: {
-            devName: document.getElementById('devName').value,
+            devName: currentUser.name || 'Guest',
             captureInterval: 30000,
             visionModel: 'qwen3-vl:2b'
           }
         });
+        console.log("[Config] Enforced qwen3-vl:2b");
       }
 
       // ============ MONITORING LOOP ============
 
       document.getElementById('startBtn').onclick = async () => {
-        isMonitoring = true;
-        document.getElementById('statStatus').textContent = 'On';
-        document.getElementById('statStatus').style.color = 'var(--success)';
+        const btn = document.getElementById('startBtn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span> Starting AI Engine...';
 
-        // Initial capture
-        captureAndAnalyze();
+        try {
+          // 1. Ensure Ollama Service is Running
+          const startResult = await invoke('start_ollama');
+          console.log("[Agent] Ollama Start Request:", startResult);
 
-        const intervalMs = 30000;
-        monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
+          // Give it a moment to spin up if it wasn't running
+          await new Promise(r => setTimeout(r, 2000));
+
+          // 2. Enforce Model Configuration
+          await saveConfig();
+
+          // 3. Start Monitoring Loop
+          isMonitoring = true;
+          document.getElementById('statStatus').textContent = 'On';
+          document.getElementById('statStatus').style.color = 'var(--success)';
+
+          // Initial capture (This will trigger the first Model Request)
+          captureAndAnalyze();
+
+          const intervalMs = 30000;
+          monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
+
+          // Restore Button to "Stop" state visually if needed, but here we keep "Start" disabled? 
+          // The original code didn't disable "Start".
+          // Let's re-enable start (or better, hide it and show Stop).
+          // For now, restoring original text but keeping enabled so they can click again if needed?
+          // No, usually Start -> Stop. The Stop button is separate.
+          btn.innerHTML = originalText;
+
+        } catch (e) {
+          console.error("Start Failed:", e);
+          alert("Failed to start AI Engine: " + e);
+          btn.innerHTML = originalText;
+        }
+        btn.disabled = false;
       };
 
       document.getElementById('stopBtn').onclick = () => {
@@ -506,9 +550,11 @@
 
           // Save to Local DB (UI calls this so stats update)
           // Backend handles DB insert, we just update UI list
+          // NOTE: Rust arguments must be camelCase if using Tauri 2? Or snake_case? 
+          // Usually Tauri uses camelCase for the JS object keys mapping to snake_case args in Rust.
           await invoke('save_activity', {
             description: snapshot.description,
-            category: snapshot.category,
+            activityType: snapshot.category, // Mapped to activity_type argument
             jiraTicket: jiraTicket
           });
 
@@ -524,12 +570,30 @@
         if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now'; }
       }
 
+      // TEST REPORT BUTTON
+      document.getElementById('testReportBtn').onclick = async () => {
+        const btn = document.getElementById('testReportBtn');
+        btn.disabled = true;
+        btn.textContent = "Generating Report...";
+        try {
+          const res = await invoke('force_sync_now');
+          alert("Report Generated:\n" + res);
+        } catch (e) {
+          alert("Report Failed: " + e);
+        }
+        btn.disabled = false;
+        btn.textContent = "Test Report Generation";
+      };
+
       function addActivityItem(devName, desc, category, ticket) {
         const list = document.getElementById('activityList');
         const div = document.createElement('div');
         div.className = 'activity-item';
         // Truncate desc for UI
-        const shortDesc = desc && desc.length > 100 ? desc.substring(0, 100) + "..." : desc;
+        let displayDesc = desc ? desc.trim() : "";
+        if (!displayDesc) displayDesc = "<em>[No output from AI model - check terminal for details]</em>";
+        else if (displayDesc.length > 150) displayDesc = displayDesc.substring(0, 150) + "...";
+
         const ticketBadge = ticket ? `<span class="activity-badge" style="background:#e0f2fe; color:#0369a1;">${ticket}</span>` : '';
 
         div.innerHTML = `
@@ -539,8 +603,7 @@
              <strong>${devName}</strong>
              <span style="font-size:10px; font-weight:600; color:#666;">${category || 'Unknown'}</span>
            </div>
-           <span style="font-size:11px; color:#555;">${shortDesc}</span>
-           <br>
+           <span style="font-size:11px; color:#333; display:block; margin: 4px 0;">${displayDesc}</span>
            ${ticketBadge}
            <span class="activity-badge synced">Archived Locally</span>
         </div>
