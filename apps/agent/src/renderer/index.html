@@ -438,7 +438,21 @@
       document.getElementById('connectJiraLink').onclick = (e) => { e.preventDefault(); handleConnect(); };
 
       // Initialize
-      refreshIdentity();
+      async function init() {
+        try {
+          console.log("[Agent] Initializing backend...");
+          await invoke('initialize_agent');
+          console.log("[Agent] Backend initialized.");
+        } catch (e) {
+          console.error("Failed to init agent:", e);
+        }
+
+        await refreshIdentity();
+        await loadConfig();
+        await checkOllama();
+      }
+
+      init();
 
       async function refreshJira() {
         const btn = document.getElementById('refreshJiraBtn');

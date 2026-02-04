@@ -23,12 +23,12 @@ pub fn start_sync_thread(db_path: std::path::PathBuf) {
 pub fn force_sync_now() -> Result<String, String> {
     let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
     match perform_sync(&db_path) {
-        Ok(_) => Ok("Sync completed successfully.".to_string()),
+        Ok(summary) => Ok(format!("Sync Report:\n\n{}", summary)),
         Err(e) => Err(format!("Sync failed: {}", e))
     }
 }
 
-fn perform_sync(db_path: &std::path::PathBuf) -> Result<(), String> {
+fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
     // 1. Get Unsynced Reports
@@ -73,25 +73,35 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<(), String> {
     
     if ids.is_empty() {
         println!("[CloudSync] No new reports to sync.");
-        return Ok(());
+        return Ok("No new activity to report.".to_string());
     }
 
     // 2. Generate Summary with Qwen (from Text Logs only)
-    let summary = summarize_with_qwen(&full_text).unwrap_or("Summary failed".to_string());
+    let summary = summarize_with_qwen(&full_text).unwrap_or("Summary generation failed".to_string());
     
-    // 3. Upload to Supabase
-    upload_session(total_duration, &summary, &categories, &tickets).map_err(|e| e.to_string())?;
+    // 3. Upload to Supabase (Best Effort)
+    match upload_session(total_duration, &summary, &categories, &tickets) {
+        Ok(_) => {
+            println!("[CloudSync] Upload success.");
+            // 4. Mark Synced ONLY if upload succeeded
+            let id_list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
+            let _ = conn.execute(
+                &format!("UPDATE reports SET synced = 1 WHERE id IN ({})", id_list),
+                []
+            );
+        },
+        Err(e) => {
+            println!("[CloudSync] Upload failed (Supabase 404 or other): {}", e);
+            println!("[CloudSync] Continuing locally...");
+            // We DO NOT mark as synced so we try again later? 
+            // Or do we mark as synced to avoid infinite retries of same data?
+            // For now, let's NOT mark synced so it retries when cloud is fixed.
+            return Ok(format!("(Cloud Upload Failed: {})\n\nLOCAL SUMMARY:\n{}", e, summary));
+        }
+    }
     
-    // 4. Mark Synced
-    // In a real app, verify upload first.
-    let id_list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
-    conn.execute(
-        &format!("UPDATE reports SET synced = 1 WHERE id IN ({})", id_list),
-        []
-    ).map_err(|e| e.to_string())?;
-    
-    println!("[CloudSync] Synced {} reports.", ids.len());
-    Ok(())
+    println!("[CloudSync] Processed {} reports.", ids.len());
+    Ok(summary)
 }
 
 fn summarize_with_qwen(text: &str) -> Result<String, String> {
@@ -100,17 +110,19 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
     
     let body = serde_json::json!({
         "model": "qwen3-vl:2b", 
-        "prompt": prompt,
+        "messages": [
+            { "role": "user", "content": prompt }
+        ],
         "stream": false
     });
     
-    let resp = client.post("http://localhost:11434/api/generate")
+    let resp = client.post("http://localhost:11434/api/chat")
         .json(&body)
         .send()
         .map_err(|e| e.to_string())?;
         
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    Ok(json["response"].as_str().unwrap_or("No response").to_string())
+    Ok(json["message"]["content"].as_str().unwrap_or("No response").to_string())
 }
 
 fn upload_session(
