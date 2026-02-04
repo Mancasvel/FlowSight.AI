@@ -32,3 +32,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 dirs = "5"
 whoami = "1.5"
 active-win-pos-rs = "0.8"
+oauth2 = "4.4"
+url = "2.5"
+tiny_http = "0.12"
+open = "5.0"
+dotenv = "0.15"

@@ -1,4 +1,6 @@
 mod agent;
+mod jira;
+mod sync;
 pub mod fingerprint;
 pub mod context;
 
@@ -6,7 +8,7 @@ use agent::{
     AgentState, initialize_agent, get_config, update_config,
     get_status, start_monitoring, stop_monitoring,
     capture_screen_command, save_activity,
-    get_activity_log, check_ollama, test_pm_connection,
+    get_activity_log, check_ollama,
     install_ollama, pull_model, start_ollama,
     get_semantic_fingerprint
 };
@@ -22,17 +24,19 @@ pub fn run() {
             get_status,
             start_monitoring,
             stop_monitoring,
-            capture_screen_command,
-            save_activity,
-            get_activity_log,
-            check_ollama,
-            test_pm_connection,
-            install_ollama,
+    capture_screen_command,
+    save_activity,
+    get_activity_log,
+    check_ollama,
+    install_ollama,
             pull_model,
             start_ollama,
             get_semantic_fingerprint,
             agent::analyze_screen_with_ai,
-            agent::capture_context_snapshot
+            agent::capture_context_snapshot,
+            jira::fetch_jira_tasks,
+            jira::start_jira_oauth,
+            jira::fetch_jira_profile
         ])
     .setup(|app| {
       if cfg!(debug_assertions) {

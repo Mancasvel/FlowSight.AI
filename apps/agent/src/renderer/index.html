@@ -182,9 +182,21 @@
         <div class="status-dot" id="ollamaDot"></div>
         <span class="status-text" id="ollamaStatus">Checking Ollama...</span>
       </div>
-      <div class="form-group">
-        <label>Your Name</label>
-        <input type="text" id="devName" placeholder="John Doe">
+
+      <!-- Identity Section -->
+      <div id="identitySection" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+        <div id="userProfile" style="display: flex; align-items: center; gap: 10px; display: none;">
+          <img id="userAvatar" src="" style="width: 32px; height: 32px; border-radius: 50%;">
+          <div>
+            <div id="userName" style="font-size: 13px; font-weight: 600;">Loading...</div>
+            <div id="userEmail" style="font-size: 11px; color: var(--text-secondary);">Using Jira Identity</div>
+          </div>
+        </div>
+        <div id="guestProfile">
+          <div style="font-size: 12px; color: var(--warning); margin-bottom: 5px;">Not Connected</div>
+          <button class="btn btn-outline" id="loginBtn" style="width: 100%; font-size: 12px;">Connect Jira to
+            Login</button>
+        </div>
       </div>
     </div>
 
@@ -206,156 +218,331 @@
         </div>
       </div>
       <div class="form-group">
-        <label>Current Task</label>
-        <input type="text" id="currentTask" placeholder="e.g. Refactoring Agent">
+        <div class="form-group">
+          <label>Current Task</label>
+          <div style="display: flex; gap: 8px;">
+            <select id="jiraSelect"
+              style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+              <option value="">-- Select Active Jira Task --</option>
+              <option value="General">General / No Ticket</option>
+            </select>
+            <button class="btn btn-outline" id="refreshJiraBtn" title="Refresh Jira Tasks"><span
+                class="material-icons">refresh</span></button>
+          </div>
+          <div style="margin-top: 5px; text-align: right;">
+            <a href="#" id="connectJiraLink" style="font-size: 11px; color: var(--primary);">Connect/Reconnect Jira</a>
+          </div>
+          <input type="text" id="manualTask" placeholder="Or type manually..." style="margin-top: 8px; display: none;">
+        </div>
+
+        <div class="form-group">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="syncToJira" checked>
+            Sync time to Jira (HUBSTAFF-style)
+          </label>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-success" id="startBtn"><span class="material-icons">play_arrow</span> Start</button>
+          <button class="btn btn-error" id="stopBtn"><span class="material-icons">stop</span> Stop</button>
+          <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture
+            Now</button>
+        </div>
       </div>
-      <div class="btn-group">
-        <button class="btn btn-success" id="startBtn"><span class="material-icons">play_arrow</span> Start</button>
-        <button class="btn btn-error" id="stopBtn"><span class="material-icons">stop</span> Stop</button>
-        <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture
-          Now</button>
+
+      <!-- Activity Card -->
+      <div class="card">
+        <div class="card-title"><span class="material-icons">history</span> Local Activity Feed</div>
+        <div class="activity-list" id="activityList">
+          <div class="empty" style="text-align: center; padding: 20px;">No activity yet.</div>
+        </div>
       </div>
     </div>
 
-    <!-- Activity Card -->
-    <div class="card">
-      <div class="card-title"><span class="material-icons">history</span> Local Activity Feed</div>
-      <div class="activity-list" id="activityList">
-        <div class="empty" style="text-align: center; padding: 20px;">No activity yet.</div>
-      </div>
-    </div>
-  </div>
+    <script type="module">
+      import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
 
-  <script type="module">
-    import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
+      // No Supabase, No PM Connection
 
-    // No Supabase, No PM Connection
-
-    function getDeviceId() {
-      let id = localStorage.getItem('fsk_device_id');
-      if (!id) {
-        id = 'dev-' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('fsk_device_id', id);
-      }
-      return id;
-    }
-
-    function log(msg) {
-      console.log("[Agent]", msg);
-    }
-
-    // ============ CONFIG ============
-
-    async function loadConfig() {
-      const config = await invoke('get_config');
-      document.getElementById('devName').value = config.devName || '';
-      document.getElementById('statInterval').textContent = (config.captureInterval || 30000) / 1000 + 's';
-    }
-
-    async function saveConfig() {
-      await invoke('update_config', {
-        config: {
-          devName: document.getElementById('devName').value,
-          captureInterval: 30000,
-          visionModel: 'qwen3-vl:2b'
+      function getDeviceId() {
+        let id = localStorage.getItem('fsk_device_id');
+        if (!id) {
+          id = 'dev-' + Math.random().toString(36).substr(2, 9);
+          localStorage.setItem('fsk_device_id', id);
         }
-      });
-    }
+        return id;
+      }
 
-    // ============ MONITORING LOOP ============
+      function log(msg) {
+        console.log("[Agent]", msg);
+      }
 
-    document.getElementById('startBtn').onclick = async () => {
-      isMonitoring = true;
-      document.getElementById('statStatus').textContent = 'On';
-      document.getElementById('statStatus').style.color = 'var(--success)';
+      // ============ CONFIG ============
 
-      // Initial capture
-      captureAndAnalyze();
+      async function loadConfig() {
+        const config = await invoke('get_config');
+        document.getElementById('devName').value = config.devName || '';
+        document.getElementById('statInterval').textContent = (config.captureInterval || 30000) / 1000 + 's';
+      }
 
-      const intervalMs = 30000;
-      monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
-    };
-
-    document.getElementById('stopBtn').onclick = () => {
-      isMonitoring = false;
-      document.getElementById('statStatus').textContent = 'Off';
-      document.getElementById('statStatus').style.color = 'inherit';
-      if (monitoringInterval) clearInterval(monitoringInterval);
-    };
-
-    document.getElementById('captureBtn').onclick = captureAndAnalyze;
-
-    // Check Ollama Loop
-    async function checkOllama() {
-      try {
-        const status = await invoke('check_ollama');
-        const dot = document.getElementById('ollamaDot');
-        const txt = document.getElementById('ollamaStatus');
-        if (status.online) {
-          if (status.hasVisionModel) {
-            dot.className = 'status-dot ok';
-            txt.textContent = 'Ollama Ready';
-          } else {
-            dot.className = 'status-dot warn';
-            txt.textContent = 'Ollama Online (Missing Model)';
+      async function saveConfig() {
+        await invoke('update_config', {
+          config: {
+            devName: document.getElementById('devName').value,
+            captureInterval: 30000,
+            visionModel: 'qwen3-vl:2b'
           }
-        } else {
-          dot.className = 'status-dot error';
-          txt.textContent = 'Ollama Offline';
-        }
-      } catch (e) { console.error(e); }
-    }
-    setInterval(checkOllama, 5000);
-    checkOllama();
-    loadConfig();
-
-    async function captureAndAnalyze() {
-      const btn = document.getElementById('captureBtn');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading"></span>'; }
-
-      try {
-        log("Taking Context Snapshot...");
-
-        const task = document.getElementById('currentTask').value || "General Work";
-
-        // SINGLE CALL: Capture + Context Analysis
-        const snapshot = await invoke('capture_context_snapshot', { userTask: task });
-
-        log(`Snapshot description ready: ${snapshot.description.substring(0, 50)}...`);
-
-        // Update UI logic (Local Feed)
-        const devName = document.getElementById('devName').value || 'Developer';
-        addActivityItem(devName, snapshot.description);
-
-        document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
-
-      } catch (e) {
-        console.error(e);
-        log("Error: " + e);
+        });
       }
 
-      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now'; }
-    }
+      // ============ MONITORING LOOP ============
 
-    function addActivityItem(devName, desc) {
-      const list = document.getElementById('activityList');
-      const div = document.createElement('div');
-      div.className = 'activity-item';
-      // Truncate desc for UI
-      const shortDesc = desc && desc.length > 100 ? desc.substring(0, 100) + "..." : desc;
+      document.getElementById('startBtn').onclick = async () => {
+        isMonitoring = true;
+        document.getElementById('statStatus').textContent = 'On';
+        document.getElementById('statStatus').style.color = 'var(--success)';
 
-      div.innerHTML = `
+        // Initial capture
+        captureAndAnalyze();
+
+        const intervalMs = 30000;
+        monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
+      };
+
+      document.getElementById('stopBtn').onclick = () => {
+        isMonitoring = false;
+        document.getElementById('statStatus').textContent = 'Off';
+        document.getElementById('statStatus').style.color = 'inherit';
+        if (monitoringInterval) clearInterval(monitoringInterval);
+      };
+
+      document.getElementById('captureBtn').onclick = captureAndAnalyze;
+
+      // Check Ollama Loop
+      async function checkOllama() {
+        try {
+          const status = await invoke('check_ollama');
+          const dot = document.getElementById('ollamaDot');
+          const txt = document.getElementById('ollamaStatus');
+          if (status.online) {
+            if (status.hasVisionModel) {
+              dot.className = 'status-dot ok';
+              txt.textContent = 'Ollama Ready';
+            } else {
+              dot.className = 'status-dot warn';
+              txt.textContent = 'Ollama Online (Missing Model)';
+            }
+          } else {
+            dot.className = 'status-dot error';
+            txt.textContent = 'Ollama Offline';
+          }
+        } catch (e) { console.error(e); }
+      }
+      setInterval(checkOllama, 5000);
+      checkOllama();
+      loadConfig();
+
+      // ============ IDENTITY ============
+      let currentUser = { name: 'Guest', avatar: '' };
+
+      async function refreshIdentity() {
+        try {
+          const user = await invoke('fetch_jira_profile');
+          currentUser = { name: user.display_name, avatar: user.avatar_url };
+
+          // Update UI
+          document.getElementById('guestProfile').style.display = 'none';
+          document.getElementById('userProfile').style.display = 'flex';
+          document.getElementById('userName').textContent = user.display_name;
+          document.getElementById('userAvatar').src = user.avatar_url;
+          document.getElementById('userEmail').textContent = user.email;
+
+          // Only refresh tasks if we have identity
+          refreshJira();
+
+        } catch (e) {
+          console.log("No identity:", e);
+          document.getElementById('guestProfile').style.display = 'block';
+          document.getElementById('userProfile').style.display = 'none';
+        }
+      }
+
+      // Connect Button Logic
+      async function handleConnect() {
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = true;
+        btn.textContent = "Opening Browser...";
+        try {
+          const msg = await invoke('start_jira_oauth');
+          alert(msg + "\n\nAfter you approve in browser, come back and click OK.");
+          // Wait a moment then try to fetch profile
+          setTimeout(refreshIdentity, 2000);
+        } catch (e) {
+          alert("Error: " + e);
+        }
+        btn.disabled = false;
+        btn.textContent = "Connect Jira to Login";
+      }
+
+      document.getElementById('loginBtn').onclick = handleConnect;
+      // Also keep the link in the monitoring card as a "Reconnect"
+      document.getElementById('connectJiraLink').onclick = (e) => { e.preventDefault(); handleConnect(); };
+
+      // Initialize
+      refreshIdentity();
+
+      async function refreshJira() {
+        const btn = document.getElementById('refreshJiraBtn');
+        const sel = document.getElementById('jiraSelect');
+        btn.disabled = true;
+        sel.innerHTML = '<option>Loading...</option>';
+
+        try {
+          // Real Call
+          const tasks = await invoke('fetch_jira_tasks');
+
+          sel.innerHTML = '<option value="">-- Select Active Jira Task --</option>';
+
+          // Group by Status
+          const groups = {};
+          tasks.forEach(t => {
+            const s = t.status || 'Unknown';
+            if (!groups[s]) groups[s] = [];
+            groups[s].push(t);
+          });
+
+          // Sort Groups priority (In Progress first)
+          const priority = ["In Progress", "To Do", "Selected for Development", "Done"];
+          const sortedKeys = Object.keys(groups).sort((a, b) => {
+            const idxA = priority.indexOf(a);
+            const idxB = priority.indexOf(b);
+            // If both in priority list, sort by index
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            // If only A is in list, it comes first
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            // Otherwise alphabetical
+            return a.localeCompare(b);
+          });
+
+          sortedKeys.forEach(status => {
+            const grp = document.createElement('optgroup');
+            grp.label = status;
+
+            groups[status].forEach(t => {
+              const opt = document.createElement('option');
+              opt.value = t.key;
+              opt.textContent = `[${t.key}] ${t.summary}`;
+              grp.appendChild(opt);
+            });
+            sel.appendChild(grp);
+          });
+
+          // Allow manual override
+          const other = document.createElement('option');
+          other.value = "MANUAL";
+          other.textContent = "Other (Type Manual)";
+          sel.appendChild(other);
+
+        } catch (e) {
+          console.error(e);
+          alert("Failed to fetch tasks: " + e); // Visible Feedback
+          sel.innerHTML = '<option value="">Error or Not Connected</option>';
+          // Fallback
+          const manual = document.createElement('option');
+          manual.value = "MANUAL";
+          manual.textContent = "Not Connected - Use Manual";
+          sel.appendChild(manual);
+        }
+        btn.disabled = false;
+      }
+
+      document.getElementById('refreshJiraBtn').onclick = refreshJira;
+
+      document.getElementById('jiraSelect').onchange = (e) => {
+        if (e.target.value === 'MANUAL') {
+          document.getElementById('manualTask').style.display = 'block';
+        } else {
+          document.getElementById('manualTask').style.display = 'none';
+        }
+      };
+
+      async function captureAndAnalyze() {
+        const btn = document.getElementById('captureBtn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading"></span>'; }
+
+        try {
+          log("Taking Context Snapshot...");
+
+          // Determine Task
+          let task = "General";
+          let jiraTicket = null;
+
+          const sel = document.getElementById('jiraSelect');
+          if (sel.value && sel.value !== 'MANUAL') {
+            jiraTicket = sel.value;
+            task = sel.options[sel.selectedIndex].text;
+          } else if (sel.value === 'MANUAL') {
+            task = document.getElementById('manualTask').value || "Manual Work";
+          }
+
+          // SINGLE CALL: Capture + Context Analysis
+          // Pass jiraTicket to backend
+          const snapshot = await invoke('capture_context_snapshot', {
+            userTask: task,
+            jiraTicket: jiraTicket
+          });
+
+          log(`Snapshot description ready: ${snapshot.description.substring(0, 50)}...`);
+          log(`Category: ${snapshot.category}`);
+
+          // Update UI logic (Local Feed)
+          const devName = currentUser.name || 'Developer';
+
+          // Save to Local DB (UI calls this so stats update)
+          // Backend handles DB insert, we just update UI list
+          await invoke('save_activity', {
+            description: snapshot.description,
+            category: snapshot.category,
+            jiraTicket: jiraTicket
+          });
+
+          addActivityItem(devName, snapshot.description, snapshot.category, jiraTicket);
+
+          document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
+
+        } catch (e) {
+          console.error(e);
+          log("Error: " + e);
+        }
+
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now'; }
+      }
+
+      function addActivityItem(devName, desc, category, ticket) {
+        const list = document.getElementById('activityList');
+        const div = document.createElement('div');
+        div.className = 'activity-item';
+        // Truncate desc for UI
+        const shortDesc = desc && desc.length > 100 ? desc.substring(0, 100) + "..." : desc;
+        const ticketBadge = ticket ? `<span class="activity-badge" style="background:#e0f2fe; color:#0369a1;">${ticket}</span>` : '';
+
+        div.innerHTML = `
         <div class="activity-time">${new Date().toLocaleTimeString()}</div>
         <div class="activity-desc">
-           <strong>${devName}</strong><br>
+           <div style="display:flex; justify-content:space-between;">
+             <strong>${devName}</strong>
+             <span style="font-size:10px; font-weight:600; color:#666;">${category || 'Unknown'}</span>
+           </div>
            <span style="font-size:11px; color:#555;">${shortDesc}</span>
            <br>
+           ${ticketBadge}
            <span class="activity-badge synced">Archived Locally</span>
         </div>
       `;
-      list.insertBefore(div, list.firstChild);
-    }
-  </script>
+        list.insertBefore(div, list.firstChild);
+      }
+    </script>
 </body>
 
 </html>

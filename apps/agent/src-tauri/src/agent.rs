@@ -62,6 +62,10 @@ impl FlowSightAgent {
         
         agent.init_db();
         agent.load_config();
+        
+        // Start Background Sync (10m interval)
+        crate::sync::start_sync_thread(agent.db_path.clone());
+        
         agent
     }
     
@@ -83,8 +87,6 @@ impl FlowSightAgent {
     fn load_config(&mut self) {
         if let Ok(conn) = Connection::open(&self.db_path) {
             for (key, field) in [
-                ("pm_url", &mut self.config.pm_url),
-                ("api_key", &mut self.config.api_key),
                 ("dev_name", &mut self.config.dev_name),
                 ("vision_model", &mut self.config.vision_model),
             ] {
@@ -100,8 +102,6 @@ impl FlowSightAgent {
     fn save_config(&self) {
         if let Ok(conn) = Connection::open(&self.db_path) {
             for (key, val) in [
-                ("pm_url", &self.config.pm_url),
-                ("api_key", &self.config.api_key),
                 ("dev_name", &self.config.dev_name),
                 ("vision_model", &self.config.vision_model),
             ] {
@@ -126,6 +126,7 @@ impl FlowSightAgent {
         None
     }
     
+    #[allow(dead_code)]
     fn mark_synced(&self, id: i64) {
         if let Ok(conn) = Connection::open(&self.db_path) {
             let _ = conn.execute("UPDATE reports SET synced = 1 WHERE id = ?", [id]);
@@ -227,6 +228,7 @@ pub struct ContextSnapshot {
     pub vector: Vec<f32>,
     pub dimension: usize,
     pub description: String,
+    pub category: String, // NEW
     pub metadata: SnapshotMetadata,
 }
 
@@ -240,8 +242,7 @@ pub struct SnapshotMetadata {
 }
 
 #[tauri::command]
-pub fn capture_context_snapshot(user_task: Option<String>) -> Result<ContextSnapshot, String> {
-    use crate::fingerprint::generate_fingerprint;
+pub fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Option<String>) -> Result<ContextSnapshot, String> {
     use crate::context::{get_system_context, get_git_context};
     use std::path::PathBuf;
 
@@ -249,16 +250,19 @@ pub fn capture_context_snapshot(user_task: Option<String>) -> Result<ContextSnap
     let (base64, path_str) = capture_screen()?;
     let path = PathBuf::from(&path_str);
 
-    // 2. Run Qwen2-VL (Visual Description) - REPLACES CLIP
-    // We use a helper function to call Ollama with qwen2-vl:2b or similar
-    let description = analyze_image_with_qwen(&base64).unwrap_or_else(|_| "Screen analysis failed".to_string());
+    // 2. Run Qwen2-VL (Visual Description + Category)
+    // We now parse "Category: <Name>" from the response
+    let raw_analysis = analyze_image_with_qwen(&base64).unwrap_or_else(|_| "Screen analysis failed".to_string());
+    
+    // Simple heuristic or prompt-based classification
+    let (description, category) = parse_analysis(&raw_analysis);
 
     // 3. System Context (Window/App)
     let sys = get_system_context();
     
     // 4. Git Context (Project)
     let mut git = None;
-    if let Some(title) = &sys.window_title {
+    if let Some(_title) = &sys.window_title {
         let home = dirs::desktop_dir().unwrap_or(PathBuf::from("."));
         let possible_path = home.join("FlowSight.AI"); 
         if possible_path.exists() {
@@ -277,14 +281,32 @@ pub fn capture_context_snapshot(user_task: Option<String>) -> Result<ContextSnap
         vector: vec![], // No vectors anymore
         dimension: 0,
         description,
+        category,
         metadata: SnapshotMetadata {
-            task: Some(user_task.unwrap_or_default()),
+            task: jira_ticket.or(user_task),
             file: sys.file_name,
             app: sys.app_name,
             branch: git.and_then(|g| g.branch),
             language: None,
         }
     })
+}
+
+// Helper to parse "Category: X" logic
+fn parse_analysis(raw: &str) -> (String, String) {
+    // This assumes the Prompt asks for "Category: [X]"
+    // For now, default to "Unknown" if not found
+    // Implementation of parsing logic:
+    let mut category = "General".to_string();
+    let lower = raw.to_lowercase();
+    
+    if lower.contains("category: coding") || lower.contains("category: development") { category = "Coding".to_string(); }
+    else if lower.contains("category: design") { category = "Design".to_string(); }
+    else if lower.contains("category: sales") || lower.contains("crm") { category = "Sales".to_string(); }
+    else if lower.contains("category: communication") || lower.contains("slack") { category = "Communication".to_string(); }
+    else if lower.contains("category: meeting") { category = "Meeting".to_string(); }
+    
+    (raw.to_string(), category)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -295,7 +317,7 @@ pub struct ActivityMetadata {
 }
 
 #[tauri::command]
-pub fn get_semantic_fingerprint(image_path: String, metadata: Option<ActivityMetadata>) -> Result<Fingerprint, String> {
+pub fn get_semantic_fingerprint(image_path: String, _metadata: Option<ActivityMetadata>) -> Result<Fingerprint, String> {
     // Kept for backward compat or direct calls
     use crate::fingerprint::generate_fingerprint;
     use std::path::PathBuf;
@@ -544,7 +566,12 @@ APP: <Name>
 
 fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
     let client = reqwest::blocking::Client::new();
-    let prompt = "Describe the screen content in detail. Identify the active application, open files, and code. Summarize what the user is doing.";
+    // Updated Generalist Prompt
+    let prompt = "Describe the screen content. Then, explicitly classify the activity into exactly one of these Categories: Coding, Design, Sales, Communication, Meeting, Browsing, Other.
+    
+    Format:
+    Description: <summary>
+    Category: <Category>";
     
     let body = serde_json::json!({
         "model": "qwen3-vl:2b", // User confirmed or assumed default
