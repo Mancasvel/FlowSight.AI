@@ -19,10 +19,6 @@ pub struct ActivityReport {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AgentConfig {
-    #[serde(rename = "pmUrl")]
-    pub pm_url: Option<String>,
-    #[serde(rename = "apiKey")]
-    pub api_key: Option<String>,
     #[serde(rename = "devName")]
     pub dev_name: Option<String>,
     #[serde(rename = "captureInterval")]
@@ -55,8 +51,6 @@ impl FlowSightAgent {
         
         let mut agent = Self {
             config: AgentConfig {
-                pm_url: Some("http://localhost:8080".to_string()),
-                api_key: None,
                 dev_name: Some(whoami::realname()),
                 capture_interval: Some(30000), // Updated default to 30s
                 vision_model: Some("qwen3-vl:2b".to_string()), // Updated default
@@ -367,11 +361,10 @@ pub fn get_status(state: State<'_, AgentState>) -> Result<serde_json::Value, Str
     Ok(if let Some(a) = agent.as_ref() {
         serde_json::json!({
             "isRunning": a.is_running,
-            "reportsSent": a.reports_sent,
-            "isConnected": a.config.api_key.is_some()
+            "reportsSent": a.reports_sent
         })
     } else {
-        serde_json::json!({"isRunning": false, "reportsSent": 0, "isConnected": false})
+        serde_json::json!({"isRunning": false, "reportsSent": 0})
     })
 }
 
@@ -412,25 +405,6 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
             Ok(serde_json::json!({"online": true, "models": models, "hasVisionModel": has_vision}))
         }
         _ => Ok(serde_json::json!({"online": false}))
-    }
-}
-
-#[tauri::command]
-pub fn test_pm_connection(state: State<'_, AgentState>) -> Result<serde_json::Value, String> {
-    let (pm_url, _api_key) = {
-        let agent = state.lock().unwrap();
-        let a = agent.as_ref().ok_or("Not initialized")?;
-        (a.config.pm_url.clone().unwrap_or_default(), a.config.api_key.clone().unwrap_or_default())
-    };
-    
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build().map_err(|e| e.to_string())?;
-    
-    let url = format!("{}/health", pm_url.trim_end_matches('/'));
-    match client.get(&url).send() {
-        Ok(r) if r.status().is_success() => Ok(serde_json::json!({"connected": true, "url": pm_url})),
-        _ => Ok(serde_json::json!({"connected": false, "url": pm_url}))
     }
 }
 

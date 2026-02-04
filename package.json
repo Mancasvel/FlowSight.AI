@@ -4,11 +4,8 @@
   "private": true,
   "description": "FlowSight AI - Privacy-first developer activity monitor with local AI",
   "scripts": {
-    "dev:agent": "pnpm --filter @flowsight/agent dev",
-    "dev:pm": "pnpm --filter @flowsight/pm dev",
-    "build:agent": "pnpm --filter @flowsight/agent build",
-    "build:pm": "pnpm --filter @flowsight/pm build",
-    "build": "pnpm build:agent && pnpm build:pm"
+    "dev": "pnpm --filter @flowsight/agent dev",
+    "build": "pnpm --filter @flowsight/agent build"
   },
   "workspaces": [
     "apps/*"
