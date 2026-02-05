@@ -5,10 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlowSight DEV Agent</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
-    /* ... (Existing styles simplified) ... */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
     * {
       margin: 0;
       padding: 0;
@@ -16,615 +15,823 @@
     }
 
     :root {
-      --primary: #2563eb;
-      --success: #16a34a;
-      --error: #dc2626;
-      --warning: #d97706;
-      --bg: #f8fafc;
-      --surface: #fff;
-      --text: #1e293b;
-      --text-secondary: #64748b;
-      --border: #e2e8f0;
+      --background: 0 0% 100%;
+      --foreground: 222.2 84% 4.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 222.2 84% 4.9%;
+      --primary: 221.2 83.2% 53.3%;
+      --primary-foreground: 210 40% 98%;
+      --secondary: 210 40% 96.1%;
+      --secondary-foreground: 222.2 47.4% 11.2%;
+      --muted: 210 40% 96.1%;
+      --muted-foreground: 215.4 16.3% 46.9%;
+      --accent: 210 40% 96.1%;
+      --accent-foreground: 222.2 47.4% 11.2%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 210 40% 98%;
+      --border: 214.3 31.8% 91.4%;
+      --input: 214.3 31.8% 91.4%;
+      --ring: 221.2 83.2% 53.3%;
+      --radius: 0.5rem;
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 24px;
-    }
-
-    .header h1 {
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .container {
-      max-width: 600px;
+    .app-container {
+      width: 100%;
+      max-width: 340px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .app-container::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .app-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .app-container::-webkit-scrollbar-thumb {
+      background: hsl(var(--border));
+      border-radius: 2px;
     }
 
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid hsl(var(--border));
     }
 
     .card-title {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      color: hsl(var(--foreground));
+      flex: 1;
     }
 
-    .form-group {
-      margin-bottom: 12px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-    }
-
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
+    .badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-    }
-
-    .btn-success {
-      background: var(--success);
-      color: white;
-    }
-
-    .btn-error {
-      background: var(--error);
-      color: white;
-    }
-
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border);
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .stat {
-      text-align: center;
-      padding: 12px;
-      background: var(--bg);
-      border-radius: 8px;
-    }
-
-    .stat-value {
-      font-size: 24px;
-    }
-
-    .stat-label {
+      border-radius: calc(var(--radius) - 2px);
+      padding: 2px 8px;
       font-size: 11px;
-      text-transform: uppercase;
-      color: var(--text-secondary);
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
     }
 
-    .activity-list {
-      max-height: 400px;
-      overflow-y: auto;
+    .badge-default {
+      background: hsl(var(--secondary));
+      color: hsl(var(--secondary-foreground));
     }
 
-    .activity-item {
-      padding: 12px;
-      border-bottom: 1px solid var(--border);
+    .badge-success {
+      background: hsl(142.1 76.2% 36.3% / 0.15);
+      color: hsl(142.1 70.6% 45.3%);
     }
 
-    .status-row {
+    .badge-destructive {
+      background: hsl(var(--destructive) / 0.15);
+      color: hsl(var(--destructive));
+    }
+
+    .status-indicator {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px;
-      background: var(--bg);
-      border-radius: 8px;
-      margin-bottom: 12px;
+      padding: 8px 10px;
+      background: hsl(var(--muted));
+      border-radius: calc(var(--radius) - 2px);
+      margin-bottom: 8px;
     }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #ccc;
+      background: hsl(var(--muted-foreground));
     }
 
-    .status-dot.ok {
-      background: var(--success);
+    .status-dot.active {
+      background: hsl(142.1 76.2% 36.3%);
+      box-shadow: 0 0 0 3px hsl(142.1 76.2% 36.3% / 0.2);
+    }
+
+    .status-text {
+      font-size: 12px;
+      color: hsl(var(--muted-foreground));
+      flex: 1;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: calc(var(--radius) - 2px);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button-primary {
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+    }
+
+    .button-primary:hover:not(:disabled) {
+      background: hsl(var(--primary) / 0.9);
+    }
+
+    .button-destructive {
+      background: hsl(var(--destructive));
+      color: hsl(var(--destructive-foreground));
+    }
+
+    .button-destructive:hover:not(:disabled) {
+      background: hsl(var(--destructive) / 0.9);
+    }
+
+    .button-secondary {
+      background: hsl(var(--secondary));
+      color: hsl(var(--secondary-foreground));
+      border: 1px solid hsl(var(--border));
+    }
+
+    .button-secondary:hover:not(:disabled) {
+      background: hsl(var(--accent));
+    }
+
+    .button-ghost {
+      background: transparent;
+      color: hsl(var(--foreground));
+    }
+
+    .button-ghost:hover:not(:disabled) {
+      background: hsl(var(--accent));
+    }
+
+    .input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid hsl(var(--input));
+      border-radius: calc(var(--radius) - 2px);
+      background: hsl(var(--background));
+      font-size: 12px;
+      color: hsl(var(--foreground));
+      transition: border-color 0.15s;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: hsl(var(--ring));
+      box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+    }
+
+    .select {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid hsl(var(--input));
+      border-radius: calc(var(--radius) - 2px);
+      background: hsl(var(--background));
+      font-size: 12px;
+      color: hsl(var(--foreground));
+      cursor: pointer;
+    }
+
+    .select:focus {
+      outline: none;
+      border-color: hsl(var(--ring));
+      box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+    }
+
+    .label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: hsl(var(--foreground));
+      margin-bottom: 4px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stat-card {
+      padding: 8px;
+      background: hsl(var(--muted));
+      border-radius: calc(var(--radius) - 2px);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: hsl(var(--foreground));
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    .activity-feed {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .activity-feed::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .activity-feed::-webkit-scrollbar-thumb {
+      background: hsl(var(--border));
+      border-radius: 2px;
+    }
+
+    .activity-item {
+      padding: 8px;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-time {
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 3px;
+    }
+
+    .activity-desc {
+      font-size: 11px;
+      color: hsl(var(--foreground));
+    }
+
+    .activity-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .activity-user {
+      font-weight: 500;
+      font-size: 11px;
+    }
+
+    .activity-category {
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+      font-weight: 500;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: hsl(var(--muted-foreground));
+      font-size: 12px;
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: hsl(var(--muted));
+      border-radius: calc(var(--radius) - 2px);
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: hsl(var(--primary));
+    }
+
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: hsl(var(--foreground));
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .user-email {
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .checkbox {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .checkbox-label {
+      font-size: 11px;
+      color: hsl(var(--foreground));
+      cursor: pointer;
+    }
+
+    .link {
+      color: hsl(var(--primary));
+      font-size: 11px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .link:hover {
+      text-decoration: underline;
+    }
+
+    .icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
 
 <body>
-  <div class="header">
-    <h1>FlowSight Agent</h1>
-    <div style="font-size: 12px; color: var(--text-secondary);">Standalone Mode</div>
-  </div>
-
-  <div class="container">
+  <div class="app-container">
     <!-- Status Card -->
     <div class="card">
-      <div class="card-title"><span class="material-icons">dns</span> System Status</div>
-      <div class="status-row">
+      <div class="card-header">
+        <div class="card-title">FlowSight Agent</div>
+        <div class="badge badge-default">Standalone</div>
+      </div>
+
+      <div class="status-indicator">
         <div class="status-dot" id="ollamaDot"></div>
         <span class="status-text" id="ollamaStatus">Checking Ollama...</span>
       </div>
 
-      <!-- Identity Section -->
-      <div id="identitySection" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-        <div id="userProfile" style="display: flex; align-items: center; gap: 10px; display: none;">
-          <img id="userAvatar" src="" style="width: 32px; height: 32px; border-radius: 50%;">
-          <div>
-            <div id="userName" style="font-size: 13px; font-weight: 600;">Loading...</div>
-            <div id="userEmail" style="font-size: 11px; color: var(--text-secondary);">Using Jira Identity</div>
+      <div id="userProfile" style="display: none;">
+        <div class="user-profile">
+          <img id="userAvatar" class="user-avatar" src="" alt="">
+          <div class="user-info">
+            <div class="user-name" id="userName">Loading...</div>
+            <div class="user-email" id="userEmail">Jira Identity</div>
           </div>
         </div>
-        <div id="guestProfile">
-          <div style="font-size: 12px; color: var(--warning); margin-bottom: 5px;">Not Connected</div>
-          <button class="btn btn-outline" id="loginBtn" style="width: 100%; font-size: 12px;">Connect Jira to
-            Login</button>
-        </div>
+      </div>
+
+      <div id="guestProfile">
+        <button class="button button-secondary" id="loginBtn" style="width: 100%;">Connect Jira</button>
       </div>
     </div>
 
     <!-- Monitoring Card -->
     <div class="card">
-      <div class="card-title"><span class="material-icons">play_circle</span> Monitoring</div>
-      <div class="stats">
-        <div class="stat">
+      <div class="card-header">
+        <div class="card-title">Monitoring</div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
           <div class="stat-value" id="statStatus">Off</div>
           <div class="stat-label">Status</div>
         </div>
-        <div class="stat">
+        <div class="stat-card">
           <div class="stat-value" id="statSent">0</div>
           <div class="stat-label">Reports</div>
         </div>
-        <div class="stat">
+        <div class="stat-card">
           <div class="stat-value" id="statInterval">30s</div>
           <div class="stat-label">Interval</div>
         </div>
       </div>
+
       <div class="form-group">
-        <div class="form-group">
-          <label>Current Task</label>
-          <div style="display: flex; gap: 8px;">
-            <select id="jiraSelect"
-              style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
-              <option value="">-- Select Active Jira Task --</option>
-              <option value="General">General / No Ticket</option>
-            </select>
-            <button class="btn btn-outline" id="refreshJiraBtn" title="Refresh Jira Tasks"><span
-                class="material-icons">refresh</span></button>
-          </div>
-          <div style="margin-top: 5px; text-align: right;">
-            <a href="#" id="connectJiraLink" style="font-size: 11px; color: var(--primary);">Connect/Reconnect Jira</a>
-          </div>
-          <input type="text" id="manualTask" placeholder="Or type manually..." style="margin-top: 8px; display: none;">
+        <label class="label">Current Task</label>
+        <div style="display: flex; gap: 6px;">
+          <select id="jiraSelect" class="select" style="flex: 1;">
+            <option value="">Select Task...</option>
+            <option value="General">General / No Ticket</option>
+          </select>
+          <button class="button button-ghost" id="refreshJiraBtn" title="Refresh">↻</button>
         </div>
-
-        <div class="form-group">
-          <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
-            <input type="checkbox" id="syncToJira" checked>
-            Sync time to Jira (HUBSTAFF-style)
-          </label>
+        <div style="margin-top: 6px; text-align: right;">
+          <a href="#" class="link" id="connectJiraLink">Reconnect Jira</a>
         </div>
-
-        <div class="btn-group">
-          <button class="btn btn-success" id="startBtn"><span class="material-icons">play_arrow</span> Start</button>
-          <button class="btn btn-error" id="stopBtn"><span class="material-icons">stop</span> Stop</button>
-          <button class="btn btn-outline" id="captureBtn"><span class="material-icons">camera_alt</span> Capture
-            Now</button>
-        </div>
-        <div style="margin-top: 10px;">
-          <button class="btn btn-outline" id="testReportBtn" style="width: 100%;"><span
-              class="material-icons">bug_report</span> Test Report Generation</button>
-        </div>
+        <input type="text" id="manualTask" class="input" placeholder="Manual task..."
+          style="margin-top: 6px; display: none;">
       </div>
 
-      <!-- Activity Card -->
-      <div class="card">
-        <div class="card-title"><span class="material-icons">history</span> Local Activity Feed</div>
-        <div class="activity-list" id="activityList">
-          <div class="empty" style="text-align: center; padding: 20px;">No activity yet.</div>
-        </div>
+      <div class="form-group">
+        <label class="checkbox-wrapper">
+          <input type="checkbox" id="syncToJira" class="checkbox" checked>
+          <span class="checkbox-label">Sync time to Jira</span>
+        </label>
       </div>
+
+      <div class="button-group">
+        <button class="button button-primary" id="startBtn" style="flex: 1;">▶ Start</button>
+        <button class="button button-destructive" id="stopBtn" style="flex: 1;">■ Stop</button>
+      </div>
+
+      <button class="button button-secondary" id="captureBtn" style="width: 100%; margin-top: 6px;">📸 Capture
+        Now</button>
+      <button class="button button-secondary" id="testReportBtn" style="width: 100%; margin-top: 6px;">🧪 Test
+        Report</button>
     </div>
 
-    <script type="module">
-      import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
+    <!-- Activity Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Activity Feed</div>
+      </div>
+      <div class="activity-feed" id="activityList">
+        <div class="empty-state">No activity yet</div>
+      </div>
+    </div>
+  </div>
 
-      // No Supabase, No PM Connection
+  <script type="module">
+    import { invoke } from 'https://esm.sh/@tauri-apps/api@2.0.0/core';
 
-      let isMonitoring = false;
-      let monitoringInterval = null;
+    let isMonitoring = false;
+    let monitoringInterval = null;
+    let currentUser = { name: 'Guest', avatar: '' };
 
-      function getDeviceId() {
-        let id = localStorage.getItem('fsk_device_id');
-        if (!id) {
-          id = 'dev-' + Math.random().toString(36).substr(2, 9);
-          localStorage.setItem('fsk_device_id', id);
+    function getDeviceId() {
+      let id = localStorage.getItem('fsk_device_id');
+      if (!id) {
+        id = 'dev-' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('fsk_device_id', id);
+      }
+      return id;
+    }
+
+    function log(msg) {
+      console.log("[Agent]", msg);
+    }
+
+    async function loadConfig() {
+      const config = await invoke('get_config');
+      document.getElementById('statInterval').textContent = (config.captureInterval || 60000) / 1000 + 's';
+    }
+
+    async function saveConfig() {
+      await invoke('update_config', {
+        config: {
+          devName: currentUser.name || 'Guest',
+          captureInterval: 30000,
+          visionModel: 'qwen3-vl:2b'
         }
-        return id;
+      });
+      console.log("[Config] Enforced qwen3-vl:2b");
+    }
+
+    document.getElementById('startBtn').onclick = async () => {
+      const btn = document.getElementById('startBtn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Starting...';
+
+      try {
+        const startResult = await invoke('start_ollama');
+        console.log("[Agent] Ollama Start Request:", startResult);
+        await new Promise(r => setTimeout(r, 2000));
+        await saveConfig();
+
+        isMonitoring = true;
+        document.getElementById('statStatus').textContent = 'On';
+        document.getElementById('statStatus').style.color = 'hsl(142.1 76.2% 36.3%)';
+
+        captureAndAnalyze();
+        const intervalMs = 30000;
+        monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
+        btn.innerHTML = originalText;
+      } catch (e) {
+        console.error("Start Failed:", e);
+        alert("Failed to start: " + e);
+        btn.innerHTML = originalText;
       }
+      btn.disabled = false;
+    };
 
-      function log(msg) {
-        console.log("[Agent]", msg);
-      }
+    document.getElementById('stopBtn').onclick = () => {
+      isMonitoring = false;
+      document.getElementById('statStatus').textContent = 'Off';
+      document.getElementById('statStatus').style.color = '';
+      if (monitoringInterval) clearInterval(monitoringInterval);
+    };
 
-      // ============ CONFIG ============
+    document.getElementById('captureBtn').onclick = captureAndAnalyze;
 
-      // ============ CONFIG ============
-
-      async function loadConfig() {
-        const config = await invoke('get_config');
-        // No manual devName input anymore
-        document.getElementById('statInterval').textContent = (config.captureInterval || 60000) / 1000 + 's';
-      }
-
-      async function saveConfig() {
-        // Enforce qwen3-vl:2b and current name (if available)
-        // If we don't pass devName, backend might keep existing or set to null?
-        // AgentConfig has Option<String>, so we should pass what we have.
-        await invoke('update_config', {
-          config: {
-            devName: currentUser.name || 'Guest',
-            captureInterval: 30000,
-            visionModel: 'qwen3-vl:2b'
-          }
-        });
-        console.log("[Config] Enforced qwen3-vl:2b");
-      }
-
-      // ============ MONITORING LOOP ============
-
-      document.getElementById('startBtn').onclick = async () => {
-        const btn = document.getElementById('startBtn');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="loading"></span> Starting AI Engine...';
-
-        try {
-          // 1. Ensure Ollama Service is Running
-          const startResult = await invoke('start_ollama');
-          console.log("[Agent] Ollama Start Request:", startResult);
-
-          // Give it a moment to spin up if it wasn't running
-          await new Promise(r => setTimeout(r, 2000));
-
-          // 2. Enforce Model Configuration
-          await saveConfig();
-
-          // 3. Start Monitoring Loop
-          isMonitoring = true;
-          document.getElementById('statStatus').textContent = 'On';
-          document.getElementById('statStatus').style.color = 'var(--success)';
-
-          // Initial capture (This will trigger the first Model Request)
-          captureAndAnalyze();
-
-          const intervalMs = 30000;
-          monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
-
-          // Restore Button to "Stop" state visually if needed, but here we keep "Start" disabled? 
-          // The original code didn't disable "Start".
-          // Let's re-enable start (or better, hide it and show Stop).
-          // For now, restoring original text but keeping enabled so they can click again if needed?
-          // No, usually Start -> Stop. The Stop button is separate.
-          btn.innerHTML = originalText;
-
-        } catch (e) {
-          console.error("Start Failed:", e);
-          alert("Failed to start AI Engine: " + e);
-          btn.innerHTML = originalText;
-        }
-        btn.disabled = false;
-      };
-
-      document.getElementById('stopBtn').onclick = () => {
-        isMonitoring = false;
-        document.getElementById('statStatus').textContent = 'Off';
-        document.getElementById('statStatus').style.color = 'inherit';
-        if (monitoringInterval) clearInterval(monitoringInterval);
-      };
-
-      document.getElementById('captureBtn').onclick = captureAndAnalyze;
-
-      // Check Ollama Loop
-      async function checkOllama() {
-        try {
-          const status = await invoke('check_ollama');
-          const dot = document.getElementById('ollamaDot');
-          const txt = document.getElementById('ollamaStatus');
-          if (status.online) {
-            if (status.hasVisionModel) {
-              dot.className = 'status-dot ok';
-              txt.textContent = 'Ollama Ready';
-            } else {
-              dot.className = 'status-dot warn';
-              txt.textContent = 'Ollama Online (Missing Model)';
-            }
+    async function checkOllama() {
+      try {
+        const status = await invoke('check_ollama');
+        const dot = document.getElementById('ollamaDot');
+        const txt = document.getElementById('ollamaStatus');
+        if (status.online) {
+          if (status.hasVisionModel) {
+            dot.className = 'status-dot active';
+            txt.textContent = 'Ollama Ready';
           } else {
-            dot.className = 'status-dot error';
-            txt.textContent = 'Ollama Offline';
+            dot.className = 'status-dot';
+            txt.textContent = 'Ollama Online (Missing Model)';
           }
-        } catch (e) { console.error(e); }
-      }
-      setInterval(checkOllama, 5000);
-      checkOllama();
-      loadConfig();
-
-      // ============ IDENTITY ============
-      let currentUser = { name: 'Guest', avatar: '' };
-
-      async function refreshIdentity() {
-        try {
-          const user = await invoke('fetch_jira_profile');
-          currentUser = { name: user.display_name, avatar: user.avatar_url };
-
-          // Update UI
-          document.getElementById('guestProfile').style.display = 'none';
-          document.getElementById('userProfile').style.display = 'flex';
-          document.getElementById('userName').textContent = user.display_name;
-          document.getElementById('userAvatar').src = user.avatar_url;
-          document.getElementById('userEmail').textContent = user.email;
-
-          // Only refresh tasks if we have identity
-          refreshJira();
-
-        } catch (e) {
-          console.log("No identity:", e);
-          // Only alert if it's NOT just the initial "Not connected" check
-          // We can check if the error is "Not connected to Jira" which is the standard error when no token exists.
-          if (!e.includes("Not connected to Jira")) {
-            alert("Failed to Load Identity: " + e);
-          }
-          document.getElementById('guestProfile').style.display = 'block';
-          document.getElementById('userProfile').style.display = 'none';
-        }
-      }
-
-      // Connect Button Logic
-      async function handleConnect() {
-        const btn = document.getElementById('loginBtn');
-        btn.disabled = true;
-        btn.textContent = "Opening Browser...";
-        try {
-          const msg = await invoke('start_jira_oauth');
-          alert(msg + "\n\nAfter you approve in browser, come back and click OK.");
-          // Wait a moment then try to fetch profile
-          setTimeout(refreshIdentity, 2000);
-        } catch (e) {
-          alert("Error: " + e);
-        }
-        btn.disabled = false;
-        btn.textContent = "Connect Jira to Login";
-      }
-
-      document.getElementById('loginBtn').onclick = handleConnect;
-      // Also keep the link in the monitoring card as a "Reconnect"
-      document.getElementById('connectJiraLink').onclick = (e) => { e.preventDefault(); handleConnect(); };
-
-      // Initialize
-      async function init() {
-        try {
-          console.log("[Agent] Initializing backend...");
-          await invoke('initialize_agent');
-          console.log("[Agent] Backend initialized.");
-        } catch (e) {
-          console.error("Failed to init agent:", e);
-        }
-
-        await refreshIdentity();
-        await loadConfig();
-        await checkOllama();
-      }
-
-      init();
-
-      async function refreshJira() {
-        const btn = document.getElementById('refreshJiraBtn');
-        const sel = document.getElementById('jiraSelect');
-        btn.disabled = true;
-        sel.innerHTML = '<option>Loading...</option>';
-
-        try {
-          // Real Call
-          const tasks = await invoke('fetch_jira_tasks');
-
-          sel.innerHTML = '<option value="">-- Select Active Jira Task --</option>';
-
-          // Group by Status
-          const groups = {};
-          tasks.forEach(t => {
-            const s = t.status || 'Unknown';
-            if (!groups[s]) groups[s] = [];
-            groups[s].push(t);
-          });
-
-          // Sort Groups priority (In Progress first)
-          const priority = ["In Progress", "To Do", "Selected for Development", "Done"];
-          const sortedKeys = Object.keys(groups).sort((a, b) => {
-            const idxA = priority.indexOf(a);
-            const idxB = priority.indexOf(b);
-            // If both in priority list, sort by index
-            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-            // If only A is in list, it comes first
-            if (idxA !== -1) return -1;
-            if (idxB !== -1) return 1;
-            // Otherwise alphabetical
-            return a.localeCompare(b);
-          });
-
-          sortedKeys.forEach(status => {
-            const grp = document.createElement('optgroup');
-            grp.label = status;
-
-            groups[status].forEach(t => {
-              const opt = document.createElement('option');
-              opt.value = t.key;
-              opt.textContent = `[${t.key}] ${t.summary}`;
-              grp.appendChild(opt);
-            });
-            sel.appendChild(grp);
-          });
-
-          // Allow manual override
-          const other = document.createElement('option');
-          other.value = "MANUAL";
-          other.textContent = "Other (Type Manual)";
-          sel.appendChild(other);
-
-        } catch (e) {
-          console.error(e);
-          alert("Failed to fetch tasks: " + e); // Visible Feedback
-          sel.innerHTML = '<option value="">Error or Not Connected</option>';
-          // Fallback
-          const manual = document.createElement('option');
-          manual.value = "MANUAL";
-          manual.textContent = "Not Connected - Use Manual";
-          sel.appendChild(manual);
-        }
-        btn.disabled = false;
-      }
-
-      document.getElementById('refreshJiraBtn').onclick = refreshJira;
-
-      document.getElementById('jiraSelect').onchange = (e) => {
-        if (e.target.value === 'MANUAL') {
-          document.getElementById('manualTask').style.display = 'block';
         } else {
-          document.getElementById('manualTask').style.display = 'none';
+          dot.className = 'status-dot';
+          txt.textContent = 'Ollama Offline';
         }
-      };
+      } catch (e) { console.error(e); }
+    }
+    setInterval(checkOllama, 5000);
+    checkOllama();
+    loadConfig();
 
-      async function captureAndAnalyze() {
-        const btn = document.getElementById('captureBtn');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading"></span>'; }
+    async function refreshIdentity() {
+      try {
+        const user = await invoke('fetch_jira_profile');
+        currentUser = { name: user.display_name, avatar: user.avatar_url };
 
-        try {
-          log("Taking Context Snapshot...");
+        document.getElementById('guestProfile').style.display = 'none';
+        document.getElementById('userProfile').style.display = 'block';
+        document.getElementById('userName').textContent = user.display_name;
+        document.getElementById('userAvatar').src = user.avatar_url;
+        document.getElementById('userEmail').textContent = user.email;
 
-          // Determine Task
-          let task = "General";
-          let jiraTicket = null;
+        refreshJira();
+      } catch (e) {
+        console.log("No identity:", e);
+        document.getElementById('guestProfile').style.display = 'block';
+        document.getElementById('userProfile').style.display = 'none';
+      }
+    }
 
-          const sel = document.getElementById('jiraSelect');
-          if (sel.value && sel.value !== 'MANUAL') {
-            jiraTicket = sel.value;
-            task = sel.options[sel.selectedIndex].text;
-          } else if (sel.value === 'MANUAL') {
-            task = document.getElementById('manualTask').value || "Manual Work";
-          }
+    async function handleConnect() {
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true;
+      btn.textContent = "Opening Browser...";
+      try {
+        const msg = await invoke('start_jira_oauth');
+        alert(msg + "\n\nAfter approval, return and click OK.");
+        setTimeout(refreshIdentity, 2000);
+      } catch (e) {
+        alert("Error: " + e);
+      }
+      btn.disabled = false;
+      btn.textContent = "Connect Jira";
+    }
 
-          // SINGLE CALL: Capture + Context Analysis
-          // Pass jiraTicket to backend
-          const snapshot = await invoke('capture_context_snapshot', {
-            userTask: task,
-            jiraTicket: jiraTicket
-          });
+    document.getElementById('loginBtn').onclick = handleConnect;
+    document.getElementById('connectJiraLink').onclick = (e) => { e.preventDefault(); handleConnect(); };
 
-          log(`Snapshot description ready: ${snapshot.description.substring(0, 50)}...`);
-          log(`Category: ${snapshot.category}`);
-
-          // Update UI logic (Local Feed)
-          const devName = currentUser.name || 'Developer';
-
-          // Save to Local DB (UI calls this so stats update)
-          // Backend handles DB insert, we just update UI list
-          // NOTE: Rust arguments must be camelCase if using Tauri 2? Or snake_case? 
-          // Usually Tauri uses camelCase for the JS object keys mapping to snake_case args in Rust.
-          await invoke('save_activity', {
-            description: snapshot.description,
-            activityType: snapshot.category, // Mapped to activity_type argument
-            jiraTicket: jiraTicket
-          });
-
-          addActivityItem(devName, snapshot.description, snapshot.category, jiraTicket);
-
-          document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
-
-        } catch (e) {
-          console.error(e);
-          log("Error: " + e);
-        }
-
-        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-icons">camera_alt</span> Capture Now'; }
+    async function init() {
+      try {
+        console.log("[Agent] Initializing backend...");
+        await invoke('initialize_agent');
+        console.log("[Agent] Backend initialized.");
+      } catch (e) {
+        console.error("Failed to init agent:", e);
       }
 
-      // TEST REPORT BUTTON
-      document.getElementById('testReportBtn').onclick = async () => {
-        const btn = document.getElementById('testReportBtn');
-        btn.disabled = true;
-        btn.textContent = "Generating Report...";
-        try {
-          const res = await invoke('force_sync_now');
-          alert("Report Generated:\n" + res);
-        } catch (e) {
-          alert("Report Failed: " + e);
+      await refreshIdentity();
+      await loadConfig();
+      await checkOllama();
+    }
+
+    init();
+
+    async function refreshJira() {
+      const btn = document.getElementById('refreshJiraBtn');
+      const sel = document.getElementById('jiraSelect');
+      btn.disabled = true;
+      sel.innerHTML = '<option>Loading...</option>';
+
+      try {
+        const tasks = await invoke('fetch_jira_tasks');
+        sel.innerHTML = '<option value="">Select Task...</option>';
+
+        const groups = {};
+        tasks.forEach(t => {
+          const s = t.status || 'Unknown';
+          if (!groups[s]) groups[s] = [];
+          groups[s].push(t);
+        });
+
+        const priority = ["In Progress", "To Do", "Selected for Development", "Done"];
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+          const idxA = priority.indexOf(a);
+          const idxB = priority.indexOf(b);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.localeCompare(b);
+        });
+
+        sortedKeys.forEach(status => {
+          const grp = document.createElement('optgroup');
+          grp.label = status;
+
+          groups[status].forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.key;
+            opt.textContent = `[${t.key}] ${t.summary}`;
+            grp.appendChild(opt);
+          });
+          sel.appendChild(grp);
+        });
+
+        const other = document.createElement('option');
+        other.value = "MANUAL";
+        other.textContent = "Other (Type Manual)";
+        sel.appendChild(other);
+      } catch (e) {
+        console.error(e);
+        alert("Failed to fetch tasks: " + e);
+        sel.innerHTML = '<option value="">Error or Not Connected</option>';
+        const manual = document.createElement('option');
+        manual.value = "MANUAL";
+        manual.textContent = "Not Connected - Use Manual";
+        sel.appendChild(manual);
+      }
+      btn.disabled = false;
+    }
+
+    document.getElementById('refreshJiraBtn').onclick = refreshJira;
+
+    document.getElementById('jiraSelect').onchange = (e) => {
+      if (e.target.value === 'MANUAL') {
+        document.getElementById('manualTask').style.display = 'block';
+      } else {
+        document.getElementById('manualTask').style.display = 'none';
+      }
+    };
+
+    async function captureAndAnalyze() {
+      const btn = document.getElementById('captureBtn');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Capturing...'; }
+
+      try {
+        log("Taking Context Snapshot...");
+
+        let task = "General";
+        let jiraTicket = null;
+
+        const sel = document.getElementById('jiraSelect');
+        if (sel.value && sel.value !== 'MANUAL') {
+          jiraTicket = sel.value;
+          task = sel.options[sel.selectedIndex].text;
+        } else if (sel.value === 'MANUAL') {
+          task = document.getElementById('manualTask').value || "Manual Work";
         }
-        btn.disabled = false;
-        btn.textContent = "Test Report Generation";
-      };
 
-      function addActivityItem(devName, desc, category, ticket) {
-        const list = document.getElementById('activityList');
-        const div = document.createElement('div');
-        div.className = 'activity-item';
-        // Truncate desc for UI
-        let displayDesc = desc ? desc.trim() : "";
-        if (!displayDesc) displayDesc = "<em>[No output from AI model - check terminal for details]</em>";
-        else if (displayDesc.length > 150) displayDesc = displayDesc.substring(0, 150) + "...";
+        const snapshot = await invoke('capture_context_snapshot', {
+          userTask: task,
+          jiraTicket: jiraTicket
+        });
 
-        const ticketBadge = ticket ? `<span class="activity-badge" style="background:#e0f2fe; color:#0369a1;">${ticket}</span>` : '';
+        log(`Snapshot description ready: ${snapshot.description.substring(0, 50)}...`);
+        log(`Category: ${snapshot.category}`);
 
-        div.innerHTML = `
+        const devName = currentUser.name || 'Developer';
+
+        await invoke('save_activity', {
+          description: snapshot.description,
+          activityType: snapshot.category,
+          jiraTicket: jiraTicket
+        });
+
+        addActivityItem(devName, snapshot.description, snapshot.category, jiraTicket);
+        document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
+      } catch (e) {
+        console.error(e);
+        log("Error: " + e);
+      }
+
+      if (btn) { btn.disabled = false; btn.innerHTML = '📸 Capture Now'; }
+    }
+
+    document.getElementById('testReportBtn').onclick = async () => {
+      const btn = document.getElementById('testReportBtn');
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+      try {
+        const res = await invoke('force_sync_now');
+        alert("Report Generated:\n" + res);
+      } catch (e) {
+        alert("Report Failed: " + e);
+      }
+      btn.disabled = false;
+      btn.textContent = "🧪 Test Report";
+    };
+
+    function addActivityItem(devName, desc, category, ticket) {
+      const list = document.getElementById('activityList');
+
+      if (list.querySelector('.empty-state')) {
+        list.innerHTML = '';
+      }
+
+      const div = document.createElement('div');
+      div.className = 'activity-item';
+
+      let displayDesc = desc ? desc.trim() : "";
+      if (!displayDesc) displayDesc = "<em>No output from AI model</em>";
+      else if (displayDesc.length > 100) displayDesc = displayDesc.substring(0, 100) + "...";
+
+      const ticketBadge = ticket ? `<span class="badge badge-success" style="margin-top: 3px;">${ticket}</span>` : '';
+
+      div.innerHTML = `
         <div class="activity-time">${new Date().toLocaleTimeString()}</div>
-        <div class="activity-desc">
-           <div style="display:flex; justify-content:space-between;">
-             <strong>${devName}</strong>
-             <span style="font-size:10px; font-weight:600; color:#666;">${category || 'Unknown'}</span>
-           </div>
-           <span style="font-size:11px; color:#333; display:block; margin: 4px 0;">${displayDesc}</span>
-           ${ticketBadge}
-           <span class="activity-badge synced">Archived Locally</span>
+        <div class="activity-meta">
+          <span class="activity-user">${devName}</span>
+          <span class="activity-category">${category || 'Unknown'}</span>
         </div>
+        <div class="activity-desc">${displayDesc}</div>
+        ${ticketBadge}
       `;
-        list.insertBefore(div, list.firstChild);
-      }
-    </script>
+      list.insertBefore(div, list.firstChild);
+    }
+  </script>
 </body>
 
 </html>

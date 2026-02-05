@@ -13,12 +13,12 @@
     "windows": [
       {
         "title": "FlowSight AI - Developer Productivity Agent",
-        "width": 1400,
-        "height": 900,
+        "width": 370,
+        "height": 700,
         "resizable": true,
         "fullscreen": false,
-        "minWidth": 800,
-        "minHeight": 600
+        "minWidth": 340,
+        "minHeight": 400
       }
     ],
     "security": {
