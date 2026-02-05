@@ -263,10 +263,11 @@ pub fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Option<S
     let path = PathBuf::from(&path_str);
 
     // 2. Run Qwen2-VL (Visual Description + Category)
-    // We now parse "Category: <Name>" from the response
-    let raw_analysis = analyze_image_with_qwen(&base64).unwrap_or_else(|_| "Screen analysis failed".to_string());
+    // Pass task context to the analysis
+    let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
+    let raw_analysis = analyze_image_with_qwen(&base64, &task_context).unwrap_or_else(|_| "Screen analysis failed. Category: General".to_string());
     
-    // Simple heuristic or prompt-based classification
+    // Parse category from response
     let (description, category) = parse_analysis(&raw_analysis);
 
     // 3. System Context (Window/App)
@@ -517,10 +518,27 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
 // RESTORED AI ANALYSIS (Backend)
 #[tauri::command]
 
-fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
-    let client = reqwest::blocking::Client::new();
-    // Detailed Prompt for extended answer
-    let prompt = "Analyze the image in detail. Describe the visible applications, specific file names, code context, and user activity. Then, explicitly state the Category from: Coding, Design, Sales, Communication, Meeting, Browsing, Other.";
+fn analyze_image_with_qwen(base64_img: &str, current_task: &str) -> Result<String, String> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    // Detailed but direct prompt
+    let prompt = format!(
+        "Current Task: {}
+
+Analyze this screenshot in detail but be direct. Report:
+- Application in use and window title
+- Specific files open (exact names if visible)
+- Code/content being edited (language, functions, classes)
+- User's current action (writing, debugging, reviewing, etc.)
+- Progress indicators (errors, test results, build status)
+- How this work relates to the current task
+
+Conclude with: Category: [Coding/Design/Sales/Communication/Meeting/Browsing/Other]",
+        current_task
+    );
     
     let body = serde_json::json!({
         "model": "qwen3-vl:2b",
@@ -533,7 +551,7 @@ fn analyze_image_with_qwen(base64_img: &str) -> Result<String, String> {
         ],
         "stream": false,
         "options": {
-            "temperature": 0.6, 
+            "temperature": 0.3,
             "num_predict": 500
         }
     });
