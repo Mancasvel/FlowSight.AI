@@ -604,7 +604,12 @@
 
     document.getElementById('captureBtn').onclick = captureAndAnalyze;
 
+    let ollamaConfirmedOnline = false;
+
     async function checkOllama() {
+      // Skip frequent checks if already confirmed online
+      if (ollamaConfirmedOnline) return;
+
       try {
         const status = await invoke('check_ollama');
         const dot = document.getElementById('ollamaDot');
@@ -613,6 +618,7 @@
           if (status.hasVisionModel) {
             dot.className = 'status-dot active';
             txt.textContent = 'Ollama Ready';
+            ollamaConfirmedOnline = true; // Stop polling once confirmed
           } else {
             dot.className = 'status-dot';
             txt.textContent = 'Ollama Online (Missing Model)';
@@ -620,10 +626,15 @@
         } else {
           dot.className = 'status-dot';
           txt.textContent = 'Ollama Offline';
+          ollamaConfirmedOnline = false;
         }
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error(e);
+        ollamaConfirmedOnline = false;
+      }
     }
-    setInterval(checkOllama, 5000);
+    // Check every 30s instead of 5s, and stop once confirmed online
+    setInterval(checkOllama, 30000);
     checkOllama();
     loadConfig();
 
@@ -748,7 +759,20 @@
 
     async function captureAndAnalyze() {
       const btn = document.getElementById('captureBtn');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Capturing...'; }
+      const originalBtnHtml = btn ? btn.innerHTML : '';
+
+      // Helper to update button with animation
+      const updateBtn = (text) => {
+        if (btn) btn.innerHTML = `<span class="loading"></span> ${text}`;
+      };
+
+      if (btn) {
+        btn.disabled = true;
+        updateBtn('Capturing...');
+      }
+
+      // Allow UI to update before heavy work
+      await new Promise(r => setTimeout(r, 50));
 
       try {
         log("Taking Context Snapshot...");
@@ -764,6 +788,10 @@
           task = document.getElementById('manualTask').value || "Manual Work";
         }
 
+        // Update status before heavy AI call
+        updateBtn('Analyzing...');
+        await new Promise(r => setTimeout(r, 10));
+
         const snapshot = await invoke('capture_context_snapshot', {
           userTask: task,
           jiraTicket: jiraTicket
@@ -772,6 +800,7 @@
         log(`Snapshot description ready: ${snapshot.description.substring(0, 50)}...`);
         log(`Category: ${snapshot.category}`);
 
+        updateBtn('Saving...');
         const devName = currentUser.name || 'Developer';
 
         await invoke('save_activity', {
