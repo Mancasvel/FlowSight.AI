@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlowSight DEV Agent</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-    
+
     * {
       margin: 0;
       padding: 0;
@@ -44,16 +45,17 @@
     }
 
     .app-container {
-      position: fixed;
-      top: 12px;
-      left: 12px;
-      width: 340px;
-      max-height: calc(100vh - 24px);
+      width: 100%;
+      max-width: 340px;
+      margin: 0 auto;
+      padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 8px;
       overflow-y: auto;
       overflow-x: hidden;
+      min-height: 100vh;
+      box-sizing: border-box;
     }
 
     .app-container::-webkit-scrollbar {
@@ -427,10 +429,13 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
+
 <body>
   <div class="app-container">
     <!-- Status Card -->
@@ -439,7 +444,7 @@
         <div class="card-title">FlowSight Agent</div>
         <div class="badge badge-default">Standalone</div>
       </div>
-      
+
       <div class="status-indicator">
         <div class="status-dot" id="ollamaDot"></div>
         <span class="status-text" id="ollamaStatus">Checking Ollama...</span>
@@ -493,7 +498,8 @@
         <div style="margin-top: 6px; text-align: right;">
           <a href="#" class="link" id="connectJiraLink">Reconnect Jira</a>
         </div>
-        <input type="text" id="manualTask" class="input" placeholder="Manual task..." style="margin-top: 6px; display: none;">
+        <input type="text" id="manualTask" class="input" placeholder="Manual task..."
+          style="margin-top: 6px; display: none;">
       </div>
 
       <div class="form-group">
@@ -508,8 +514,10 @@
         <button class="button button-destructive" id="stopBtn" style="flex: 1;">■ Stop</button>
       </div>
 
-      <button class="button button-secondary" id="captureBtn" style="width: 100%; margin-top: 6px;">📸 Capture Now</button>
-      <button class="button button-secondary" id="testReportBtn" style="width: 100%; margin-top: 6px;">🧪 Test Report</button>
+      <button class="button button-secondary" id="captureBtn" style="width: 100%; margin-top: 6px;">📸 Capture
+        Now</button>
+      <button class="button button-secondary" id="testReportBtn" style="width: 100%; margin-top: 6px;">🧪 Test
+        Report</button>
     </div>
 
     <!-- Activity Card -->
@@ -798,14 +806,14 @@
 
     function addActivityItem(devName, desc, category, ticket) {
       const list = document.getElementById('activityList');
-      
+
       if (list.querySelector('.empty-state')) {
         list.innerHTML = '';
       }
 
       const div = document.createElement('div');
       div.className = 'activity-item';
-      
+
       let displayDesc = desc ? desc.trim() : "";
       if (!displayDesc) displayDesc = "<em>No output from AI model</em>";
       else if (displayDesc.length > 100) displayDesc = displayDesc.substring(0, 100) + "...";
@@ -825,4 +833,5 @@
     }
   </script>
 </body>
+
 </html>
