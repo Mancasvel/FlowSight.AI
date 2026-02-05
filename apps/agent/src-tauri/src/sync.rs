@@ -77,6 +77,7 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     }
 
     // 2. Generate Summary with Qwen (from Text Logs only)
+    println!("[CloudSync] Summarizing text:\n{}", full_text); // DEBUG
     let summary = summarize_with_qwen(&full_text).unwrap_or("Summary generation failed".to_string());
     
     // 3. Upload to Supabase (Best Effort)
@@ -106,7 +107,17 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
 
 fn summarize_with_qwen(text: &str) -> Result<String, String> {
     let client = Client::new();
-    let prompt = format!("Summarize this developer activity log into a concise 1-paragraph standup report:\n\n{}", text);
+    let prompt = format!("You are an Activity Summarizer. Below is a list of tasks performed by a developer.
+    
+    TASKS:
+    {}
+    
+    INSTRUCTIONS:
+    - Write a short 1-paragraph summary of what was actually done.
+    - ONLY use the information provided in the TASKS list.
+    - Do NOT invent or assume any other work.
+    - If the logs are about 'Fixing Agent Start Logic', say that.
+    ", text);
     
     let body = serde_json::json!({
         "model": "qwen3-vl:2b", 
@@ -122,7 +133,23 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
         
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    Ok(json["message"]["content"].as_str().unwrap_or("No response").to_string())
+    
+    // Parse Logic with Thinking Fallback
+    let msg = &json["message"];
+    let content = msg["content"].as_str().unwrap_or("");
+    let thinking = msg["thinking"].as_str().unwrap_or("");
+    
+    let final_text = if !content.is_empty() {
+        content.to_string()
+    } else if !thinking.is_empty() {
+        println!("[CloudSync] Using THINKING field for summary.");
+        thinking.to_string()
+    } else {
+        println!("[CloudSync] Empty summary. JSON: {:?}", json);
+        return Err("Model returned empty summary.".to_string());
+    };
+    
+    Ok(final_text)
 }
 
 fn upload_session(
