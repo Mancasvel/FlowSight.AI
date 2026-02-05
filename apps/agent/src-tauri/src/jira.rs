@@ -174,6 +174,103 @@ fn save_tokens(access: &str, refresh: Option<&str>) {
    }
 }
 
+/// Refreshes the access token using the stored refresh token
+/// Returns the new access token if successful
+fn refresh_access_token() -> Result<String, String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    let refresh_token: String = conn.query_row(
+        "SELECT value FROM config WHERE key = 'jira_refresh_token'", 
+        [], 
+        |r| r.get(0)
+    ).map_err(|_| "No refresh token found. Please reconnect to Jira.".to_string())?;
+    
+    let client_id = get_client_id();
+    let client_secret = get_client_secret();
+    
+    // Build the token refresh request
+    let http_client = Client::new();
+    let mut params = vec![
+        ("grant_type", "refresh_token"),
+        ("refresh_token", &refresh_token),
+        ("client_id", &client_id),
+    ];
+    
+    // Add client_secret if available (required for confidential clients)
+    let secret_str;
+    if let Some(ref secret) = client_secret {
+        secret_str = secret.clone();
+        params.push(("client_secret", &secret_str));
+    }
+    
+    let resp = http_client.post(TOKEN_URL)
+        .form(&params)
+        .send()
+        .map_err(|e| format!("Failed to refresh token: {}", e))?;
+    
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().unwrap_or_default();
+        println!("[Jira] Token refresh failed: {} - {}", status, body);
+        return Err(format!("Token refresh failed ({}). Please reconnect to Jira.", status));
+    }
+    
+    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    
+    let new_access = json["access_token"].as_str()
+        .ok_or("No access_token in refresh response")?
+        .to_string();
+    
+    let new_refresh = json["refresh_token"].as_str().map(String::from);
+    
+    // Save the new tokens
+    save_tokens(&new_access, new_refresh.as_deref());
+    println!("[Jira] Token refreshed successfully");
+    
+    Ok(new_access)
+}
+
+/// Gets a valid access token, refreshing if necessary
+/// This is the main entry point for getting a token to use in API calls
+fn get_valid_token() -> Result<String, String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    let access_token: String = conn.query_row(
+        "SELECT value FROM config WHERE key = 'jira_access_token'", 
+        [], 
+        |r| r.get(0)
+    ).map_err(|_| "Not connected to Jira".to_string())?;
+    
+    // Quick validation: try to access a lightweight endpoint
+    let http_client = Client::new();
+    let test_resp = http_client.get("https://api.atlassian.com/oauth/token/accessible-resources")
+        .bearer_auth(&access_token)
+        .send();
+    
+    match test_resp {
+        Ok(resp) if resp.status().as_u16() == 401 => {
+            // Token expired, try to refresh
+            println!("[Jira] Access token expired, attempting refresh...");
+            refresh_access_token()
+        }
+        Ok(resp) if resp.status().is_success() => {
+            // Token is still valid
+            Ok(access_token)
+        }
+        Ok(resp) => {
+            // Other error
+            Err(format!("Jira API error: {}", resp.status()))
+        }
+        Err(e) => {
+            // Network error, return current token and let caller handle it
+            println!("[Jira] Network check failed: {}, using cached token", e);
+            Ok(access_token)
+        }
+    }
+}
+
 fn fetch_cloud_id(token: &str) -> Result<String, Box<dyn Error>> {
     let client = Client::new();
     let resp = client.get("https://api.atlassian.com/oauth/token/accessible-resources")
@@ -188,22 +285,19 @@ fn fetch_cloud_id(token: &str) -> Result<String, Box<dyn Error>> {
 
 #[tauri::command]
 pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
-    // 1. Get Token from DB
+    // 1. Get valid token (auto-refreshes if expired)
+    let access_token = get_valid_token()?;
+    
     let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
-    
-    let access_token: String = conn.query_row("SELECT value FROM config WHERE key = 'jira_access_token'", [], |r| r.get(0))
-        .map_err(|_| "Not connected to Jira".to_string())?;
     let cloud_id: String = conn.query_row("SELECT value FROM config WHERE key = 'jira_cloud_id'", [], |r| r.get(0))
         .map_err(|_| "Jira Cloud ID not found".to_string())?;
 
     // 2. Fetch Issues
     let client = Client::new();
     let url = format!("https://api.atlassian.com/ex/jira/{}/rest/api/3/search/jql", cloud_id);
-    // Relaxed JQL: Get ALL open issues (useful for single-user/small teams)
     let jql = "statusCategory != Done ORDER BY updated DESC";
     
-    // Switch to POST as GET is deprecated/removed for some contexts (410 Gone)
     let resp = client.post(&url)
         .bearer_auth(&access_token)
         .header("Content-Type", "application/json")
@@ -215,16 +309,38 @@ pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
         .send()
         .map_err(|e| e.to_string())?;
         
-    println!("Jira Fetch Status: {}", resp.status());
+    println!("[Jira] Fetch Status: {}", resp.status());
 
+    // Handle 401 with retry after refresh
     if resp.status().as_u16() == 401 {
-        // TODO: Try Refresh Token logic here if 401
-        return Err("Jira Token Expired. Please reconnect.".to_string());
+        println!("[Jira] Got 401, attempting token refresh...");
+        let new_token = refresh_access_token()?;
+        
+        // Retry with new token
+        let retry_resp = client.post(&url)
+            .bearer_auth(&new_token)
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                "jql": jql,
+                "fields": ["summary", "status"],
+                "maxResults": 50
+            }))
+            .send()
+            .map_err(|e| e.to_string())?;
+        
+        if !retry_resp.status().is_success() {
+            return Err(format!("Jira API failed after refresh: {}", retry_resp.status()));
+        }
+        
+        return parse_jira_issues(retry_resp.text().map_err(|e| e.to_string())?);
     }
     
     let text_resp = resp.text().map_err(|e| e.to_string())?;
-    println!("Jira Raw Response: {}", text_resp);
+    parse_jira_issues(text_resp)
+}
 
+fn parse_jira_issues(text_resp: String) -> Result<Vec<JiraIssue>, String> {
+    println!("[Jira] Raw Response: {}", text_resp);
     let json: serde_json::Value = serde_json::from_str(&text_resp).map_err(|e| e.to_string())?;
     
     let mut issues = Vec::new();
@@ -236,8 +352,6 @@ pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
             issues.push(JiraIssue { key, summary, status });
         }
     }
-    
-
     Ok(issues)
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -249,12 +363,11 @@ pub struct JiraUser {
 
 #[tauri::command]
 pub fn fetch_jira_profile() -> Result<JiraUser, String> {
-     // 1. Get Token & Cloud ID
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
-    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    // 1. Get valid token (auto-refreshes if expired)
+    let access_token = get_valid_token()?;
     
-    let access_token: String = conn.query_row("SELECT value FROM config WHERE key = 'jira_access_token'", [], |r| r.get(0))
-        .map_err(|_| "Not connected to Jira".to_string())?;
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     let cloud_id: String = conn.query_row("SELECT value FROM config WHERE key = 'jira_cloud_id'", [], |r| r.get(0))
         .map_err(|_| "Jira Cloud ID not found".to_string())?;
         
@@ -267,13 +380,31 @@ pub fn fetch_jira_profile() -> Result<JiraUser, String> {
         .send()
         .map_err(|e| e.to_string())?;
 
-    if !resp.status().is_success() {
-         return Err(format!("Failed to fetch profile: {}", resp.status()));
+    // Handle 401 with retry after refresh
+    if resp.status().as_u16() == 401 {
+        println!("[Jira] Profile fetch got 401, refreshing token...");
+        let new_token = refresh_access_token()?;
+        
+        let retry_resp = client.get(&url)
+            .bearer_auth(&new_token)
+            .send()
+            .map_err(|e| e.to_string())?;
+        
+        if !retry_resp.status().is_success() {
+            return Err(format!("Failed to fetch profile after refresh: {}", retry_resp.status()));
+        }
+        
+        return parse_jira_profile(retry_resp.json().map_err(|e| e.to_string())?, &conn);
     }
 
-    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    
-    // 3. Parse & Save to DB (as dev_name)
+    if !resp.status().is_success() {
+        return Err(format!("Failed to fetch profile: {}", resp.status()));
+    }
+
+    parse_jira_profile(resp.json().map_err(|e| e.to_string())?, &conn)
+}
+
+fn parse_jira_profile(json: serde_json::Value, conn: &Connection) -> Result<JiraUser, String> {
     let user = JiraUser {
         display_name: json["displayName"].as_str().unwrap_or("Unknown").to_string(),
         avatar_url: json["avatarUrls"]["48x48"].as_str().unwrap_or("").to_string(),
