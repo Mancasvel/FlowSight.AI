@@ -536,7 +536,7 @@ Analyze this screenshot in detail but be direct. Report:
 - Progress indicators (errors, test results, build status)
 - How this work relates to the current task
 
-Conclude with: Category: [Coding/Design/Sales/Communication/Meeting/Browsing/Other]",
+You have 600 tokens. Use them to provide a complete, detailed analysis. Always finish your response with: Category: [Coding/Design/Sales/Communication/Meeting/Browsing/Other]",
         current_task
     );
     
@@ -552,7 +552,7 @@ Conclude with: Category: [Coding/Design/Sales/Communication/Meeting/Browsing/Oth
         "stream": false,
         "options": {
             "temperature": 0.3,
-            "num_predict": 500
+            "num_predict": 600
         }
     });
     
