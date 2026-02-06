@@ -28,7 +28,7 @@ dist-electron/
 *.rpm
 *.AppImage
 *.snap
-
+supabase_schema.sql
 # ================================
 # IDE / Editor
 # ================================
