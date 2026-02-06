@@ -227,14 +227,6 @@ pub fn capture_screen_command() -> Result<CaptureResult, String> {
         base64
     })
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Fingerprint {
-    pub vector: Vec<f32>,
-    pub dimension: usize,
-    pub model: String,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContextSnapshot {
     pub vector: Vec<f32>,
@@ -321,34 +313,6 @@ fn parse_analysis(raw: &str) -> (String, String) {
     
     (raw.to_string(), category)
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ActivityMetadata {
-    pub app_name: Option<String>,
-    pub window_title: Option<String>,
-    pub window_title_hash: Option<String>, // Privacy
-}
-
-#[tauri::command]
-pub fn get_semantic_fingerprint(image_path: String, _metadata: Option<ActivityMetadata>) -> Result<Fingerprint, String> {
-    // Kept for backward compat or direct calls
-    use crate::fingerprint::generate_fingerprint;
-    use std::path::PathBuf;
-    
-    let path = PathBuf::from(&image_path);
-    if !path.exists() {
-        return Err(format!("File not found: {}", image_path));
-    }
-    
-    let result = generate_fingerprint(&path).map_err(|e| e.to_string())?;
-    
-    Ok(Fingerprint {
-        vector: result.vector,
-        dimension: result.dimension,
-        model: result.model
-    })
-}
-
 #[tauri::command]
 pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
     let mut agent = state.lock().unwrap();
