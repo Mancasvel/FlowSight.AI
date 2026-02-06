@@ -299,19 +299,48 @@ pub fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Option<S
 
 // Helper to parse "Category: X" logic
 fn parse_analysis(raw: &str) -> (String, String) {
-    // This assumes the Prompt asks for "Category: [X]"
-    // For now, default to "Unknown" if not found
-    // Implementation of parsing logic:
-    let mut category = "General".to_string();
     let lower = raw.to_lowercase();
     
-    if lower.contains("category: coding") || lower.contains("category: development") { category = "Coding".to_string(); }
-    else if lower.contains("category: design") { category = "Design".to_string(); }
-    else if lower.contains("category: sales") || lower.contains("crm") { category = "Sales".to_string(); }
-    else if lower.contains("category: communication") || lower.contains("slack") { category = "Communication".to_string(); }
-    else if lower.contains("category: meeting") { category = "Meeting".to_string(); }
+    // Extended category detection - order matters (more specific first)
+    let category = if lower.contains("category: debugging") || lower.contains("debugger") || lower.contains("breakpoint") {
+        "Debugging"
+    } else if lower.contains("category: code review") || lower.contains("pull request") || lower.contains("reviewing code") {
+        "CodeReview"
+    } else if lower.contains("category: testing") || lower.contains("running tests") || lower.contains("test results") {
+        "Testing"
+    } else if lower.contains("category: coding") || lower.contains("category: development") || lower.contains("writing code") {
+        "Coding"
+    } else if lower.contains("category: documentation") || lower.contains("writing docs") || lower.contains("readme") {
+        "Documentation"
+    } else if lower.contains("category: design") || lower.contains("figma") || lower.contains("sketch") {
+        "Design"
+    } else if lower.contains("category: planning") || lower.contains("jira") || lower.contains("trello") || lower.contains("backlog") {
+        "Planning"
+    } else if lower.contains("category: meeting") || lower.contains("zoom") || lower.contains("google meet") || lower.contains("teams") {
+        "Meeting"
+    } else if lower.contains("category: communication") || lower.contains("slack") || lower.contains("discord") || lower.contains("email") {
+        "Communication"
+    } else if lower.contains("category: research") || lower.contains("stackoverflow") || lower.contains("searching") {
+        "Research"
+    } else if lower.contains("category: learning") || lower.contains("tutorial") || lower.contains("course") || lower.contains("documentation") {
+        "Learning"
+    } else if lower.contains("category: devops") || lower.contains("docker") || lower.contains("kubernetes") || lower.contains("pipeline") {
+        "DevOps"
+    } else if lower.contains("category: database") || lower.contains("sql") || lower.contains("database") {
+        "Database"
+    } else if lower.contains("category: sales") || lower.contains("crm") || lower.contains("hubspot") {
+        "Sales"
+    } else if lower.contains("category: admin") || lower.contains("settings") || lower.contains("configuration") {
+        "Admin"
+    } else if lower.contains("category: browsing") || lower.contains("browser") {
+        "Browsing"
+    } else if lower.contains("category: idle") || lower.contains("idle") || lower.contains("no activity") {
+        "Idle"
+    } else {
+        "General"
+    };
     
-    (raw.to_string(), category)
+    (raw.to_string(), category.to_string())
 }
 #[tauri::command]
 pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
@@ -488,7 +517,7 @@ fn analyze_image_with_qwen(base64_img: &str, current_task: &str) -> Result<Strin
         .build()
         .map_err(|e| e.to_string())?;
     
-    // Detailed but direct prompt
+    // Detailed but direct prompt with extended categories
     let prompt = format!(
         "Current Task: {}
 
@@ -500,7 +529,10 @@ Analyze this screenshot in detail but be direct. Report:
 - Progress indicators (errors, test results, build status)
 - How this work relates to the current task
 
-You have 600 tokens. Use them to provide a complete, detailed analysis. Always finish your response with: Category: [Coding/Design/Sales/Communication/Meeting/Browsing/Other]",
+You have 600 tokens. Provide a complete, detailed analysis.
+
+End with exactly ONE of these categories:
+Category: Coding | Debugging | CodeReview | Testing | Documentation | Design | Planning | Meeting | Communication | Research | Learning | DevOps | Database | Sales | Admin | Browsing | Idle | General",
         current_task
     );
     
