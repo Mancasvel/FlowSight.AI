@@ -693,6 +693,45 @@
       </div>
     </div>
 
+    <!-- Integrations Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Integrations</div>
+      </div>
+
+      <!-- Task Provider Links -->
+      <div style="margin-bottom: 12px;">
+        <div class="label" style="margin-bottom: 6px;">Task Provider</div>
+        <div style="display: flex; gap: 6px;">
+          <button class="button button-secondary" id="linkJiraBtn" style="flex: 1; padding: 8px; font-size: 11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" style="margin-right: 4px;">
+              <path fill="#2684FF"
+                d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" />
+            </svg>
+            <span id="jiraLinkStatus">Link Jira</span>
+          </button>
+          <button class="button button-secondary" id="linkLinearBtn" style="flex: 1; padding: 8px; font-size: 11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" style="margin-right: 4px;">
+              <path fill="#5E6AD2"
+                d="M3.357 3.357a12.19 12.19 0 0 1 17.286 0 12.19 12.19 0 0 1 0 17.286 12.19 12.19 0 0 1-17.286 0 12.19 12.19 0 0 1 0-17.286z" />
+            </svg>
+            <span id="linearLinkStatus">Link Linear</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Team Code Input -->
+      <div class="form-group">
+        <label class="label">Team Code (from PM)</label>
+        <div style="display: flex; gap: 6px;">
+          <input type="text" id="teamCodeInput" class="select" placeholder="Enter team code..."
+            style="flex: 1; font-family: monospace;">
+          <button class="button button-primary" id="joinTeamBtn" style="padding: 8px 12px;">Join</button>
+        </div>
+        <div id="teamStatus" style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 4px;"></div>
+      </div>
+    </div>
+
     <!-- Monitoring Card -->
     <div class="card">
       <div class="card-header">
@@ -897,6 +936,108 @@
 
     // Expose login handler to window for inline onclick
     window.handleLoginClick = handleLogin;
+
+    // ===== INTEGRATION LINK HANDLERS =====
+    let linkedProviders = { jira: false, linear: false };
+    let currentTeamCode = localStorage.getItem('flowsight_team_code') || '';
+
+    async function linkProvider(provider) {
+      const btn = document.getElementById('link' + provider.charAt(0).toUpperCase() + provider.slice(1) + 'Btn');
+      const statusEl = document.getElementById(provider + 'LinkStatus');
+      const originalText = statusEl.textContent;
+
+      btn.disabled = true;
+      statusEl.textContent = 'Connecting...';
+
+      try {
+        await invoke('start_auth', { provider });
+
+        // Poll for link success
+        let attempts = 0;
+        const pollLink = async () => {
+          attempts++;
+          statusEl.textContent = `Linking... (${attempts}/30)`;
+
+          // Check if we got tokens for this provider
+          try {
+            if (provider === 'jira') {
+              await invoke('fetch_jira_tasks');
+              linkedProviders.jira = true;
+              statusEl.textContent = '✓ Linked';
+              btn.classList.add('button-success');
+              showToast('Jira linked successfully!', 'success');
+              refreshTasks();
+              return;
+            } else if (provider === 'linear') {
+              await invoke('fetch_linear_tasks');
+              linkedProviders.linear = true;
+              statusEl.textContent = '✓ Linked';
+              btn.classList.add('button-success');
+              showToast('Linear linked successfully!', 'success');
+              refreshTasks();
+              return;
+            }
+          } catch (e) {
+            // Not linked yet, keep polling
+          }
+
+          if (attempts < 30) {
+            setTimeout(pollLink, 2000);
+          } else {
+            btn.disabled = false;
+            statusEl.textContent = originalText;
+            showToast('Link timeout - try again', 'error');
+          }
+        };
+
+        setTimeout(pollLink, 2000);
+      } catch (e) {
+        btn.disabled = false;
+        statusEl.textContent = originalText;
+        showToast('Link failed: ' + e, 'error');
+      }
+    }
+
+    document.getElementById('linkJiraBtn').onclick = () => linkProvider('jira');
+    document.getElementById('linkLinearBtn').onclick = () => linkProvider('linear');
+
+    // Team code handler
+    document.getElementById('joinTeamBtn').onclick = async () => {
+      const code = document.getElementById('teamCodeInput').value.trim();
+      const statusEl = document.getElementById('teamStatus');
+
+      if (!code) {
+        showToast('Please enter a team code', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('joinTeamBtn');
+      btn.disabled = true;
+      btn.textContent = 'Joining...';
+      statusEl.textContent = 'Validating code...';
+
+      try {
+        // Save team code locally for now
+        localStorage.setItem('flowsight_team_code', code);
+        currentTeamCode = code;
+
+        // TODO: Validate with backend when PM dashboard is ready
+        statusEl.innerHTML = `✓ Team code saved: <strong>${code}</strong>`;
+        showToast('Team code saved!', 'success');
+      } catch (e) {
+        statusEl.textContent = 'Failed to save: ' + e;
+        showToast('Failed: ' + e, 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Join';
+    };
+
+    // Load saved team code on init
+    if (currentTeamCode) {
+      document.getElementById('teamCodeInput').value = currentTeamCode;
+      document.getElementById('teamStatus').innerHTML = `✓ Team code: <strong>${currentTeamCode}</strong>`;
+    }
 
     // Login button handlers (fallback if inline onclick fails)
     document.getElementById('loginGoogle').onclick = () => handleLogin('google');
