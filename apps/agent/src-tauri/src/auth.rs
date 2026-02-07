@@ -67,6 +67,112 @@ const LINEAR: ProviderConfig = ProviderConfig {
 
 const REDIRECT_URL: &str = "http://localhost:12345/callback";
 
+// Elegant success page HTML matching FlowSight design
+const SUCCESS_HTML: &str = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowSight - Login Successful</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fafafa;
+    }
+    .container {
+      text-align: center;
+      padding: 48px;
+      max-width: 420px;
+    }
+    .logo {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .check-icon {
+      width: 80px;
+      height: 80px;
+      margin: 24px auto;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 40px rgba(34, 197, 94, 0.3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .check-icon svg {
+      width: 40px;
+      height: 40px;
+      stroke: white;
+      stroke-width: 3;
+      fill: none;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 40px rgba(34, 197, 94, 0.3); }
+      50% { transform: scale(1.05); box-shadow: 0 0 60px rgba(34, 197, 94, 0.5); }
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    p {
+      color: #a1a1aa;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .hint {
+      margin-top: 32px;
+      padding: 16px 24px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      font-size: 13px;
+      color: #71717a;
+    }
+    .close-btn {
+      margin-top: 24px;
+      padding: 12px 32px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .close-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">FlowSight</div>
+    <div class="check-icon">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <h1>Login Successful!</h1>
+    <p>Your account has been connected successfully.</p>
+    <div class="hint">You can now close this tab and return to the FlowSight app.</div>
+    <button class="close-btn" onclick="window.close()">Close Tab</button>
+  </div>
+</body>
+</html>"#;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthUser {
     pub id: String,
@@ -242,9 +348,8 @@ fn listen_for_callback() {
             match exchange_code(&provider, code, &verifier) {
                 Ok(session) => {
                     save_auth_session(&session);
-                    let _ = request.respond(Response::from_string(
-                        "✅ Login successful! You can close this tab and return to FlowSight."
-                    ));
+                    let _ = request.respond(Response::from_string(SUCCESS_HTML)
+                        .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
                     break;
                 }
                 Err(e) => {
@@ -317,9 +422,8 @@ fn listen_for_supabase_callback() {
                             provider,
                         };
                         save_auth_session(&session);
-                        let _ = request.respond(Response::from_string(
-                            "<html><body><h1>✅ Login successful!</h1><p>You can close this tab and return to FlowSight.</p></body></html>"
-                        ).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
+                        let _ = request.respond(Response::from_string(SUCCESS_HTML)
+                            .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
                         break;
                     }
                     Err(e) => {
