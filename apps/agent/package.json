@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.0.0",
+    "jspdf": "^4.1.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6",

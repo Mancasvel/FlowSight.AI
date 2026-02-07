@@ -414,6 +414,101 @@ pub fn get_activity_log(state: State<'_, AgentState>, limit: Option<u32>) -> Res
     Ok(state.lock().unwrap().as_ref().map(|a| a.get_recent(limit.unwrap_or(20))).unwrap_or_default())
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DayHistoryEntry {
+    pub time: String,
+    pub description: String,
+    pub category: String,
+    pub ticket: Option<String>,
+    pub duration_seconds: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CategoryBreakdown {
+    pub category: String,
+    pub total_seconds: i32,
+    pub count: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TicketBreakdown {
+    pub ticket: String,
+    pub total_seconds: i32,
+    pub count: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TodayHistory {
+    pub entries: Vec<DayHistoryEntry>,
+    pub total_seconds: i32,
+    pub category_breakdown: Vec<CategoryBreakdown>,
+    pub ticket_breakdown: Vec<TicketBreakdown>,
+    pub date: String,
+}
+
+#[tauri::command]
+pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, String> {
+    let agent = state.lock().unwrap();
+    let agent = agent.as_ref().ok_or("Agent not initialized")?;
+    
+    let conn = Connection::open(&agent.db_path).map_err(|e| e.to_string())?;
+    let today = Local::now().format("%Y-%m-%d").to_string();
+    
+    // Get all entries for today
+    let mut stmt = conn.prepare(
+        "SELECT created_at, description, activity_type, jira_ticket_id, duration_seconds 
+         FROM reports 
+         WHERE date(created_at) = date('now', 'localtime')
+         ORDER BY created_at DESC"
+    ).map_err(|e| e.to_string())?;
+    
+    let entries: Vec<DayHistoryEntry> = stmt.query_map([], |row| {
+        Ok(DayHistoryEntry {
+            time: row.get::<_, String>(0).unwrap_or_default(),
+            description: row.get::<_, String>(1).unwrap_or_default(),
+            category: row.get::<_, String>(2).unwrap_or_default(),
+            ticket: row.get::<_, Option<String>>(3).unwrap_or(None),
+            duration_seconds: row.get::<_, i32>(4).unwrap_or(30),
+        })
+    }).map_err(|e| e.to_string())?
+    .filter_map(|r| r.ok())
+    .collect();
+    
+    // Calculate total
+    let total_seconds: i32 = entries.iter().map(|e| e.duration_seconds).sum();
+    
+    // Category breakdown
+    let mut cat_map: std::collections::HashMap<String, (i32, i32)> = std::collections::HashMap::new();
+    for e in &entries {
+        let entry = cat_map.entry(e.category.clone()).or_insert((0, 0));
+        entry.0 += e.duration_seconds;
+        entry.1 += 1;
+    }
+    let category_breakdown: Vec<CategoryBreakdown> = cat_map.into_iter()
+        .map(|(category, (total_seconds, count))| CategoryBreakdown { category, total_seconds, count })
+        .collect();
+    
+    // Ticket breakdown
+    let mut ticket_map: std::collections::HashMap<String, (i32, i32)> = std::collections::HashMap::new();
+    for e in &entries {
+        if let Some(ref ticket) = e.ticket {
+            let entry = ticket_map.entry(ticket.clone()).or_insert((0, 0));
+            entry.0 += e.duration_seconds;
+            entry.1 += 1;
+        }
+    }
+    let ticket_breakdown: Vec<TicketBreakdown> = ticket_map.into_iter()
+        .map(|(ticket, (total_seconds, count))| TicketBreakdown { ticket, total_seconds, count })
+        .collect();
+    
+    Ok(TodayHistory {
+        entries,
+        total_seconds,
+        category_breakdown,
+        ticket_breakdown,
+        date: today,
+    })
+}
 
 #[tauri::command]
 pub fn check_ollama() -> Result<serde_json::Value, String> {

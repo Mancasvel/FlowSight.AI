@@ -2,19 +2,27 @@ use reqwest::blocking::Client;
 use std::thread;
 use std::time::Duration;
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 
 const SYNC_INTERVAL_MINS: u64 = 10;
-// Hardcoded for Local Pivot (Env macros fail in this setup without dotenv crate)
 const SUPABASE_URL: &str = "https://dzpyrdxelcgfpmcdojvb.supabase.co";
 const SUPABASE_KEY: &str = "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ";
+
+// User session stored locally after login
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSession {
+    pub user_id: String,
+    pub team_id: Option<String>,
+    pub access_token: String,
+    pub email: String,
+}
 
 pub fn start_sync_thread(db_path: std::path::PathBuf) {
     let path_clone = db_path.clone();
     thread::spawn(move || {
         loop {
-             // ... existing loop
-             thread::sleep(Duration::from_secs(SYNC_INTERVAL_MINS * 60));
-             let _ = perform_sync(&path_clone);
+            thread::sleep(Duration::from_secs(SYNC_INTERVAL_MINS * 60));
+            let _ = perform_sync(&path_clone);
         }
     });
 }
@@ -28,11 +36,68 @@ pub fn force_sync_now() -> Result<String, String> {
     }
 }
 
+// Get user session from local config
+fn get_user_session(conn: &Connection) -> Option<UserSession> {
+    let mut stmt = conn.prepare(
+        "SELECT value FROM config WHERE key = 'user_session'"
+    ).ok()?;
+    
+    let json_str: String = stmt.query_row([], |row| row.get(0)).ok()?;
+    serde_json::from_str(&json_str).ok()
+}
+
+// Save user session to local config
+#[tauri::command]
+pub fn save_user_session(user_id: String, team_id: Option<String>, access_token: String, email: String) -> Result<(), String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    let session = UserSession { user_id, team_id, access_token, email };
+    let json = serde_json::to_string(&session).map_err(|e| e.to_string())?;
+    
+    conn.execute(
+        "INSERT OR REPLACE INTO config (key, value) VALUES ('user_session', ?1)",
+        [&json]
+    ).map_err(|e| e.to_string())?;
+    
+    println!("[Sync] User session saved for: {}", session.email);
+    Ok(())
+}
+
+// Clear user session (logout)
+#[tauri::command]
+pub fn clear_user_session() -> Result<(), String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    conn.execute("DELETE FROM config WHERE key = 'user_session'", [])
+        .map_err(|e| e.to_string())?;
+    
+    println!("[Sync] User session cleared");
+    Ok(())
+}
+
+// Check if user is logged in
+#[tauri::command]
+pub fn get_current_user() -> Result<Option<UserSession>, String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    Ok(get_user_session(&conn))
+}
+
 fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
+    // Check if user is logged in
+    let session = match get_user_session(&conn) {
+        Some(s) => s,
+        None => {
+            println!("[CloudSync] No user session found. Sync disabled.");
+            return Ok("Not logged in - sync disabled".to_string());
+        }
+    };
+    
     // 1. Get Unsynced Reports
-    // Note: DB column is "activity_type", but struct usually expects category. We alias it.
     let mut stmt = conn.prepare(
         "SELECT id, description, activity_type, duration_seconds, jira_ticket_id FROM reports WHERE synced = 0 LIMIT 50"
     ).map_err(|e| e.to_string())?;
@@ -76,15 +141,15 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         return Ok("No new activity to report.".to_string());
     }
 
-    // 2. Generate Summary with Qwen (from Text Logs only)
-    println!("[CloudSync] Summarizing text:\n{}", full_text); // DEBUG
-    let summary = summarize_with_qwen(&full_text).unwrap_or("Summary generation failed".to_string());
+    // 2. Generate Summary with Qwen
+    println!("[CloudSync] Summarizing {} reports...", ids.len());
+    let summary = summarize_with_qwen(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
     
-    // 3. Upload to Supabase (Best Effort)
-    match upload_session(total_duration, &summary, &categories, &tickets) {
+    // 3. Upload to Supabase with user authentication
+    match upload_session(&session, total_duration, &summary, &categories, &tickets) {
         Ok(_) => {
-            println!("[CloudSync] Upload success.");
-            // 4. Mark Synced ONLY if upload succeeded
+            println!("[CloudSync] Upload success for user: {}", session.email);
+            // Mark as synced
             let id_list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             let _ = conn.execute(
                 &format!("UPDATE reports SET synced = 1 WHERE id IN ({})", id_list),
@@ -92,11 +157,13 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
             );
         },
         Err(e) => {
-            println!("[CloudSync] Upload failed (Supabase 404 or other): {}", e);
-            println!("[CloudSync] Continuing locally...");
-            // We DO NOT mark as synced so we try again later? 
-            // Or do we mark as synced to avoid infinite retries of same data?
-            // For now, let's NOT mark synced so it retries when cloud is fixed.
+            // Check for license errors
+            if e.contains("License expired") || e.contains("403") {
+                println!("[CloudSync] LICENSE EXPIRED - Sync blocked");
+                return Err("License expired. Contact your PM to renew.".to_string());
+            }
+            
+            println!("[CloudSync] Upload failed: {}", e);
             return Ok(format!("(Cloud Upload Failed: {})\n\nLOCAL SUMMARY:\n{}", e, summary));
         }
     }
@@ -106,7 +173,11 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
 }
 
 fn summarize_with_qwen(text: &str) -> Result<String, String> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+        
     let prompt = format!("You are an Activity Summarizer. Below is a list of tasks performed by a developer.
     
     TASKS:
@@ -116,7 +187,7 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
     - Write a short 1-paragraph summary of what was actually done.
     - ONLY use the information provided in the TASKS list.
     - Do NOT invent or assume any other work.
-    - If the logs are about 'Fixing Agent Start Logic', say that.
+    - Be concise but specific.
     ", text);
     
     let body = serde_json::json!({
@@ -124,7 +195,11 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
         "messages": [
             { "role": "user", "content": prompt }
         ],
-        "stream": false
+        "stream": false,
+        "options": {
+            "temperature": 0.3,
+            "num_predict": 200
+        }
     });
     
     let resp = client.post("http://localhost:11434/api/chat")
@@ -134,7 +209,6 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
         
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
     
-    // Parse Logic with Thinking Fallback
     let msg = &json["message"];
     let content = msg["content"].as_str().unwrap_or("");
     let thinking = msg["thinking"].as_str().unwrap_or("");
@@ -145,7 +219,6 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
         println!("[CloudSync] Using THINKING field for summary.");
         thinking.to_string()
     } else {
-        println!("[CloudSync] Empty summary. JSON: {:?}", json);
         return Err("Model returned empty summary.".to_string());
     };
     
@@ -153,31 +226,91 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
 }
 
 fn upload_session(
+    session: &UserSession,
     duration: i32, 
     summary: &str, 
     categories: &std::collections::HashMap<String, i32>,
     tickets: &std::collections::HashMap<String, i32>
-) -> Result<(), reqwest::Error> {
+) -> Result<(), String> {
     let client = Client::new();
     let url = format!("{}/rest/v1/work_sessions", SUPABASE_URL); 
     
     let body = serde_json::json!({
-        "user_id": whoami::username(),
+        "user_id": session.user_id,
+        "team_id": session.team_id,
         "duration_seconds": duration,
         "summary": summary,
         "category_breakdown": categories,
         "jira_breakdown": tickets,
+        "session_date": chrono::Local::now().format("%Y-%m-%d").to_string(),
         "created_at": chrono::Utc::now().to_rfc3339()
     });
 
-    client.post(&url)
+    let resp = client.post(&url)
         .header("apikey", SUPABASE_KEY)
-        .header("Authorization", format!("Bearer {}", SUPABASE_KEY))
+        .header("Authorization", format!("Bearer {}", &session.access_token))
         .header("Content-Type", "application/json")
         .header("Prefer", "return=minimal")
         .json(&body)
-        .send()?
-        .error_for_status()?;
+        .send()
+        .map_err(|e| e.to_string())?;
+    
+    let status = resp.status();
+    
+    if status.as_u16() == 403 {
+        return Err("License expired or invalid".to_string());
+    }
+    
+    if !status.is_success() {
+        let body_text = resp.text().unwrap_or_default();
+        return Err(format!("HTTP {}: {}", status, body_text));
+    }
         
+    Ok(())
+}
+
+// Upload individual activity report (for granular tracking)
+#[tauri::command]
+pub fn upload_activity_report(
+    description: String,
+    category: String,
+    jira_ticket_id: Option<String>,
+    duration_seconds: i32
+) -> Result<(), String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    let session = get_user_session(&conn)
+        .ok_or("Not logged in")?;
+    
+    let client = Client::new();
+    let url = format!("{}/rest/v1/activity_reports", SUPABASE_URL);
+    
+    let body = serde_json::json!({
+        "user_id": session.user_id,
+        "team_id": session.team_id,
+        "description": description,
+        "category": category,
+        "jira_ticket_id": jira_ticket_id,
+        "duration_seconds": duration_seconds,
+        "captured_at": chrono::Utc::now().to_rfc3339()
+    });
+    
+    let resp = client.post(&url)
+        .header("apikey", SUPABASE_KEY)
+        .header("Authorization", format!("Bearer {}", &session.access_token))
+        .header("Content-Type", "application/json")
+        .header("Prefer", "return=minimal")
+        .json(&body)
+        .send()
+        .map_err(|e| e.to_string())?;
+    
+    if resp.status().as_u16() == 403 {
+        return Err("License expired or invalid".to_string());
+    }
+    
+    resp.error_for_status()
+        .map_err(|e| e.to_string())?;
+    
     Ok(())
 }
