@@ -943,7 +943,7 @@
       await invoke('update_config', {
         config: {
           devName: currentUser.name || 'Guest',
-          captureInterval: 30000,
+          captureInterval: 60000,
           visionModel: 'qwen3-vl:2b'
         }
       });
@@ -967,7 +967,7 @@
         document.getElementById('statStatus').style.color = 'hsl(142.1 76.2% 36.3%)';
 
         captureAndAnalyze();
-        const intervalMs = 30000;
+        const intervalMs = 60000;
         monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
         btn.innerHTML = originalText;
       } catch (e) {
