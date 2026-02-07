@@ -965,16 +965,18 @@
               linkedProviders.jira = true;
               statusEl.textContent = '✓ Linked';
               btn.classList.add('button-success');
+              localStorage.setItem('flowsight_jira_linked', 'true');
               showToast('Jira linked successfully!', 'success');
-              refreshTasks();
+              loadJiraTasks();
               return;
             } else if (provider === 'linear') {
               await invoke('fetch_linear_tasks');
               linkedProviders.linear = true;
               statusEl.textContent = '✓ Linked';
               btn.classList.add('button-success');
+              localStorage.setItem('flowsight_linear_linked', 'true');
               showToast('Linear linked successfully!', 'success');
-              refreshTasks();
+              loadLinearTasks();
               return;
             }
           } catch (e) {
@@ -1038,6 +1040,97 @@
       document.getElementById('teamCodeInput').value = currentTeamCode;
       document.getElementById('teamStatus').innerHTML = `✓ Team code: <strong>${currentTeamCode}</strong>`;
     }
+
+    // ===== TASK LOADING FUNCTIONS =====
+    async function loadJiraTasks() {
+      const select = document.getElementById('jiraSelect');
+      const refreshBtn = document.getElementById('refreshJiraBtn');
+
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳';
+
+      try {
+        const tasks = await invoke('fetch_jira_tasks');
+        console.log('[UI] Jira tasks:', tasks);
+
+        // Clear existing options except first two
+        while (select.options.length > 2) {
+          select.remove(2);
+        }
+
+        // Add tasks
+        if (tasks && tasks.length > 0) {
+          tasks.forEach(task => {
+            const opt = document.createElement('option');
+            opt.value = task.key;
+            opt.textContent = `${task.key}: ${task.summary}`;
+            select.appendChild(opt);
+          });
+
+          // Mark Jira as linked
+          linkedProviders.jira = true;
+          document.getElementById('jiraLinkStatus').textContent = '✓ Linked';
+          document.getElementById('linkJiraBtn').classList.add('button-success');
+          localStorage.setItem('flowsight_jira_linked', 'true');
+        }
+      } catch (e) {
+        console.error('[UI] Failed to load Jira tasks:', e);
+        // Don't show error toast if just not linked
+      }
+
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = '↻';
+    }
+
+    async function loadLinearTasks() {
+      const select = document.getElementById('jiraSelect'); // Using same dropdown for now
+
+      try {
+        const tasks = await invoke('fetch_linear_tasks');
+        console.log('[UI] Linear tasks:', tasks);
+
+        if (tasks && tasks.length > 0) {
+          tasks.forEach(task => {
+            const opt = document.createElement('option');
+            opt.value = task.id;
+            opt.textContent = `${task.identifier || task.id}: ${task.title}`;
+            select.appendChild(opt);
+          });
+
+          // Mark Linear as linked
+          linkedProviders.linear = true;
+          document.getElementById('linearLinkStatus').textContent = '✓ Linked';
+          document.getElementById('linkLinearBtn').classList.add('button-success');
+          localStorage.setItem('flowsight_linear_linked', 'true');
+        }
+      } catch (e) {
+        console.error('[UI] Failed to load Linear tasks:', e);
+      }
+    }
+
+    // Restore linked status from localStorage
+    if (localStorage.getItem('flowsight_jira_linked') === 'true') {
+      linkedProviders.jira = true;
+      document.getElementById('jiraLinkStatus').textContent = '✓ Linked';
+      document.getElementById('linkJiraBtn').classList.add('button-success');
+    }
+    if (localStorage.getItem('flowsight_linear_linked') === 'true') {
+      linkedProviders.linear = true;
+      document.getElementById('linearLinkStatus').textContent = '✓ Linked';
+      document.getElementById('linkLinearBtn').classList.add('button-success');
+    }
+
+    // Refresh button handler
+    document.getElementById('refreshJiraBtn').onclick = async () => {
+      await loadJiraTasks();
+      await loadLinearTasks();
+    };
+
+    // Auto-load tasks on init if already linked
+    setTimeout(async () => {
+      if (linkedProviders.jira) await loadJiraTasks();
+      if (linkedProviders.linear) await loadLinearTasks();
+    }, 1000);
 
     // Login button handlers (fallback if inline onclick fails)
     document.getElementById('loginGoogle').onclick = () => handleLogin('google');
