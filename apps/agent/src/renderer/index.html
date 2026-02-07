@@ -850,19 +850,38 @@
 
       try {
         await invoke('start_auth', { provider });
-        // Wait for callback
-        setTimeout(async () => {
+
+        // Poll for auth success (user may take time in browser)
+        let attempts = 0;
+        const maxAttempts = 30; // 60 seconds max
+
+        const pollAuth = async () => {
+          attempts++;
+          btn.innerHTML = `<span class="loading"></span> Waiting for login... (${attempts}/${maxAttempts})`;
+
           await checkAuth();
           if (authSession) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
             await initMainApp();
+            return;
           }
-        }, 3000);
+
+          if (attempts < maxAttempts) {
+            setTimeout(pollAuth, 2000);
+          } else {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            showToast("Login timeout - please try again", "error");
+          }
+        };
+
+        setTimeout(pollAuth, 2000);
       } catch (e) {
         alert("Login failed: " + e);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
-
-      btn.disabled = false;
-      btn.innerHTML = originalText;
     }
 
     async function handleLogout() {
