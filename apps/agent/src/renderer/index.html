@@ -596,6 +596,52 @@
       border-radius: 50%;
       background: hsl(var(--muted-foreground));
     }
+
+    /* Progress Bar for Setup */
+    .setup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(4px);
+      z-index: 3000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .progress-container {
+      width: 100%;
+      max-width: 280px;
+      height: 8px;
+      background: hsl(var(--secondary));
+      border-radius: 4px;
+      margin: 15px 0;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: hsl(var(--primary));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .setup-status {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .setup-subtext {
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+    }
   </style>
 </head>
 
@@ -800,6 +846,15 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- SETUP OVERLAY -->
+  <div id="setupOverlay" class="setup-overlay" style="display: none;">
+    <div class="setup-status" id="setupStatus">Configurando entorno de IA...</div>
+    <div class="progress-container">
+      <div class="progress-bar" id="setupProgress"></div>
+    </div>
+    <div class="setup-subtext" id="setupSubtext">Esto tomará unos minutos</div>
+  </div>
+
   <!-- HISTORY MODAL -->
   <div id="historyModal" class="modal-overlay" style="display: none;">
     <div class="modal-content">
@@ -830,6 +885,7 @@
     console.log('[FlowSight] Script starting...');
 
     import { invoke } from '@tauri-apps/api/core';
+    import { listen } from '@tauri-apps/api/event';
     import { jsPDF } from 'jspdf';
 
     console.log('[FlowSight] Imports loaded successfully');
@@ -1019,16 +1075,16 @@
       statusEl.textContent = 'Validating code...';
 
       try {
-        // Save team code locally for now
-        localStorage.setItem('flowsight_team_code', code);
-        currentTeamCode = code;
+        const result = await invoke('join_team', { token: code });
 
-        // TODO: Validate with backend when PM dashboard is ready
-        statusEl.innerHTML = `✓ Team code saved: <strong>${code}</strong>`;
-        showToast('Team code saved!', 'success');
+        statusEl.innerHTML = `✓ Joined team. ID: <strong>${result.team_id}</strong>`;
+        showToast('Successfully joined the team!', 'success');
+
+        // Refresh session/tasks if needed
+        await checkAuth();
       } catch (e) {
-        statusEl.textContent = 'Failed to save: ' + e;
-        showToast('Failed: ' + e, 'error');
+        statusEl.textContent = 'Failed to join: ' + e;
+        showToast('Error: ' + e, 'error');
       }
 
       btn.disabled = false;
@@ -1188,25 +1244,85 @@
       const btn = document.getElementById('startBtn');
       const originalText = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Starting...';
+      btn.innerHTML = '<span class="loading"></span> Iniciando...';
+
+      const overlay = document.getElementById('setupOverlay');
+      const progress = document.getElementById('setupProgress');
+      const statusText = document.getElementById('setupStatus');
+      const subtext = document.getElementById('setupSubtext');
+
+      const showStep = (status, sub = "Esto tomará unos minutos", pct = 0) => {
+        overlay.style.display = 'flex';
+        statusText.textContent = status;
+        subtext.textContent = sub;
+        progress.style.width = pct + '%';
+      };
 
       try {
-        const startResult = await invoke('start_ollama');
-        console.log("[Agent] Ollama Start Request:", startResult);
-        await new Promise(r => setTimeout(r, 2000));
-        await saveConfig();
+        // 1. Check status
+        let status = await invoke('check_ollama');
+
+        // 2. Install Ollama if missing
+        if (!status.installed) {
+          showStep("Instalando Ollama...", "Descargando e instalando componentes básicos", 10);
+          await invoke('install_ollama');
+          // Wait a bit for install to finish and registry to update
+          await new Promise(r => setTimeout(r, 5000));
+        }
+
+        // 3. Start Service
+        if (!status.online) {
+          showStep("Iniciando servicio de IA...", "Arrancando Ollama en segundo plano", 30);
+          await invoke('start_ollama');
+
+          // Poll until online
+          let polls = 0;
+          while (polls < 15) {
+            await new Promise(r => setTimeout(r, 2000));
+            status = await invoke('check_ollama');
+            if (status.online) break;
+            polls++;
+          }
+          if (!status.online) throw new Error("No se pudo iniciar el servicio de Ollama");
+        }
+
+        // 4. Pull Model
+        if (!status.hasVisionModel) {
+          showStep("Instalando modelo de IA...", "Esto tomará unos minutos. Descargando (~2GB)...", 50);
+
+          // Setup progress listener
+          const unlisten = await listen('ollama-progress', (event) => {
+            if (event.payload.status) {
+              subtext.textContent = event.payload.status;
+              const match = event.payload.status.match(/(\d+)%/);
+              if (match) {
+                const p = 50 + (parseInt(match[1]) / 2); // 50-100%
+                progress.style.width = p + '%';
+              }
+            }
+          });
+
+          await invoke('pull_model', { model: 'qwen3-vl:2b' });
+          unlisten();
+        }
+
+        // Finalize
+        overlay.style.display = 'none';
+        showToast("Entorno de IA listo", "success");
 
         isMonitoring = true;
         document.getElementById('statStatus').textContent = 'On';
         document.getElementById('statStatus').style.color = 'hsl(142.1 76.2% 36.3%)';
 
         captureAndAnalyze();
-        const intervalMs = 60000;
-        monitoringInterval = setInterval(captureAndAnalyze, intervalMs);
+        monitoringInterval = setInterval(captureAndAnalyze, 60000);
         btn.innerHTML = originalText;
+        ollamaConfirmedOnline = true;
+        await checkOllama();
       } catch (e) {
+        overlay.style.display = 'none';
         console.error("Start Failed:", e);
-        alert("Failed to start: " + e);
+        showToast("Error: " + e, "error");
         btn.innerHTML = originalText;
       }
       btn.disabled = false;

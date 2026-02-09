@@ -510,10 +510,60 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
     })
 }
 
+fn get_ollama_bin() -> String {
+    use std::process::Command;
+    
+    // 1. Try plain "ollama" (if in PATH)
+    if let Ok(o) = Command::new(if cfg!(windows) { "where" } else { "which" }).arg("ollama").output() {
+        if o.status.success() {
+            return "ollama".to_string();
+        }
+    }
+
+    // 2. Common Windows paths if not in PATH
+    if cfg!(windows) {
+        let mut paths = Vec::new();
+        
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            paths.push(format!(r"{}\Programs\Ollama\ollama.exe", local_app_data));
+        }
+        
+        if let Ok(user_profile) = std::env::var("USERPROFILE") {
+            paths.push(format!(r"{}\AppData\Local\Programs\Ollama\ollama.exe", user_profile));
+        }
+
+        paths.push(r"C:\Program Files\Ollama\ollama.exe".to_string());
+        paths.push(r"C:\Users\manue\AppData\Local\Programs\Ollama\ollama.exe".to_string()); // Hardcoded as fallback since we saw it there
+
+        for p in paths {
+            if std::path::Path::new(&p).exists() {
+                println!("[Ollama] Found binary at: {}", p);
+                return p;
+            }
+        }
+    }
+
+    println!("[Ollama] Using fallback 'ollama' command");
+    "ollama".to_string()
+}
+
 #[tauri::command]
 pub fn check_ollama() -> Result<serde_json::Value, String> {
+    let ollama_bin = get_ollama_bin();
+    let has_exe = if ollama_bin == "ollama" {
+        // Double check via command if it's just "ollama"
+        use std::process::Command;
+        if cfg!(windows) {
+            Command::new("where").arg("ollama").output().map(|o| o.status.success()).unwrap_or(false)
+        } else {
+            Command::new("which").arg("ollama").output().map(|o| o.status.success()).unwrap_or(false)
+        }
+    } else {
+        std::path::Path::new(&ollama_bin).exists()
+    };
+
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(2))
         .build().map_err(|e| e.to_string())?;
     
     match client.get("http://localhost:11434/api/tags").send() {
@@ -523,12 +573,27 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
                 .map(|arr| arr.iter().filter_map(|m| m["name"].as_str().map(String::from)).collect())
                 .unwrap_or_default();
             
-            // Allow llava, moondream, OR qwen (assumed to be VL if selected, or just qwen2-vl explicitly)
-            let has_vision = models.iter().any(|m| m.contains("llava") || m.contains("moondream") || m.contains("qwen"));
+            let has_vision = models.iter().any(|m| {
+                let m_lower = m.to_lowercase();
+                m_lower.contains("llava") || 
+                m_lower.contains("moondream") || 
+                (m_lower.contains("qwen") && m_lower.contains("vl"))
+            });
             
-            Ok(serde_json::json!({"online": true, "models": models, "hasVisionModel": has_vision}))
+            println!("[Ollama] Full models list: {:?}", models);
+            println!("[Ollama] Has vision model (qwen*vl): {}", has_vision);
+            
+            Ok(serde_json::json!({
+                "online": true, 
+                "installed": true,
+                "models": models, 
+                "hasVisionModel": has_vision
+            }))
         }
-        _ => Ok(serde_json::json!({"online": false}))
+        _ => Ok(serde_json::json!({
+            "online": false,
+            "installed": has_exe
+        }))
     }
 }
 
@@ -536,70 +601,100 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
 pub fn install_ollama() -> Result<serde_json::Value, String> {
     use std::process::Command;
     
-    // Check if Ollama is already installed
-    let check = if cfg!(windows) {
-        Command::new("where").arg("ollama").output()
-    } else {
-        Command::new("which").arg("ollama").output()
-    };
-    
-    if let Ok(output) = check {
+    if cfg!(windows) {
+        // Use winget for silent install
+        let output = Command::new("winget")
+            .args(["install", "Ollama.Ollama", "--silent", "--accept-package-agreements", "--accept-source-agreements"])
+            .output()
+            .map_err(|e| format!("Failed to run winget: {}", e))?;
+        
         if output.status.success() {
-            return Ok(serde_json::json!({"installed": true, "message": "Ollama already installed"}));
+            Ok(serde_json::json!({"success": true, "message": "Ollama installed successfully"}))
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("Winget failed: {}", stderr))
         }
-    }
-    
-    // Open download page (safest cross-platform approach)
-    let url = "https://ollama.ai/download";
-    let _ = if cfg!(windows) {
-        Command::new("cmd").args(["/c", "start", url]).spawn()
-    } else if cfg!(target_os = "macos") {
-        Command::new("open").arg(url).spawn()
     } else {
-        Command::new("xdg-open").arg(url).spawn()
-    };
-    
-    Ok(serde_json::json!({
-        "installed": false, 
-        "message": "Opening Ollama download page. Please install and restart."
-    }))
+        // For non-windows, still open the link (manual)
+        let url = "https://ollama.ai/download";
+        let _ = if cfg!(target_os = "macos") {
+            Command::new("open").arg(url).spawn()
+        } else {
+            Command::new("xdg-open").arg(url).spawn()
+        };
+        Ok(serde_json::json!({
+            "success": false, 
+            "message": "Manual installation required on this OS. Opening download page."
+        }))
+    }
+}
+
+#[derive(Serialize, Clone)]
+struct ProgressPayload {
+    status: String,
+    completed: Option<u64>,
+    total: Option<u64>,
 }
 
 #[tauri::command]
-pub fn pull_model(model: String) -> Result<serde_json::Value, String> {
-    use std::process::Command;
-    
-    let output = Command::new("ollama")
+pub async fn pull_model(window: tauri::Window, model: String) -> Result<serde_json::Value, String> {
+    use tauri::Emitter;
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+
+    let ollama_bin = get_ollama_bin();
+    let mut child = Command::new(&ollama_bin)
         .args(["pull", &model])
-        .output()
-        .map_err(|e| format!("Failed to run ollama: {}", e))?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn ollama ({}): {}", ollama_bin, e))?;
+
+    let mut stderr_content = String::new();
+    let stderr = child.stderr.take().unwrap();
+    let reader = BufReader::new(stderr);
+
+    for line in reader.lines() {
+        if let Ok(l) = line {
+            stderr_content.push_str(&l);
+            stderr_content.push('\n');
+            // Ollama prints progress to stderr. It's not stable JSON, but we can try to emit it as text
+            let _ = window.emit("ollama-progress", ProgressPayload {
+                status: l.clone(),
+                completed: None,
+                total: None,
+            });
+        }
+    }
+
+    let status = child.wait().map_err(|e| format!("Ollama failed: {}", e))?;
     
-    if output.status.success() {
+    if status.success() {
         Ok(serde_json::json!({"success": true, "model": model}))
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Failed to pull {}: {}", model, stderr))
+        Err(format!("Failed to pull model: {}", stderr_content))
     }
 }
 
 #[tauri::command]
 pub fn start_ollama() -> Result<serde_json::Value, String> {
     use std::process::Command;
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+    
+    let ollama_bin = get_ollama_bin();
     
     // Try to start Ollama in background
-    let result = if cfg!(windows) {
-        Command::new("cmd")
-            .args(["/c", "start", "/b", "ollama", "serve"])
-            .spawn()
-    } else {
-        Command::new("ollama")
-            .arg("serve")
-            .spawn()
-    };
+    let mut cmd = Command::new(&ollama_bin);
+    cmd.arg("serve");
     
-    match result {
+    // Ensure no window on Windows
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    
+    match cmd.spawn() {
         Ok(_) => Ok(serde_json::json!({"started": true})),
-        Err(e) => Err(format!("Failed to start Ollama: {}", e))
+        Err(e) => Err(format!("Failed to start Ollama ({}): {}", ollama_bin, e))
     }
 }
 

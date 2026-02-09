@@ -40,6 +40,7 @@ pub fn run() {
             sync::clear_user_session,
             sync::get_current_user,
             sync::upload_activity_report,
+            sync::join_team,
             // Auth commands
             auth::start_auth,
             auth::get_auth_session,
