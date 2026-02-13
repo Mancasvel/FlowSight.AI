@@ -776,6 +776,13 @@
         </div>
         <div id="teamStatus" style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 4px;"></div>
       </div>
+
+      <div class="form-group" id="teamSelectorGroup" style="display: none;">
+        <label class="label">Active Team</label>
+        <select id="teamSelect" class="select">
+          <option value="">No team selected</option>
+        </select>
+      </div>
     </div>
 
     <!-- Monitoring Card -->
@@ -935,7 +942,104 @@
       if (authSession && authSession.provider === 'jira') {
         refreshJira();
       }
+
+      // Load user teams
+      loadUserTeams();
+
+      // Restore linked integrations (Jira/Linear)
+      restoreLinkedProviders();
     }
+
+    // ===== RESTORE LINKED PROVIDERS ON STARTUP =====
+    async function restoreLinkedProviders() {
+      // Jira
+      if (localStorage.getItem('flowsight_jira_linked') === 'true') {
+        try {
+          const profile = await invoke('fetch_jira_profile');
+          linkedProviders.jira = true;
+          const statusEl = document.getElementById('jiraLinkStatus');
+          const btn = document.getElementById('linkJiraBtn');
+          if (statusEl) statusEl.textContent = '✓ Linked';
+          if (btn) btn.classList.add('button-success');
+          console.log('[Jira] Restored linked session for:', profile.display_name);
+          loadJiraTasks();
+        } catch (e) {
+          console.log('[Jira] Saved link expired or invalid, clearing:', e);
+          localStorage.removeItem('flowsight_jira_linked');
+          linkedProviders.jira = false;
+        }
+      }
+
+      // Linear
+      if (localStorage.getItem('flowsight_linear_linked') === 'true') {
+        try {
+          await invoke('fetch_linear_tasks');
+          linkedProviders.linear = true;
+          const statusEl = document.getElementById('linearLinkStatus');
+          const btn = document.getElementById('linkLinearBtn');
+          if (statusEl) statusEl.textContent = '✓ Linked';
+          if (btn) btn.classList.add('button-success');
+          console.log('[Linear] Restored linked session');
+          loadLinearTasks();
+        } catch (e) {
+          console.log('[Linear] Saved link expired or invalid, clearing:', e);
+          localStorage.removeItem('flowsight_linear_linked');
+          linkedProviders.linear = false;
+        }
+      }
+    }
+
+    // ===== TEAM FUNCTIONS =====
+    async function loadUserTeams() {
+      const select = document.getElementById('teamSelect');
+      const group = document.getElementById('teamSelectorGroup');
+      try {
+        const data = await invoke('get_user_teams');
+        const teams = data.teams || [];
+        const activeId = data.active_team_id || '';
+
+        // Clear options
+        select.innerHTML = '';
+
+        if (teams.length === 0) {
+          group.style.display = 'none';
+          return;
+        }
+
+        // Populate dropdown
+        teams.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.team_id;
+          opt.textContent = `${t.team_id.substring(0, 8)}... (${t.role})`;
+          if (t.team_id === activeId) opt.selected = true;
+          select.appendChild(opt);
+        });
+
+        group.style.display = 'block';
+
+        // Update status
+        const statusEl = document.getElementById('teamStatus');
+        statusEl.innerHTML = `✓ Active team: <strong>${activeId ? activeId.substring(0, 8) + '...' : 'none'}</strong>`;
+
+        console.log('[Team] Loaded', teams.length, 'teams, active:', activeId);
+      } catch (e) {
+        console.log('[Team] Could not load teams:', e);
+        group.style.display = 'none';
+      }
+    }
+
+    // Team dropdown change handler
+    document.getElementById('teamSelect').addEventListener('change', async (e) => {
+      const teamId = e.target.value;
+      if (!teamId) return;
+      try {
+        await invoke('set_active_team', { teamId });
+        document.getElementById('teamStatus').innerHTML = `✓ Active team: <strong>${teamId.substring(0, 8)}...</strong>`;
+        console.log('[Team] Switched active team to:', teamId);
+      } catch (err) {
+        console.error('[Team] Failed to set active team:', err);
+      }
+    });
 
     async function handleLogin(provider) {
       const btn = document.getElementById('login' + provider.charAt(0).toUpperCase() + provider.slice(1));
@@ -1080,8 +1184,8 @@
         statusEl.innerHTML = `✓ Joined team. ID: <strong>${result.team_id}</strong>`;
         showToast('Successfully joined the team!', 'success');
 
-        // Refresh session/tasks if needed
-        await checkAuth();
+        // Refresh teams dropdown
+        await loadUserTeams();
       } catch (e) {
         statusEl.textContent = 'Failed to join: ' + e;
         showToast('Error: ' + e, 'error');

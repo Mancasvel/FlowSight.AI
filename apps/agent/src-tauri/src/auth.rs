@@ -319,10 +319,20 @@ fn start_supabase_oauth(provider: &str) -> Result<String, String> {
 }
 
 fn listen_for_callback() {
-    let server = match Server::http("0.0.0.0:12345") {
-        Ok(s) => s,
-        Err(_) => {
-            println!("[Auth] Port 12345 busy, existing listener will handle callback");
+    let mut server_opt = None;
+    for attempt in 0..5 {
+        match Server::http("0.0.0.0:12345") {
+            Ok(s) => { server_opt = Some(s); break; }
+            Err(_) => {
+                println!("[Auth] Port 12345 busy (attempt {}), retrying...", attempt + 1);
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    }
+    let server = match server_opt {
+        Some(s) => s,
+        None => {
+            println!("[Auth] Could not bind port 12345 after 5 attempts");
             return;
         }
     };
@@ -348,6 +358,12 @@ fn listen_for_callback() {
             match exchange_code(&provider, code, &verifier) {
                 Ok(session) => {
                     save_auth_session(&session);
+                    
+                    // For Jira: also save provider-specific tokens so jira.rs can find them
+                    if provider == "jira" {
+                        save_jira_specific_tokens(&session);
+                    }
+                    
                     let _ = request.respond(Response::from_string(SUCCESS_HTML)
                         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
                     break;
@@ -364,10 +380,20 @@ fn listen_for_callback() {
 // Supabase returns tokens in hash fragment (#access_token=...) which browsers don't send to servers
 // So we serve an HTML page that extracts the fragment and redirects with query params
 fn listen_for_supabase_callback() {
-    let server = match Server::http("0.0.0.0:12345") {
-        Ok(s) => s,
-        Err(_) => {
-            println!("[Auth] Port 12345 busy for Supabase callback");
+    let mut server_opt = None;
+    for attempt in 0..5 {
+        match Server::http("0.0.0.0:12345") {
+            Ok(s) => { server_opt = Some(s); break; }
+            Err(_) => {
+                println!("[Auth] Supabase port 12345 busy (attempt {}), retrying...", attempt + 1);
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    }
+    let server = match server_opt {
+        Some(s) => s,
+        None => {
+            println!("[Auth] Could not bind port 12345 for Supabase after 5 attempts");
             return;
         }
     };
@@ -556,6 +582,45 @@ fn get_db_conn() -> Result<Connection, String> {
     Connection::open(db_path).map_err(|e| e.to_string())
 }
 
+// Save Jira-specific tokens so jira.rs functions can find them
+// jira.rs reads from 'jira_access_token', 'jira_refresh_token', 'jira_cloud_id' config keys
+fn save_jira_specific_tokens(session: &AuthSession) {
+    if let Ok(conn) = get_db_conn() {
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES ('jira_access_token', ?1)",
+            [&session.access_token]
+        );
+        if let Some(ref rt) = session.refresh_token {
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES ('jira_refresh_token', ?1)",
+                [rt]
+            );
+        }
+        
+        // Fetch and save Cloud ID (needed for Jira API calls)
+        let http_client = Client::new();
+        match http_client.get("https://api.atlassian.com/oauth/token/accessible-resources")
+            .bearer_auth(&session.access_token)
+            .send()
+        {
+            Ok(resp) => {
+                if let Ok(json) = resp.json::<serde_json::Value>() {
+                    if let Some(cloud_id) = json[0]["id"].as_str() {
+                        let _ = conn.execute(
+                            "INSERT OR REPLACE INTO config (key, value) VALUES ('jira_cloud_id', ?1)",
+                            [cloud_id]
+                        );
+                        println!("[Auth] Saved Jira cloud_id: {}", cloud_id);
+                    }
+                }
+            }
+            Err(e) => println!("[Auth] Could not fetch Jira cloud_id: {}", e),
+        }
+        
+        println!("[Auth] Jira-specific tokens saved for jira.rs compatibility");
+    }
+}
+
 fn save_auth_session(session: &AuthSession) {
     if let Ok(conn) = get_db_conn() {
         let json = serde_json::to_string(session).unwrap_or_default();
@@ -588,7 +653,9 @@ pub fn logout() -> Result<(), String> {
     let conn = get_db_conn()?;
     conn.execute("DELETE FROM config WHERE key = 'auth_session'", [])
         .map_err(|e| e.to_string())?;
-    println!("[Auth] Logged out");
+    conn.execute("DELETE FROM config WHERE key = 'user_session'", [])
+        .map_err(|e| e.to_string())?;
+    println!("[Auth] Logged out (cleared auth_session + user_session)");
     Ok(())
 }
 
@@ -597,13 +664,43 @@ const SUPABASE_KEY: &str = "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ";
 
 #[tauri::command]
 pub fn login_with_code(code: String) -> Result<AuthSession, String> {
-    // Treat the code as a direct access token (JWT)
-    // Validate it against Supabase Auth API
+    // Support both raw JWT tokens and full redirect URLs with hash fragments
+    // e.g., "https://flowsight.site/#access_token=eyJ...&refresh_token=abc&..."
+    let (access_token, refresh_token) = if code.contains("access_token=") {
+        // Parse tokens from URL hash fragment
+        let fragment = if let Some(hash_pos) = code.find('#') {
+            &code[hash_pos + 1..]
+        } else if code.contains("access_token=") {
+            &code[..]
+        } else {
+            return Err("Could not parse URL".to_string());
+        };
+        
+        let params: std::collections::HashMap<String, String> = fragment
+            .split('&')
+            .filter_map(|pair| {
+                let mut parts = pair.splitn(2, '=');
+                Some((parts.next()?.to_string(), parts.next()?.to_string()))
+            })
+            .collect();
+        
+        let at = params.get("access_token")
+            .ok_or("No access_token found in URL")?
+            .clone();
+        let rt = params.get("refresh_token").cloned();
+        
+        println!("[Auth] Extracted tokens from URL (refresh_token: {})", rt.is_some());
+        (at, rt)
+    } else {
+        // Raw JWT token
+        (code, None)
+    };
     
+    // Validate against Supabase Auth API
     let client = Client::new();
     let resp = client.get(format!("{}/auth/v1/user", SUPABASE_URL))
         .header("apikey", SUPABASE_KEY)
-        .header("Authorization", format!("Bearer {}", code))
+        .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .map_err(|e| e.to_string())?;
     
@@ -622,17 +719,18 @@ pub fn login_with_code(code: String) -> Result<AuthSession, String> {
             .unwrap_or("User")
             .to_string(),
         avatar_url: json["user_metadata"]["avatar_url"].as_str().map(String::from),
-        provider: "manual".to_string(),
+        provider: "google".to_string(),
     };
     
     let session = AuthSession {
         user,
-        access_token: code,
-        refresh_token: None, // We don't have refresh token from simple code entry usually
-        provider: "manual".to_string(),
+        access_token,
+        refresh_token,
+        provider: "google".to_string(),
     };
     
     save_auth_session(&session);
+    println!("[Auth] Login with code successful for: {}", session.user.email);
     Ok(session)
 }
 

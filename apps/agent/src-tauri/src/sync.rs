@@ -45,39 +45,66 @@ pub fn force_sync_now() -> Result<String, String> {
 
 // Get user session from local config
 fn get_user_session(conn: &Connection) -> Option<UserSession> {
-    // 1. Try 'user_session' (Internal sync session)
-    let res: Result<String, _> = conn.query_row(
+    // 1. Try 'user_session' (Internal sync session - has team_id)
+    let user_session: Option<UserSession> = conn.query_row(
         "SELECT value FROM config WHERE key = 'user_session'",
         [],
-        |row| row.get(0)
-    );
+        |row| row.get::<_, String>(0)
+    ).ok().and_then(|json_str| serde_json::from_str(&json_str).ok());
     
-    if let Ok(json_str) = res {
-        if let Ok(s) = serde_json::from_str(&json_str) {
-            return Some(s);
-        }
-    }
-    
-    // 2. Fallback to 'auth_session' (OAuth session from auth.rs)
-    let res_auth: Result<String, _> = conn.query_row(
+    // 2. Try 'auth_session' (OAuth session from auth.rs)
+    let auth_session: Option<serde_json::Value> = conn.query_row(
         "SELECT value FROM config WHERE key = 'auth_session'",
         [],
-        |row| row.get(0)
-    );
+        |row| row.get::<_, String>(0)
+    ).ok().and_then(|json_str| serde_json::from_str(&json_str).ok());
     
-    if let Ok(json_str) = res_auth {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json_str) {
-            return Some(UserSession {
-                user_id: v["user"]["id"].as_str()?.to_string(),
-                team_id: None,
-                access_token: v["access_token"].as_str()?.to_string(),
-                refresh_token: v["refresh_token"].as_str().map(|t| t.to_string()),
-                email: v["user"]["email"].as_str()?.to_string(),
-            });
+    match (user_session, auth_session) {
+        // Both exist: only merge if auth_session is from Supabase (google), NOT jira/linear
+        (Some(mut us), Some(auth)) => {
+            let provider = auth["provider"].as_str().unwrap_or("");
+            if provider == "google" || provider == "manual" {
+                if let Some(fresh_token) = auth["access_token"].as_str() {
+                    if fresh_token != us.access_token {
+                        println!("[Sync] Merging fresher Supabase tokens into user_session");
+                        us.access_token = fresh_token.to_string();
+                        if let Some(rt) = auth["refresh_token"].as_str() {
+                            us.refresh_token = Some(rt.to_string());
+                        }
+                        // Persist merged session
+                        let json = serde_json::to_string(&us).unwrap_or_default();
+                        let _ = conn.execute(
+                            "INSERT OR REPLACE INTO config (key, value) VALUES ('user_session', ?1)",
+                            [&json]
+                        );
+                    }
+                }
+            } else {
+                println!("[Sync] Skipping auth_session merge (provider: {})", provider);
+            }
+            Some(us)
         }
+        // Only user_session exists: use as-is
+        (Some(us), None) => Some(us),
+        // Only auth_session exists: build UserSession from it (only if Supabase)
+        (None, Some(v)) => {
+            let provider = v["provider"].as_str().unwrap_or("");
+            if provider == "google" || provider == "manual" {
+                Some(UserSession {
+                    user_id: v["user"]["id"].as_str()?.to_string(),
+                    team_id: None,
+                    access_token: v["access_token"].as_str()?.to_string(),
+                    refresh_token: v["refresh_token"].as_str().map(|t| t.to_string()),
+                    email: v["user"]["email"].as_str()?.to_string(),
+                })
+            } else {
+                println!("[Sync] auth_session is {} (not Supabase), no user_session available", provider);
+                None
+            }
+        }
+        // Neither exists
+        (None, None) => None,
     }
-    
-    None
 }
 
 // Save user session to local config
@@ -389,6 +416,79 @@ pub fn upload_activity_report(
         .map_err(|e| e.to_string())?;
     
     Ok(())
+}
+
+// Get all teams the current user belongs to
+#[tauri::command]
+pub fn get_user_teams() -> Result<serde_json::Value, String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    let session = get_user_session(&conn)
+        .ok_or("Not logged in")?;
+    
+    let client = Client::new();
+    let mut current_token = session.access_token.clone();
+    
+    // Fetch team memberships from Supabase
+    let url = format!(
+        "{}/rest/v1/team_members?user_id=eq.{}&select=team_id,role,joined_at",
+        get_supabase_url(), session.user_id
+    );
+    
+    let mut resp = client.get(&url)
+        .header("apikey", get_supabase_key())
+        .header("Authorization", format!("Bearer {}", current_token))
+        .send()
+        .map_err(|e| e.to_string())?;
+    
+    // Retry on 401/403
+    if resp.status().as_u16() == 401 || resp.status().as_u16() == 403 {
+        if let Ok(new_s) = refresh_supabase_token(&session) {
+            current_token = new_s.access_token.clone();
+            resp = client.get(&url)
+                .header("apikey", get_supabase_key())
+                .header("Authorization", format!("Bearer {}", current_token))
+                .send()
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().unwrap_or_default();
+        return Err(format!("Failed to fetch teams (HTTP {}): {}", status, body));
+    }
+    
+    let teams: Vec<serde_json::Value> = resp.json().map_err(|e| e.to_string())?;
+    let active_team_id = session.team_id.clone();
+    
+    println!("[Team] Found {} team memberships, active: {:?}", teams.len(), active_team_id);
+    
+    Ok(serde_json::json!({
+        "teams": teams,
+        "active_team_id": active_team_id
+    }))
+}
+
+// Set the active team for the current user (persists to SQLite)
+#[tauri::command]
+pub fn set_active_team(team_id: String) -> Result<(), String> {
+    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    
+    let session = get_user_session(&conn)
+        .ok_or("Not logged in")?;
+    
+    println!("[Team] Setting active team to: {}", team_id);
+    
+    save_user_session(
+        session.user_id,
+        Some(team_id),
+        session.access_token,
+        session.refresh_token,
+        session.email
+    )
 }
 
 // Join a team using an invitation token
