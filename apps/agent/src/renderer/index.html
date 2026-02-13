@@ -1593,25 +1593,26 @@
       }
     };
 
+    let isSyncing = false;
+
     async function captureAndAnalyze() {
-      const btn = document.getElementById('captureBtn');
-      const originalBtnHtml = btn ? btn.innerHTML : '';
-
-      // Helper to update button with animation
-      const updateBtn = (text) => {
-        if (btn) btn.innerHTML = `<span class="loading"></span> ${text}`;
-      };
-
-      if (btn) {
-        btn.disabled = true;
-        updateBtn('Capturing...');
+      // Prevent overlapping syncs but DON'T block the UI
+      if (isSyncing) {
+        console.log('[Sync] Already syncing, skipping this cycle');
+        return;
       }
 
-      // Allow UI to update before heavy work
-      await new Promise(r => setTimeout(r, 50));
+      isSyncing = true;
+      const btn = document.getElementById('captureBtn');
+      const statusEl = document.getElementById('statStatus');
 
+      // Show subtle indicator without disabling anything
+      if (btn) btn.innerHTML = '🔄 Syncing...';
+      const prevStatus = statusEl ? statusEl.textContent : '';
+
+      // Fire and forget — don't await at the top level for interval calls
       try {
-        log("Taking Context Snapshot...");
+        log("Taking Context Snapshot (background)...");
 
         let task = "General";
         let jiraTicket = null;
@@ -1624,20 +1625,12 @@
           task = document.getElementById('manualTask').value || "Manual Work";
         }
 
-        // Update status before heavy AI call
-        updateBtn('Analyzing...');
-        await new Promise(r => setTimeout(r, 10));
-
         const snapshot = await invoke('capture_context_snapshot', {
           userTask: task,
           jiraTicket: jiraTicket
         });
 
-        log(`Snapshot description ready: ${snapshot.description.substring(0, 50)}...`);
-        log(`Category: ${snapshot.category}`);
-
-        updateBtn('Saving...');
-        const devName = currentUser.name || 'Developer';
+        log(`Snapshot ready: ${snapshot.description.substring(0, 50)}...`);
 
         await invoke('save_activity', {
           description: snapshot.description,
@@ -1645,19 +1638,20 @@
           jiraTicket: jiraTicket
         });
 
+        const devName = currentUser ? (currentUser.name || 'Developer') : 'Developer';
         addActivityItem(devName, snapshot.description, snapshot.category, jiraTicket);
         document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
 
-        // Show sync notification
         const ticketLabel = jiraTicket ? ` → ${jiraTicket}` : '';
         showToast(`Activity synced${ticketLabel}`, 'success', 2500);
       } catch (e) {
-        console.error(e);
-        log("Error: " + e);
-        showToast('Sync failed', 'error', 3000);
+        console.error('[Sync] Error:', e);
+        log("Sync error: " + e);
+        // Don't show toast for background errors to avoid annoying the user
       }
 
-      if (btn) { btn.disabled = false; btn.innerHTML = '📸 Capture Now'; }
+      isSyncing = false;
+      if (btn) btn.innerHTML = '📸 Capture Now';
     }
 
     document.getElementById('testReportBtn').onclick = async () => {

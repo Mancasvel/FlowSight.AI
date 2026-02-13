@@ -246,55 +246,56 @@ pub struct SnapshotMetadata {
 }
 
 #[tauri::command]
-pub fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Option<String>) -> Result<ContextSnapshot, String> {
-    use crate::context::{get_system_context, get_git_context};
-    use std::path::PathBuf;
+pub async fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Option<String>) -> Result<ContextSnapshot, String> {
+    // Run ALL heavy work on a background thread to avoid blocking the main/UI thread
+    tauri::async_runtime::spawn_blocking(move || {
+        use crate::context::{get_system_context, get_git_context};
+        use std::path::PathBuf;
 
-    // 1. Capture Screen
-    let (base64, path_str) = capture_screen()?;
-    let path = PathBuf::from(&path_str);
+        // 1. Capture Screen
+        let (base64, path_str) = capture_screen()?;
+        let path = PathBuf::from(&path_str);
 
-    // 2. Run Qwen2-VL (Visual Description + Category)
-    // Pass task context to the analysis
-    let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
-    let raw_analysis = analyze_image_with_qwen(&base64, &task_context).unwrap_or_else(|_| "Screen analysis failed. Category: General".to_string());
-    
-    // Parse category from response
-    let (description, category) = parse_analysis(&raw_analysis);
+        // 2. Run Qwen2-VL (Visual Description + Category) — this is the slow part
+        let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
+        let raw_analysis = analyze_image_with_qwen(&base64, &task_context).unwrap_or_else(|_| "Screen analysis failed. Category: General".to_string());
+        
+        // Parse category from response
+        let (description, category) = parse_analysis(&raw_analysis);
 
-    // 3. System Context (Window/App)
-    let sys = get_system_context();
-    
-    // 4. Git Context (Project)
-    let mut git = None;
-    if let Some(_title) = &sys.window_title {
-        let home = dirs::desktop_dir().unwrap_or(PathBuf::from("."));
-        let possible_path = home.join("FlowSight.AI"); 
-        if possible_path.exists() {
-             git = get_git_context(possible_path.to_str().unwrap());
+        // 3. System Context (Window/App)
+        let sys = get_system_context();
+        
+        // 4. Git Context (Project)
+        let mut git = None;
+        if let Some(_title) = &sys.window_title {
+            let home = dirs::desktop_dir().unwrap_or(PathBuf::from("."));
+            let possible_path = home.join("FlowSight.AI"); 
+            if possible_path.exists() {
+                 git = get_git_context(possible_path.to_str().unwrap());
+            }
         }
-    }
-    if git.is_none() {
-        git = get_git_context(".");
-    }
-
-    // McLean Config / Cleanup
-    // Remove the temp file to protect privacy (as per plan)
-    let _ = std::fs::remove_file(&path);
-
-    Ok(ContextSnapshot {
-        vector: vec![], // No vectors anymore
-        dimension: 0,
-        description,
-        category,
-        metadata: SnapshotMetadata {
-            task: jira_ticket.or(user_task),
-            file: sys.file_name,
-            app: sys.app_name,
-            branch: git.and_then(|g| g.branch),
-            language: None,
+        if git.is_none() {
+            git = get_git_context(".");
         }
-    })
+
+        // Cleanup temp file
+        let _ = std::fs::remove_file(&path);
+
+        Ok(ContextSnapshot {
+            vector: vec![],
+            dimension: 0,
+            description,
+            category,
+            metadata: SnapshotMetadata {
+                task: jira_ticket.or(user_task),
+                file: sys.file_name,
+                app: sys.app_name,
+                branch: git.and_then(|g| g.branch),
+                language: None,
+            }
+        })
+    }).await.map_err(|e| format!("Task join error: {}", e))?
 }
 
 // Helper to parse "Category: X" logic
