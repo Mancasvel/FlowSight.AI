@@ -94,6 +94,13 @@ models/
 *.safetensors
 
 # ================================
+# Runtime binaries (llama.cpp DLLs and executables)
+# ================================
+local_llm/bin/*.dll
+local_llm/bin/*.exe
+local_llm/bin/cli_output.txt
+
+# ================================
 # Temp files
 # ================================
 .tmp/
