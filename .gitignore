@@ -67,6 +67,10 @@ desktop.ini
 # ================================
 logs/
 *.log
+apps/agent/src-tauri/server.log
+agent_error.log
+internvl_start_test*.log
+local_llm/bin/cli_output.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
