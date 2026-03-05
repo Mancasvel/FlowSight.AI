@@ -85,7 +85,7 @@ pnpm-debug.log*
 data/
 
 # ================================
-# AI Models (large files)
+# AI Models (large files — each developer downloads locally)
 # ================================
 models/
 *.bin
@@ -93,12 +93,40 @@ models/
 *.onnx
 *.safetensors
 
+# Qwen model directories (legacy, replaced by InternVL2-1B)
+local_llm/Qwen2-VL-2B-Instruct/
+local_llm/Qwen3-VL-2B/
+
 # ================================
-# Runtime binaries (llama.cpp DLLs and executables)
+# Runtime binaries (llama.cpp — each developer installs via setup_llm.py)
 # ================================
 local_llm/bin/*.dll
 local_llm/bin/*.exe
 local_llm/bin/cli_output.txt
+
+# ================================
+# Diagnostic / debug artifacts (one-off scripts output)
+# ================================
+inspect_output*.txt
+safetensors_keys.txt
+vision_keys.txt
+help_convert.txt
+convert_error.log
+convert_mmproj_error.log
+build_v2.log
+install_full.log
+install.log
+build.log
+error.log
+__pycache__/
+
+# ================================
+# Test artifacts (not part of the app workflow)
+# ================================
+test_input.png
+test_request.json
+test_vision*.json
+test_vision_manual.json
 
 # ================================
 # Temp files
