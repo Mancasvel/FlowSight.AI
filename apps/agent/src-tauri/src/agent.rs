@@ -5,8 +5,12 @@ use tauri::State;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Local;
 use rusqlite::{Connection, params};
+use std::io::Write;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
+const INTERNVL_MODEL_ID: &str = "OpenGVLab/InternVL2-1B";
+const INTERNVL_LOCAL_HF_REPO: &str = "ggml-org/InternVL2_5-1B-GGUF";
+const INTERNVL_LOCAL_MODEL_NAME: &str = "InternVL2_5-1B-GGUF";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActivityReport {
@@ -25,6 +29,8 @@ pub struct AgentConfig {
     pub capture_interval: Option<u64>,
     #[serde(rename = "visionModel")]
     pub vision_model: Option<String>,
+    #[serde(rename = "gpuLayers")]
+    pub gpu_layers: Option<i32>,
 }
 
 pub struct FlowSightAgent {
@@ -53,7 +59,8 @@ impl FlowSightAgent {
             config: AgentConfig {
                 dev_name: Some(whoami::realname()),
                 capture_interval: Some(60000),
-                vision_model: Some("qwen3-vl:2b".to_string()),
+                vision_model: Some(INTERNVL_MODEL_ID.to_string()),
+                gpu_layers: Some(16), // Default to Balanced Mode
             },
             is_running: false,
             reports_sent: 0,
@@ -98,6 +105,7 @@ impl FlowSightAgent {
     
     fn load_config(&mut self) {
         if let Ok(conn) = Connection::open(&self.db_path) {
+            // Load String configs
             for (key, field) in [
                 ("dev_name", &mut self.config.dev_name),
                 ("vision_model", &mut self.config.vision_model),
@@ -108,11 +116,21 @@ impl FlowSightAgent {
                     *field = Some(val);
                 }
             }
+            
+            // Load Integer configs (gpu_layers)
+            if let Ok(val) = conn.query_row::<String, _, _>(
+                "SELECT value FROM config WHERE key = 'gpu_layers'", [], |r| r.get(0)
+            ) {
+                if let Ok(parsed) = val.parse::<i32>() {
+                    self.config.gpu_layers = Some(parsed);
+                }
+            }
         }
     }
     
     fn save_config(&self) {
         if let Ok(conn) = Connection::open(&self.db_path) {
+            // Save String configs
             for (key, val) in [
                 ("dev_name", &self.config.dev_name),
                 ("vision_model", &self.config.vision_model),
@@ -123,6 +141,14 @@ impl FlowSightAgent {
                         params![key, v]
                     );
                 }
+            }
+            
+            // Save Integer configs
+            if let Some(layers) = self.config.gpu_layers {
+                let _ = conn.execute(
+                    "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+                    params!["gpu_layers", layers.to_string()]
+                );
             }
         }
     }
@@ -246,7 +272,20 @@ pub struct SnapshotMetadata {
 }
 
 #[tauri::command]
-pub async fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Option<String>) -> Result<ContextSnapshot, String> {
+pub async fn capture_context_snapshot(
+    state: State<'_, AgentState>,
+    user_task: Option<String>, 
+    jira_ticket: Option<String>
+) -> Result<ContextSnapshot, String> {
+    
+    // Extract config (default to 16 if not set to ensure balanced load)
+    let gpu_layers = {
+        let guard = state.lock().unwrap();
+        guard.as_ref()
+            .and_then(|a| a.config.gpu_layers)
+            .or(Some(16)) 
+    };
+
     // Run ALL heavy work on a background thread to avoid blocking the main/UI thread
     tauri::async_runtime::spawn_blocking(move || {
         use crate::context::{get_system_context, get_git_context};
@@ -256,9 +295,23 @@ pub async fn capture_context_snapshot(user_task: Option<String>, jira_ticket: Op
         let (base64, path_str) = capture_screen()?;
         let path = PathBuf::from(&path_str);
 
-        // 2. Run Qwen2-VL (Visual Description + Category) — this is the slow part
+        // 2. Run InternVL2-1B (Visual Description + Category) — this is the slow part
         let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
-        let raw_analysis = analyze_image_with_qwen(&base64, &task_context).unwrap_or_else(|_| "Screen analysis failed. Category: General".to_string());
+        
+        let raw_analysis = match analyze_image_with_internvl(&base64, &task_context, gpu_layers) {
+            Ok(res) => res,
+            Err(e) => {
+                let err_msg = format!("[Agent] AI Analysis Failed: {}", e);
+                println!("{}", err_msg);
+                
+                // Log to file for debugging (Current Dir)
+                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("agent_error.log") {
+                    let _ = writeln!(file, "{}", err_msg);
+                }
+                
+                "Screen analysis failed. Category: General".to_string()
+            }
+        };
         
         // Parse category from response
         let (description, category) = parse_analysis(&raw_analysis);
@@ -340,8 +393,21 @@ fn parse_analysis(raw: &str) -> (String, String) {
     } else {
         "General"
     };
-    
-    (raw.to_string(), category.to_string())
+
+    // Keep readable plain text in feed/logs (avoid markdown headers/bullets noise).
+    let mut description = raw
+        .replace("###", "")
+        .replace("##", "")
+        .replace("**", "")
+        .replace("####", "")
+        .replace("- ", "• ");
+
+    // Remove trailing category line from the main description.
+    if let Some(idx) = description.to_lowercase().rfind("category:") {
+        description = description[..idx].trim().to_string();
+    }
+
+    (description, category.to_string())
 }
 #[tauri::command]
 pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
@@ -550,51 +616,27 @@ fn get_ollama_bin() -> String {
 
 #[tauri::command]
 pub fn check_ollama() -> Result<serde_json::Value, String> {
-    let ollama_bin = get_ollama_bin();
-    let has_exe = if ollama_bin == "ollama" {
-        // Double check via command if it's just "ollama"
-        use std::process::Command;
-        if cfg!(windows) {
-            Command::new("where").arg("ollama").output().map(|o| o.status.success()).unwrap_or(false)
-        } else {
-            Command::new("which").arg("ollama").output().map(|o| o.status.success()).unwrap_or(false)
-        }
-    } else {
-        std::path::Path::new(&ollama_bin).exists()
-    };
-
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
+        .timeout(std::time::Duration::from_secs(1))
         .build().map_err(|e| e.to_string())?;
     
-    match client.get("http://localhost:11434/api/tags").send() {
-        Ok(r) if r.status().is_success() => {
-            let json: serde_json::Value = r.json().unwrap_or_default();
-            let models: Vec<String> = json["models"].as_array()
-                .map(|arr| arr.iter().filter_map(|m| m["name"].as_str().map(String::from)).collect())
-                .unwrap_or_default();
-            
-            let has_vision = models.iter().any(|m| {
-                let m_lower = m.to_lowercase();
-                m_lower.contains("llava") || 
-                m_lower.contains("moondream") || 
-                (m_lower.contains("qwen") && m_lower.contains("vl"))
-            });
-            
-            println!("[Ollama] Full models list: {:?}", models);
-            println!("[Ollama] Has vision model (qwen*vl): {}", has_vision);
-            
-            Ok(serde_json::json!({
-                "online": true, 
-                "installed": true,
-                "models": models, 
-                "hasVisionModel": has_vision
-            }))
-        }
-        _ => Ok(serde_json::json!({
+    // llama-server local health check (workflow compatibility)
+    match client.get("http://localhost:8080/health").send() {
+        Ok(r) if r.status().is_success() => Ok(serde_json::json!({
+            "online": true,
+            "installed": true,
+            "models": [INTERNVL_LOCAL_MODEL_NAME],
+            "hasVisionModel": true
+        })),
+        Ok(r) => Ok(serde_json::json!({
             "online": false,
-            "installed": has_exe
-        }))
+            "installed": true,
+            "error": format!("Local server status: {}", r.status())
+        })),
+        Err(_) => Ok(serde_json::json!({
+            "online": false,
+            "installed": true
+        })),
     }
 }
 
@@ -689,6 +731,11 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
     let mut cmd = Command::new(&ollama_bin);
     cmd.arg("serve");
     
+    // FORCE CPU MODE for testing low-end hardware
+    // This makes Ollama ignore the GPU and run in system RAM
+    // cmd.env("OLLAMA_NUM_GPU", "0");
+    // println!("[Ollama] Starting in CPU-ONLY mode (OLLAMA_NUM_GPU=0)");
+    
     // Ensure no window on Windows
     #[cfg(windows)]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
@@ -699,83 +746,160 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
     }
 }
 
+// LLAMA SERVER COMMANDS
+
+static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+#[tauri::command]
+pub fn start_server() -> Result<serde_json::Value, String> {
+    let mut guard = SERVER_PROCESS.lock().unwrap();
+    if guard.is_some() {
+        return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
+    }
+
+    let root = std::path::PathBuf::from(r"C:\Users\manue\FlowSight.AI");
+    let bin_path = root.join("local_llm").join("bin").join("llama-server.exe");
+    if !bin_path.exists() {
+        return Err(format!("Server binary not found at: {:?}", bin_path));
+    }
+
+    use std::process::Command;
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let mut cmd = Command::new(&bin_path);
+    cmd.arg("-hf").arg(INTERNVL_LOCAL_HF_REPO)
+        .arg("--mmproj-auto")
+        .arg("--port").arg("8080")
+        .arg("--ctx-size").arg("3072")
+        .arg("--parallel").arg("2")
+        .arg("--threads").arg("4")
+        .arg("--n-gpu-layers").arg("16");
+
+    if let Some(parent) = bin_path.parent() {
+        cmd.current_dir(parent);
+    }
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let log_path = root.join("apps").join("agent").join("src-tauri").join("server.log");
+    if let Ok(file) = std::fs::File::create(&log_path) {
+        if let Ok(file_err) = file.try_clone() {
+            cmd.stdout(std::process::Stdio::from(file));
+            cmd.stderr(std::process::Stdio::from(file_err));
+        }
+    }
+
+    match cmd.spawn() {
+        Ok(mut child) => {
+            // Detect immediate boot errors (bad flags/download/bootstrap failure).
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            if let Ok(Some(status)) = child.try_wait() {
+                let log_tail = std::fs::read_to_string(&log_path)
+                    .ok()
+                    .map(|s| s.chars().rev().take(1200).collect::<String>().chars().rev().collect::<String>())
+                    .unwrap_or_default();
+                return Err(format!(
+                    "llama-server exited during startup (code: {:?}). {}",
+                    status.code(),
+                    if log_tail.is_empty() { "See apps/agent/src-tauri/server.log".to_string() } else { format!("Log tail: {}", log_tail) }
+                ));
+            }
+
+            *guard = Some(child);
+            Ok(serde_json::json!({
+                "status": "started",
+                "pid": "managed",
+                "model": INTERNVL_LOCAL_MODEL_NAME
+            }))
+        },
+        Err(e) => Err(format!("Failed to start server: {}", e))
+    }
+}
+
+#[tauri::command]
+pub fn stop_server() -> Result<bool, String> {
+    let mut guard = SERVER_PROCESS.lock().unwrap();
+    if let Some(mut child) = guard.take() {
+        let _ = child.kill();
+        return Ok(true);
+    }
+
+    use std::process::Command;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill").args(["/F", "/IM", "llama-server.exe"]).creation_flags(0x08000000).output();
+    }
+
+    Ok(true)
+}
+
 // RESTORED AI ANALYSIS (Backend)
 #[tauri::command]
-
-fn analyze_image_with_qwen(base64_img: &str, current_task: &str) -> Result<String, String> {
+fn analyze_image_with_internvl(base64_img: &str, current_task: &str, _gpu_layers: Option<i32>) -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
+        .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|e| e.to_string())?;
+    let url = "http://localhost:8080/v1/chat/completions";
     
-    // Detailed but direct prompt with extended categories
     let prompt = format!(
         "Current Task: {}
+Analyze this screenshot and produce a developer activity log with clear, plain text (NO markdown, NO headings, NO asterisks).
+Write 2-4 concise paragraphs documenting:
+1) app/window and what is visible,
+2) files/code or content being worked on,
+3) current action and progress signals (errors/tests/build),
+4) relation to current task and likely next immediate step.
 
-Analyze this screenshot in detail but be direct. Report:
-- Application in use and window title
-- Specific files open (exact names if visible)
-- Code/content being edited (language, functions, classes)
-- User's current action (writing, debugging, reviewing, etc.)
-- Progress indicators (errors, test results, build status)
-- How this work relates to the current task
-
-You have 600 tokens. Provide a complete, detailed analysis.
-
-End with exactly ONE of these categories:
+If text is not visible, say that clearly instead of guessing.
+After the paragraphs, end with exactly ONE line:
 Category: Coding | Debugging | CodeReview | Testing | Documentation | Design | Planning | Meeting | Communication | Research | Learning | DevOps | Database | Sales | Admin | Browsing | Idle | General",
         current_task
     );
-    
+
     let body = serde_json::json!({
-        "model": "qwen3-vl:2b",
+        "model": INTERNVL_LOCAL_MODEL_NAME,
         "messages": [
             {
                 "role": "user",
-                "content": prompt,
-                "images": [base64_img]
+                "content": [
+                    { "type": "text", "text": prompt },
+                    { 
+                        "type": "image_url", 
+                        "image_url": { 
+                            "url": format!("data:image/png;base64,{}", base64_img) 
+                        } 
+                    }
+                ]
             }
         ],
-        "stream": false,
-        "options": {
-            "temperature": 0.3,
-            "num_predict": 600
-        }
+        "temperature": 0.3,
+        "max_tokens": 1200,
+        "stream": false
     });
-    
-    // Switch to Chat API
-    let resp = client.post("http://localhost:11434/api/chat")
+
+    let resp = client.post(url)
         .json(&body)
         .send()
-        .map_err(|e| format!("Ollama request failed: {}", e))?;
+        .map_err(|e| format!("Request failed: {}", e))?;
         
     if !resp.status().is_success() {
-        return Err(format!("Ollama Error: {}", resp.status()));
+        return Err(format!("Server Error: {}", resp.status()));
     }
     
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
     
-    // Debug Log (Print full JSON to be safe)
-    // println!("Ollama JSON: {:?}", json);
+    // Parse OpenAI-style Response
+    let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("");
     
-    // Parse Chat Response
-    // Qwen3-VL sometimes puts reasoning in "thinking" field and content might be empty or partial
-    let msg = &json["message"];
-    let content = msg["content"].as_str().unwrap_or("");
-    let thinking = msg["thinking"].as_str().unwrap_or("");
-    
-    let response_text = if !content.is_empty() {
-        content.to_string()
-    } else if !thinking.is_empty() {
-        // Fallback to thinking if content is empty (common in Qwen)
-        println!("Using THINKING field as content was empty.");
-        thinking.to_string()
-    } else {
-        println!("RAW OLLAMA RESP IS EMPTY. Full JSON: {:?}", json);
-        "No content returned".to_string()
-    };
+    if content.is_empty() {
+        println!("RAW RESP IS EMPTY. Full JSON: {:?}", json);
+        return Ok("No content returned".to_string());
+    }
 
-    println!("RAW OLLAMA RESP: {}", response_text);
-    
-    Ok(response_text)
+    Ok(content.to_string())
 }

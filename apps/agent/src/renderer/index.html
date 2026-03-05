@@ -318,6 +318,7 @@
     .activity-desc {
       font-size: 11px;
       color: hsl(var(--foreground));
+      white-space: pre-wrap;
     }
 
     .activity-meta {
@@ -724,7 +725,7 @@
 
       <div class="status-indicator">
         <div class="status-dot" id="ollamaDot"></div>
-        <span class="status-text" id="ollamaStatus">Checking Ollama...</span>
+        <span class="status-text" id="ollamaStatus">Checking Vision Model...</span>
       </div>
 
       <div id="userProfile">
@@ -1338,24 +1339,24 @@
         config: {
           devName: currentUser.name || 'Guest',
           captureInterval: 60000,
-          visionModel: 'qwen3-vl:2b'
+          visionModel: 'OpenGVLab/InternVL2-1B'
         }
       });
-      console.log("[Config] Enforced qwen3-vl:2b");
+      console.log("[Config] Enforced OpenGVLab/InternVL2-1B");
     }
 
     document.getElementById('startBtn').onclick = async () => {
       const btn = document.getElementById('startBtn');
       const originalText = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Iniciando...';
+      btn.innerHTML = '<span class="loading"></span> Starting Local Server...';
 
       const overlay = document.getElementById('setupOverlay');
       const progress = document.getElementById('setupProgress');
       const statusText = document.getElementById('setupStatus');
       const subtext = document.getElementById('setupSubtext');
 
-      const showStep = (status, sub = "Esto tomará unos minutos", pct = 0) => {
+      const showStep = (status, sub = "Initializing...", pct = 0) => {
         overlay.style.display = 'flex';
         statusText.textContent = status;
         subtext.textContent = sub;
@@ -1363,56 +1364,36 @@
       };
 
       try {
-        // 1. Check status
-        let status = await invoke('check_ollama');
+        showStep("Starting InternVL2-1B...", "Preparing local server (first run downloads model + projector)...", 20);
 
-        // 2. Install Ollama if missing
-        if (!status.installed) {
-          showStep("Instalando Ollama...", "Descargando e instalando componentes básicos", 10);
-          await invoke('install_ollama');
-          // Wait a bit for install to finish and registry to update
-          await new Promise(r => setTimeout(r, 5000));
-        }
+        // 1. Start Server
+        const res = await invoke('start_server');
+        console.log("Server Start Result:", res);
 
-        // 3. Start Service
-        if (!status.online) {
-          showStep("Iniciando servicio de IA...", "Arrancando Ollama en segundo plano", 30);
-          await invoke('start_ollama');
+        if (res.status === 'started' || res.status === 'already_running') {
+          showStep("Verifying Server...", "Waiting for health check...", 60);
 
-          // Poll until online
+          // Poll for health (first start may download model files)
           let polls = 0;
-          while (polls < 15) {
-            await new Promise(r => setTimeout(r, 2000));
-            status = await invoke('check_ollama');
-            if (status.online) break;
+          let online = false;
+          while (polls < 900) {
+            await new Promise(r => setTimeout(r, 1000));
+            const status = await invoke('check_ollama'); // Repurposed function
+            if (status.online) {
+              online = true;
+              break;
+            }
             polls++;
           }
-          if (!status.online) throw new Error("No se pudo iniciar el servicio de Ollama");
-        }
 
-        // 4. Pull Model
-        if (!status.hasVisionModel) {
-          showStep("Instalando modelo de IA...", "Esto tomará unos minutos. Descargando (~2GB)...", 50);
-
-          // Setup progress listener
-          const unlisten = await listen('ollama-progress', (event) => {
-            if (event.payload.status) {
-              subtext.textContent = event.payload.status;
-              const match = event.payload.status.match(/(\d+)%/);
-              if (match) {
-                const p = 50 + (parseInt(match[1]) / 2); // 50-100%
-                progress.style.width = p + '%';
-              }
-            }
-          });
-
-          await invoke('pull_model', { model: 'qwen3-vl:2b' });
-          unlisten();
+          if (!online) throw new Error("Server started but did not respond to health check");
+        } else {
+          throw new Error("Unexpected server status: " + JSON.stringify(res));
         }
 
         // Finalize
         overlay.style.display = 'none';
-        showToast("Entorno de IA listo", "success");
+        showToast("Local AI Server Ready", "success");
 
         isMonitoring = true;
         document.getElementById('statStatus').textContent = 'On';
@@ -1432,11 +1413,18 @@
       btn.disabled = false;
     };
 
-    document.getElementById('stopBtn').onclick = () => {
+    document.getElementById('stopBtn').onclick = async () => {
       isMonitoring = false;
       document.getElementById('statStatus').textContent = 'Off';
       document.getElementById('statStatus').style.color = '';
       if (monitoringInterval) clearInterval(monitoringInterval);
+
+      try {
+        await invoke('stop_server');
+        showToast("Server Stopped", "success");
+      } catch (e) {
+        console.error("Failed to stop server:", e);
+      }
     };
 
     document.getElementById('captureBtn').onclick = captureAndAnalyze;
@@ -1444,25 +1432,17 @@
     let ollamaConfirmedOnline = false;
 
     async function checkOllama() {
-      // Skip frequent checks if already confirmed online
-      if (ollamaConfirmedOnline) return;
-
       try {
-        const status = await invoke('check_ollama');
+        const status = await invoke('check_ollama'); // Checks localhost:8080/health
         const dot = document.getElementById('ollamaDot');
         const txt = document.getElementById('ollamaStatus');
         if (status.online) {
-          if (status.hasVisionModel) {
-            dot.className = 'status-dot active';
-            txt.textContent = 'Ollama Ready';
-            ollamaConfirmedOnline = true; // Stop polling once confirmed
-          } else {
-            dot.className = 'status-dot';
-            txt.textContent = 'Ollama Online (Missing Model)';
-          }
+          dot.className = 'status-dot active';
+          txt.textContent = 'Local Server Ready';
+          ollamaConfirmedOnline = true; // Stop polling once confirmed
         } else {
           dot.className = 'status-dot';
-          txt.textContent = 'Ollama Offline';
+          txt.textContent = 'Server Offline';
           ollamaConfirmedOnline = false;
         }
       } catch (e) {
@@ -1680,7 +1660,7 @@
 
       let displayDesc = desc ? desc.trim() : "";
       if (!displayDesc) displayDesc = "<em>No output from AI model</em>";
-      else if (displayDesc.length > 100) displayDesc = displayDesc.substring(0, 100) + "...";
+      else if (displayDesc.length > 900) displayDesc = displayDesc.substring(0, 900) + "...";
 
       const ticketBadge = ticket ? `<span class="badge badge-success" style="margin-top: 3px;">${ticket}</span>` : '';
 

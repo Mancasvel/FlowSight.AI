@@ -43,6 +43,8 @@ pub fn run() {
             sync::join_team,
             sync::get_user_teams,
             sync::set_active_team,
+            agent::start_server,
+            agent::stop_server,
             // Auth commands
             auth::start_auth,
             auth::get_auth_session,

@@ -5,6 +5,8 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 const SYNC_INTERVAL_MINS: u64 = 10;
+const INTERNVL_MODEL_ID: &str = "InternVL2_5-1B-GGUF";
+const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
 
 fn get_supabase_url() -> String {
     std::env::var("VITE_SUPABASE_URL").unwrap_or_else(|_| "https://dzpyrdxelcgfpmcdojvb.supabase.co".to_string())
@@ -244,9 +246,9 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         return Ok("No new activity to report.".to_string());
     }
 
-    // 2. Generate Summary with Qwen
+    // 2. Generate Summary with InternVL2
     println!("[CloudSync] Summarizing {} reports...", ids.len());
-    let summary = summarize_with_qwen(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
+    let summary = summarize_with_internvl(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
     
     // 3. Upload to Supabase with user authentication
     match upload_session(&session, total_duration, &summary, &categories, &tickets) {
@@ -275,7 +277,7 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     Ok(summary)
 }
 
-fn summarize_with_qwen(text: &str) -> Result<String, String> {
+fn summarize_with_internvl(text: &str) -> Result<String, String> {
     let client = Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -294,38 +296,25 @@ fn summarize_with_qwen(text: &str) -> Result<String, String> {
     ", text);
     
     let body = serde_json::json!({
-        "model": "qwen3-vl:2b", 
-        "messages": [
-            { "role": "user", "content": prompt }
-        ],
-        "stream": false,
-        "options": {
-            "temperature": 0.3,
-            "num_predict": 200
-        }
+        "model": INTERNVL_MODEL_ID,
+        "messages": [{ "role": "user", "content": prompt }],
+        "temperature": 0.3,
+        "max_tokens": 220,
+        "stream": false
     });
-    
-    let resp = client.post("http://localhost:11434/api/chat")
-        .json(&body)
-        .send()
-        .map_err(|e| e.to_string())?;
-        
+
+    let resp = client.post(LOCAL_CHAT_URL).json(&body).send().map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("Summary request failed: {}", resp.status()));
+    }
+
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    
-    let msg = &json["message"];
-    let content = msg["content"].as_str().unwrap_or("");
-    let thinking = msg["thinking"].as_str().unwrap_or("");
-    
-    let final_text = if !content.is_empty() {
-        content.to_string()
-    } else if !thinking.is_empty() {
-        println!("[CloudSync] Using THINKING field for summary.");
-        thinking.to_string()
-    } else {
+    let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("");
+    if content.is_empty() {
         return Err("Model returned empty summary.".to_string());
-    };
-    
-    Ok(final_text)
+    }
+
+    Ok(content.to_string())
 }
 
 fn upload_session(
