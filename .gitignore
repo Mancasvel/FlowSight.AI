@@ -93,7 +93,7 @@ models/
 *.onnx
 *.safetensors
 
-# Qwen model directories (legacy, replaced by InternVL2-1B)
+# Legacy model directories (not used — current model: Qwen3-VL-1B-Merged)
 local_llm/Qwen2-VL-2B-Instruct/
 local_llm/Qwen3-VL-2B/
 
