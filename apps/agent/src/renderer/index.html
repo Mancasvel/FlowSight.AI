@@ -1281,16 +1281,11 @@
       document.getElementById('linkLinearBtn').classList.add('button-success');
     }
 
-    // Refresh button handler
-    document.getElementById('refreshJiraBtn').onclick = async () => {
-      await loadJiraTasks();
-      await loadLinearTasks();
-    };
+    document.getElementById('refreshJiraBtn').onclick = refreshTasks;
 
     // Auto-load tasks on init if already linked
     setTimeout(async () => {
-      if (linkedProviders.jira) await loadJiraTasks();
-      if (linkedProviders.linear) await loadLinearTasks();
+      if (linkedProviders.jira || linkedProviders.linear) await refreshTasks();
     }, 1000);
 
     // Login button handlers (fallback if inline onclick fails)
@@ -1481,7 +1476,6 @@
 
     init();
 
-    // Unified task refresh - loads from Jira or Linear based on auth provider
     async function refreshTasks() {
       const btn = document.getElementById('refreshJiraBtn');
       const sel = document.getElementById('jiraSelect');
@@ -1490,22 +1484,27 @@
 
       try {
         let tasks = [];
-        const provider = authSession?.provider || 'none';
+        const hasJira = linkedProviders.jira || authSession?.provider === 'jira';
+        const hasLinear = linkedProviders.linear || authSession?.provider === 'linear';
 
-        if (provider === 'jira') {
-          tasks = await invoke('fetch_jira_tasks');
-          tasks = tasks.map(t => ({
+        if (hasJira) {
+          const jiraTasks = await invoke('fetch_jira_tasks');
+          tasks = tasks.concat(jiraTasks.map(t => ({
             key: t.key,
             title: t.summary,
-            status: t.status || 'Unknown'
-          }));
-        } else if (provider === 'linear') {
-          tasks = await invoke('fetch_linear_tasks');
-          tasks = tasks.map(t => ({
+            status: t.status || 'Unknown',
+            source: 'jira'
+          })));
+        }
+
+        if (hasLinear) {
+          const linearTasks = await invoke('fetch_linear_tasks');
+          tasks = tasks.concat(linearTasks.map(t => ({
             key: t.identifier,
             title: t.title,
-            status: t.state || 'Unknown'
-          }));
+            status: t.state || 'Unknown',
+            source: 'linear'
+          })));
         }
 
         sel.innerHTML = '<option value="">Select Task...</option>';
@@ -1549,7 +1548,7 @@
         sel.appendChild(other);
 
       } catch (e) {
-        console.error(e);
+        console.error('[UI] Refresh tasks failed:', e);
         sel.innerHTML = '<option value="">Not connected</option>';
         sel.innerHTML += '<option value="General">General / No Ticket</option>';
         const manual = document.createElement('option');
@@ -1560,10 +1559,7 @@
       btn.disabled = false;
     }
 
-    // Alias for compatibility
     const refreshJira = refreshTasks;
-
-    document.getElementById('refreshJiraBtn').onclick = refreshTasks;
 
     document.getElementById('jiraSelect').onchange = (e) => {
       if (e.target.value === 'MANUAL') {
