@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 const SYNC_INTERVAL_MINS: u64 = 10;
-const INTERNVL_MODEL_ID: &str = "InternVL2_5-1B-GGUF";
+const VISION_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
 
 fn get_supabase_url() -> String {
@@ -246,15 +246,29 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         return Ok("No new activity to report.".to_string());
     }
 
-    // 2. Generate Summary with InternVL2
+    // 2. Generate Summary with Qwen3-VL local model
     println!("[CloudSync] Summarizing {} reports...", ids.len());
-    let summary = summarize_with_internvl(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
+    let summary = summarize_with_vision_model(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
     
-    // 3. Upload to Supabase with user authentication
-    match upload_session(&session, total_duration, &summary, &categories, &tickets) {
+    // 3. Upload to Supabase with user authentication (retry on JWT expired)
+    let upload_result = upload_session(&session, total_duration, &summary, &categories, &tickets);
+    let upload_result = match &upload_result {
+        Err(e) if e.contains("401") || e.contains("PGRST3") => {
+            println!("[CloudSync] Auth error detected ({}), attempting JWT refresh...", e);
+            match refresh_supabase_token(&session) {
+                Ok(refreshed) => upload_session(&refreshed, total_duration, &summary, &categories, &tickets),
+                Err(ref_err) => {
+                    println!("[CloudSync] Token refresh failed: {}", ref_err);
+                    upload_result
+                }
+            }
+        }
+        _ => upload_result,
+    };
+
+    match upload_result {
         Ok(_) => {
             println!("[CloudSync] Upload success for user: {}", session.email);
-            // Mark as synced
             let id_list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             let _ = conn.execute(
                 &format!("UPDATE reports SET synced = 1 WHERE id IN ({})", id_list),
@@ -262,7 +276,6 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
             );
         },
         Err(e) => {
-            // Check for license errors
             if e.contains("License expired") || e.contains("403") {
                 println!("[CloudSync] LICENSE EXPIRED - Sync blocked");
                 return Err("License expired. Contact your PM to renew.".to_string());
@@ -277,7 +290,7 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     Ok(summary)
 }
 
-fn summarize_with_internvl(text: &str) -> Result<String, String> {
+fn summarize_with_vision_model(text: &str) -> Result<String, String> {
     let client = Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -296,10 +309,10 @@ fn summarize_with_internvl(text: &str) -> Result<String, String> {
     ", text);
     
     let body = serde_json::json!({
-        "model": INTERNVL_MODEL_ID,
+        "model": VISION_MODEL_NAME,
         "messages": [{ "role": "user", "content": prompt }],
         "temperature": 0.3,
-        "max_tokens": 220,
+        "max_tokens": 500,
         "stream": false
     });
 

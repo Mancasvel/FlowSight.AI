@@ -1339,10 +1339,10 @@
         config: {
           devName: currentUser.name || 'Guest',
           captureInterval: 60000,
-          visionModel: 'OpenGVLab/InternVL2-1B'
+          visionModel: 'ViFortune-AI/Qwen3-VL-1B-Merged'
         }
       });
-      console.log("[Config] Enforced OpenGVLab/InternVL2-1B");
+      console.log("[Config] Enforced Qwen3-VL-1B-Merged");
     }
 
     document.getElementById('startBtn').onclick = async () => {
@@ -1364,7 +1364,7 @@
       };
 
       try {
-        showStep("Starting InternVL2-1B...", "Preparing local server (first run downloads model + projector)...", 20);
+        showStep("Starting Qwen3-VL-1B...", "Preparing local server (first run downloads model)...", 20);
 
         // 1. Start Server
         const res = await invoke('start_server');

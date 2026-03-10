@@ -3,7 +3,10 @@ Setup script for FlowSight.AI local inference runtime.
 
 Downloads:
   - llama.cpp prebuilt binaries (llama-server.exe) for Windows
-  - InternVL2-1B GGUF model (ggml-org/InternVL2_5-1B-GGUF, Q4_K_M quant)
+  - Qwen3-VL-2B-Instruct Q4_K_M GGUF (vision language model)
+  - Qwen3-VL-2B-Instruct mmproj Q8_0 GGUF (vision projector, required for image analysis)
+
+Model: https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
 
 Run once before launching the app:
   python setup_llm.py
@@ -15,11 +18,16 @@ import zipfile
 
 
 LLAMA_CPP_API = "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest"
-INTERNVL_MODEL_URL = (
-    "https://huggingface.co/ggml-org/InternVL2_5-1B-GGUF/resolve/main/"
-    "InternVL2_5-1B-Q4_K_M.gguf"
-)
-INTERNVL_MODEL_DEST = "local_llm/InternVL2_5-1B-Q4_K_M.gguf"
+
+HF_REPO = "Qwen/Qwen3-VL-2B-Instruct-GGUF"
+MODEL_FILE = "Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+MMPROJ_FILE = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+
+MODEL_URL = f"https://huggingface.co/{HF_REPO}/resolve/main/{MODEL_FILE}"
+MMPROJ_URL = f"https://huggingface.co/{HF_REPO}/resolve/main/{MMPROJ_FILE}"
+
+MODEL_DEST = f"local_llm/{MODEL_FILE}"
+MMPROJ_DEST = f"local_llm/{MMPROJ_FILE}"
 BIN_DIR = "local_llm/bin"
 
 
@@ -68,28 +76,36 @@ def download_llama_bin(tag: str) -> bool:
     return False
 
 
-def download_internvl_model() -> bool:
-    """Download InternVL2.5-1B Q4_K_M GGUF if not already present."""
-    os.makedirs("local_llm", exist_ok=True)
+def download_file(url: str, dest: str, label: str) -> bool:
+    """Download a single file from a URL, skip if already present."""
+    os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
 
-    if os.path.exists(INTERNVL_MODEL_DEST):
-        print(f"Model already exists: {INTERNVL_MODEL_DEST} — skipping download.")
+    if os.path.exists(dest):
+        size_mb = os.path.getsize(dest) / 1_048_576
+        print(f"{label} already exists: {dest} ({size_mb:.1f} MB) — skipping.")
         return True
 
-    print(f"Downloading InternVL2_5-1B-Q4_K_M.gguf from HuggingFace...")
+    print(f"Downloading {label}...")
     try:
-        r = requests.get(INTERNVL_MODEL_URL, stream=True, timeout=60)
+        r = requests.get(url, stream=True, timeout=60)
         r.raise_for_status()
-        with open(INTERNVL_MODEL_DEST, "wb") as f:
+        total = int(r.headers.get("content-length", 0))
+        with open(dest, "wb") as f:
             downloaded = 0
             for chunk in r.iter_content(chunk_size=65536):
                 f.write(chunk)
                 downloaded += len(chunk)
-                print(f"\r  {downloaded / 1_048_576:.1f} MB downloaded...", end="", flush=True)
-        print(f"\nSaved to {INTERNVL_MODEL_DEST}")
+                if total > 0:
+                    pct = downloaded * 100 / total
+                    print(f"\r  {downloaded / 1_048_576:.1f} / {total / 1_048_576:.1f} MB ({pct:.0f}%)", end="", flush=True)
+                else:
+                    print(f"\r  {downloaded / 1_048_576:.1f} MB downloaded...", end="", flush=True)
+        print(f"\nSaved to {dest}")
         return True
     except Exception as e:
-        print(f"\nError downloading model: {e}")
+        print(f"\nError downloading {label}: {e}")
+        if os.path.exists(dest):
+            os.remove(dest)
         return False
 
 
@@ -100,6 +116,7 @@ if __name__ == "__main__":
     if tag:
         download_llama_bin(tag)
 
-    download_internvl_model()
+    download_file(MODEL_URL, MODEL_DEST, f"Qwen3-VL-2B model ({MODEL_FILE})")
+    download_file(MMPROJ_URL, MMPROJ_DEST, f"Qwen3-VL-2B vision projector ({MMPROJ_FILE})")
 
     print("\nSetup complete. You can now launch the FlowSight.AI app.")

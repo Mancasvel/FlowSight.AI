@@ -8,9 +8,10 @@ use rusqlite::{Connection, params};
 use std::io::Write;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
-const INTERNVL_MODEL_ID: &str = "OpenGVLab/InternVL2-1B";
-const INTERNVL_LOCAL_HF_REPO: &str = "ggml-org/InternVL2_5-1B-GGUF";
-const INTERNVL_LOCAL_MODEL_NAME: &str = "InternVL2_5-1B-GGUF";
+const VISION_MODEL_ID: &str = "Qwen/Qwen3-VL-2B-Instruct";
+const VISION_LOCAL_MODEL_FILE: &str = "Qwen3VL-2B-Instruct-Q4_K_M.gguf";
+const VISION_LOCAL_MMPROJ_FILE: &str = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
+const VISION_LOCAL_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActivityReport {
@@ -59,7 +60,7 @@ impl FlowSightAgent {
             config: AgentConfig {
                 dev_name: Some(whoami::realname()),
                 capture_interval: Some(60000),
-                vision_model: Some(INTERNVL_MODEL_ID.to_string()),
+                vision_model: Some(VISION_MODEL_ID.to_string()),
                 gpu_layers: Some(16), // Default to Balanced Mode
             },
             is_running: false,
@@ -215,9 +216,8 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
             .ok_or("Failed to create image")?
     );
     
-    // Use original resolution (No Resizing) to ensure max clarity for OCR
-    // let resized = img.resize(1280, 720, image::imageops::FilterType::Lanczos3);
-    
+    let img = img.resize(1280, 720, image::imageops::FilterType::Lanczos3);
+
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .map_err(|e| e.to_string())?;
@@ -295,10 +295,10 @@ pub async fn capture_context_snapshot(
         let (base64, path_str) = capture_screen()?;
         let path = PathBuf::from(&path_str);
 
-        // 2. Run InternVL2-1B (Visual Description + Category) — this is the slow part
+        // 2. Run Qwen3-VL-1B vision analysis (Visual Description + Category)
         let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
         
-        let raw_analysis = match analyze_image_with_internvl(&base64, &task_context, gpu_layers) {
+        let raw_analysis = match analyze_image_with_vision(&base64, &task_context, gpu_layers) {
             Ok(res) => res,
             Err(e) => {
                 let err_msg = format!("[Agent] AI Analysis Failed: {}", e);
@@ -354,60 +354,124 @@ pub async fn capture_context_snapshot(
 // Helper to parse "Category: X" logic
 fn parse_analysis(raw: &str) -> (String, String) {
     let lower = raw.to_lowercase();
-    
-    // Extended category detection - order matters (more specific first)
-    let category = if lower.contains("category: debugging") || lower.contains("debugger") || lower.contains("breakpoint") {
-        "Debugging"
-    } else if lower.contains("category: code review") || lower.contains("pull request") || lower.contains("reviewing code") {
-        "CodeReview"
-    } else if lower.contains("category: testing") || lower.contains("running tests") || lower.contains("test results") {
-        "Testing"
-    } else if lower.contains("category: coding") || lower.contains("category: development") || lower.contains("writing code") {
-        "Coding"
-    } else if lower.contains("category: documentation") || lower.contains("writing docs") || lower.contains("readme") {
-        "Documentation"
-    } else if lower.contains("category: design") || lower.contains("figma") || lower.contains("sketch") {
-        "Design"
-    } else if lower.contains("category: planning") || lower.contains("jira") || lower.contains("trello") || lower.contains("backlog") {
-        "Planning"
-    } else if lower.contains("category: meeting") || lower.contains("zoom") || lower.contains("google meet") || lower.contains("teams") {
-        "Meeting"
-    } else if lower.contains("category: communication") || lower.contains("slack") || lower.contains("discord") || lower.contains("email") {
-        "Communication"
-    } else if lower.contains("category: research") || lower.contains("stackoverflow") || lower.contains("searching") {
-        "Research"
-    } else if lower.contains("category: learning") || lower.contains("tutorial") || lower.contains("course") || lower.contains("documentation") {
-        "Learning"
-    } else if lower.contains("category: devops") || lower.contains("docker") || lower.contains("kubernetes") || lower.contains("pipeline") {
-        "DevOps"
-    } else if lower.contains("category: database") || lower.contains("sql") || lower.contains("database") {
-        "Database"
-    } else if lower.contains("category: sales") || lower.contains("crm") || lower.contains("hubspot") {
-        "Sales"
-    } else if lower.contains("category: admin") || lower.contains("settings") || lower.contains("configuration") {
-        "Admin"
-    } else if lower.contains("category: browsing") || lower.contains("browser") {
-        "Browsing"
-    } else if lower.contains("category: idle") || lower.contains("idle") || lower.contains("no activity") {
-        "Idle"
-    } else {
-        "General"
-    };
 
-    // Keep readable plain text in feed/logs (avoid markdown headers/bullets noise).
-    let mut description = raw
-        .replace("###", "")
-        .replace("##", "")
-        .replace("**", "")
-        .replace("####", "")
-        .replace("- ", "• ");
+    // --- Extract category from structured "CATEGORY:" field first ---
+    let category = extract_category_from_field(&lower)
+        .unwrap_or_else(|| infer_category_from_content(&lower));
 
-    // Remove trailing category line from the main description.
-    if let Some(idx) = description.to_lowercase().rfind("category:") {
-        description = description[..idx].trim().to_string();
+    // --- Build clean description from structured fields ---
+    let description = build_structured_description(raw);
+
+    (description, category)
+}
+
+/// Extract category from an explicit "CATEGORY: Xyz" line in the model output.
+fn extract_category_from_field(lower: &str) -> Option<String> {
+    let valid_categories = [
+        "coding", "debugging", "codereview", "testing", "documentation",
+        "design", "planning", "meeting", "communication", "research",
+        "learning", "devops", "database", "sales", "admin", "browsing",
+        "idle", "general",
+    ];
+
+    // Find the last "category:" occurrence
+    if let Some(idx) = lower.rfind("category:") {
+        let after = lower[idx + 9..].trim();
+        // Take first word (the category value)
+        let cat_word = after.split_whitespace().next().unwrap_or("")
+            .trim_matches(|c: char| !c.is_alphanumeric());
+
+        for valid in &valid_categories {
+            if cat_word.starts_with(valid) {
+                // Return properly cased version
+                return Some(match *valid {
+                    "coding" => "Coding",
+                    "debugging" => "Debugging",
+                    "codereview" => "CodeReview",
+                    "testing" => "Testing",
+                    "documentation" => "Documentation",
+                    "design" => "Design",
+                    "planning" => "Planning",
+                    "meeting" => "Meeting",
+                    "communication" => "Communication",
+                    "research" => "Research",
+                    "learning" => "Learning",
+                    "devops" => "DevOps",
+                    "database" => "Database",
+                    "sales" => "Sales",
+                    "admin" => "Admin",
+                    "browsing" => "Browsing",
+                    "idle" => "Idle",
+                    _ => "General",
+                }.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Fallback: infer category from keywords in the full content.
+fn infer_category_from_content(lower: &str) -> String {
+    if lower.contains("debugger") || lower.contains("breakpoint") { "Debugging" }
+    else if lower.contains("pull request") || lower.contains("reviewing code") || lower.contains("code review") { "CodeReview" }
+    else if lower.contains("running tests") || lower.contains("test results") || lower.contains("test suite") { "Testing" }
+    else if lower.contains("writing code") || lower.contains("editor") || lower.contains("visual studio code") || lower.contains("vs code") || lower.contains("ide") { "Coding" }
+    else if lower.contains("writing docs") || lower.contains("readme") { "Documentation" }
+    else if lower.contains("figma") || lower.contains("sketch") || lower.contains("design tool") { "Design" }
+    else if lower.contains("jira") || lower.contains("trello") || lower.contains("backlog") { "Planning" }
+    else if lower.contains("zoom") || lower.contains("google meet") || lower.contains("teams meeting") { "Meeting" }
+    else if lower.contains("slack") || lower.contains("discord") || lower.contains("email") { "Communication" }
+    else if lower.contains("stackoverflow") || lower.contains("searching") || lower.contains("google search") { "Research" }
+    else if lower.contains("tutorial") || lower.contains("course") || lower.contains("learning") { "Learning" }
+    else if lower.contains("docker") || lower.contains("kubernetes") || lower.contains("pipeline") || lower.contains("ci/cd") { "DevOps" }
+    else if lower.contains("sql") || lower.contains("database") || lower.contains("supabase") { "Database" }
+    else if lower.contains("crm") || lower.contains("hubspot") { "Sales" }
+    else if lower.contains("settings") || lower.contains("configuration") { "Admin" }
+    else if lower.contains("browser") || lower.contains("chrome") || lower.contains("firefox") || lower.contains("linkedin") || lower.contains("github.com") { "Browsing" }
+    else if lower.contains("idle") || lower.contains("no activity") || lower.contains("lock screen") { "Idle" }
+    else { "General" }
+    .to_string()
+}
+
+/// Build a clean human-readable description from the structured fields.
+fn build_structured_description(raw: &str) -> String {
+    // Known field labels from our template
+    let fields = ["APP:", "WINDOW TITLE:", "VISIBLE CONTENT:", "FILES OR URLS:",
+                   "CURRENT ACTION:", "PROGRESS:", "NEXT STEP:", "CATEGORY:"];
+
+    let mut parts: Vec<String> = Vec::new();
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() { continue; }
+
+        // Skip the CATEGORY line (parsed separately)
+        if trimmed.to_uppercase().starts_with("CATEGORY:") { continue; }
+
+        // Clean markdown artifacts just in case
+        let clean = trimmed
+            .replace("###", "")
+            .replace("##", "")
+            .replace("**", "")
+            .replace("####", "");
+        let clean = clean.trim();
+        if clean.is_empty() { continue; }
+
+        // Check if it matches a known field pattern to keep structured output
+        let is_field = fields.iter().any(|f| clean.to_uppercase().starts_with(f));
+        if is_field {
+            parts.push(clean.to_string());
+        } else {
+            // Free text line — keep as-is
+            parts.push(clean.to_string());
+        }
     }
 
-    (description, category.to_string())
+    if parts.is_empty() {
+        return "No analysis available".to_string();
+    }
+
+    parts.join("\n")
 }
 #[tauri::command]
 pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
@@ -625,7 +689,7 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
         Ok(r) if r.status().is_success() => Ok(serde_json::json!({
             "online": true,
             "installed": true,
-            "models": [INTERNVL_LOCAL_MODEL_NAME],
+            "models": [VISION_LOCAL_MODEL_NAME],
             "hasVisionModel": true
         })),
         Ok(r) => Ok(serde_json::json!({
@@ -750,6 +814,31 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
 
 static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
+fn find_project_root() -> Result<PathBuf, String> {
+    let check = |dir: &std::path::Path| dir.join("local_llm").join("bin").exists();
+
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+        for _ in 0..6 {
+            if check(&dir) { return Ok(dir); }
+            if !dir.pop() { break; }
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut dir = cwd;
+        for _ in 0..4 {
+            if check(&dir) { return Ok(dir); }
+            if !dir.pop() { break; }
+        }
+    }
+
+    let fallback = PathBuf::from(r"C:\Users\manue\FlowSight.AI");
+    if check(&fallback) { return Ok(fallback); }
+
+    Err("Could not find project root (local_llm/bin not found). Run setup_llm.py first.".to_string())
+}
+
 #[tauri::command]
 pub fn start_server() -> Result<serde_json::Value, String> {
     let mut guard = SERVER_PROCESS.lock().unwrap();
@@ -757,10 +846,20 @@ pub fn start_server() -> Result<serde_json::Value, String> {
         return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
     }
 
-    let root = std::path::PathBuf::from(r"C:\Users\manue\FlowSight.AI");
-    let bin_path = root.join("local_llm").join("bin").join("llama-server.exe");
+    let root = find_project_root()?;
+    let local_llm_dir = root.join("local_llm");
+    let bin_path = local_llm_dir.join("bin").join("llama-server.exe");
+    let model_path = local_llm_dir.join(VISION_LOCAL_MODEL_FILE);
+    let mmproj_path = local_llm_dir.join(VISION_LOCAL_MMPROJ_FILE);
+
     if !bin_path.exists() {
-        return Err(format!("Server binary not found at: {:?}", bin_path));
+        return Err(format!("llama-server not found at {:?}. Run setup_llm.py first.", bin_path));
+    }
+    if !model_path.exists() {
+        return Err(format!("Model not found at {:?}. Run setup_llm.py first.", model_path));
+    }
+    if !mmproj_path.exists() {
+        return Err(format!("Vision projector not found at {:?}. Run setup_llm.py first.", mmproj_path));
     }
 
     use std::process::Command;
@@ -769,13 +868,13 @@ pub fn start_server() -> Result<serde_json::Value, String> {
     const CREATE_NO_WINDOW: u32 = 0x08000000;
 
     let mut cmd = Command::new(&bin_path);
-    cmd.arg("-hf").arg(INTERNVL_LOCAL_HF_REPO)
-        .arg("--mmproj-auto")
-        .arg("--port").arg("8080")
-        .arg("--ctx-size").arg("3072")
-        .arg("--parallel").arg("2")
-        .arg("--threads").arg("4")
-        .arg("--n-gpu-layers").arg("16");
+    cmd.arg("-m").arg(&model_path)
+       .arg("--mmproj").arg(&mmproj_path)
+       .arg("--port").arg("8080")
+       .arg("--ctx-size").arg("4096")
+       .arg("--parallel").arg("2")
+       .arg("--threads").arg("4")
+       .arg("--n-gpu-layers").arg("99");
 
     if let Some(parent) = bin_path.parent() {
         cmd.current_dir(parent);
@@ -794,7 +893,6 @@ pub fn start_server() -> Result<serde_json::Value, String> {
 
     match cmd.spawn() {
         Ok(mut child) => {
-            // Detect immediate boot errors (bad flags/download/bootstrap failure).
             std::thread::sleep(std::time::Duration::from_secs(2));
             if let Ok(Some(status)) = child.try_wait() {
                 let log_tail = std::fs::read_to_string(&log_path)
@@ -812,7 +910,7 @@ pub fn start_server() -> Result<serde_json::Value, String> {
             Ok(serde_json::json!({
                 "status": "started",
                 "pid": "managed",
-                "model": INTERNVL_LOCAL_MODEL_NAME
+                "model": VISION_LOCAL_MODEL_NAME
             }))
         },
         Err(e) => Err(format!("Failed to start server: {}", e))
@@ -839,67 +937,96 @@ pub fn stop_server() -> Result<bool, String> {
 
 // RESTORED AI ANALYSIS (Backend)
 #[tauri::command]
-fn analyze_image_with_internvl(base64_img: &str, current_task: &str, _gpu_layers: Option<i32>) -> Result<String, String> {
+fn analyze_image_with_vision(base64_img: &str, current_task: &str, _gpu_layers: Option<i32>) -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|e| e.to_string())?;
     let url = "http://localhost:8080/v1/chat/completions";
-    
-    let prompt = format!(
-        "Current Task: {}
-Analyze this screenshot and produce a developer activity log with clear, plain text (NO markdown, NO headings, NO asterisks).
-Write 2-4 concise paragraphs documenting:
-1) app/window and what is visible,
-2) files/code or content being worked on,
-3) current action and progress signals (errors/tests/build),
-4) relation to current task and likely next immediate step.
 
-If text is not visible, say that clearly instead of guessing.
-After the paragraphs, end with exactly ONE line:
-Category: Coding | Debugging | CodeReview | Testing | Documentation | Design | Planning | Meeting | Communication | Research | Learning | DevOps | Database | Sales | Admin | Browsing | Idle | General",
+    let system_msg = "You are a screenshot analysis assistant. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. You describe exactly what you observe in the screenshot.";
+
+    let prompt = format!(
+        r#"Look at this screenshot carefully and fill in EVERY field below. Do NOT skip any field. Do NOT use markdown. Write plain text only.
+
+TASK CONTEXT: {}
+
+Fill in this template exactly:
+
+APP: [name of the application visible, e.g. Visual Studio Code, Chrome, Terminal]
+WINDOW TITLE: [exact window title visible in the title bar]
+VISIBLE CONTENT: [describe what is shown on screen in 2-3 sentences: files open, tabs, panels, text, UI elements]
+FILES OR URLS: [list any file names, URLs, or document names visible, or write None if not readable]
+CURRENT ACTION: [what the user appears to be doing right now in 1-2 sentences]
+PROGRESS: [any errors, warnings, build status, test results visible, or write None visible]
+NEXT STEP: [what the user will likely do next based on what is visible, in 1 sentence]
+CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Documentation, Design, Planning, Meeting, Communication, Research, Learning, DevOps, Database, Sales, Admin, Browsing, Idle, General]"#,
         current_task
     );
 
-    let body = serde_json::json!({
-        "model": INTERNVL_LOCAL_MODEL_NAME,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    { "type": "text", "text": prompt },
-                    { 
-                        "type": "image_url", 
-                        "image_url": { 
-                            "url": format!("data:image/png;base64,{}", base64_img) 
-                        } 
-                    }
-                ]
+    // Retry up to 2 times on empty/refusal responses
+    let max_attempts = 2;
+    for attempt in 1..=max_attempts {
+        let body = serde_json::json!({
+            "model": VISION_LOCAL_MODEL_NAME,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_msg
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        { "type": "text", "text": prompt },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": format!("data:image/png;base64,{}", base64_img)
+                            }
+                        }
+                    ]
+                }
+            ],
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "max_tokens": 1500,
+            "stream": false
+        });
+
+        let resp = client.post(url)
+            .json(&body)
+            .send()
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("Server Error: {}", resp.status()));
+        }
+
+        let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+        let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").trim();
+
+        // Detect empty or refusal responses
+        let is_empty = content.is_empty();
+        let is_refusal = content.to_lowercase().contains("i'm unable to")
+            || content.to_lowercase().contains("i cannot")
+            || content.to_lowercase().contains("i am unable")
+            || content.to_lowercase().contains("unable to view")
+            || content.to_lowercase().contains("unable to analyze");
+
+        if is_empty || is_refusal {
+            println!("[Qwen3VL] Attempt {}/{}: empty or refusal response, retrying...", attempt, max_attempts);
+            if attempt < max_attempts {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                continue;
             }
-        ],
-        "temperature": 0.3,
-        "max_tokens": 1200,
-        "stream": false
-    });
+            if is_empty {
+                return Err("Model returned empty response after retries".to_string());
+            }
+            // On final refusal, still return what we got (parse_analysis handles it)
+        }
 
-    let resp = client.post(url)
-        .json(&body)
-        .send()
-        .map_err(|e| format!("Request failed: {}", e))?;
-        
-    if !resp.status().is_success() {
-        return Err(format!("Server Error: {}", resp.status()));
-    }
-    
-    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    
-    // Parse OpenAI-style Response
-    let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("");
-    
-    if content.is_empty() {
-        println!("RAW RESP IS EMPTY. Full JSON: {:?}", json);
-        return Ok("No content returned".to_string());
+        return Ok(content.to_string());
     }
 
-    Ok(content.to_string())
+    Err("Model analysis failed after retries".to_string())
 }
