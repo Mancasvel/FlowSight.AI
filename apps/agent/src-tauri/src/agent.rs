@@ -936,6 +936,29 @@ pub fn stop_server() -> Result<bool, String> {
     Ok(true)
 }
 
+fn truncate_repetition(text: &str) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.len() < 10 { return text.to_string(); }
+
+    let mut result: Vec<&str> = Vec::with_capacity(words.len());
+    let mut repeat_count = 0u32;
+
+    for (i, word) in words.iter().enumerate() {
+        if i > 0 && *word == words[i - 1] {
+            repeat_count += 1;
+            if repeat_count >= 4 { continue; }
+        } else {
+            repeat_count = 0;
+        }
+        result.push(word);
+    }
+
+    if result.len() < words.len() {
+        println!("[Qwen3VL] Truncated {} repeated tokens from output", words.len() - result.len());
+    }
+    result.join(" ")
+}
+
 // RESTORED AI ANALYSIS (Backend)
 #[tauri::command]
 fn analyze_image_with_vision(base64_img: &str, current_task: &str, _gpu_layers: Option<i32>) -> Result<String, String> {
@@ -990,7 +1013,10 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
             ],
             "temperature": 0.1,
             "top_p": 0.9,
-            "max_tokens": 1500,
+            "max_tokens": 800,
+            "repeat_penalty": 1.3,
+            "frequency_penalty": 0.5,
+            "presence_penalty": 0.5,
             "stream": false
         });
 
@@ -1023,10 +1049,10 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
             if is_empty {
                 return Err("Model returned empty response after retries".to_string());
             }
-            // On final refusal, still return what we got (parse_analysis handles it)
         }
 
-        return Ok(content.to_string());
+        let content = truncate_repetition(content);
+        return Ok(content);
     }
 
     Err("Model analysis failed after retries".to_string())
