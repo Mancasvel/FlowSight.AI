@@ -19,12 +19,14 @@ import zipfile
 
 LLAMA_CPP_API = "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest"
 
-HF_REPO = "Qwen/Qwen3-VL-2B-Instruct-GGUF"
-MODEL_FILE = "Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+MODEL_HF_REPO = "unsloth/Qwen3-VL-2B-Instruct-GGUF"
+MODEL_FILE = "Qwen3-VL-2B-Instruct-Q3_K_M.gguf"
+
+MMPROJ_HF_REPO = "Qwen/Qwen3-VL-2B-Instruct-GGUF"
 MMPROJ_FILE = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
 
-MODEL_URL = f"https://huggingface.co/{HF_REPO}/resolve/main/{MODEL_FILE}"
-MMPROJ_URL = f"https://huggingface.co/{HF_REPO}/resolve/main/{MMPROJ_FILE}"
+MODEL_URL = f"https://huggingface.co/{MODEL_HF_REPO}/resolve/main/{MODEL_FILE}"
+MMPROJ_URL = f"https://huggingface.co/{MMPROJ_HF_REPO}/resolve/main/{MMPROJ_FILE}"
 
 MODEL_DEST = f"local_llm/{MODEL_FILE}"
 MMPROJ_DEST = f"local_llm/{MMPROJ_FILE}"

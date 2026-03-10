@@ -9,7 +9,7 @@ use std::io::Write;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
 const VISION_MODEL_ID: &str = "Qwen/Qwen3-VL-2B-Instruct";
-const VISION_LOCAL_MODEL_FILE: &str = "Qwen3VL-2B-Instruct-Q4_K_M.gguf";
+const VISION_LOCAL_MODEL_FILE: &str = "Qwen3-VL-2B-Instruct-Q3_K_M.gguf";
 const VISION_LOCAL_MMPROJ_FILE: &str = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 const VISION_LOCAL_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 
@@ -216,7 +216,7 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
             .ok_or("Failed to create image")?
     );
     
-    let img = img.resize(1280, 720, image::imageops::FilterType::Lanczos3);
+    let img = img.resize(960, 540, image::imageops::FilterType::Lanczos3);
 
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
@@ -866,6 +866,7 @@ pub fn start_server() -> Result<serde_json::Value, String> {
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
+    const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
 
     let mut cmd = Command::new(&bin_path);
     cmd.arg("-m").arg(&model_path)
@@ -873,15 +874,15 @@ pub fn start_server() -> Result<serde_json::Value, String> {
        .arg("--port").arg("8080")
        .arg("--ctx-size").arg("4096")
        .arg("--parallel").arg("2")
-       .arg("--threads").arg("4")
-       .arg("--n-gpu-layers").arg("99");
+       .arg("--threads").arg("2")
+       .arg("--n-gpu-layers").arg("50");
 
     if let Some(parent) = bin_path.parent() {
         cmd.current_dir(parent);
     }
 
     #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY);
 
     let log_path = root.join("apps").join("agent").join("src-tauri").join("server.log");
     if let Ok(file) = std::fs::File::create(&log_path) {
