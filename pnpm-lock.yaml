@@ -9,7 +9,7 @@ importers:
   .:
     devDependencies:
       '@tauri-apps/cli':
-        specifier: ^2.10.0
+        specifier: ^2.0.0
         version: 2.10.0
 
   apps/agent:
@@ -18,7 +18,7 @@ importers:
         specifier: ^2.93.3
         version: 2.93.3
       '@tauri-apps/api':
-        specifier: ^2.10.0
+        specifier: ^2.0.0
         version: 2.10.1
       jspdf:
         specifier: ^4.1.0
