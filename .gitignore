@@ -13,6 +13,8 @@ seed_supabase.sql
 **/target/
 **/*.rs.bk
 Cargo.lock
+# Application crate: lockfile must be committed so CI matches local Tauri/Rust versions
+!apps/agent/src-tauri/Cargo.lock
 /scripts
 # ================================
 # Build outputs

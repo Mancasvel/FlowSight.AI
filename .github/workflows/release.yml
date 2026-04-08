@@ -17,6 +17,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The release workflow checks out the tag’s commit. An old tag still has tauri 2.9.x while npm resolves @tauri-apps/api 2.10.x → CLI error. Fix: new tag on latest main (with committed Cargo.lock).
+      - name: Reject outdated tauri 2.9.x (stale release tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=apps/agent/src-tauri/Cargo.toml
+          if grep -qE 'tauri = \{ version = "2\.9' "$f"; then
+            echo "::error title=Stale release tag::This build uses an old commit with \`tauri\` 2.9.x while JS packages are 2.10.x. Create a **new tag** on the latest \`main\` and publish a **new** GitHub Release (do not reuse an old tag)."
+            grep -E 'tauri' "$f" || true
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v4
         with:
           version: 8.15.0
@@ -68,6 +80,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Reject outdated tauri 2.9.x (stale release tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=apps/agent/src-tauri/Cargo.toml
+          if grep -qE 'tauri = \{ version = "2\.9' "$f"; then
+            echo "::error title=Stale release tag::Create a **new tag** on the latest \`main\` and publish a **new** GitHub Release."
+            grep -E 'tauri' "$f" || true
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v4
         with:
           version: 8.15.0
@@ -103,6 +126,17 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Reject outdated tauri 2.9.x (stale release tag)
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=apps/agent/src-tauri/Cargo.toml
+          if grep -qE 'tauri = \{ version = "2\.9' "$f"; then
+            echo "::error title=Stale release tag::Create a **new tag** on the latest \`main\` and publish a **new** GitHub Release."
+            grep -E 'tauri' "$f" || true
+            exit 1
+          fi
 
       - uses: pnpm/action-setup@v4
         with:
