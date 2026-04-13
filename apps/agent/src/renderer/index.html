@@ -724,8 +724,8 @@
       </div>
 
       <div class="status-indicator">
-        <div class="status-dot" id="ollamaDot"></div>
-        <span class="status-text" id="ollamaStatus">Checking Vision Model...</span>
+        <div class="status-dot" id="localAiDot"></div>
+        <span class="status-text" id="localAiStatus">Checking local AI...</span>
       </div>
 
       <div id="userProfile">
@@ -836,6 +836,8 @@
         Now</button>
       <button class="button button-secondary" id="testReportBtn" style="width: 100%; margin-top: 6px;">🧪 Test
         Report</button>
+      <button class="button button-secondary" id="debugDumpReportsBtn"
+        style="width: 100%; margin-top: 6px; font-size: 11px;">🖥️ Dump reports (terminal)</button>
       <button class="button button-secondary" id="historyBtn" style="width: 100%; margin-top: 6px;">📅 My Day
         (GDPR)</button>
     </div>
@@ -856,11 +858,11 @@
 
   <!-- SETUP OVERLAY -->
   <div id="setupOverlay" class="setup-overlay" style="display: none;">
-    <div class="setup-status" id="setupStatus">Configurando entorno de IA...</div>
+    <div class="setup-status" id="setupStatus">Preparing local AI...</div>
     <div class="progress-container">
       <div class="progress-bar" id="setupProgress"></div>
     </div>
-    <div class="setup-subtext" id="setupSubtext">Esto tomará unos minutos</div>
+    <div class="setup-subtext" id="setupSubtext">First run may download files; please wait</div>
   </div>
 
   <!-- HISTORY MODAL -->
@@ -899,7 +901,10 @@
     console.log('[FlowSight] Imports loaded successfully');
 
     let isMonitoring = false;
+    /** @deprecated kept only to clear any legacy interval from older builds */
     let monitoringInterval = null;
+    let captureIntervalMs = 60000;
+    let localAiReady = false;
     let currentUser = null;
     let authSession = null;
 
@@ -1326,7 +1331,8 @@
 
     async function loadConfig() {
       const config = await invoke('get_config');
-      document.getElementById('statInterval').textContent = (config.captureInterval || 60000) / 1000 + 's';
+      captureIntervalMs = config.captureInterval || 60000;
+      document.getElementById('statInterval').textContent = captureIntervalMs / 1000 + 's';
     }
 
     async function saveConfig() {
@@ -1334,46 +1340,51 @@
         config: {
           devName: currentUser.name || 'Guest',
           captureInterval: 60000,
-          visionModel: 'ViFortune-AI/Qwen3-VL-1B-Merged'
+          visionModel: 'local'
         }
       });
-      console.log("[Config] Enforced Qwen3-VL-1B-Merged");
     }
 
     document.getElementById('startBtn').onclick = async () => {
       const btn = document.getElementById('startBtn');
       const originalText = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Starting Local Server...';
+      btn.innerHTML = '<span class="loading"></span> Starting...';
 
       const overlay = document.getElementById('setupOverlay');
       const progress = document.getElementById('setupProgress');
       const statusText = document.getElementById('setupStatus');
       const subtext = document.getElementById('setupSubtext');
 
-      const showStep = (status, sub = "Initializing...", pct = 0) => {
+      const showStep = (status, sub = "", pct = 0) => {
         overlay.style.display = 'flex';
         statusText.textContent = status;
-        subtext.textContent = sub;
-        progress.style.width = pct + '%';
+        subtext.textContent = sub || '';
+        progress.style.width = Math.min(100, Math.max(0, pct)) + '%';
       };
 
+      let unlistenProgress = null;
       try {
-        showStep("Starting Qwen3-VL-1B...", "Preparing local server (first run downloads model)...", 20);
+        showStep("Preparing local AI...", "Downloading or verifying model files if needed — stay on this screen", 3);
 
-        // 1. Start Server
-        const res = await invoke('start_server');
-        console.log("Server Start Result:", res);
+        unlistenProgress = await listen('local-ai-progress', (e) => {
+          const p = e.payload || {};
+          const msg = p.message || p.phase || 'Local AI';
+          const pct = typeof p.percent === 'number' ? p.percent : parseInt(progress.style.width, 10) || 0;
+          showStep(msg, '', pct);
+        });
+
+        const res = await invoke('prepare_and_start_server');
+        console.log("Local AI start result:", res);
 
         if (res.status === 'started' || res.status === 'already_running') {
-          showStep("Verifying Server...", "Waiting for health check...", 60);
+          showStep("Starting local AI server...", "Waiting for health check...", 93);
 
-          // Poll for health (first start may download model files)
           let polls = 0;
           let online = false;
           while (polls < 900) {
             await new Promise(r => setTimeout(r, 1000));
-            const status = await invoke('check_ollama'); // Repurposed function
+            const status = await invoke('check_ollama');
             if (status.online) {
               online = true;
               break;
@@ -1381,29 +1392,50 @@
             polls++;
           }
 
-          if (!online) throw new Error("Server started but did not respond to health check");
+          if (!online) throw new Error("Local AI server did not respond in time. Check your network and disk space, then try again.");
         } else {
-          throw new Error("Unexpected server status: " + JSON.stringify(res));
+          throw new Error("Unexpected status: " + JSON.stringify(res));
         }
 
-        // Finalize
+        showStep("Screen capture (Linux)", "If tools are missing, your password may be requested once to install grim / scrot via the system package manager.", 94);
+        try {
+          const capRes = await invoke('ensure_linux_capture_dependencies');
+          console.log('[FlowSight] capture deps:', capRes);
+          if (capRes.status === 'installed') {
+            showToast(capRes.message || 'Screen capture tools installed', 'success', 4500);
+          } else if (capRes.status === 'install_failed') {
+            showToast(capRes.message || 'Could not auto-install capture tools', 'warning', 9000);
+          } else if (capRes.status === 'already_attempted') {
+            showToast(capRes.message, 'warning', 7000);
+          }
+        } catch (ce) {
+          console.error('[FlowSight] ensure_linux_capture_dependencies:', ce);
+        }
+
         overlay.style.display = 'none';
-        showToast("Local AI Server Ready", "success");
+        showToast("Local AI ready", "success");
+
+        if (monitoringInterval) {
+          clearInterval(monitoringInterval);
+          monitoringInterval = null;
+        }
 
         isMonitoring = true;
         document.getElementById('statStatus').textContent = 'On';
         document.getElementById('statStatus').style.color = 'hsl(142.1 76.2% 36.3%)';
 
-        captureAndAnalyze();
-        monitoringInterval = setInterval(captureAndAnalyze, 60000);
+        localStorage.setItem('flowsight_monitoring_active', '1');
+        await invoke('start_monitoring');
         btn.innerHTML = originalText;
-        ollamaConfirmedOnline = true;
-        await checkOllama();
+        localAiReady = true;
+        await checkLocalAi();
       } catch (e) {
         overlay.style.display = 'none';
         console.error("Start Failed:", e);
         showToast("Error: " + e, "error");
         btn.innerHTML = originalText;
+      } finally {
+        if (typeof unlistenProgress === 'function') unlistenProgress();
       }
       btn.disabled = false;
     };
@@ -1412,45 +1444,71 @@
       isMonitoring = false;
       document.getElementById('statStatus').textContent = 'Off';
       document.getElementById('statStatus').style.color = '';
-      if (monitoringInterval) clearInterval(monitoringInterval);
+      if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+      }
+      localStorage.removeItem('flowsight_monitoring_active');
 
       try {
+        await invoke('stop_monitoring');
         await invoke('stop_server');
-        showToast("Server Stopped", "success");
+        showToast("Local AI stopped", "success");
       } catch (e) {
         console.error("Failed to stop server:", e);
       }
     };
 
-    document.getElementById('captureBtn').onclick = captureAndAnalyze;
+    document.getElementById('captureBtn').onclick = () => captureAndAnalyze(false);
 
-    let ollamaConfirmedOnline = false;
-
-    async function checkOllama() {
+    async function checkLocalAi() {
       try {
-        const status = await invoke('check_ollama'); // Checks localhost:8080/health
-        const dot = document.getElementById('ollamaDot');
-        const txt = document.getElementById('ollamaStatus');
+        const status = await invoke('check_ollama');
+        const dot = document.getElementById('localAiDot');
+        const txt = document.getElementById('localAiStatus');
         if (status.online) {
           dot.className = 'status-dot active';
-          txt.textContent = 'Local Server Ready';
-          ollamaConfirmedOnline = true; // Stop polling once confirmed
+          txt.textContent = 'Local AI ready';
+          localAiReady = true;
         } else {
           dot.className = 'status-dot';
-          txt.textContent = 'Server Offline';
-          ollamaConfirmedOnline = false;
+          txt.textContent = 'Local AI offline';
+          localAiReady = false;
         }
       } catch (e) {
         console.error(e);
-        ollamaConfirmedOnline = false;
+        localAiReady = false;
       }
     }
-    // Check every 30s instead of 5s, and stop once confirmed online
-    setInterval(checkOllama, 30000);
+    setInterval(checkLocalAi, 30000);
+
+    async function restoreMonitoringIfNeeded() {
+      try {
+        if (localStorage.getItem('flowsight_monitoring_active') !== '1') return;
+        const status = await invoke('check_ollama');
+        if (!status.online) {
+          localStorage.removeItem('flowsight_monitoring_active');
+          return;
+        }
+        isMonitoring = true;
+        const el = document.getElementById('statStatus');
+        if (el) {
+          el.textContent = 'On';
+          el.style.color = 'hsl(142.1 76.2% 36.3%)';
+        }
+        await invoke('start_monitoring');
+        localAiReady = true;
+        await checkLocalAi();
+      } catch (e) {
+        console.error('[Monitoring] restore failed:', e);
+        localStorage.removeItem('flowsight_monitoring_active');
+      }
+    }
 
     async function initMainApp() {
       await loadConfig();
-      await checkOllama();
+      await checkLocalAi();
+      await restoreMonitoringIfNeeded();
 
       // If logged in with Jira, fetch tasks
       if (authSession && authSession.provider === 'jira') {
@@ -1571,8 +1629,11 @@
 
     let isSyncing = false;
 
-    async function captureAndAnalyze() {
-      // Prevent overlapping syncs but DON'T block the UI
+    /**
+     * @param {boolean} fromSchedule - true when triggered by Rust `auto-capture-tick` (respects isMonitoring); false for manual "Capture Now"
+     */
+    async function captureAndAnalyze(fromSchedule = false) {
+      if (fromSchedule && !isMonitoring) return;
       if (isSyncing) {
         console.log('[Sync] Already syncing, skipping this cycle');
         return;
@@ -1580,13 +1641,9 @@
 
       isSyncing = true;
       const btn = document.getElementById('captureBtn');
-      const statusEl = document.getElementById('statStatus');
 
-      // Show subtle indicator without disabling anything
       if (btn) btn.innerHTML = '🔄 Syncing...';
-      const prevStatus = statusEl ? statusEl.textContent : '';
 
-      // Fire and forget — don't await at the top level for interval calls
       try {
         log("Taking Context Snapshot (background)...");
 
@@ -1623,12 +1680,29 @@
       } catch (e) {
         console.error('[Sync] Error:', e);
         log("Sync error: " + e);
-        // Don't show toast for background errors to avoid annoying the user
+      } finally {
+        isSyncing = false;
+        if (btn) btn.innerHTML = '📸 Capture Now';
       }
-
-      isSyncing = false;
-      if (btn) btn.innerHTML = '📸 Capture Now';
     }
+
+    listen('auto-capture-tick', async () => {
+      try {
+        await invoke('debug_log_line', { line: 'received auto-capture-tick (UI)' });
+      } catch (_) { /* ignore */ }
+      captureAndAnalyze(true);
+    }).catch((e) => console.error('[AutoCapture] listen failed:', e));
+
+    document.getElementById('debugDumpReportsBtn').onclick = async () => {
+      try {
+        const res = await invoke('debug_dump_reports', { limit: 40 });
+        showToast(res, 'success', 5000);
+        console.log('[FlowSight]', res);
+      } catch (e) {
+        showToast(String(e), 'error');
+        console.error(e);
+      }
+    };
 
     document.getElementById('testReportBtn').onclick = async () => {
       const btn = document.getElementById('testReportBtn');
@@ -1655,7 +1729,7 @@
       div.className = 'activity-item';
 
       let displayDesc = desc ? desc.trim() : "";
-      if (!displayDesc) displayDesc = "<em>No output from AI model</em>";
+      if (!displayDesc) displayDesc = "<em>No output from local AI</em>";
       else if (displayDesc.length > 900) displayDesc = displayDesc.substring(0, 900) + "...";
 
       const ticketBadge = ticket ? `<span class="badge badge-success" style="margin-top: 3px;">${ticket}</span>` : '';

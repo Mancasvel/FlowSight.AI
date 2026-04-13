@@ -1,4 +1,6 @@
 mod agent;
+mod llama_bin;
+mod screen_capture;
 mod jira;
 mod sync;
 mod auth;
@@ -43,7 +45,7 @@ pub fn run() {
             sync::join_team,
             sync::get_user_teams,
             sync::set_active_team,
-            agent::start_server,
+            agent::prepare_and_start_server,
             agent::stop_server,
             // Auth commands
             auth::start_auth,
@@ -55,9 +57,15 @@ pub fn run() {
             linear::fetch_linear_tasks,
             linear::fetch_linear_profile,
             // History commands
-            get_today_history
+            get_today_history,
+            agent::debug_dump_reports,
+            agent::debug_log_line,
+            screen_capture::ensure_linux_capture_dependencies,
         ])
     .setup(|app| {
+      eprintln!(
+        "[FlowSight] Terminal debug: monitor ticks & captures log to stderr in dev builds, or set FLOWSIGHT_DEBUG=1. Use \"Dump reports (terminal)\" in the app to print the DB."
+      );
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

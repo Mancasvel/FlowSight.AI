@@ -246,7 +246,7 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         return Ok("No new activity to report.".to_string());
     }
 
-    // 2. Generate Summary with Qwen3-VL local model
+    // 2. Generate summary with local vision model
     println!("[CloudSync] Summarizing {} reports...", ids.len());
     let summary = summarize_with_vision_model(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
     

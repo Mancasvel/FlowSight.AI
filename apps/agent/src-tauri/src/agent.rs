@@ -1,17 +1,41 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tauri::Manager;
 use tauri::State;
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use tauri::Emitter;
 use chrono::Local;
 use rusqlite::{Connection, params};
-use std::io::Write;
+use std::io::{Read, Write};
+use std::fs::File;
+use std::time::Duration;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
 const VISION_MODEL_ID: &str = "Qwen/Qwen3-VL-2B-Instruct";
 const VISION_LOCAL_MODEL_FILE: &str = "Qwen3-VL-2B-Instruct-Q3_K_M.gguf";
 const VISION_LOCAL_MMPROJ_FILE: &str = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 const VISION_LOCAL_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
+
+/// Terminal logging for `pnpm run dev`: on in debug builds, or set `FLOWSIGHT_DEBUG=1`.
+fn flowsight_terminal_debug() -> bool {
+    use std::sync::OnceLock;
+    static FLAG: OnceLock<bool> = OnceLock::new();
+    *FLAG.get_or_init(|| {
+        std::env::var("FLOWSIGHT_DEBUG")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+            .unwrap_or(cfg!(debug_assertions))
+    })
+}
+
+fn fs_log(line: impl AsRef<str>) {
+    if flowsight_terminal_debug() {
+        eprintln!("[FlowSight] {}", line.as_ref());
+    }
+}
+
+/// Same sources as `setup_llm.py`; stored under app data `FlowSight/local_llm/`.
+const MODEL_DOWNLOAD_URL: &str = "https://huggingface.co/unsloth/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3-VL-2B-Instruct-Q3_K_M.gguf";
+const MMPROJ_DOWNLOAD_URL: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActivityReport {
@@ -160,8 +184,15 @@ impl FlowSightAgent {
                 "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds) VALUES (?, ?, ?, ?)",
                 params![desc, activity_type, ticket, duration]
             );
-            return Some(conn.last_insert_rowid());
+            let id = conn.last_insert_rowid();
+            let preview: String = desc.chars().take(120).collect();
+            fs_log(format!(
+                "report INSERT id={} category={} ticket={:?} duration_s={} | {}",
+                id, activity_type, ticket, duration, preview
+            ));
+            return Some(id);
         }
+        fs_log("report INSERT failed: could not open DB".to_string());
         None
     }
     
@@ -203,40 +234,7 @@ impl FlowSightAgent {
 // (Logic moved to Frontend for cross-platform support)
 
 fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
-    use screenshots::Screen;
-    
-    let screens = Screen::all().map_err(|e| e.to_string())?;
-    let screen = screens.first().ok_or("No screen")?;
-    let captured = screen.capture().map_err(|e| e.to_string())?;
-    
-    // Convert to DynamicImage
-    let (width, height) = captured.dimensions();
-    let img = image::DynamicImage::ImageRgba8(
-        image::RgbaImage::from_raw(width, height, captured.into_raw())
-            .ok_or("Failed to create image")?
-    );
-    
-    let img = img.resize(960, 540, image::imageops::FilterType::Lanczos3);
-
-    let mut png = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .map_err(|e| e.to_string())?;
-        
-    // println!("[Agent] Captured screenshot size: {} bytes", png.len());
-    
-    // Persist to tmp for debug (optional)
-    let desktop = dirs::desktop_dir().unwrap_or(std::path::PathBuf::from("."));
-    let debug_dir = desktop.join("flowsight_screenshots_tmp");
-    if !debug_dir.exists() {
-        let _ = std::fs::create_dir_all(&debug_dir);
-    }
-    
-    let timestamp = chrono::Local::now().format("%H%M%S");
-    let filename = format!("capture_{}.png", timestamp);
-    let debug_path = debug_dir.join(filename);
-    let _ = std::fs::write(&debug_path, &png);
-    
-    Ok((BASE64.encode(&png), debug_path))
+    crate::screen_capture::capture_screen()
 }
 
 #[derive(Serialize, Clone)]
@@ -277,7 +275,11 @@ pub async fn capture_context_snapshot(
     user_task: Option<String>, 
     jira_ticket: Option<String>
 ) -> Result<ContextSnapshot, String> {
-    
+    fs_log(format!(
+        "capture_context_snapshot START task={:?} ticket={:?}",
+        user_task, jira_ticket
+    ));
+
     // Extract config (default to 16 if not set to ensure balanced load)
     let gpu_layers = {
         let guard = state.lock().unwrap();
@@ -287,7 +289,7 @@ pub async fn capture_context_snapshot(
     };
 
     // Run ALL heavy work on a background thread to avoid blocking the main/UI thread
-    tauri::async_runtime::spawn_blocking(move || {
+    let out = tauri::async_runtime::spawn_blocking(move || {
         use crate::context::{get_system_context, get_git_context};
         use std::path::PathBuf;
 
@@ -295,7 +297,7 @@ pub async fn capture_context_snapshot(
         let (base64, path_str) = capture_screen()?;
         let path = PathBuf::from(&path_str);
 
-        // 2. Run Qwen3-VL-1B vision analysis (Visual Description + Category)
+        // 2. Local vision model analysis (description + category)
         let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
         
         let raw_analysis = match analyze_image_with_vision(&base64, &task_context, gpu_layers) {
@@ -335,7 +337,7 @@ pub async fn capture_context_snapshot(
         // Cleanup temp file
         let _ = std::fs::remove_file(&path);
 
-        Ok(ContextSnapshot {
+        let snap = ContextSnapshot {
             vector: vec![],
             dimension: 0,
             description,
@@ -347,8 +349,22 @@ pub async fn capture_context_snapshot(
                 branch: git.and_then(|g| g.branch),
                 language: None,
             }
-        })
-    }).await.map_err(|e| format!("Task join error: {}", e))?
+        };
+        fs_log(format!(
+            "capture_context_snapshot OK category={} desc_preview={}",
+            snap.category,
+            snap.description.chars().take(80).collect::<String>()
+        ));
+        Ok(snap)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?;
+
+    match &out {
+        Ok(_) => {}
+        Err(e) => fs_log(format!("capture_context_snapshot ERR {e}")),
+    }
+    out
 }
 
 // Helper to parse "Category: X" logic
@@ -481,9 +497,10 @@ pub fn save_activity(state: State<'_, AgentState>, description: String, activity
         // Default capture interval 30s
         a.save_report(&description, &activity_type, jira_ticket, 30)
     } else {
+        fs_log("save_activity: agent not initialized — report not stored");
         None
     };
-    
+
     Ok(ActivityReport {
         id: report_id,
         timestamp: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
@@ -528,16 +545,114 @@ pub fn get_status(state: State<'_, AgentState>) -> Result<serde_json::Value, Str
     })
 }
 
+/// Starts periodic activity capture. Emits `auto-capture-tick` on an OS thread so the interval is not
+/// throttled when the WebView is in the background (unreliable `setInterval` in Chromium).
 #[tauri::command]
-pub fn start_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
-    if let Some(a) = state.lock().unwrap().as_mut() { a.is_running = true; }
+pub fn start_monitoring(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<bool, String> {
+    let mut g = state.lock().unwrap();
+    let Some(agent) = g.as_mut() else {
+        return Err("Agent not initialized".to_string());
+    };
+    if agent.is_running {
+        return Ok(true);
+    }
+    agent.is_running = true;
+    let app_handle = app.clone();
+    drop(g);
+
+    fs_log("start_monitoring: OS thread started (emits auto-capture-tick + sleep)");
+
+    std::thread::spawn(move || {
+        let mut tick: u64 = 0;
+        loop {
+            let interval_ms = {
+                let state = app_handle.state::<AgentState>();
+                let guard = state.lock().unwrap();
+                let Some(agent) = guard.as_ref() else {
+                    fs_log("monitor thread exit: no agent");
+                    return;
+                };
+                if !agent.is_running {
+                    fs_log("monitor thread exit: is_running=false");
+                    return;
+                }
+                agent.config.capture_interval.unwrap_or(60000)
+            };
+            tick += 1;
+            fs_log(format!(
+                "monitor tick #{tick} → emit auto-capture-tick (next sleep {}ms)",
+                interval_ms
+            ));
+            if let Err(e) = app_handle.emit("auto-capture-tick", serde_json::json!({})) {
+                fs_log(format!("emit auto-capture-tick FAILED: {e}"));
+                log::warn!("[Monitoring] emit auto-capture-tick: {e}");
+            }
+            std::thread::sleep(Duration::from_millis(interval_ms));
+        }
+    });
+
     Ok(true)
 }
 
 #[tauri::command]
 pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
-    if let Some(a) = state.lock().unwrap().as_mut() { a.is_running = false; }
+    if let Some(a) = state.lock().unwrap().as_mut() {
+        a.is_running = false;
+    }
+    fs_log("stop_monitoring: is_running=false (monitor thread will exit)");
     Ok(true)
+}
+
+/// Print recent rows from `reports` to stderr (terminal). Always prints when invoked (not gated by FLOWSIGHT_DEBUG).
+#[tauri::command]
+pub fn debug_dump_reports(state: State<'_, AgentState>, limit: Option<u32>) -> Result<String, String> {
+    let lim = limit.unwrap_or(25).min(200);
+    let db_path = {
+        let guard = state.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|a| a.db_path.clone())
+            .ok_or("Agent not initialized")?
+    };
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, synced, activity_type, jira_ticket_id, duration_seconds, created_at, substr(description,1,200) FROM reports ORDER BY id DESC LIMIT ?",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([lim], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, i32>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    eprintln!("[FlowSight] ========== reports (last {lim}) ==========");
+    let mut n = 0usize;
+    for r in rows {
+        let (id, synced, cat, ticket, dur, created, preview) = r.map_err(|e| e.to_string())?;
+        n += 1;
+        eprintln!(
+            "[FlowSight] id={} synced={} cat={} ticket={:?} dur={}s at={} | {}",
+            id, synced, cat, ticket, dur, created, preview
+        );
+    }
+    eprintln!("[FlowSight] ========== end ({n} rows) ==========");
+    Ok(format!("Printed {n} report row(s) to the terminal (stderr)."))
+}
+
+#[tauri::command]
+pub fn debug_log_line(line: String) {
+    if flowsight_terminal_debug() {
+        eprintln!("[FlowSight][UI] {}", line);
+    }
 }
 
 #[tauri::command]
@@ -678,14 +793,47 @@ fn get_ollama_bin() -> String {
     "ollama".to_string()
 }
 
+/// True if llama-server is already answering on port 8080 (avoids spawning a second instance: bind fails with exit 1).
+fn local_llama_http_healthy() -> bool {
+    let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+    else {
+        return false;
+    };
+    client
+        .get("http://127.0.0.1:8080/health")
+        .send()
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
+fn read_server_log_tail_chars(max_chars: usize) -> String {
+    let Ok(path) = server_log_path() else {
+        return String::new();
+    };
+    std::fs::read_to_string(&path)
+        .ok()
+        .map(|s| {
+            s.chars()
+                .rev()
+                .take(max_chars)
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn check_ollama() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(1))
+        .timeout(std::time::Duration::from_secs(5))
         .build().map_err(|e| e.to_string())?;
     
     // llama-server local health check (workflow compatibility)
-    match client.get("http://localhost:8080/health").send() {
+    match client.get("http://127.0.0.1:8080/health").send() {
         Ok(r) if r.status().is_success() => Ok(serde_json::json!({
             "online": true,
             "installed": true,
@@ -815,76 +963,258 @@ pub fn start_ollama() -> Result<serde_json::Value, String> {
 static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
 fn find_project_root() -> Result<PathBuf, String> {
-    let check = |dir: &std::path::Path| dir.join("local_llm").join("bin").exists();
+    let check = |dir: &Path| dir.join("local_llm").join("bin").exists();
 
     if let Ok(exe) = std::env::current_exe() {
-        let mut dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
-        for _ in 0..6 {
-            if check(&dir) { return Ok(dir); }
-            if !dir.pop() { break; }
+        let mut dir = exe.parent().unwrap_or(Path::new(".")).to_path_buf();
+        for _ in 0..8 {
+            if check(&dir) {
+                return Ok(dir);
+            }
+            if !dir.pop() {
+                break;
+            }
         }
     }
 
     if let Ok(cwd) = std::env::current_dir() {
         let mut dir = cwd;
-        for _ in 0..4 {
-            if check(&dir) { return Ok(dir); }
-            if !dir.pop() { break; }
+        for _ in 0..6 {
+            if check(&dir) {
+                return Ok(dir);
+            }
+            if !dir.pop() {
+                break;
+            }
         }
     }
 
-    let fallback = PathBuf::from(r"C:\Users\manue\FlowSight.AI");
-    if check(&fallback) { return Ok(fallback); }
-
-    Err("Could not find project root (local_llm/bin not found). Run setup_llm.py first.".to_string())
+    Err("Could not find project root (local_llm/bin not found). Run setup_llm.py once for llama-server, or place llama-server in app data.".to_string())
 }
 
-#[tauri::command]
-pub fn start_server() -> Result<serde_json::Value, String> {
-    let mut guard = SERVER_PROCESS.lock().unwrap();
-    if guard.is_some() {
-        return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
+fn local_llm_storage_dir() -> Result<PathBuf, String> {
+    let base = dirs::data_local_dir()
+        .ok_or_else(|| "Could not resolve application data directory".to_string())?
+        .join("FlowSight")
+        .join("local_llm");
+    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    Ok(base)
+}
+
+fn server_log_path() -> Result<PathBuf, String> {
+    let base = dirs::data_local_dir()
+        .ok_or_else(|| "Could not resolve application data directory".to_string())?
+        .join("FlowSight");
+    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    Ok(base.join("server.log"))
+}
+
+fn is_valid_gguf(path: &Path, min_bytes: u64) -> bool {
+    std::fs::metadata(path)
+        .ok()
+        .map(|m| m.len() >= min_bytes)
+        .unwrap_or(false)
+}
+
+/// Download a large file with progress events (`local-ai-progress`) for the UI.
+fn download_http_file(
+    app: &tauri::AppHandle,
+    url: &str,
+    dest: &Path,
+    phase_user_label: &str,
+    min_bytes: u64,
+) -> Result<(), String> {
+    if is_valid_gguf(dest, min_bytes) {
+        return Ok(());
     }
 
-    let root = find_project_root()?;
-    let local_llm_dir = root.join("local_llm");
-    let bin_path = local_llm_dir.join("bin").join("llama-server.exe");
-    let model_path = local_llm_dir.join(VISION_LOCAL_MODEL_FILE);
-    let mmproj_path = local_llm_dir.join(VISION_LOCAL_MMPROJ_FILE);
+    let parent = dest.parent().ok_or("Invalid destination path")?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let fname = dest
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("download");
+    let partial = parent.join(format!("{fname}.part"));
+    let _ = std::fs::remove_file(&partial);
 
-    if !bin_path.exists() {
-        return Err(format!("llama-server not found at {:?}. Run setup_llm.py first.", bin_path));
-    }
-    if !model_path.exists() {
-        return Err(format!("Model not found at {:?}. Run setup_llm.py first.", model_path));
-    }
-    if !mmproj_path.exists() {
-        return Err(format!("Vision projector not found at {:?}. Run setup_llm.py first.", mmproj_path));
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(7200))
+        .connect_timeout(Duration::from_secs(120))
+        .user_agent("FlowSight-Agent/1.0 (local inference)")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut resp = client
+        .get(url)
+        .send()
+        .map_err(|e| format!("Download failed ({phase_user_label}): {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "HTTP {} while downloading {} — check your network",
+            resp.status(),
+            phase_user_label
+        ));
     }
 
+    let total = resp.content_length().unwrap_or(0);
+    let mut file = File::create(&partial).map_err(|e| e.to_string())?;
+    let mut buf = [0u8; 65536];
+    let mut downloaded: u64 = 0;
+
+    loop {
+        let n = resp.read(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+        downloaded += n as u64;
+        let pct: u8 = if total > 0 {
+            (((downloaded.min(total)) * 100) / total).min(100) as u8
+        } else {
+            0
+        };
+        let _ = app.emit(
+            "local-ai-progress",
+            serde_json::json!({
+                "phase": phase_user_label,
+                "message": format!(
+                    "{} — {:.1} MB{}",
+                    phase_user_label,
+                    downloaded as f64 / 1_048_576.0,
+                    if total > 0 {
+                        format!(" / {:.1} MB", total as f64 / 1_048_576.0)
+                    } else {
+                        String::new()
+                    }
+                ),
+                "percent": pct,
+                "downloaded": downloaded,
+                "total": total,
+            }),
+        );
+    }
+
+    file.sync_all().map_err(|e| e.to_string())?;
+    drop(file);
+    std::fs::rename(&partial, dest).map_err(|e| {
+        let _ = std::fs::remove_file(&partial);
+        e.to_string()
+    })?;
+    Ok(())
+}
+
+/// Prefer dev checkout if both GGUFs exist; otherwise download into app data and use those paths.
+fn ensure_vision_model_files(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    if let Ok(root) = find_project_root() {
+        let dm = root.join("local_llm").join(VISION_LOCAL_MODEL_FILE);
+        let dmm = root.join("local_llm").join(VISION_LOCAL_MMPROJ_FILE);
+        if is_valid_gguf(&dm, 1_000_000) && is_valid_gguf(&dmm, 100_000) {
+            let _ = app.emit(
+                "local-ai-progress",
+                serde_json::json!({
+                    "phase": "ready",
+                    "message": "Using local AI files from development folder",
+                    "percent": 100u8,
+                }),
+            );
+            return Ok((dm, dmm));
+        }
+    }
+
+    let storage = local_llm_storage_dir()?;
+    let st_model = storage.join(VISION_LOCAL_MODEL_FILE);
+    let st_mmproj = storage.join(VISION_LOCAL_MMPROJ_FILE);
+
+    if !is_valid_gguf(&st_model, 1_000_000) {
+        let _ = app.emit(
+            "local-ai-progress",
+            serde_json::json!({
+                "phase": "download-model",
+                "message": "Downloading local AI model (first run only, may take a while)...",
+                "percent": 0u8,
+            }),
+        );
+        download_http_file(
+            app,
+            MODEL_DOWNLOAD_URL,
+            &st_model,
+            "Downloading local AI model",
+            1_000_000,
+        )?;
+    }
+
+    if !is_valid_gguf(&st_mmproj, 100_000) {
+        let _ = app.emit(
+            "local-ai-progress",
+            serde_json::json!({
+                "phase": "download-mmproj",
+                "message": "Downloading local AI vision module...",
+                "percent": 0u8,
+            }),
+        );
+        download_http_file(
+            app,
+            MMPROJ_DOWNLOAD_URL,
+            &st_mmproj,
+            "Downloading local AI vision module",
+            100_000,
+        )?;
+    }
+
+    Ok((st_model, st_mmproj))
+}
+
+fn spawn_llama_server(
+    bin_path: &Path,
+    model_path: &Path,
+    mmproj_path: &Path,
+) -> Result<std::process::Child, String> {
     use std::process::Command;
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
 
-    let mut cmd = Command::new(&bin_path);
-    cmd.arg("-m").arg(&model_path)
-       .arg("--mmproj").arg(&mmproj_path)
-       .arg("--port").arg("8080")
-       .arg("--ctx-size").arg("4096")
-       .arg("--parallel").arg("2")
-       .arg("--threads").arg("2")
-       .arg("--n-gpu-layers").arg("50");
+    // Windows builds often ship with CUDA; Linux/macOS release tarballs are typically CPU-only.
+    // Using --n-gpu-layers > 0 without a matching GPU backend makes llama-server exit with code 1.
+    let n_gpu_layers = if cfg!(windows) { "50" } else { "0" };
+
+    let mut cmd = Command::new(bin_path);
+    cmd.arg("-m").arg(model_path)
+        .arg("--mmproj").arg(mmproj_path)
+        .arg("--host").arg("127.0.0.1")
+        .arg("--port").arg("8080")
+        .arg("--ctx-size").arg("4096")
+        .arg("--parallel")
+        .arg(if cfg!(windows) { "2" } else { "1" })
+        .arg("--threads").arg("2")
+        .arg("--n-gpu-layers").arg(n_gpu_layers);
+
+    #[cfg(unix)]
+    {
+        // Default mmproj GPU offload breaks on typical CPU-only Unix builds (exit code 1).
+        cmd.arg("--no-mmproj-offload")
+            .arg("--no-mmap")
+            .arg("--no-warmup")
+            .arg("--image-min-tokens")
+            .arg("1024");
+    }
 
     if let Some(parent) = bin_path.parent() {
         cmd.current_dir(parent);
+        #[cfg(target_os = "linux")]
+        {
+            let path_str = parent.to_string_lossy();
+            let ld = match std::env::var("LD_LIBRARY_PATH") {
+                Ok(ref s) if !s.is_empty() => format!("{path_str}:{s}"),
+                _ => path_str.into_owned(),
+            };
+            cmd.env("LD_LIBRARY_PATH", ld);
+        }
     }
 
     #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY);
+    cmd.creation_flags(0x08000000u32 | 0x00004000u32);
 
-    let log_path = root.join("apps").join("agent").join("src-tauri").join("server.log");
+    let log_path = server_log_path()?;
     if let Ok(file) = std::fs::File::create(&log_path) {
         if let Ok(file_err) = file.try_clone() {
             cmd.stdout(std::process::Stdio::from(file));
@@ -892,31 +1222,134 @@ pub fn start_server() -> Result<serde_json::Value, String> {
         }
     }
 
-    match cmd.spawn() {
-        Ok(mut child) => {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            if let Ok(Some(status)) = child.try_wait() {
-                let log_tail = std::fs::read_to_string(&log_path)
-                    .ok()
-                    .map(|s| s.chars().rev().take(1200).collect::<String>().chars().rev().collect::<String>())
-                    .unwrap_or_default();
-                return Err(format!(
-                    "llama-server exited during startup (code: {:?}). {}",
-                    status.code(),
-                    if log_tail.is_empty() { "See apps/agent/src-tauri/server.log".to_string() } else { format!("Log tail: {}", log_tail) }
-                ));
-            }
+    cmd.spawn().map_err(|e| format!("Failed to start llama-server: {e}"))
+}
 
+fn prepare_and_start_server_inner(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    {
+        let guard = SERVER_PROCESS.lock().unwrap();
+        if guard.is_some() {
+            return Ok(serde_json::json!({
+                "status": "already_running",
+                "message": "Local AI server is already running"
+            }));
+        }
+    }
+
+    // Port 8080 already serving (e.g. leftover llama-server): spawning again fails on bind (exit 1).
+    if local_llama_http_healthy() {
+        return Ok(serde_json::json!({
+            "status": "already_running",
+            "message": "Local AI already responding on http://127.0.0.1:8080"
+        }));
+    }
+
+    let _ = app.emit(
+        "local-ai-progress",
+        serde_json::json!({
+            "phase": "prepare",
+            "message": "Preparing local AI...",
+            "percent": 5u8,
+        }),
+    );
+
+    let (model_path, mmproj_path) = ensure_vision_model_files(&app)?;
+    let bin_path = crate::llama_bin::ensure_llama_server(&app, local_llm_storage_dir()?.join("bin"))?;
+
+    let _ = app.emit(
+        "local-ai-progress",
+        serde_json::json!({
+            "phase": "start",
+            "message": "Starting local AI server...",
+            "percent": 92u8,
+        }),
+    );
+
+    let mut guard = SERVER_PROCESS.lock().unwrap();
+    if guard.is_some() {
+        return Ok(serde_json::json!({"status": "already_running"}));
+    }
+    if local_llama_http_healthy() {
+        return Ok(serde_json::json!({
+            "status": "already_running",
+            "message": "Local AI already responding on http://127.0.0.1:8080"
+        }));
+    }
+
+    let log_path = server_log_path().unwrap_or_else(|_| PathBuf::from("server.log"));
+
+    let mut child = match spawn_llama_server(&bin_path, &model_path, &mmproj_path) {
+        Ok(c) => c,
+        Err(e) => return Err(e),
+    };
+
+    const HEALTH_WAIT: Duration = Duration::from_secs(120);
+    const POLL_MS: Duration = Duration::from_millis(400);
+    let deadline = std::time::Instant::now() + HEALTH_WAIT;
+    let mut last_progress = std::time::Instant::now();
+    let wait_start = std::time::Instant::now();
+
+    loop {
+        if let Ok(Some(status)) = child.try_wait() {
+            let log_tail = read_server_log_tail_chars(8000);
+            return Err(format!(
+                "llama-server exited during startup (code: {:?}). {}",
+                status.code(),
+                if log_tail.is_empty() {
+                    format!("See log: {:?}", log_path)
+                } else {
+                    format!("Log tail: {}", log_tail)
+                }
+            ));
+        }
+        if local_llama_http_healthy() {
             *guard = Some(child);
-            Ok(serde_json::json!({
+            return Ok(serde_json::json!({
                 "status": "started",
                 "pid": "managed",
                 "model": VISION_LOCAL_MODEL_NAME
-            }))
-        },
-        Err(e) => Err(format!("Failed to start server: {}", e))
+            }));
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            let log_tail = read_server_log_tail_chars(8000);
+            return Err(format!(
+                "Local AI did not become ready within {}s. {}",
+                HEALTH_WAIT.as_secs(),
+                if log_tail.is_empty() {
+                    format!("See log: {:?}", log_path)
+                } else {
+                    format!("Log tail: {}", log_tail)
+                }
+            ));
+        }
+        if last_progress.elapsed() >= Duration::from_secs(3) {
+            last_progress = std::time::Instant::now();
+            let elapsed = wait_start.elapsed().as_secs();
+            let pct = (92u8).saturating_add((elapsed.min(25)) as u8).min(99);
+            let _ = app.emit(
+                "local-ai-progress",
+                serde_json::json!({
+                    "phase": "warmup",
+                    "message": format!("Waiting for local AI ({elapsed}s)..."),
+                    "percent": pct,
+                }),
+            );
+        }
+        std::thread::sleep(POLL_MS);
     }
 }
+
+/// Downloads vision model files to app data if needed, resolves `llama-server`, then starts it. Use this from **Start** in the UI.
+#[tauri::command]
+pub async fn prepare_and_start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || prepare_and_start_server_inner(app))
+        .await
+        .map_err(|e| format!("Task join: {e}"))?
+}
+
 
 #[tauri::command]
 pub fn stop_server() -> Result<bool, String> {
@@ -926,10 +1359,10 @@ pub fn stop_server() -> Result<bool, String> {
         return Ok(true);
     }
 
-    use std::process::Command;
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
+        use std::process::Command;
         let _ = Command::new("taskkill").args(["/F", "/IM", "llama-server.exe"]).creation_flags(0x08000000).output();
     }
 
@@ -954,7 +1387,7 @@ fn truncate_repetition(text: &str) -> String {
     }
 
     if result.len() < words.len() {
-        println!("[Qwen3VL] Truncated {} repeated tokens from output", words.len() - result.len());
+        println!("[LocalAI] Truncated {} repeated tokens from output", words.len() - result.len());
     }
     result.join(" ")
 }
@@ -1041,7 +1474,7 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
             || content.to_lowercase().contains("unable to analyze");
 
         if is_empty || is_refusal {
-            println!("[Qwen3VL] Attempt {}/{}: empty or refusal response, retrying...", attempt, max_attempts);
+            println!("[LocalAI] Attempt {}/{}: empty or refusal response, retrying...", attempt, max_attempts);
             if attempt < max_attempts {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 continue;

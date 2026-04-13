@@ -23,7 +23,6 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10.3", features = [] }
 tauri-plugin-log = "2"
-screenshots = "0.8"
 base64 = "0.22"
 chrono = "0.4"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
@@ -38,3 +37,9 @@ tiny_http = "0.12"
 open = "5.0"
 dotenv = "0.15"
 urlencoding = "2.1"
+flate2 = "1"
+tar = "0.4"
+zip = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+screenshots = "0.8"
