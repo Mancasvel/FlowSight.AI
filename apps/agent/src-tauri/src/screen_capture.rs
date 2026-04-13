@@ -285,43 +285,39 @@ fn capture_linux() -> Result<(String, PathBuf), String> {
     }
     let _ = std::fs::remove_file(&tmp);
 
-    // 2) GNOME — full screen to file (common on Ubuntu/Fedora Wayland)
-    let tmp = tmp_png_name("flowsight_gnome");
-    let tmp_s = match tmp.to_str() {
-        Some(s) => s,
-        None => return Err("Invalid temp path".into()),
-    };
-
-    if Command::new("gnome-screenshot")
-        .args(["-f", tmp_s])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-    {
-        if let Some(bytes) = try_read_tmp_png(&tmp) {
-            let _ = std::fs::remove_file(&tmp);
-            return process_png_bytes(&bytes);
+    // 2) GNOME Shell — D-Bus `Screenshot(false, false, path)` (no white flash; `gnome-screenshot` CLI flashes)
+    let tmp = tmp_png_name("flowsight_gnome_dbus");
+    let _ = std::fs::remove_file(&tmp);
+    if let Some(tmp_s) = tmp.to_str() {
+        if tool_in_path("gdbus") {
+            if let Ok(out) = Command::new("gdbus")
+                .args([
+                    "call",
+                    "--session",
+                    "--dest",
+                    "org.gnome.Shell",
+                    "--object-path",
+                    "/org/gnome/Shell/Screenshot",
+                    "--method",
+                    "org.gnome.Shell.Screenshot.Screenshot",
+                    "false",
+                    "false",
+                    tmp_s,
+                ])
+                .output()
+            {
+                if out.status.success() {
+                    if let Some(bytes) = try_read_tmp_png(&tmp) {
+                        let _ = std::fs::remove_file(&tmp);
+                        return process_png_bytes(&bytes);
+                    }
+                }
+            }
         }
     }
     let _ = std::fs::remove_file(&tmp);
 
-    // 3) KDE Plasma — batch mode, full screen
-    let tmp = tmp_png_name("flowsight_kde");
-    let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
-    if Command::new("spectacle")
-        .args(["-b", "-o", tmp_s])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
-    {
-        if let Some(bytes) = try_read_tmp_png(&tmp) {
-            let _ = std::fs::remove_file(&tmp);
-            return process_png_bytes(&bytes);
-        }
-    }
-    let _ = std::fs::remove_file(&tmp);
-
-    // 4) scrot — typical X11 tool
+    // 3) scrot — X11, typically no full-screen flash
     let tmp = tmp_png_name("flowsight_scrot");
     let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
     if Command::new("scrot")
@@ -337,7 +333,7 @@ fn capture_linux() -> Result<(String, PathBuf), String> {
     }
     let _ = std::fs::remove_file(&tmp);
 
-    // 5) maim — X11 (common on i3/Awesome)
+    // 4) maim — X11 (common on i3/Awesome)
     let tmp = tmp_png_name("flowsight_maim");
     let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
     if Command::new("maim")
@@ -353,7 +349,7 @@ fn capture_linux() -> Result<(String, PathBuf), String> {
     }
     let _ = std::fs::remove_file(&tmp);
 
-    // 6) ImageMagick 6 — `import`
+    // 5) ImageMagick 6 — `import`
     let tmp = tmp_png_name("flowsight_import");
     let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
     if Command::new("import")
@@ -369,11 +365,27 @@ fn capture_linux() -> Result<(String, PathBuf), String> {
     }
     let _ = std::fs::remove_file(&tmp);
 
-    // 7) ImageMagick 7 — `magick import`
+    // 6) ImageMagick 7 — `magick import`
     let tmp = tmp_png_name("flowsight_magick");
     let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
     if Command::new("magick")
         .args(["import", "-window", "root", tmp_s])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        if let Some(bytes) = try_read_tmp_png(&tmp) {
+            let _ = std::fs::remove_file(&tmp);
+            return process_png_bytes(&bytes);
+        }
+    }
+    let _ = std::fs::remove_file(&tmp);
+
+    // 7) KDE Plasma — batch / non-interactive
+    let tmp = tmp_png_name("flowsight_kde");
+    let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
+    if Command::new("spectacle")
+        .args(["-b", "-o", tmp_s])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -401,7 +413,26 @@ fn capture_linux() -> Result<(String, PathBuf), String> {
     }
     let _ = std::fs::remove_file(&tmp);
 
-    // 9) flameshot — full screen to path (no GUI when path is set)
+    // 9) gnome-screenshot CLI — often shows a white flash; kept as fallback only
+    let tmp = tmp_png_name("flowsight_gnome_cli");
+    let tmp_s = match tmp.to_str() {
+        Some(s) => s,
+        None => return Err("Invalid temp path".into()),
+    };
+    if Command::new("gnome-screenshot")
+        .args(["-f", tmp_s])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        if let Some(bytes) = try_read_tmp_png(&tmp) {
+            let _ = std::fs::remove_file(&tmp);
+            return process_png_bytes(&bytes);
+        }
+    }
+    let _ = std::fs::remove_file(&tmp);
+
+    // 10) flameshot — full screen to path (no GUI when path is set)
     let tmp = tmp_png_name("flowsight_flameshot");
     let tmp_s = tmp.to_str().ok_or("Invalid temp path")?;
     if Command::new("flameshot")
@@ -425,6 +456,6 @@ fn capture_linux() -> Result<(String, PathBuf), String> {
     };
 
     Err(format!(
-        "Could not capture the screen ({hint}). Tried: grim, grim (file), gnome-screenshot, spectacle, scrot, maim, import, magick, xfce4-screenshooter, flameshot."
+        "Could not capture the screen ({hint}). Tried: grim, grim (file), GNOME Shell D-Bus (no flash), scrot, maim, import, magick, spectacle, xfce4-screenshooter, gnome-screenshot, flameshot."
     ))
 }
