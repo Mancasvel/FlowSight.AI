@@ -643,9 +643,18 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
 
 fn get_ollama_bin() -> String {
     use std::process::Command;
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    #[cfg(windows)]
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     
     // 1. Try plain "ollama" (if in PATH)
-    if let Ok(o) = Command::new(if cfg!(windows) { "where" } else { "which" }).arg("ollama").output() {
+    let mut which_cmd = Command::new(if cfg!(windows) { "where" } else { "which" });
+    which_cmd.arg("ollama");
+    #[cfg(windows)]
+    which_cmd.creation_flags(CREATE_NO_WINDOW);
+    if let Ok(o) = which_cmd.output() {
         if o.status.success() {
             return "ollama".to_string();
         }

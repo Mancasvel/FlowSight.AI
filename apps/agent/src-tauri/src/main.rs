@@ -2,13 +2,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  // Load .env.local from project root (../../.env.local relative to src-tauri/target/debug usually, 
-  // but dev command runs from src-tauri root, so ../../.env.local)
-  // Actually, dotenv::dotenv() looks for .env in current dir or parents.
-  // Since .env.local isn't standard .env, we might need specific load or just rename it.
-  // BUT standard practice: Try loading parent .env.local
-  let _ = dotenv::from_filename(".env.local"); 
-  let _ = dotenv::from_filename("../../.env.local"); // Try root if running from backend dir
+  // Dev: typical repo paths. Installed app: optional `.env` next to the executable (same keys as Vite).
+  let _ = dotenv::from_filename(".env.local");
+  let _ = dotenv::from_filename("../../.env.local");
+  if let Ok(exe) = std::env::current_exe() {
+    if let Some(dir) = exe.parent() {
+      let _ = dotenv::from_filename(dir.join(".env"));
+    }
+  }
 
   app_lib::run();
 }

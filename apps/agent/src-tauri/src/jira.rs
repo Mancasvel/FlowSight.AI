@@ -36,9 +36,7 @@ const REDIRECT_URL: &str = "http://localhost:12345/callback";
 const SCOPES: &[&str] = &["read:jira-work", "read:jira-user", "offline_access", "read:me"];
 
 fn get_client_id() -> String {
-    // Try to read env var (e.g. set in .env.local and loaded by Vite/Tauri dev process)
-    std::env::var("VITE_JIRA_CLIENT_ID")
-        .unwrap_or_else(|_| "YOUR_ATLASSIAN_CLIENT_ID".to_string())
+    crate::oauth_env::jira_client_id()
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -51,9 +49,7 @@ pub struct JiraIssue {
 // Persisted Config - (Items stored in generic config table)
 
 fn get_client_secret() -> Option<String> {
-    // 3LO Apps (Custom) require secret. Public Apps do not.
-    // We try to read it, if present, we use it.
-    std::env::var("VITE_JIRA_CLIENT_SECRET").ok()
+    crate::oauth_env::jira_client_secret()
 }
 
 pub fn create_oauth_client() -> BasicClient {
@@ -86,12 +82,8 @@ pub fn start_jira_oauth() -> Result<String, String> {
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    // 3. Open Browser
-    if cfg!(windows) {
-        std::process::Command::new("cmd").args(["/c", "start", auth_url.as_str().replace("&", "^&").as_str()]).spawn().map_err(|e| e.to_string())?;
-    } else {
-        open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
-    }
+    // 3. Open Browser (`open` avoids a flashing cmd window on Windows)
+    open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
 
     // 4. Start Local Server to listen for code (Blocking! - needs own thread in real app, but for simplicity here...)
     // NOTE: In Tauri main thread this blocks UI. Ideally we spawn a thread.

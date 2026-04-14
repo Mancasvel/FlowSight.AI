@@ -11,9 +11,22 @@ concurrency:
 permissions:
   contents: write
 
+# Secrets requeridos en el repo: Settings → Secrets and variables → Actions
+#   TAURI_JIRA_CLIENT_ID, TAURI_JIRA_CLIENT_SECRET
+#   VITE_SUPABASE_URL, VITE_SUPABASE_PUBLIC_KEY
+# (Opcional: TAURI_LINEAR_CLIENT_ID, TAURI_LINEAR_CLIENT_SECRET si usáis Linear.)
+# No commitees .env.local; el CI inyecta estos valores en `pnpm build`.
+
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
+    env:
+      TAURI_JIRA_CLIENT_ID: ${{ secrets.TAURI_JIRA_CLIENT_ID }}
+      TAURI_JIRA_CLIENT_SECRET: ${{ secrets.TAURI_JIRA_CLIENT_SECRET }}
+      TAURI_LINEAR_CLIENT_ID: ${{ secrets.TAURI_LINEAR_CLIENT_ID }}
+      TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLIC_KEY: ${{ secrets.VITE_SUPABASE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +90,13 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    env:
+      TAURI_JIRA_CLIENT_ID: ${{ secrets.TAURI_JIRA_CLIENT_ID }}
+      TAURI_JIRA_CLIENT_SECRET: ${{ secrets.TAURI_JIRA_CLIENT_SECRET }}
+      TAURI_LINEAR_CLIENT_ID: ${{ secrets.TAURI_LINEAR_CLIENT_ID }}
+      TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLIC_KEY: ${{ secrets.VITE_SUPABASE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -124,6 +144,13 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    env:
+      TAURI_JIRA_CLIENT_ID: ${{ secrets.TAURI_JIRA_CLIENT_ID }}
+      TAURI_JIRA_CLIENT_SECRET: ${{ secrets.TAURI_JIRA_CLIENT_SECRET }}
+      TAURI_LINEAR_CLIENT_ID: ${{ secrets.TAURI_LINEAR_CLIENT_ID }}
+      TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLIC_KEY: ${{ secrets.VITE_SUPABASE_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
 

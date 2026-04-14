@@ -197,8 +197,8 @@ fn get_env_var(key: &str) -> Option<String> {
 fn get_provider_client_id(provider: &str) -> String {
     match provider {
         "google" => get_env_var("VITE_GOOGLE_CLIENT_ID").unwrap_or_default(),
-        "jira" => get_env_var("VITE_JIRA_CLIENT_ID").unwrap_or_default(),
-        "linear" => get_env_var("VITE_LINEAR_CLIENT_ID").unwrap_or_default(),
+        "jira" => crate::oauth_env::jira_client_id(),
+        "linear" => crate::oauth_env::linear_client_id(),
         _ => String::new(),
     }
 }
@@ -206,8 +206,8 @@ fn get_provider_client_id(provider: &str) -> String {
 fn get_provider_client_secret(provider: &str) -> Option<String> {
     match provider {
         "google" => get_env_var("VITE_GOOGLE_CLIENT_SECRET"),
-        "jira" => get_env_var("VITE_JIRA_CLIENT_SECRET"),
-        "linear" => get_env_var("VITE_LINEAR_CLIENT_SECRET"),
+        "jira" => crate::oauth_env::jira_client_secret(),
+        "linear" => crate::oauth_env::linear_client_secret(),
         _ => None,
     }
 }
@@ -274,16 +274,8 @@ pub fn start_auth(provider: String) -> Result<String, String> {
         auth_url.query_pairs_mut().append_pair("audience", "api.atlassian.com");
     }
     
-    // Open browser
-    if cfg!(windows) {
-        let url_str = auth_url.as_str().replace("&", "^&");
-        std::process::Command::new("cmd")
-            .args(["/c", "start", &url_str])
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    } else {
-        open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
-    }
+    // Open browser (use `open` on Windows too — avoids a flashing cmd window from `cmd /c start`)
+    open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
     
     // Start callback listener
     std::thread::spawn(move || {

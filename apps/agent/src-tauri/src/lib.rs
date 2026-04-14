@@ -3,6 +3,7 @@ mod jira;
 mod sync;
 mod auth;
 mod linear;
+mod oauth_env;
 pub mod context;
 
 use agent::{

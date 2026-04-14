@@ -8,6 +8,20 @@ const SYNC_INTERVAL_MINS: u64 = 10;
 const VISION_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
 
+fn jwt_exp(token: &str) -> i64 {
+    use base64::Engine;
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() < 2 { return 0; }
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(parts[1])
+        .or_else(|_| base64::engine::general_purpose::STANDARD.decode(parts[1]))
+        .unwrap_or_default();
+    serde_json::from_slice::<serde_json::Value>(&decoded)
+        .ok()
+        .and_then(|v| v["exp"].as_i64())
+        .unwrap_or(0)
+}
+
 fn get_supabase_url() -> String {
     std::env::var("VITE_SUPABASE_URL").unwrap_or_else(|_| "https://dzpyrdxelcgfpmcdojvb.supabase.co".to_string())
 }
@@ -66,19 +80,25 @@ fn get_user_session(conn: &Connection) -> Option<UserSession> {
         (Some(mut us), Some(auth)) => {
             let provider = auth["provider"].as_str().unwrap_or("");
             if provider == "google" || provider == "manual" {
-                if let Some(fresh_token) = auth["access_token"].as_str() {
-                    if fresh_token != us.access_token {
-                        println!("[Sync] Merging fresher Supabase tokens into user_session");
-                        us.access_token = fresh_token.to_string();
-                        if let Some(rt) = auth["refresh_token"].as_str() {
-                            us.refresh_token = Some(rt.to_string());
+                if let Some(auth_token) = auth["access_token"].as_str() {
+                    if auth_token != us.access_token {
+                        // Only merge if auth_session token is actually newer (decode JWT exp)
+                        let auth_exp = jwt_exp(auth_token);
+                        let us_exp = jwt_exp(&us.access_token);
+                        if auth_exp > us_exp {
+                            println!("[Sync] Merging fresher Supabase tokens into user_session (auth_exp={} > us_exp={})", auth_exp, us_exp);
+                            us.access_token = auth_token.to_string();
+                            if let Some(rt) = auth["refresh_token"].as_str() {
+                                us.refresh_token = Some(rt.to_string());
+                            }
+                            let json = serde_json::to_string(&us).unwrap_or_default();
+                            let _ = conn.execute(
+                                "INSERT OR REPLACE INTO config (key, value) VALUES ('user_session', ?1)",
+                                [&json]
+                            );
+                        } else {
+                            println!("[Sync] Skipping auth_session merge (user_session token is fresher: us_exp={} >= auth_exp={})", us_exp, auth_exp);
                         }
-                        // Persist merged session
-                        let json = serde_json::to_string(&us).unwrap_or_default();
-                        let _ = conn.execute(
-                            "INSERT OR REPLACE INTO config (key, value) VALUES ('user_session', ?1)",
-                            [&json]
-                        );
                     }
                 }
             } else {
@@ -248,7 +268,11 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
 
     // 2. Generate Summary with Qwen3-VL local model
     println!("[CloudSync] Summarizing {} reports...", ids.len());
-    let summary = summarize_with_vision_model(&full_text).unwrap_or_else(|_| "Summary generation failed".to_string());
+    let summary = summarize_with_vision_model(&full_text).unwrap_or_else(|e| {
+        println!("[CloudSync] Summary generation failed: {}", e);
+        "Summary generation failed".to_string()
+    });
+    println!("[CloudSync] Summary generated ({} chars): {:.120}", summary.len(), summary);
     
     // 3. Upload to Supabase with user authentication (retry on JWT expired)
     let upload_result = upload_session(&session, total_duration, &summary, &categories, &tickets);
@@ -295,30 +319,39 @@ fn summarize_with_vision_model(text: &str) -> Result<String, String> {
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| e.to_string())?;
-        
-    let prompt = format!("You are an Activity Summarizer. Below is a list of tasks performed by a developer.
-    
-    TASKS:
-    {}
-    
-    INSTRUCTIONS:
-    - Write a short 1-paragraph summary of what was actually done.
-    - ONLY use the information provided in the TASKS list.
-    - Do NOT invent or assume any other work.
-    - Be concise but specific.
-    ", text);
+
+    // ~3500 tokens budget for input (ctx 4096 minus 500 output tokens, ~4 chars/token)
+    let max_chars = 12_000;
+    let truncated = if text.len() > max_chars {
+        println!("[CloudSync] Truncating summary input from {} to {} chars", text.len(), max_chars);
+        &text[..max_chars]
+    } else {
+        text
+    };
+
+    let prompt = format!(
+        "You are an Activity Summarizer. Below is a list of tasks performed by a developer.\n\n\
+         TASKS:\n{}\n\n\
+         INSTRUCTIONS:\n\
+         - Write a short 1-paragraph summary of what was actually done.\n\
+         - ONLY use the information provided in the TASKS list.\n\
+         - Do NOT invent or assume any other work.\n\
+         - Be concise but specific.",
+        truncated
+    );
     
     let body = serde_json::json!({
         "model": VISION_MODEL_NAME,
         "messages": [{ "role": "user", "content": prompt }],
         "temperature": 0.3,
-        "max_tokens": 500,
-        "stream": false
+        "max_tokens": 500
     });
 
     let resp = client.post(LOCAL_CHAT_URL).json(&body).send().map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("Summary request failed: {}", resp.status()));
+        let status = resp.status();
+        let err_body = resp.text().unwrap_or_default();
+        return Err(format!("Summary request failed ({}): {}", status, err_body));
     }
 
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;

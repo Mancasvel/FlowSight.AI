@@ -2,6 +2,19 @@ use active_win_pos_rs::get_active_window;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn git_command() -> Command {
+    let mut c = Command::new("git");
+    #[cfg(windows)]
+    c.creation_flags(CREATE_NO_WINDOW);
+    c
+}
+
 #[derive(serde::Serialize, Clone, Debug, Default)]
 pub struct SystemContext {
     pub app_name: Option<String>,
@@ -52,7 +65,7 @@ pub fn get_git_context(cwd: &str) -> Option<GitContext> {
     if !path.exists() { return None; }
 
     // 1. Get Branch
-    let branch = Command::new("git")
+    let branch = git_command()
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(&path)
         .output()
@@ -69,7 +82,7 @@ pub fn get_git_context(cwd: &str) -> Option<GitContext> {
     if branch.is_none() { return None; }
 
     // 2. Check Dirty Status
-    let is_dirty = Command::new("git")
+    let is_dirty = git_command()
         .args(["status", "--porcelain"])
         .current_dir(&path)
         .output()
@@ -78,7 +91,7 @@ pub fn get_git_context(cwd: &str) -> Option<GitContext> {
         .unwrap_or(false);
 
     // 3. Last Commit
-    let last_commit_msg = Command::new("git")
+    let last_commit_msg = git_command()
         .args(["log", "-1", "--pretty=%B"])
         .current_dir(&path)
         .output()
