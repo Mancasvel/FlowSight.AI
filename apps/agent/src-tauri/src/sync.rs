@@ -5,8 +5,28 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 const SYNC_INTERVAL_MINS: u64 = 10;
+/// Refresh the access token when it is expired or within this many seconds of expiring.
+const JWT_REFRESH_MARGIN_SECS: i64 = 300;
+/// Background poll interval for proactive JWT renewal.
+const TOKEN_REFRESH_POLL_SECS: u64 = 120;
 const VISION_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
+/// Max Unicode characters of TASKS text sent to the local `/v1/chat/completions` endpoint.
+/// Default llama.cpp servers often use `n_ctx=2048`; prompt = instructions + tasks must stay under that.
+/// Override with env `FLOWSIGHT_SUMMARY_MAX_CHARS` (same unit: Unicode chars).
+const SUMMARY_MAX_TASK_CHARS: usize = 5000;
+
+fn truncate_tasks_for_summary(text: &str, max_chars: usize) -> String {
+    let n = text.chars().count();
+    if n <= max_chars {
+        return text.to_string();
+    }
+    println!(
+        "[CloudSync] Truncating summary TASKS from {} to {} Unicode chars (local n_ctx limit)",
+        n, max_chars
+    );
+    text.chars().take(max_chars).collect()
+}
 
 fn jwt_exp(token: &str) -> i64 {
     use base64::Engine;
@@ -46,6 +66,44 @@ pub fn start_sync_thread(db_path: std::path::PathBuf) {
         loop {
             thread::sleep(Duration::from_secs(SYNC_INTERVAL_MINS * 60));
             let _ = perform_sync(&path_clone);
+        }
+    });
+}
+
+/// Proactively refreshes the Supabase session when the access token is missing, expired,
+/// or close to expiry. Safe to call from a background thread.
+pub(crate) fn refresh_session_if_expiring(db_path: &std::path::PathBuf) {
+    let Ok(conn) = Connection::open(db_path) else {
+        return;
+    };
+    let Some(session) = get_user_session(&conn) else {
+        return;
+    };
+    if session.refresh_token.is_none() {
+        return;
+    }
+
+    let exp = jwt_exp(&session.access_token);
+    let now = chrono::Utc::now().timestamp();
+    if exp > 0 && exp - now > JWT_REFRESH_MARGIN_SECS {
+        return;
+    }
+
+    match refresh_supabase_token(&session) {
+        Ok(_) => println!(
+            "[Sync] Proactive JWT refresh OK (previous access exp: {})",
+            exp
+        ),
+        Err(e) => println!("[Sync] Proactive JWT refresh failed: {}", e),
+    }
+}
+
+pub fn start_token_refresh_thread(db_path: std::path::PathBuf) {
+    thread::spawn(move || {
+        refresh_session_if_expiring(&db_path);
+        loop {
+            thread::sleep(Duration::from_secs(TOKEN_REFRESH_POLL_SECS));
+            refresh_session_if_expiring(&db_path);
         }
     });
 }
@@ -211,6 +269,8 @@ pub fn get_current_user() -> Result<Option<UserSession>, String> {
 }
 
 fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
+    refresh_session_if_expiring(db_path);
+
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     
     // Check if user is logged in
@@ -279,7 +339,10 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     let upload_result = match &upload_result {
         Err(e) if e.contains("401") || e.contains("PGRST3") => {
             println!("[CloudSync] Auth error detected ({}), attempting JWT refresh...", e);
-            match refresh_supabase_token(&session) {
+            let conn_refresh = Connection::open(db_path).map_err(|e| e.to_string())?;
+            let session_for_refresh =
+                get_user_session(&conn_refresh).unwrap_or_else(|| session.clone());
+            match refresh_supabase_token(&session_for_refresh) {
                 Ok(refreshed) => upload_session(&refreshed, total_duration, &summary, &categories, &tickets),
                 Err(ref_err) => {
                     println!("[CloudSync] Token refresh failed: {}", ref_err);
@@ -320,31 +383,24 @@ fn summarize_with_vision_model(text: &str) -> Result<String, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    // ~3500 tokens budget for input (ctx 4096 minus 500 output tokens, ~4 chars/token)
-    let max_chars = 12_000;
-    let truncated = if text.len() > max_chars {
-        println!("[CloudSync] Truncating summary input from {} to {} chars", text.len(), max_chars);
-        &text[..max_chars]
-    } else {
-        text
-    };
+    let max_chars = std::env::var("FLOWSIGHT_SUMMARY_MAX_CHARS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(SUMMARY_MAX_TASK_CHARS);
 
+    let tasks = truncate_tasks_for_summary(text, max_chars);
+
+    // Keep instructions short to preserve token budget for TASKS.
     let prompt = format!(
-        "You are an Activity Summarizer. Below is a list of tasks performed by a developer.\n\n\
-         TASKS:\n{}\n\n\
-         INSTRUCTIONS:\n\
-         - Write a short 1-paragraph summary of what was actually done.\n\
-         - ONLY use the information provided in the TASKS list.\n\
-         - Do NOT invent or assume any other work.\n\
-         - Be concise but specific.",
-        truncated
+        "Summarize the developer activity below in ONE short paragraph. Use only facts from the list; do not invent work.\n\nTASKS:\n{}",
+        tasks
     );
     
     let body = serde_json::json!({
         "model": VISION_MODEL_NAME,
         "messages": [{ "role": "user", "content": prompt }],
         "temperature": 0.3,
-        "max_tokens": 500
+        "max_tokens": 384
     });
 
     let resp = client.post(LOCAL_CHAT_URL).json(&body).send().map_err(|e| e.to_string())?;
@@ -530,9 +586,11 @@ pub fn set_active_team(team_id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    refresh_session_if_expiring(&db_path);
+
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
-    let session = get_user_session(&conn)
+    let mut session = get_user_session(&conn)
         .ok_or("Not logged in. Please sign in first.")?;
     
     let client = Client::new();
@@ -549,13 +607,22 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     if user_resp.status().as_u16() == 401 || user_resp.status().as_u16() == 403 {
         println!("[Team] JWT might be expired (HTTP {}), attempting refresh...", user_resp.status());
         if let Ok(new_s) = refresh_supabase_token(&session) {
-            current_token = new_s.access_token.clone();
+            session = new_s;
+            current_token = session.access_token.clone();
             user_resp = client.get(format!("{}/auth/v1/user", get_supabase_url()))
                 .header("apikey", get_supabase_key())
                 .header("Authorization", format!("Bearer {}", current_token))
                 .send()
                 .map_err(|e| e.to_string())?;
         }
+    }
+    
+    if !user_resp.status().is_success() {
+        let err_body = user_resp.text().unwrap_or_else(|_| "Empty body".to_string());
+        return Err(format!(
+            "Your session has expired. Please sign out and sign in again. ({})",
+            err_body
+        ));
     }
     
     let user_json: serde_json::Value = user_resp.json().map_err(|e| e.to_string())?;
@@ -601,8 +668,10 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
         .map_err(|e| e.to_string())?;
         
     if inv_resp.status().as_u16() == 401 || inv_resp.status().as_u16() == 403 {
-         if let Ok(new_s) = refresh_supabase_token(&session) {
-            current_token = new_s.access_token.clone();
+        println!("[Team] Invitation request unauthorized, attempting refresh with latest session...");
+        if let Ok(new_s) = refresh_supabase_token(&session) {
+            session = new_s;
+            current_token = session.access_token.clone();
             inv_resp = client.get(&inv_url)
                 .header("apikey", get_supabase_key())
                 .header("Authorization", format!("Bearer {}", current_token))
@@ -614,6 +683,12 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     let inv_status = inv_resp.status();
     if !inv_status.is_success() {
         let err_body = inv_resp.text().unwrap_or_else(|_| "Empty body".to_string());
+        if err_body.contains("JWT expired") || err_body.contains("PGRST303") {
+            return Err(
+                "Your session has expired. Please sign out, sign in again, then join the team."
+                    .to_string(),
+            );
+        }
         return Err(format!("Error validating invitation (HTTP {}): {}", inv_status, err_body));
     }
     
@@ -629,7 +704,7 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     }
     
     let team_id = invitation["team_id"].as_str().ok_or("Malformed invitation (missing team_id)")?;
-    let inviter_id = invitation["created_by"].as_str();
+    let _inviter_id = invitation["created_by"].as_str();
     
     // 4. Add to team_members (Retry on 401)
     println!("[Team] Adding user {} to team {} (role: member, omitting invited_by)", user_id_from_jwt, team_id);
@@ -652,7 +727,8 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     
     if member_resp.status().as_u16() == 401 || member_resp.status().as_u16() == 403 {
         if let Ok(new_s) = refresh_supabase_token(&session) {
-            current_token = new_s.access_token.clone();
+            session = new_s;
+            current_token = session.access_token.clone();
             member_resp = client.post(&member_url)
                 .header("apikey", get_supabase_key())
                 .header("Authorization", format!("Bearer {}", current_token))

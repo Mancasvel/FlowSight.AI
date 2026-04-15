@@ -9,6 +9,7 @@ use url::Url;
 use tiny_http::{Server, Response};
 use rusqlite::Connection;
 use std::sync::{Mutex, OnceLock};
+use base64::Engine;
 
 static OAUTH_STATE: OnceLock<Mutex<OAuthState>> = OnceLock::new();
 
@@ -67,8 +68,7 @@ const LINEAR: ProviderConfig = ProviderConfig {
 
 const REDIRECT_URL: &str = "http://localhost:12345/callback";
 
-// Elegant success page HTML matching FlowSight design
-const SUCCESS_HTML: &str = r#"<!DOCTYPE html>
+const SUPABASE_SUCCESS_HTML_TEMPLATE: &str = r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -90,14 +90,11 @@ const SUCCESS_HTML: &str = r#"<!DOCTYPE html>
       padding: 48px;
       max-width: 420px;
     }
-    .logo {
-      font-size: 32px;
-      font-weight: 700;
-      margin-bottom: 8px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+    .logo-img {
+      display: block;
+      margin: 0 auto 20px;
+      max-width: min(240px, 80vw);
+      height: auto;
     }
     .check-icon {
       width: 80px;
@@ -161,7 +158,7 @@ const SUCCESS_HTML: &str = r#"<!DOCTYPE html>
 </head>
 <body>
   <div class="container">
-    <div class="logo">FlowSight</div>
+    <img class="logo-img" src="__FLOW_LOGO_DATA_URI__" alt="FlowSight" />
     <div class="check-icon">
       <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
     </div>
@@ -172,6 +169,17 @@ const SUCCESS_HTML: &str = r#"<!DOCTYPE html>
   </div>
 </body>
 </html>"#;
+
+fn supabase_login_success_html() -> String {
+    static HTML: OnceLock<String> = OnceLock::new();
+    HTML.get_or_init(|| {
+        let bytes = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/flowsight_sinfondo.png"));
+        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let data_uri = format!("data:image/png;base64,{}", b64);
+        SUPABASE_SUCCESS_HTML_TEMPLATE.replace("__FLOW_LOGO_DATA_URI__", &data_uri)
+    })
+    .clone()
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AuthUser {
@@ -356,7 +364,7 @@ fn listen_for_callback() {
                         save_jira_specific_tokens(&session);
                     }
                     
-                    let _ = request.respond(Response::from_string(SUCCESS_HTML)
+                    let _ = request.respond(Response::from_string(supabase_login_success_html())
                         .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
                     break;
                 }
@@ -440,7 +448,7 @@ fn listen_for_supabase_callback() {
                             provider,
                         };
                         save_auth_session(&session);
-                        let _ = request.respond(Response::from_string(SUCCESS_HTML)
+                        let _ = request.respond(Response::from_string(supabase_login_success_html())
                             .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
                         break;
                     }

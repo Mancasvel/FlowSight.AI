@@ -73,6 +73,8 @@ impl FlowSightAgent {
         
         // Start Background Sync (10m interval)
         crate::sync::start_sync_thread(agent.db_path.clone());
+        // Proactive Supabase JWT refresh (~every 2m when near expiry)
+        crate::sync::start_token_refresh_thread(agent.db_path.clone());
         
         agent
     }

@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FlowSight DEV Agent</title>
+  <link rel="icon" href="/flowsight_sinfondo.png" type="image/png" />
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
@@ -93,6 +94,34 @@
       font-weight: 600;
       color: hsl(var(--foreground));
       flex: 1;
+    }
+
+    .login-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .login-logo {
+      display: block;
+      width: 140px;
+      height: auto;
+      max-width: 85%;
+    }
+
+    .header-logo {
+      width: 26px;
+      height: auto;
+      flex-shrink: 0;
+      object-fit: contain;
+    }
+
+    .card-header-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
     }
 
     .badge {
@@ -651,8 +680,11 @@
   <div class="app-container" id="loginScreen">
     <div class="card" style="padding: 24px; text-align: center;">
       <div style="margin-bottom: 20px;">
-        <h1 style="font-size: 20px; font-weight: 600; margin-bottom: 4px;">FlowSight Agent</h1>
-        <p style="font-size: 12px; color: hsl(var(--muted-foreground));">Sign in to start tracking</p>
+        <div class="login-brand">
+          <img src="/flowsight_sinfondo.png" alt="" class="login-logo" width="140" height="auto" />
+          <h1 id="loginTitle" style="font-size: 20px; font-weight: 600; margin-top: 12px; margin-bottom: 4px;">FlowSight Agent</h1>
+          <p id="loginSubtitle" style="font-size: 12px; color: hsl(var(--muted-foreground));">Sign in to start tracking</p>
+        </div>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -719,7 +751,10 @@
     <!-- Status Card -->
     <div class="card">
       <div class="card-header">
-        <div class="card-title">FlowSight Agent</div>
+        <div class="card-header-title-row">
+          <img src="/flowsight_sinfondo.png" alt="" class="header-logo" width="26" height="26" />
+          <div class="card-title">FlowSight Agent</div>
+        </div>
         <div class="badge badge-success" id="loginBadge">Connected</div>
       </div>
 
@@ -1779,7 +1814,9 @@
 
     // PDF Export Logic
     let currentHistoryData = null;
-    document.getElementById('exportPdfBtn').onclick = exportHistoryToPDF;
+    document.getElementById('exportPdfBtn').onclick = () => {
+      exportHistoryToPDF().catch((e) => showToast('PDF export failed: ' + e, 'error'));
+    };
 
     async function loadHistory() {
       historyBody.innerHTML = '<div class="loading"></div> Loading history...';
@@ -1793,13 +1830,36 @@
       }
     }
 
-    function exportHistoryToPDF() {
+    async function exportHistoryToPDF() {
       if (!currentHistoryData) return;
 
       const doc = new jsPDF();
       const data = currentHistoryData;
       const margin = 20;
       let y = 20;
+
+      try {
+        const res = await fetch('/flowsight_sinfondo.png');
+        const blob = await res.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+        const w = 40;
+        const h = Math.min((img.height / img.width) * w, 22);
+        doc.addImage(dataUrl, 'PNG', margin, y, w, h);
+        y += h + 10;
+      } catch (_) {
+        /* logo optional */
+      }
 
       // Title
       doc.setFontSize(20);
@@ -1889,16 +1949,16 @@
       toggleManualLogin.style.display = 'none';
       // Hide other buttons roughly
       document.getElementById('loginGoogle').parentElement.style.display = 'none';
-      document.querySelector('h1').innerText = "Manual Code Login";
-      document.querySelector('p').innerText = "Enter your access token directly";
+      document.getElementById('loginTitle').innerText = "Manual Code Login";
+      document.getElementById('loginSubtitle').innerText = "Enter your access token directly";
     };
 
     cancelManualLoginBtn.onclick = () => {
       manualLoginParams.style.display = 'none';
       toggleManualLogin.style.display = 'inline';
       document.getElementById('loginGoogle').parentElement.style.display = 'flex';
-      document.querySelector('h1').innerText = "FlowSight Agent";
-      document.querySelector('p').innerText = "Sign in to start tracking";
+      document.getElementById('loginTitle').innerText = "FlowSight Agent";
+      document.getElementById('loginSubtitle').innerText = "Sign in to start tracking";
     };
 
     manualLoginBtn.onclick = async () => {
