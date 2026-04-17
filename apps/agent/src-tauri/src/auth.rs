@@ -35,6 +35,8 @@ fn get_oauth_state() -> (Option<String>, Option<String>) {
 // Provider configs
 #[derive(Clone)]
 struct ProviderConfig {
+    /// Provider id (reserved for logging / future use).
+    #[allow(dead_code)]
     name: &'static str,
     auth_url: &'static str,
     token_url: &'static str,
@@ -662,38 +664,45 @@ pub fn logout() -> Result<(), String> {
 const SUPABASE_URL: &str = "https://dzpyrdxelcgfpmcdojvb.supabase.co";
 const SUPABASE_KEY: &str = "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ";
 
+/// Parses `access_token` / optional `refresh_token` from a hash or query fragment, or treats `code` as a raw JWT.
+pub(crate) fn parse_tokens_from_oauth_code(code: &str) -> Result<(String, Option<String>), String> {
+    if !code.contains("access_token=") {
+        return Ok((code.to_string(), None));
+    }
+    let fragment = if let Some(hash_pos) = code.find('#') {
+        &code[hash_pos + 1..]
+    } else {
+        code
+    };
+
+    let params: std::collections::HashMap<String, String> = fragment
+        .split('&')
+        .filter_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            Some((parts.next()?.to_string(), parts.next()?.to_string()))
+        })
+        .collect();
+
+    let at = params
+        .get("access_token")
+        .ok_or_else(|| "No access_token found in URL".to_string())?
+        .clone();
+    let rt = params.get("refresh_token").cloned();
+    Ok((at, rt))
+}
+
 #[tauri::command]
 pub fn login_with_code(code: String) -> Result<AuthSession, String> {
     // Support both raw JWT tokens and full redirect URLs with hash fragments
     // e.g., "https://flowsight.site/#access_token=eyJ...&refresh_token=abc&..."
-    let (access_token, refresh_token) = if code.contains("access_token=") {
-        // Parse tokens from URL hash fragment
-        let fragment = if let Some(hash_pos) = code.find('#') {
-            &code[hash_pos + 1..]
-        } else if code.contains("access_token=") {
-            &code[..]
-        } else {
-            return Err("Could not parse URL".to_string());
-        };
-        
-        let params: std::collections::HashMap<String, String> = fragment
-            .split('&')
-            .filter_map(|pair| {
-                let mut parts = pair.splitn(2, '=');
-                Some((parts.next()?.to_string(), parts.next()?.to_string()))
-            })
-            .collect();
-        
-        let at = params.get("access_token")
-            .ok_or("No access_token found in URL")?
-            .clone();
-        let rt = params.get("refresh_token").cloned();
-        
-        println!("[Auth] Extracted tokens from URL (refresh_token: {})", rt.is_some());
-        (at, rt)
-    } else {
-        // Raw JWT token
-        (code, None)
+    let (access_token, refresh_token) = match parse_tokens_from_oauth_code(&code) {
+        Ok((at, rt)) => {
+            if code.contains("access_token=") {
+                println!("[Auth] Extracted tokens from URL (refresh_token: {})", rt.is_some());
+            }
+            (at, rt)
+        }
+        Err(e) => return Err(e),
     };
     
     // Validate against Supabase Auth API
@@ -737,4 +746,33 @@ pub fn login_with_code(code: String) -> Result<AuthSession, String> {
 #[tauri::command]
 pub fn is_logged_in() -> Result<bool, String> {
     Ok(get_auth_session()?.is_some())
+}
+
+#[cfg(test)]
+mod oauth_code_parse_tests {
+    use super::parse_tokens_from_oauth_code;
+
+    #[test]
+    fn raw_token_without_equals() {
+        let (at, rt) = parse_tokens_from_oauth_code("eyJhbGciOiJIUzI1NiJ9.x.y").unwrap();
+        assert_eq!(at, "eyJhbGciOiJIUzI1NiJ9.x.y");
+        assert!(rt.is_none());
+    }
+
+    #[test]
+    fn hash_fragment_tokens() {
+        let url = "https://app.test/callback#access_token=AAA&refresh_token=BBB&token_type=bearer";
+        let (at, rt) = parse_tokens_from_oauth_code(url).unwrap();
+        assert_eq!(at, "AAA");
+        assert_eq!(rt.as_deref(), Some("BBB"));
+    }
+
+    #[test]
+    fn query_style_without_hash() {
+        let s = "access_token=CCC&refresh_token=DDD";
+        let (at, rt) = parse_tokens_from_oauth_code(s).unwrap();
+        assert_eq!(at, "CCC");
+        assert_eq!(rt.as_deref(), Some("DDD"));
+    }
+
 }

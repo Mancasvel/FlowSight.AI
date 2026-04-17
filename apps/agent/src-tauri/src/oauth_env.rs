@@ -52,3 +52,34 @@ pub fn linear_client_secret() -> Option<String> {
         });
     from_env.or(from_compile)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jira_client_id_prefers_tauri_env() {
+        temp_env::with_vars(
+            [
+                ("TAURI_JIRA_CLIENT_ID", Some("from-tauri")),
+                ("VITE_JIRA_CLIENT_ID", Some("from-vite")),
+            ],
+            || {
+                assert_eq!(jira_client_id(), "from-tauri");
+            },
+        );
+    }
+
+    #[test]
+    fn linear_client_id_falls_back_to_vite() {
+        temp_env::with_vars(
+            [
+                ("TAURI_LINEAR_CLIENT_ID", None::<&str>),
+                ("VITE_LINEAR_CLIENT_ID", Some("linear-vite")),
+            ],
+            || {
+                assert_eq!(linear_client_id(), "linear-vite");
+            },
+        );
+    }
+}

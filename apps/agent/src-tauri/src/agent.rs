@@ -1,3 +1,4 @@
+use crate::agent_pure::parse_analysis;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -353,128 +354,6 @@ pub async fn capture_context_snapshot(
     }).await.map_err(|e| format!("Task join error: {}", e))?
 }
 
-// Helper to parse "Category: X" logic
-fn parse_analysis(raw: &str) -> (String, String) {
-    let lower = raw.to_lowercase();
-
-    // --- Extract category from structured "CATEGORY:" field first ---
-    let category = extract_category_from_field(&lower)
-        .unwrap_or_else(|| infer_category_from_content(&lower));
-
-    // --- Build clean description from structured fields ---
-    let description = build_structured_description(raw);
-
-    (description, category)
-}
-
-/// Extract category from an explicit "CATEGORY: Xyz" line in the model output.
-fn extract_category_from_field(lower: &str) -> Option<String> {
-    let valid_categories = [
-        "coding", "debugging", "codereview", "testing", "documentation",
-        "design", "planning", "meeting", "communication", "research",
-        "learning", "devops", "database", "sales", "admin", "browsing",
-        "idle", "general",
-    ];
-
-    // Find the last "category:" occurrence
-    if let Some(idx) = lower.rfind("category:") {
-        let after = lower[idx + 9..].trim();
-        // Take first word (the category value)
-        let cat_word = after.split_whitespace().next().unwrap_or("")
-            .trim_matches(|c: char| !c.is_alphanumeric());
-
-        for valid in &valid_categories {
-            if cat_word.starts_with(valid) {
-                // Return properly cased version
-                return Some(match *valid {
-                    "coding" => "Coding",
-                    "debugging" => "Debugging",
-                    "codereview" => "CodeReview",
-                    "testing" => "Testing",
-                    "documentation" => "Documentation",
-                    "design" => "Design",
-                    "planning" => "Planning",
-                    "meeting" => "Meeting",
-                    "communication" => "Communication",
-                    "research" => "Research",
-                    "learning" => "Learning",
-                    "devops" => "DevOps",
-                    "database" => "Database",
-                    "sales" => "Sales",
-                    "admin" => "Admin",
-                    "browsing" => "Browsing",
-                    "idle" => "Idle",
-                    _ => "General",
-                }.to_string());
-            }
-        }
-    }
-    None
-}
-
-/// Fallback: infer category from keywords in the full content.
-fn infer_category_from_content(lower: &str) -> String {
-    if lower.contains("debugger") || lower.contains("breakpoint") { "Debugging" }
-    else if lower.contains("pull request") || lower.contains("reviewing code") || lower.contains("code review") { "CodeReview" }
-    else if lower.contains("running tests") || lower.contains("test results") || lower.contains("test suite") { "Testing" }
-    else if lower.contains("writing code") || lower.contains("editor") || lower.contains("visual studio code") || lower.contains("vs code") || lower.contains("ide") { "Coding" }
-    else if lower.contains("writing docs") || lower.contains("readme") { "Documentation" }
-    else if lower.contains("figma") || lower.contains("sketch") || lower.contains("design tool") { "Design" }
-    else if lower.contains("jira") || lower.contains("trello") || lower.contains("backlog") { "Planning" }
-    else if lower.contains("zoom") || lower.contains("google meet") || lower.contains("teams meeting") { "Meeting" }
-    else if lower.contains("slack") || lower.contains("discord") || lower.contains("email") { "Communication" }
-    else if lower.contains("stackoverflow") || lower.contains("searching") || lower.contains("google search") { "Research" }
-    else if lower.contains("tutorial") || lower.contains("course") || lower.contains("learning") { "Learning" }
-    else if lower.contains("docker") || lower.contains("kubernetes") || lower.contains("pipeline") || lower.contains("ci/cd") { "DevOps" }
-    else if lower.contains("sql") || lower.contains("database") || lower.contains("supabase") { "Database" }
-    else if lower.contains("crm") || lower.contains("hubspot") { "Sales" }
-    else if lower.contains("settings") || lower.contains("configuration") { "Admin" }
-    else if lower.contains("browser") || lower.contains("chrome") || lower.contains("firefox") || lower.contains("linkedin") || lower.contains("github.com") { "Browsing" }
-    else if lower.contains("idle") || lower.contains("no activity") || lower.contains("lock screen") { "Idle" }
-    else { "General" }
-    .to_string()
-}
-
-/// Build a clean human-readable description from the structured fields.
-fn build_structured_description(raw: &str) -> String {
-    // Known field labels from our template
-    let fields = ["APP:", "WINDOW TITLE:", "VISIBLE CONTENT:", "FILES OR URLS:",
-                   "CURRENT ACTION:", "PROGRESS:", "NEXT STEP:", "CATEGORY:"];
-
-    let mut parts: Vec<String> = Vec::new();
-
-    for line in raw.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() { continue; }
-
-        // Skip the CATEGORY line (parsed separately)
-        if trimmed.to_uppercase().starts_with("CATEGORY:") { continue; }
-
-        // Clean markdown artifacts just in case
-        let clean = trimmed
-            .replace("###", "")
-            .replace("##", "")
-            .replace("**", "")
-            .replace("####", "");
-        let clean = clean.trim();
-        if clean.is_empty() { continue; }
-
-        // Check if it matches a known field pattern to keep structured output
-        let is_field = fields.iter().any(|f| clean.to_uppercase().starts_with(f));
-        if is_field {
-            parts.push(clean.to_string());
-        } else {
-            // Free text line — keep as-is
-            parts.push(clean.to_string());
-        }
-    }
-
-    if parts.is_empty() {
-        return "No analysis available".to_string();
-    }
-
-    parts.join("\n")
-}
 #[tauri::command]
 pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
     let mut agent = state.lock().unwrap();
@@ -1067,4 +946,54 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
     }
 
     Err("Model analysis failed after retries".to_string())
+}
+
+#[cfg(test)]
+mod agent_struct_tests {
+    use super::*;
+
+    #[test]
+    fn agent_config_json_roundtrip() {
+        let c = AgentConfig {
+            dev_name: Some("Tester".into()),
+            capture_interval: Some(42_000),
+            vision_model: Some("model-id".into()),
+            gpu_layers: Some(4),
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: AgentConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.dev_name, c.dev_name);
+        assert_eq!(back.gpu_layers, c.gpu_layers);
+    }
+
+    #[test]
+    fn activity_report_serializes() {
+        let r = ActivityReport {
+            id: Some(1),
+            timestamp: "t".into(),
+            description: "d".into(),
+            activity_type: "coding".into(),
+            synced: false,
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["activity_type"], "coding");
+    }
+}
+
+#[cfg(test)]
+mod repetition_tests {
+    use super::truncate_repetition;
+
+    #[test]
+    fn truncate_short_text_noop() {
+        let s = "a b c d e f g h i";
+        assert_eq!(truncate_repetition(s), s);
+    }
+
+    #[test]
+    fn truncate_collapses_many_repeated_words() {
+        let spam: String = std::iter::repeat("spam ").take(25).collect();
+        let out = truncate_repetition(spam.trim());
+        assert!(out.len() < spam.len());
+    }
 }

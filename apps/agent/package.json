@@ -6,7 +6,9 @@
   "scripts": {
     "vite": "vite",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml --lib",
+    "test:coverage": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml --lib --summary-only"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",

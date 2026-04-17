@@ -8,6 +8,15 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+/// VS Code / IDE style: `"file.rs - Project - Editor"` → leading segment as file hint.
+pub(crate) fn file_hint_from_window_title(title: &str) -> Option<String> {
+    if title.contains(" - ") {
+        title.split(" - ").next().map(|s| s.trim().to_string())
+    } else {
+        None
+    }
+}
+
 fn git_command() -> Command {
     let mut c = Command::new("git");
     #[cfg(windows)]
@@ -39,15 +48,7 @@ pub fn get_system_context() -> SystemContext {
             // Heuristic: Extract filename from title
             // VS Code: "filename.rs - Project - VS Code"
             // IntelliJ: "filename.rs [Project] - ..."
-            let file_name = if let Some(t) = &title {
-                if t.contains(" - ") {
-                    t.split(" - ").next().map(|s| s.trim().to_string())
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let file_name = title.as_ref().and_then(|t| file_hint_from_window_title(t));
 
             SystemContext {
                 app_name: app,
@@ -109,4 +110,22 @@ pub fn get_git_context(cwd: &str) -> Option<GitContext> {
         last_commit_msg,
         is_dirty,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_hint_splits_vscode_style_title() {
+        assert_eq!(
+            file_hint_from_window_title("main.rs - flowsight - VS Code").as_deref(),
+            Some("main.rs")
+        );
+    }
+
+    #[test]
+    fn file_hint_none_without_separator() {
+        assert_eq!(file_hint_from_window_title("YouTube"), None);
+    }
 }

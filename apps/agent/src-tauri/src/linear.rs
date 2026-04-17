@@ -119,3 +119,21 @@ pub fn fetch_linear_profile() -> Result<LinearUser, String> {
         avatar_url: viewer["avatarUrl"].as_str().map(String::from),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linear_issue_roundtrip() {
+        let i = LinearIssue {
+            id: "u".into(),
+            identifier: "ENG-1".into(),
+            title: "t".into(),
+            state: "Done".into(),
+        };
+        let j = serde_json::to_string(&i).unwrap();
+        let back: LinearIssue = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.identifier, "ENG-1");
+    }
+}

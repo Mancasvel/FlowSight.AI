@@ -408,3 +408,13 @@ fn parse_jira_profile(json: serde_json::Value, conn: &Connection) -> Result<Jira
 
     Ok(user)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oauth_client_builds_without_panic() {
+        let _ = create_oauth_client();
+    }
+}

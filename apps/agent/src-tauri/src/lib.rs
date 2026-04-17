@@ -1,5 +1,8 @@
 mod agent;
+mod agent_pure;
 mod jira;
+mod sync_env;
+mod sync_pure;
 mod sync;
 mod auth;
 mod linear;

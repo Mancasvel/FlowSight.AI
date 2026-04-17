@@ -1,10 +1,15 @@
-use reqwest::blocking::Client;
+use crate::sync_env::{supabase_anon_key, supabase_url};
+use crate::sync_pure::{jwt_exp, truncate_tasks_for_summary, SELECT_UNSYNCED_IN_WINDOW_SQL};
+use reqwest::blocking::{Client, Response};
 use std::thread;
 use std::time::Duration;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 const SYNC_INTERVAL_MINS: u64 = 10;
+/// Only aggregate unsynced reports whose `created_at` falls within this rolling window (minutes).
+/// Override with `FLOWSIGHT_SYNC_WINDOW_MINS`.
+const CLOUDSYNC_REPORT_WINDOW_MINS: i64 = 10;
 /// Refresh the access token when it is expired or within this many seconds of expiring.
 const JWT_REFRESH_MARGIN_SECS: i64 = 300;
 /// Background poll interval for proactive JWT renewal.
@@ -15,40 +20,6 @@ const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
 /// Default llama.cpp servers often use `n_ctx=2048`; prompt = instructions + tasks must stay under that.
 /// Override with env `FLOWSIGHT_SUMMARY_MAX_CHARS` (same unit: Unicode chars).
 const SUMMARY_MAX_TASK_CHARS: usize = 5000;
-
-fn truncate_tasks_for_summary(text: &str, max_chars: usize) -> String {
-    let n = text.chars().count();
-    if n <= max_chars {
-        return text.to_string();
-    }
-    println!(
-        "[CloudSync] Truncating summary TASKS from {} to {} Unicode chars (local n_ctx limit)",
-        n, max_chars
-    );
-    text.chars().take(max_chars).collect()
-}
-
-fn jwt_exp(token: &str) -> i64 {
-    use base64::Engine;
-    let parts: Vec<&str> = token.split('.').collect();
-    if parts.len() < 2 { return 0; }
-    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(parts[1])
-        .or_else(|_| base64::engine::general_purpose::STANDARD.decode(parts[1]))
-        .unwrap_or_default();
-    serde_json::from_slice::<serde_json::Value>(&decoded)
-        .ok()
-        .and_then(|v| v["exp"].as_i64())
-        .unwrap_or(0)
-}
-
-fn get_supabase_url() -> String {
-    std::env::var("VITE_SUPABASE_URL").unwrap_or_else(|_| "https://dzpyrdxelcgfpmcdojvb.supabase.co".to_string())
-}
-
-fn get_supabase_key() -> String {
-    std::env::var("VITE_SUPABASE_PUBLIC_KEY").unwrap_or_else(|_| "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ".to_string())
-}
 
 // User session stored locally after login
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,10 +181,10 @@ fn refresh_supabase_token(session: &UserSession) -> Result<UserSession, String> 
     
     println!("[Sync] Attempting token refresh using token starting with: {}...", &refresh_token[..10]);
     let client = Client::new();
-    let url = format!("{}/auth/v1/token?grant_type=refresh_token", get_supabase_url());
+    let url = format!("{}/auth/v1/token?grant_type=refresh_token", supabase_url());
     
     let resp = client.post(&url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .json(&serde_json::json!({ "refresh_token": refresh_token }))
         .send()
         .map_err(|e| e.to_string())?;
@@ -282,12 +253,40 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         }
     };
     
-    // 1. Get Unsynced Reports
-    let mut stmt = conn.prepare(
-        "SELECT id, description, activity_type, duration_seconds, jira_ticket_id FROM reports WHERE synced = 0 LIMIT 50"
-    ).map_err(|e| e.to_string())?;
-    
-    let rows = stmt.query_map([], |row| {
+    // 1. Unsynced reports from the last N minutes only (rolling window; avoids huge backlog / truncation)
+    let window_mins = std::env::var("FLOWSIGHT_SYNC_WINDOW_MINS")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .filter(|&m| m > 0)
+        .unwrap_or(CLOUDSYNC_REPORT_WINDOW_MINS);
+    let time_modifier = format!("-{} minutes", window_mins);
+
+    let old_unsynced: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM reports WHERE synced = 0 \
+             AND datetime(COALESCE(created_at, '1970-01-01')) < datetime('now', ?1, 'localtime')",
+            params![&time_modifier],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap_or(0);
+    if old_unsynced > 0 {
+        println!(
+            "[CloudSync] {} unsynced row(s) older than the {} min window (skipped for cloud upload)",
+            old_unsynced,
+            window_mins
+        );
+    }
+
+    let mut stmt = conn
+        .prepare(SELECT_UNSYNCED_IN_WINDOW_SQL)
+        .map_err(|e| e.to_string())?;
+
+    println!(
+        "[CloudSync] Window: unsynced reports with created_at in the last {} minutes (local time)",
+        window_mins
+    );
+
+    let rows = stmt.query_map(params![time_modifier], |row| {
         Ok((
             row.get::<_, i64>(0)?,
             row.get::<_, String>(1)?,
@@ -356,6 +355,38 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     match upload_result {
         Ok(_) => {
             println!("[CloudSync] Upload success for user: {}", session.email);
+
+            let primary_category = categories
+                .iter()
+                .max_by_key(|(_, &secs)| secs)
+                .map(|(c, _)| c.as_str())
+                .unwrap_or("mixed")
+                .to_string();
+
+            let primary_jira = tickets
+                .iter()
+                .max_by_key(|(_, &secs)| secs)
+                .map(|(t, _)| t.clone());
+
+            // Same AI summary as work_sessions — not the raw SQLite log (that stays local only).
+            let activity_body = serde_json::json!({
+                "user_id": session.user_id,
+                "team_id": session.team_id,
+                "description": summary.clone(),
+                "category": primary_category,
+                "jira_ticket_id": primary_jira,
+                "duration_seconds": total_duration,
+                "captured_at": chrono::Utc::now().to_rfc3339()
+            });
+
+            match post_activity_report_with_refresh(db_path, &session, &activity_body) {
+                Ok(()) => println!("[CloudSync] activity_reports: AI window summary saved"),
+                Err(e) => println!(
+                    "[CloudSync] activity_reports insert failed (work_sessions row already saved): {}",
+                    e
+                ),
+            }
+
             let id_list = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>().join(",");
             let _ = conn.execute(
                 &format!("UPDATE reports SET synced = 1 WHERE id IN ({})", id_list),
@@ -388,6 +419,13 @@ fn summarize_with_vision_model(text: &str) -> Result<String, String> {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(SUMMARY_MAX_TASK_CHARS);
 
+    let n_chars = text.chars().count();
+    if n_chars > max_chars {
+        println!(
+            "[CloudSync] Truncating summary TASKS from {} to {} Unicode chars (local n_ctx limit)",
+            n_chars, max_chars
+        );
+    }
     let tasks = truncate_tasks_for_summary(text, max_chars);
 
     // Keep instructions short to preserve token budget for TASKS.
@@ -427,7 +465,7 @@ fn upload_session(
     tickets: &std::collections::HashMap<String, i32>
 ) -> Result<(), String> {
     let client = Client::new();
-    let url = format!("{}/rest/v1/work_sessions", get_supabase_url()); 
+    let url = format!("{}/rest/v1/work_sessions", supabase_url()); 
     
     let body = serde_json::json!({
         "user_id": session.user_id,
@@ -441,7 +479,7 @@ fn upload_session(
     });
 
     let resp = client.post(&url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", &session.access_token))
         .header("Content-Type", "application/json")
         .header("Prefer", "return=minimal")
@@ -463,6 +501,46 @@ fn upload_session(
     Ok(())
 }
 
+fn post_activity_report_row(session: &UserSession, body: &serde_json::Value) -> Result<Response, String> {
+    let client = Client::new();
+    let url = format!("{}/rest/v1/activity_reports", supabase_url());
+    client
+        .post(&url)
+        .header("apikey", supabase_anon_key())
+        .header("Authorization", format!("Bearer {}", &session.access_token))
+        .header("Content-Type", "application/json")
+        .header("Prefer", "return=minimal")
+        .json(body)
+        .send()
+        .map_err(|e| e.to_string())
+}
+
+/// Retries once with a refreshed JWT if the first POST returns 401/403.
+fn post_activity_report_with_refresh(
+    db_path: &std::path::PathBuf,
+    session: &UserSession,
+    body: &serde_json::Value,
+) -> Result<(), String> {
+    let mut resp = post_activity_report_row(session, body)?;
+    if resp.status().as_u16() == 401 || resp.status().as_u16() == 403 {
+        let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+        if let Some(s) = get_user_session(&conn) {
+            if let Ok(new_s) = refresh_supabase_token(&s) {
+                resp = post_activity_report_row(&new_s, body)?;
+            }
+        }
+    }
+    let status = resp.status();
+    if status.as_u16() == 403 {
+        return Err("License expired or invalid".to_string());
+    }
+    if !status.is_success() {
+        let t = resp.text().unwrap_or_default();
+        return Err(format!("HTTP {}: {}", status, t));
+    }
+    Ok(())
+}
+
 // Upload individual activity report (for granular tracking)
 #[tauri::command]
 pub fn upload_activity_report(
@@ -477,9 +555,6 @@ pub fn upload_activity_report(
     let session = get_user_session(&conn)
         .ok_or("Not logged in")?;
     
-    let client = Client::new();
-    let url = format!("{}/rest/v1/activity_reports", get_supabase_url());
-    
     let body = serde_json::json!({
         "user_id": session.user_id,
         "team_id": session.team_id,
@@ -490,14 +565,7 @@ pub fn upload_activity_report(
         "captured_at": chrono::Utc::now().to_rfc3339()
     });
     
-    let resp = client.post(&url)
-        .header("apikey", get_supabase_key())
-        .header("Authorization", format!("Bearer {}", &session.access_token))
-        .header("Content-Type", "application/json")
-        .header("Prefer", "return=minimal")
-        .json(&body)
-        .send()
-        .map_err(|e| e.to_string())?;
+    let resp = post_activity_report_row(&session, &body)?;
     
     if resp.status().as_u16() == 403 {
         return Err("License expired or invalid".to_string());
@@ -524,11 +592,11 @@ pub fn get_user_teams() -> Result<serde_json::Value, String> {
     // Fetch team memberships from Supabase
     let url = format!(
         "{}/rest/v1/team_members?user_id=eq.{}&select=team_id,role,joined_at",
-        get_supabase_url(), session.user_id
+        supabase_url(), session.user_id
     );
     
     let mut resp = client.get(&url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", current_token))
         .send()
         .map_err(|e| e.to_string())?;
@@ -538,7 +606,7 @@ pub fn get_user_teams() -> Result<serde_json::Value, String> {
         if let Ok(new_s) = refresh_supabase_token(&session) {
             current_token = new_s.access_token.clone();
             resp = client.get(&url)
-                .header("apikey", get_supabase_key())
+                .header("apikey", supabase_anon_key())
                 .header("Authorization", format!("Bearer {}", current_token))
                 .send()
                 .map_err(|e| e.to_string())?;
@@ -598,8 +666,8 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     
     // 1. Fetch current user info (Retry on 401)
     println!("[Team] Fetching user info for profile sync...");
-    let mut user_resp = client.get(format!("{}/auth/v1/user", get_supabase_url()))
-        .header("apikey", get_supabase_key())
+    let mut user_resp = client.get(format!("{}/auth/v1/user", supabase_url()))
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", current_token))
         .send()
         .map_err(|e| e.to_string())?;
@@ -609,8 +677,8 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
         if let Ok(new_s) = refresh_supabase_token(&session) {
             session = new_s;
             current_token = session.access_token.clone();
-            user_resp = client.get(format!("{}/auth/v1/user", get_supabase_url()))
-                .header("apikey", get_supabase_key())
+            user_resp = client.get(format!("{}/auth/v1/user", supabase_url()))
+                .header("apikey", supabase_anon_key())
                 .header("Authorization", format!("Bearer {}", current_token))
                 .send()
                 .map_err(|e| e.to_string())?;
@@ -635,9 +703,9 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     println!("[Team] Syncing profile for user {} (JWT id: {})", session.user_id, user_id_from_jwt);
     
     // 2. Ensure profile exists (Upsert)
-    let profile_url = format!("{}/rest/v1/profiles", get_supabase_url());
+    let profile_url = format!("{}/rest/v1/profiles", supabase_url());
     let prof_resp = client.post(&profile_url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", current_token))
         .header("Content-Type", "application/json")
         .header("Prefer", "resolution=merge-duplicates,return=minimal")
@@ -659,10 +727,10 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
 
     // 3. Verify invitation (Retry on 401)
     println!("[Team] Validating invitation token: {}", token);
-    let inv_url = format!("{}/rest/v1/invitations?token=eq.{}&select=team_id,expires_at,used_at,created_by,email", get_supabase_url(), token);
+    let inv_url = format!("{}/rest/v1/invitations?token=eq.{}&select=team_id,expires_at,used_at,created_by,email", supabase_url(), token);
     
     let mut inv_resp = client.get(&inv_url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", current_token))
         .send()
         .map_err(|e| e.to_string())?;
@@ -673,7 +741,7 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
             session = new_s;
             current_token = session.access_token.clone();
             inv_resp = client.get(&inv_url)
-                .header("apikey", get_supabase_key())
+                .header("apikey", supabase_anon_key())
                 .header("Authorization", format!("Bearer {}", current_token))
                 .send()
                 .map_err(|e| e.to_string())?;
@@ -708,7 +776,7 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     
     // 4. Add to team_members (Retry on 401)
     println!("[Team] Adding user {} to team {} (role: member, omitting invited_by)", user_id_from_jwt, team_id);
-    let member_url = format!("{}/rest/v1/team_members", get_supabase_url());
+    let member_url = format!("{}/rest/v1/team_members", supabase_url());
     let member_body = serde_json::json!({
         "team_id": team_id,
         "user_id": user_id_from_jwt,
@@ -717,7 +785,7 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     });
     
     let mut member_resp = client.post(&member_url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", current_token))
         .header("Content-Type", "application/json")
         .header("Prefer", "return=minimal")
@@ -730,7 +798,7 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
             session = new_s;
             current_token = session.access_token.clone();
             member_resp = client.post(&member_url)
-                .header("apikey", get_supabase_key())
+                .header("apikey", supabase_anon_key())
                 .header("Authorization", format!("Bearer {}", current_token))
                 .header("Content-Type", "application/json")
                 .header("Prefer", "return=minimal")
@@ -751,9 +819,9 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     }
     
     // 5. Mark invitation as used
-    let mark_url = format!("{}/rest/v1/invitations?token=eq.{}", get_supabase_url(), token);
+    let mark_url = format!("{}/rest/v1/invitations?token=eq.{}", supabase_url(), token);
     let _ = client.patch(&mark_url)
-        .header("apikey", get_supabase_key())
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", current_token))
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({ "used_at": chrono::Utc::now().to_rfc3339() }))
@@ -770,4 +838,24 @@ pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     )?;
     
     Ok(serde_json::json!({ "success": true, "team_id": team_id }))
+}
+
+#[cfg(test)]
+mod user_session_tests {
+    use super::UserSession;
+
+    #[test]
+    fn user_session_json_roundtrip() {
+        let s = UserSession {
+            user_id: "u1".into(),
+            team_id: Some("t1".into()),
+            access_token: "at".into(),
+            refresh_token: Some("rt".into()),
+            email: "a@b.c".into(),
+        };
+        let j = serde_json::to_string(&s).unwrap();
+        let back: UserSession = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.email, s.email);
+        assert_eq!(back.team_id, s.team_id);
+    }
 }
