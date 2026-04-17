@@ -36,6 +36,7 @@ supabase_schema.sql
 # ================================
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *~
