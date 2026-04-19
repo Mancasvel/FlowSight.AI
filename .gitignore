@@ -96,7 +96,7 @@ models/
 *.onnx
 *.safetensors
 
-# Legacy model directories (not used — current model: Qwen3-VL-1B-Merged)
+# Legacy local_llm checkpoint dirs (superseded by current vision bundle)
 local_llm/Qwen2-VL-2B-Instruct/
 local_llm/Qwen3-VL-2B/
 

@@ -1,4 +1,5 @@
 use crate::sync_env::{supabase_anon_key, supabase_url};
+use crate::vision_model::LLAMA_CHAT_MODEL_ID;
 use crate::sync_pure::{jwt_exp, truncate_tasks_for_summary, SELECT_UNSYNCED_IN_WINDOW_SQL};
 use reqwest::blocking::{Client, Response};
 use std::thread;
@@ -14,7 +15,6 @@ const CLOUDSYNC_REPORT_WINDOW_MINS: i64 = 10;
 const JWT_REFRESH_MARGIN_SECS: i64 = 300;
 /// Background poll interval for proactive JWT renewal.
 const TOKEN_REFRESH_POLL_SECS: u64 = 120;
-const VISION_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
 /// Max Unicode characters of TASKS text sent to the local `/v1/chat/completions` endpoint.
 /// Default llama.cpp servers often use `n_ctx=2048`; prompt = instructions + tasks must stay under that.
@@ -325,7 +325,7 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         return Ok("No new activity to report.".to_string());
     }
 
-    // 2. Generate Summary with Qwen3-VL local model
+    // 2. Generate summary with local vision model
     println!("[CloudSync] Summarizing {} reports...", ids.len());
     let summary = summarize_with_vision_model(&full_text).unwrap_or_else(|e| {
         println!("[CloudSync] Summary generation failed: {}", e);
@@ -435,7 +435,7 @@ fn summarize_with_vision_model(text: &str) -> Result<String, String> {
     );
     
     let body = serde_json::json!({
-        "model": VISION_MODEL_NAME,
+        "model": LLAMA_CHAT_MODEL_ID,
         "messages": [{ "role": "user", "content": prompt }],
         "temperature": 0.3,
         "max_tokens": 384

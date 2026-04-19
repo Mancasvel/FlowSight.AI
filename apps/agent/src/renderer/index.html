@@ -1369,10 +1369,10 @@
         config: {
           devName: currentUser.name || 'Guest',
           captureInterval: 60000,
-          visionModel: 'ViFortune-AI/Qwen3-VL-1B-Merged'
+          visionModel: 'FlowSight/local-vision'
         }
       });
-      console.log("[Config] Enforced Qwen3-VL-1B-Merged");
+      console.log("[Config] vision model:", "FlowSight/local-vision");
     }
 
     document.getElementById('startBtn').onclick = async () => {
@@ -1394,7 +1394,7 @@
       };
 
       try {
-        showStep("Starting Qwen3-VL-1B...", "Preparing local server (first run downloads model)...", 20);
+        showStep("Starting local vision…", "Preparing local server (first run may download model weights)…", 20);
 
         // 1. Start Server
         const res = await invoke('start_server');

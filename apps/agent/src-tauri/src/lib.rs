@@ -1,3 +1,4 @@
+mod vision_model;
 mod agent;
 mod agent_pure;
 mod jira;

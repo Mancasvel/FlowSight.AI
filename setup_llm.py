@@ -3,10 +3,7 @@ Setup script for FlowSight.AI local inference runtime.
 
 Downloads:
   - llama.cpp prebuilt binaries (llama-server.exe) for Windows
-  - Qwen3-VL-2B-Instruct Q4_K_M GGUF (vision language model)
-  - Qwen3-VL-2B-Instruct mmproj Q8_0 GGUF (vision projector, required for image analysis)
-
-Model: https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF
+  - Multimodal vision GGUF weights + matching vision projector (mmproj), required for image analysis
 
 Run once before launching the app:
   python setup_llm.py
@@ -118,7 +115,7 @@ if __name__ == "__main__":
     if tag:
         download_llama_bin(tag)
 
-    download_file(MODEL_URL, MODEL_DEST, f"Qwen3-VL-2B model ({MODEL_FILE})")
-    download_file(MMPROJ_URL, MMPROJ_DEST, f"Qwen3-VL-2B vision projector ({MMPROJ_FILE})")
+    download_file(MODEL_URL, MODEL_DEST, "Vision language model (GGUF weights)")
+    download_file(MMPROJ_URL, MMPROJ_DEST, "Vision projector (mmproj GGUF)")
 
     print("\nSetup complete. You can now launch the FlowSight.AI app.")

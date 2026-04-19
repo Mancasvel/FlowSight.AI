@@ -1,4 +1,8 @@
 use crate::agent_pure::parse_analysis;
+use crate::vision_model::{
+    CONFIG_VISION_MODEL_ID, LLAMA_CHAT_MODEL_ID, VISION_GGUF_FILENAME, VISION_MMPROJ_FILENAME,
+    VISION_STATUS_LABEL,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::path::PathBuf;
@@ -9,10 +13,6 @@ use rusqlite::{Connection, params};
 use std::io::Write;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
-const VISION_MODEL_ID: &str = "Qwen/Qwen3-VL-2B-Instruct";
-const VISION_LOCAL_MODEL_FILE: &str = "Qwen3-VL-2B-Instruct-Q3_K_M.gguf";
-const VISION_LOCAL_MMPROJ_FILE: &str = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
-const VISION_LOCAL_MODEL_NAME: &str = "Qwen3-VL-2B-Instruct";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ActivityReport {
@@ -61,7 +61,7 @@ impl FlowSightAgent {
             config: AgentConfig {
                 dev_name: Some(whoami::realname()),
                 capture_interval: Some(60000),
-                vision_model: Some(VISION_MODEL_ID.to_string()),
+                vision_model: Some(CONFIG_VISION_MODEL_ID.to_string()),
                 gpu_layers: Some(16), // Default to Balanced Mode
             },
             is_running: false,
@@ -298,7 +298,7 @@ pub async fn capture_context_snapshot(
         let (base64, path_str) = capture_screen()?;
         let path = PathBuf::from(&path_str);
 
-        // 2. Run Qwen3-VL-1B vision analysis (Visual Description + Category)
+        // 2. Local vision analysis (visual description + category)
         let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
         
         let raw_analysis = match analyze_image_with_vision(&base64, &task_context, gpu_layers) {
@@ -579,7 +579,7 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
         Ok(r) if r.status().is_success() => Ok(serde_json::json!({
             "online": true,
             "installed": true,
-            "models": [VISION_LOCAL_MODEL_NAME],
+            "models": [VISION_STATUS_LABEL],
             "hasVisionModel": true
         })),
         Ok(r) => Ok(serde_json::json!({
@@ -739,8 +739,8 @@ pub fn start_server() -> Result<serde_json::Value, String> {
     let root = find_project_root()?;
     let local_llm_dir = root.join("local_llm");
     let bin_path = local_llm_dir.join("bin").join("llama-server.exe");
-    let model_path = local_llm_dir.join(VISION_LOCAL_MODEL_FILE);
-    let mmproj_path = local_llm_dir.join(VISION_LOCAL_MMPROJ_FILE);
+    let model_path = local_llm_dir.join(VISION_GGUF_FILENAME);
+    let mmproj_path = local_llm_dir.join(VISION_MMPROJ_FILENAME);
 
     if !bin_path.exists() {
         return Err(format!("llama-server not found at {:?}. Run setup_llm.py first.", bin_path));
@@ -801,7 +801,7 @@ pub fn start_server() -> Result<serde_json::Value, String> {
             Ok(serde_json::json!({
                 "status": "started",
                 "pid": "managed",
-                "model": VISION_LOCAL_MODEL_NAME
+                "model": VISION_STATUS_LABEL
             }))
         },
         Err(e) => Err(format!("Failed to start server: {}", e))
@@ -844,7 +844,7 @@ fn truncate_repetition(text: &str) -> String {
     }
 
     if result.len() < words.len() {
-        println!("[Qwen3VL] Truncated {} repeated tokens from output", words.len() - result.len());
+        println!("[Vision] Truncated {} repeated tokens from output", words.len() - result.len());
     }
     result.join(" ")
 }
@@ -882,7 +882,7 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
     let max_attempts = 2;
     for attempt in 1..=max_attempts {
         let body = serde_json::json!({
-            "model": VISION_LOCAL_MODEL_NAME,
+            "model": LLAMA_CHAT_MODEL_ID,
             "messages": [
                 {
                     "role": "system",
@@ -931,7 +931,7 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
             || content.to_lowercase().contains("unable to analyze");
 
         if is_empty || is_refusal {
-            println!("[Qwen3VL] Attempt {}/{}: empty or refusal response, retrying...", attempt, max_attempts);
+            println!("[Vision] Attempt {}/{}: empty or refusal response, retrying...", attempt, max_attempts);
             if attempt < max_attempts {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 continue;

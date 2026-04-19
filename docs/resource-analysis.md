@@ -1,7 +1,7 @@
 # FlowSight Agent — Local AI Resource Analysis
 
-**Date**: March 10, 2026
-**Model**: Qwen3-VL-2B-Instruct (Q3_K_M quantization)
+**Date**: March 10, 2026  
+**Model**: 2B multimodal instruct (Q3_K_M quantization)  
 **Runtime**: llama.cpp (llama-server) via Vulkan GPU backend
 
 ---
@@ -19,17 +19,18 @@
 
 ## Part 1 — Decision Log
 
-### Decision 1: Replace broken Qwen3-VL-1B-Merged with official Qwen3-VL-2B-Instruct
+### Decision 1: Replace broken merged 1B GGUF with official 2B instruct + mmproj
 
-**Problem**: The original model (`Novaciano/Qwen3-VL-1B-Merged-Q4_K_M-GGUF`, 482 MB) was completely non-functional for vision tasks. It was missing the **mmproj** (multimodal projector) file required by llama.cpp to process images. The base model also had a documented dimension mismatch between its vision encoder (2048) and LLM hidden size (1024). No mmproj existed for this model and no one had successfully created one.
+**Problem**: The original merged 1B GGUF (~482 MB) was non-functional for vision: missing **mmproj** (multimodal projector) required by llama.cpp for images, plus a documented encoder/LLM dimension mismatch. No usable mmproj existed for that build.
 
-**Decision**: Switch to `Qwen/Qwen3-VL-2B-Instruct-GGUF` — the smallest official Qwen **3** VL model with complete GGUF + mmproj support from the ggml-org ecosystem.
+**Decision**: Switch to the smallest supported **2B** multimodal instruct GGUF from the ecosystem, with matching official **mmproj** artifacts.
 
 **Rationale**:
-- Official Qwen repo with verified architecture (`qwen3vl`)
-- Both model GGUF and mmproj GGUF available and tested
-- 2B is the smallest Qwen3-VL size available (no official 1B exists)
-- Apache 2.0 license
+
+- Verified multimodal architecture in upstream llama.cpp builds
+- Both main GGUF and mmproj available and tested together
+- 2B was the smallest practical instruct+vision pair at the time (no reliable smaller complete pair)
+- Permissive license (Apache 2.0)
 
 **Impact**: Vision went from **0% functional** to **fully working** screenshot analysis with accurate app detection, window title reading, and activity categorization.
 
@@ -40,11 +41,13 @@
 **Problem**: The previous `start_server()` used llama-server's `-hf` (HuggingFace auto-download) flag, which does not support passing the separate mmproj file needed for vision models. It also required network access at startup and had no control over file location.
 
 **Decision**: Switch to explicit local paths:
+
 ```
 llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 ```
 
 **Rationale**:
+
 - `--mmproj` is required for vision and only works with local file paths
 - No network dependency at server boot
 - Predictable file layout for setup_llm.py to manage
@@ -61,6 +64,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 **Decision**: Implement `find_project_root()` that walks up from the executable path and current working directory, looking for the `local_llm/bin/` directory. Falls back to the hardcoded path as a last resort.
 
 **Rationale**:
+
 - Works during `tauri dev` (cwd is `src-tauri/`)
 - Works in production builds (exe is in `target/release/`)
 - Works if repo is moved or cloned elsewhere
@@ -74,9 +78,10 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 
 **Problem**: The user needed the model to be as small as possible (targeting ~1B parameter equivalent size) while maintaining analysis accuracy.
 
-**Decision**: Switch from `Q4_K_M` (1,056 MB, ~4.5 bits/param) to `Q3_K_M` (896 MB, ~3.5 bits/param) from the `unsloth/Qwen3-VL-2B-Instruct-GGUF` repo, which is properly quantized from full-precision weights.
+**Decision**: Switch from `Q4_K_M` (1,056 MB, ~4.5 bits/param) to `Q3_K_M` (896 MB, ~3.5 bits/param) from a community GGUF repo with weights quantized from full precision.
 
 **Alternatives considered**:
+
 | Quantization | Size | Quality | Why not chosen |
 |-------------|------|---------|----------------|
 | Q4_K_M | 1,056 MB | Best | Larger than needed |
@@ -85,6 +90,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 | IQ2_XS | ~570 MB | Moderate | Noticeable quality loss on fine text |
 
 **Rationale**:
+
 - Q3_K_M is widely recognized as the sweet spot for aggressive quantization with minimal quality loss
 - For structured tasks (identify app, read title, categorize), the difference from Q4_K_M is negligible
 - Properly quantized from full precision (not double-quantized from Q4_K_M)
@@ -111,6 +117,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 | **960×540** | **~660** | **~3,436** | **84%** |
 
 **Measured accuracy at 960×540** (from production logs):
+
 - Correctly identifies app name (VS Code / Chrome / Terminal)
 - Reads window titles and file names
 - Detects visible UI elements, tabs, panels
@@ -128,6 +135,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 **Decision**: Reduce to `--n-gpu-layers 50` and `--threads 2`.
 
 **Rationale**:
+
 - With 28 model layers, `50` still offloads all layers to GPU but leaves more GPU scheduling headroom for the OS compositor, video playback, and other apps
 - Reducing threads from 4 to 2 frees 10 of 12 CPU threads for the worker
 - The trade-off is slightly longer inference, but with the 960×540 resolution reduction, total time actually decreased
@@ -143,6 +151,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 **Decision**: Launch llama-server with Windows `BELOW_NORMAL_PRIORITY_CLASS` (flag `0x00004000`) combined with `CREATE_NO_WINDOW` (`0x08000000`).
 
 **Rationale**:
+
 - Windows scheduler automatically yields CPU time to any Normal or Above Normal priority process
 - Worker's VS Code, Chrome, `cargo build`, `npm run` all run at Normal priority — they always win
 - llama-server only uses CPU cycles that would otherwise be idle
@@ -158,7 +167,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 
 | Metric | Before (baseline) | After (optimized) | Change |
 |--------|-------------------|-------------------|--------|
-| Model | Qwen3-VL-1B-Merged Q4_K_M | Qwen3-VL-2B-Instruct Q3_K_M | Functional vision |
+| Model | Merged 1B Q4_K_M (no mmproj) | 2B instruct Q3_K_M + mmproj | Functional vision |
 | Vision works | **No** (no mmproj) | **Yes** | Fixed |
 | Image encoding | N/A | **3.0 s** | — |
 | Image decoding | N/A | **0.8 s** | — |
@@ -169,7 +178,7 @@ llama-server -m local_llm/model.gguf --mmproj local_llm/mmproj.gguf
 ### Resource comparison (before optimizations vs after)
 
 | Resource | Initial config | Optimized config | Improvement |
-|----------|---------------|-----------------|-------------|
+|----------|---------------|-----------------|------------|
 | Model file size | 1,056 MB (Q4_K_M) | 896 MB (Q3_K_M) | **-15%** |
 | Total disk (model + mmproj) | 1,480 MB | 1,320 MB | **-11%** |
 | GPU layers | 99 (full offload) | 50 (balanced) | Less GPU saturation |
@@ -205,12 +214,12 @@ The model is **invisible to the worker** for 85% of each cycle.
 
 | File | Size |
 |------|------|
-| `Qwen3-VL-2B-Instruct-Q3_K_M.gguf` | 896 MB |
-| `mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf` | 424 MB |
+| Main vision GGUF (Q3_K_M) | 896 MB |
+| mmproj GGUF (Q8_0) | 424 MB |
 | `llama-server.exe` + DLLs | ~100 MB |
 | **Total** | **1.32 GB** |
 
-Legacy files removed: `Qwen3VL-2B-Instruct-Q4_K_M.gguf` (1,056 MB) and `Qwen2-VL-2B-Instruct-Q4_K_M.gguf` (940 MB). Freed ~2 GB.
+Legacy larger quantizations removed (~2 GB freed).
 
 ### VRAM (GTX 1650 — 4 GB)
 
