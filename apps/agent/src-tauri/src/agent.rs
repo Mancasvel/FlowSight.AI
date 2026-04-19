@@ -357,16 +357,18 @@ pub async fn capture_context_snapshot(
 #[tauri::command]
 pub fn save_activity(state: State<'_, AgentState>, description: String, activity_type: String, jira_ticket: Option<String>) -> Result<ActivityReport, String> {
     let mut agent = state.lock().unwrap();
-    let report_id = if let Some(a) = agent.as_mut() {
-        a.reports_sent += 1;
-        // Default capture interval 30s
-        a.save_report(&description, &activity_type, jira_ticket, 30)
-    } else {
-        None
+    let Some(a) = agent.as_mut() else {
+        return Err(
+            "Agent not initialized — wait for startup to finish before capturing.".to_string(),
+        );
     };
-    
+    a.reports_sent += 1;
+    let report_id = a
+        .save_report(&description, &activity_type, jira_ticket, 30)
+        .ok_or_else(|| "Failed to write activity to local database.".to_string())?;
+
     Ok(ActivityReport {
-        id: report_id,
+        id: Some(report_id),
         timestamp: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         description,
         activity_type,
@@ -378,7 +380,11 @@ pub fn save_activity(state: State<'_, AgentState>, description: String, activity
 
 #[tauri::command]
 pub fn initialize_agent(state: State<'_, AgentState>) -> Result<bool, String> {
-    *state.lock().unwrap() = Some(FlowSightAgent::new());
+    let mut g = state.lock().unwrap();
+    if g.is_some() {
+        return Ok(true);
+    }
+    *g = Some(FlowSightAgent::new());
     Ok(true)
 }
 

@@ -863,7 +863,7 @@
       </div>
 
       <div class="button-group">
-        <button class="button button-primary" id="startBtn" style="flex: 1;">▶ Start</button>
+        <button class="button button-primary" id="startBtn" style="flex: 1;" disabled>▶ Start</button>
         <button class="button button-destructive" id="stopBtn" style="flex: 1;">■ Stop</button>
       </div>
 
@@ -1494,12 +1494,15 @@
     }
 
     async function init() {
+      const startBtn = document.getElementById('startBtn');
       try {
         console.log("[Agent] Initializing backend...");
         await invoke('initialize_agent');
         console.log("[Agent] Backend initialized.");
       } catch (e) {
         console.error("Failed to init agent:", e);
+      } finally {
+        if (startBtn) startBtn.disabled = false;
       }
 
       // Check if already logged in
@@ -1654,7 +1657,7 @@
         document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
 
         const ticketLabel = jiraTicket ? ` → ${jiraTicket}` : '';
-        showToast(`Activity synced${ticketLabel}`, 'success', 2500);
+        showToast(`Saved locally${ticketLabel} (cloud upload runs on a timer when logged in)`, 'success', 2500);
       } catch (e) {
         console.error('[Sync] Error:', e);
         log("Sync error: " + e);

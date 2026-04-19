@@ -1,16 +1,15 @@
 use crate::sync_env::{supabase_anon_key, supabase_url};
 use crate::vision_model::LLAMA_CHAT_MODEL_ID;
-use crate::sync_pure::{jwt_exp, truncate_tasks_for_summary, SELECT_UNSYNCED_IN_WINDOW_SQL};
+use crate::sync_pure::{jwt_exp, select_unsynced_pending_sql, truncate_tasks_for_summary};
 use reqwest::blocking::{Client, Response};
 use std::thread;
 use std::time::Duration;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 const SYNC_INTERVAL_MINS: u64 = 10;
-/// Only aggregate unsynced reports whose `created_at` falls within this rolling window (minutes).
-/// Override with `FLOWSIGHT_SYNC_WINDOW_MINS`.
-const CLOUDSYNC_REPORT_WINDOW_MINS: i64 = 10;
+/// Max rows per cloud upload batch (oldest unsynced first). Override with `FLOWSIGHT_SYNC_BATCH_LIMIT`.
+const CLOUDSYNC_BATCH_LIMIT_DEFAULT: u64 = 500;
 /// Refresh the access token when it is expired or within this many seconds of expiring.
 const JWT_REFRESH_MARGIN_SECS: i64 = 300;
 /// Background poll interval for proactive JWT renewal.
@@ -34,6 +33,8 @@ pub struct UserSession {
 pub fn start_sync_thread(db_path: std::path::PathBuf) {
     let path_clone = db_path.clone();
     thread::spawn(move || {
+        // Run once immediately so the first cloud batch is not delayed by SYNC_INTERVAL_MINS.
+        let _ = perform_sync(&path_clone);
         loop {
             thread::sleep(Duration::from_secs(SYNC_INTERVAL_MINS * 60));
             let _ = perform_sync(&path_clone);
@@ -125,14 +126,12 @@ fn get_user_session(conn: &Connection) -> Option<UserSession> {
                                 "INSERT OR REPLACE INTO config (key, value) VALUES ('user_session', ?1)",
                                 [&json]
                             );
-                        } else {
-                            println!("[Sync] Skipping auth_session merge (user_session token is fresher: us_exp={} >= auth_exp={})", us_exp, auth_exp);
                         }
+                        // else: keep user_session JWT (fresher); no log — token refresh polls hit this often.
                     }
                 }
-            } else {
-                println!("[Sync] Skipping auth_session merge (provider: {})", provider);
             }
+            // Non-Supabase auth_session (e.g. Jira): keep user_session only; no merge.
             Some(us)
         }
         // Only user_session exists: use as-is
@@ -252,41 +251,31 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
             return Ok("Not logged in - sync disabled".to_string());
         }
     };
+    println!("[CloudSync] REST base: {}", supabase_url());
     
-    // 1. Unsynced reports from the last N minutes only (rolling window; avoids huge backlog / truncation)
-    let window_mins = std::env::var("FLOWSIGHT_SYNC_WINDOW_MINS")
+    let batch_limit = std::env::var("FLOWSIGHT_SYNC_BATCH_LIMIT")
         .ok()
-        .and_then(|s| s.parse::<i64>().ok())
-        .filter(|&m| m > 0)
-        .unwrap_or(CLOUDSYNC_REPORT_WINDOW_MINS);
-    let time_modifier = format!("-{} minutes", window_mins);
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(CLOUDSYNC_BATCH_LIMIT_DEFAULT)
+        .min(5000) as usize;
 
-    let old_unsynced: i64 = conn
+    let total_unsynced: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM reports WHERE synced = 0 \
-             AND datetime(COALESCE(created_at, '1970-01-01')) < datetime('now', ?1, 'localtime')",
-            params![&time_modifier],
+            "SELECT COUNT(*) FROM reports WHERE synced = 0",
+            [],
             |r| r.get::<_, i64>(0),
         )
         .unwrap_or(0);
-    if old_unsynced > 0 {
-        println!(
-            "[CloudSync] {} unsynced row(s) older than the {} min window (skipped for cloud upload)",
-            old_unsynced,
-            window_mins
-        );
-    }
-
-    let mut stmt = conn
-        .prepare(SELECT_UNSYNCED_IN_WINDOW_SQL)
-        .map_err(|e| e.to_string())?;
-
     println!(
-        "[CloudSync] Window: unsynced reports with created_at in the last {} minutes (local time)",
-        window_mins
+        "[CloudSync] Pending unsynced reports: {} (uploading oldest up to {} rows)",
+        total_unsynced, batch_limit
     );
 
-    let rows = stmt.query_map(params![time_modifier], |row| {
+    let sql = select_unsynced_pending_sql(batch_limit);
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map([], |row| {
         Ok((
             row.get::<_, i64>(0)?,
             row.get::<_, String>(1)?,
@@ -318,6 +307,13 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
                 }
             }
         }
+    }
+
+    if (total_unsynced as usize) > ids.len() {
+        println!(
+            "[CloudSync] {} more unsynced report(s) queued after this batch; will upload on the next run.",
+            total_unsynced as usize - ids.len()
+        );
     }
     
     if ids.is_empty() {
@@ -354,7 +350,10 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
 
     match upload_result {
         Ok(_) => {
-            println!("[CloudSync] Upload success for user: {}", session.email);
+            println!(
+                "[CloudSync] Upload success for {} — in Supabase open public.work_sessions and public.activity_reports (local dev-agent.db table \"reports\" is not uploaded as raw rows).",
+                session.email
+            );
 
             let primary_category = categories
                 .iter()
@@ -391,6 +390,29 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
             let _ = conn.execute(
                 &format!("UPDATE reports SET synced = 1 WHERE id IN ({})", id_list),
                 []
+            );
+
+            let sync_meta = serde_json::json!({
+                "at": chrono::Utc::now().to_rfc3339(),
+                "rows_marked_synced": ids.len(),
+                "supabase_project_host": supabase_url()
+                    .trim_end_matches('/')
+                    .trim_start_matches("https://"),
+                "tables": "work_sessions, activity_reports",
+            });
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES ('last_cloud_sync', ?1)",
+                [sync_meta.to_string()],
+            );
+            let base = supabase_url();
+            let host = base
+                .trim_end_matches('/')
+                .trim_start_matches("https://");
+            println!(
+                "[CloudSync] (testing) {} UTC | {} local capture(s) → {} | work_sessions + activity_reports",
+                chrono::Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                ids.len(),
+                host
             );
         },
         Err(e) => {

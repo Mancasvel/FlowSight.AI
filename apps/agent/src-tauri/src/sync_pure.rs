@@ -2,14 +2,18 @@
 
 use base64::Engine;
 
-/// Same WHERE clause as `perform_sync` — kept here for tests and a single source of truth.
-pub(crate) const SELECT_UNSYNCED_IN_WINDOW_SQL: &str =
-    "SELECT id, description, activity_type, duration_seconds, jira_ticket_id \
-     FROM reports \
-     WHERE synced = 0 \
-       AND datetime(COALESCE(created_at, '1970-01-01')) >= datetime('now', ?1, 'localtime') \
-     ORDER BY id ASC \
-     LIMIT 50";
+/// Batch of unsynced rows (oldest first) for `perform_sync`. `limit` is clamped to 1..=5000.
+pub(crate) fn select_unsynced_pending_sql(limit: usize) -> String {
+    let lim = limit.max(1).min(5000);
+    format!(
+        "SELECT id, description, activity_type, duration_seconds, jira_ticket_id \
+         FROM reports \
+         WHERE synced = 0 \
+         ORDER BY id ASC \
+         LIMIT {}",
+        lim
+    )
+}
 
 pub(crate) fn jwt_exp(token: &str) -> i64 {
     let parts: Vec<&str> = token.split('.').collect();
@@ -73,7 +77,7 @@ mod tests {
     }
 
     #[test]
-    fn window_query_selects_only_recent_unsynced() {
+    fn pending_query_selects_all_unsynced_oldest_first() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "CREATE TABLE reports (
@@ -99,16 +103,15 @@ mod tests {
         )
         .unwrap();
 
-        let mut stmt = conn.prepare(SELECT_UNSYNCED_IN_WINDOW_SQL).unwrap();
+        let mut stmt = conn.prepare(&select_unsynced_pending_sql(500)).unwrap();
         let rows: Vec<String> = stmt
-            .query_map(rusqlite::params!["-10 minutes"], |row| {
-                row.get::<_, String>(1)
-            })
+            .query_map([], |row| row.get::<_, String>(1))
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0], "new");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0], "old");
+        assert_eq!(rows[1], "new");
     }
 }
