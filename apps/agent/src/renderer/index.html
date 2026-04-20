@@ -1032,7 +1032,7 @@
       try {
         const data = await invoke('get_user_teams');
         const teams = data.teams || [];
-        const activeId = data.active_team_id || '';
+        let activeId = data.active_team_id || '';
 
         // Clear options
         select.innerHTML = '';
@@ -1040,6 +1040,19 @@
         if (teams.length === 0) {
           group.style.display = 'none';
           return;
+        }
+
+        // Fallback: si el backend no devolvió activo (p.ej. versión vieja del
+        // agente) garantizamos persistir la primera membresía, así
+        // session.team_id nunca queda NULL al subir reportes.
+        if (!activeId && teams[0]?.team_id) {
+          activeId = teams[0].team_id;
+          try {
+            await invoke('set_active_team', { teamId: activeId });
+            console.log('[Team] Auto-selected first team:', activeId);
+          } catch (err) {
+            console.error('[Team] Failed auto-select:', err);
+          }
         }
 
         // Populate dropdown

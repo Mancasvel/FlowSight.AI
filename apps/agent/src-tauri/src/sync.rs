@@ -642,10 +642,34 @@ pub fn get_user_teams() -> Result<serde_json::Value, String> {
     }
     
     let teams: Vec<serde_json::Value> = resp.json().map_err(|e| e.to_string())?;
-    let active_team_id = session.team_id.clone();
-    
+
+    // Auto-elegir primer team si no hay uno activo persistido todavía.
+    // Evita que activity_reports/work_sessions suban con team_id=NULL cuando el
+    // usuario ya tiene membresía(s) pero nunca tocó el dropdown (el navegador
+    // muestra la primera opción sin disparar `change`, por eso `set_active_team`
+    // no se invocaba).
+    let active_team_id = match session.team_id.clone() {
+        Some(id) => Some(id),
+        None => {
+            let first = teams
+                .first()
+                .and_then(|t| t["team_id"].as_str().map(|s| s.to_string()));
+            if let Some(id) = first.clone() {
+                println!("[Team] No active team in session; auto-selecting first membership: {}", id);
+                save_user_session(
+                    session.user_id.clone(),
+                    Some(id.clone()),
+                    current_token.clone(),
+                    session.refresh_token.clone(),
+                    session.email.clone(),
+                )?;
+            }
+            first
+        }
+    };
+
     println!("[Team] Found {} team memberships, active: {:?}", teams.len(), active_team_id);
-    
+
     Ok(serde_json::json!({
         "teams": teams,
         "active_team_id": active_team_id
