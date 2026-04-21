@@ -284,7 +284,7 @@ pub fn start_auth(provider: String) -> Result<String, String> {
         auth_url.query_pairs_mut().append_pair("audience", "api.atlassian.com");
     }
     
-    // Open browser (use `open` on Windows too — avoids a flashing cmd window from `cmd /c start`)
+    // Open browser
     open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
     
     // Start callback listener
@@ -309,7 +309,6 @@ fn start_supabase_oauth(provider: &str) -> Result<String, String> {
     
     println!("[Auth] Opening Supabase OAuth URL: {}", auth_url);
     
-    // Use open crate - more reliable on Windows
     open::that(&auth_url).map_err(|e| format!("Failed to open browser: {}", e))?;
     
     // Start callback listener for Supabase tokens
@@ -321,9 +320,12 @@ fn start_supabase_oauth(provider: &str) -> Result<String, String> {
 }
 
 fn listen_for_callback() {
+    // Give any previous listener thread time to release the port
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
     let mut server_opt = None;
     for attempt in 0..5 {
-        match Server::http("0.0.0.0:12345") {
+        match Server::http("127.0.0.1:12345") {
             Ok(s) => { server_opt = Some(s); break; }
             Err(_) => {
                 println!("[Auth] Port 12345 busy (attempt {}), retrying...", attempt + 1);
@@ -338,8 +340,11 @@ fn listen_for_callback() {
             return;
         }
     };
+
+    // Auto-exit after 120s so this thread never parks forever
+    server.set_read_timeout(Some(std::time::Duration::from_secs(120))).ok();
     
-    println!("[Auth] Listening for callback on 12345...");
+    println!("[Auth] Listening for callback on 127.0.0.1:12345...");
     
     for request in server.incoming_requests() {
         let url = format!("http://localhost:12345{}", request.url());
@@ -379,12 +384,17 @@ fn listen_for_callback() {
 }
 
 // Supabase OAuth callback - handles tokens in URL fragment
-// Supabase returns tokens in hash fragment (#access_token=...) which browsers don't send to servers
-// So we serve an HTML page that extracts the fragment and redirects with query params
+// Supabase returns tokens in hash fragment (#access_token=...) which browsers
+// never send to the server. We serve an HTML page that extracts the fragment
+// and submits it back via a same-origin <form> GET — this is never blocked
+// by browser cross-origin navigation policies unlike window.location.href.
 fn listen_for_supabase_callback() {
+    // Give any previous listener thread time to release port 12345
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
     let mut server_opt = None;
     for attempt in 0..5 {
-        match Server::http("0.0.0.0:12345") {
+        match Server::http("127.0.0.1:12345") {
             Ok(s) => { server_opt = Some(s); break; }
             Err(_) => {
                 println!("[Auth] Supabase port 12345 busy (attempt {}), retrying...", attempt + 1);
@@ -399,23 +409,53 @@ fn listen_for_supabase_callback() {
             return;
         }
     };
+
+    // Auto-exit after 120s so this thread never parks forever and blocks retries
+    server.set_read_timeout(Some(std::time::Duration::from_secs(120))).ok();
     
-    println!("[Auth] Listening for Supabase callback on 12345...");
+    println!("[Auth] Listening for Supabase callback on 127.0.0.1:12345...");
     
-    // HTML page that extracts hash fragment and redirects
+    // FIX: Use a same-origin <form> submit instead of window.location.href.
+    // Chrome 115+ and Firefox block cross-origin href redirects to localhost
+    // when the initiating page comes from a Supabase/Google domain. A form
+    // submit is always same-origin (the target is our own localhost server)
+    // and is never intercepted by browser security policies.
     let capture_html = r#"<!DOCTYPE html>
 <html>
-<head><title>FlowSight Login</title></head>
+<head>
+  <meta charset="UTF-8">
+  <title>FlowSight Login</title>
+</head>
 <body>
-<p>Processing login...</p>
-<script>
-  const hash = window.location.hash.substring(1);
-  if (hash) {
-    window.location.href = '/token?' + hash;
-  } else {
-    document.body.innerHTML = '<p>Login failed - no token received</p>';
-  }
-</script>
+  <p>Completing login, please wait...</p>
+  <script>
+    (function () {
+      var hash = window.location.hash.substring(1);
+      if (!hash) {
+        document.body.innerHTML = '<p style="color:red">Login failed &ndash; no token received. Please close this tab and try again.</p>';
+        return;
+      }
+      // Build a <form> and submit it as a GET to /token.
+      // This is a same-origin request and is NEVER blocked by browser
+      // cross-origin navigation guards (unlike window.location.href).
+      var form = document.createElement('form');
+      form.method = 'GET';
+      form.action = '/token';
+      hash.split('&').forEach(function (pair) {
+        var eqIdx = pair.indexOf('=');
+        if (eqIdx === -1) return;
+        var key = decodeURIComponent(pair.substring(0, eqIdx));
+        var val = decodeURIComponent(pair.substring(eqIdx + 1));
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = key;
+        inp.value = val;
+        form.appendChild(inp);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    })();
+  </script>
 </body>
 </html>"#;
     
@@ -424,15 +464,15 @@ fn listen_for_supabase_callback() {
         let parsed = Url::parse(&url).unwrap();
         let path = parsed.path();
         
-        // First request: serve HTML to capture hash fragment
+        // First request: serve HTML to capture hash fragment via form submit
         if path == "/callback" {
-            println!("[Auth] Serving token capture page...");
+            println!("[Auth] Serving token capture page (form-submit method)...");
             let _ = request.respond(Response::from_string(capture_html)
-                .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
+                .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap()));
             continue;
         }
         
-        // Second request: receive tokens via query params
+        // Second request: receive tokens via query params from the form submit
         if path == "/token" {
             let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
             
@@ -455,11 +495,13 @@ fn listen_for_supabase_callback() {
                         break;
                     }
                     Err(e) => {
+                        println!("[Auth] Failed to fetch Supabase user: {}", e);
                         let _ = request.respond(Response::from_string(format!("Error: {}", e)));
                     }
                 }
             } else if let Some(error) = pairs.get("error") {
                 let desc = pairs.get("error_description").map(|s| s.as_str()).unwrap_or("");
+                println!("[Auth] OAuth error from Supabase: {} - {}", error, desc);
                 let _ = request.respond(Response::from_string(format!("Auth Error: {} - {}", error, desc)));
                 break;
             }
