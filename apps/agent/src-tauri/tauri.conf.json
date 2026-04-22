@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "pnpm vite",
-    "beforeBuildCommand": "pnpm vite build"
+    "beforeBuildCommand": "python ../../../scripts/fetch-models.py && pnpm vite build"
   },
   "app": {
     "windows": [
@@ -34,6 +34,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../../../local_llm/bin/*.exe": "local_llm/bin/",
+      "../../../local_llm/bin/*.dll": "local_llm/bin/",
+      "../../../local_llm/Qwen3-VL-2B-Instruct-Q3_K_M.gguf": "local_llm/Qwen3-VL-2B-Instruct-Q3_K_M.gguf",
+      "../../../local_llm/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf": "local_llm/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+    }
   }
 }

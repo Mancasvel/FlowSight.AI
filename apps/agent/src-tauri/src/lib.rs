@@ -9,13 +9,14 @@ mod auth;
 mod linear;
 mod oauth_env;
 pub mod context;
+pub mod paths;
 
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
     get_status, start_monitoring, stop_monitoring,
     capture_screen_command, save_activity,
-    get_activity_log, get_today_history, check_ollama,
-    install_ollama, pull_model, start_ollama
+    get_activity_log, get_today_history,
+    check_ollama, check_local_server,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -33,9 +34,7 @@ pub fn run() {
     save_activity,
     get_activity_log,
     check_ollama,
-    install_ollama,
-            pull_model,
-            start_ollama,
+    check_local_server,
             agent::capture_context_snapshot,
             jira::fetch_jira_tasks,
             jira::start_jira_oauth,

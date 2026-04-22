@@ -2,9 +2,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  // Dev: typical repo paths. Installed app: optional `.env` next to the executable (same keys as Vite).
-  let _ = dotenv::from_filename(".env.local");
-  let _ = dotenv::from_filename("../../.env.local");
+  // Env loading strategy:
+  // - En dev (cargo tauri dev) el CWD es el repo y `../../.env.local` resuelve
+  //   bien. Vite ya hornea los VITE_* al build; esto es solo para el caso
+  //   ra\u00edsimo de leer envs en runtime desde Rust.
+  // - En release el `.exe` corre desde Program Files y esos paths no existen;
+  //   probamos junto al ejecutable como \u00fanica ruta v\u00e1lida para override.
+  if cfg!(debug_assertions) {
+    let _ = dotenv::from_filename(".env.local");
+    let _ = dotenv::from_filename("../../.env.local");
+  }
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
       let _ = dotenv::from_filename(dir.join(".env"));
@@ -30,14 +37,10 @@ fn main() {
     );
     eprintln!("{}", msg);
     log::error!("{}", msg);
-    if let Some(base) = dirs::data_local_dir() {
-      let dir = base.join("FlowSight");
-      let _ = std::fs::create_dir_all(&dir);
-      let path = dir.join("crash.log");
-      use std::io::Write;
-      if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = f.write_all(msg.as_bytes());
-      }
+    let path = app_lib::paths::crash_log_path_or_fallback();
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+      let _ = f.write_all(msg.as_bytes());
     }
   }));
 

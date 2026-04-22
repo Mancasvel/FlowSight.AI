@@ -150,9 +150,13 @@ fn listen_for_callback() {
 }
 
 fn save_tokens(access: &str, refresh: Option<&str>) {
-   // Helper to save to DB (Need efficient way to access shared DB path)
-   // For now, we assume standard path
-   let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+   let db_path = match crate::paths::db_path() {
+       Ok(p) => p,
+       Err(e) => {
+           eprintln!("[jira] save_tokens: {}", e);
+           return;
+       }
+   };
    if let Ok(conn) = Connection::open(db_path) {
         let _ = conn.execute("INSERT OR REPLACE INTO config (key, value) VALUES ('jira_access_token', ?)", [access]);
         if let Some(r) = refresh {
@@ -169,7 +173,7 @@ fn save_tokens(access: &str, refresh: Option<&str>) {
 /// Refreshes the access token using the stored refresh token
 /// Returns the new access token if successful
 fn refresh_access_token() -> Result<String, String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let refresh_token: String = conn.query_row(
@@ -226,7 +230,7 @@ fn refresh_access_token() -> Result<String, String> {
 /// Gets a valid access token, refreshing if necessary
 /// This is the main entry point for getting a token to use in API calls
 fn get_valid_token() -> Result<String, String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let access_token: String = conn.query_row(
@@ -280,7 +284,7 @@ pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
     // 1. Get valid token (auto-refreshes if expired)
     let access_token = get_valid_token()?;
     
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     let cloud_id: String = conn.query_row("SELECT value FROM config WHERE key = 'jira_cloud_id'", [], |r| r.get(0))
         .map_err(|_| "Jira Cloud ID not found".to_string())?;
@@ -358,7 +362,7 @@ pub fn fetch_jira_profile() -> Result<JiraUser, String> {
     // 1. Get valid token (auto-refreshes if expired)
     let access_token = get_valid_token()?;
     
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     let cloud_id: String = conn.query_row("SELECT value FROM config WHERE key = 'jira_cloud_id'", [], |r| r.get(0))
         .map_err(|_| "Jira Cloud ID not found".to_string())?;

@@ -82,7 +82,7 @@ pub fn start_token_refresh_thread(db_path: std::path::PathBuf) {
 
 #[tauri::command]
 pub fn force_sync_now() -> Result<String, String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     match perform_sync(&db_path) {
         Ok(summary) => Ok(format!("Sync Report:\n\n{}", summary)),
         Err(e) => Err(format!("Sync failed: {}", e))
@@ -160,7 +160,7 @@ fn get_user_session(conn: &Connection) -> Option<UserSession> {
 // Save user session to local config
 #[tauri::command]
 pub fn save_user_session(user_id: String, team_id: Option<String>, access_token: String, refresh_token: Option<String>, email: String) -> Result<(), String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let session = UserSession { user_id, team_id, access_token, refresh_token, email };
@@ -220,7 +220,7 @@ fn refresh_supabase_token(session: &UserSession) -> Result<UserSession, String> 
 // Clear user session (logout)
 #[tauri::command]
 pub fn clear_user_session() -> Result<(), String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     conn.execute("DELETE FROM config WHERE key = 'user_session'", [])
@@ -233,7 +233,7 @@ pub fn clear_user_session() -> Result<(), String> {
 // Check if user is logged in
 #[tauri::command]
 pub fn get_current_user() -> Result<Option<UserSession>, String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     Ok(get_user_session(&conn))
 }
@@ -571,7 +571,7 @@ pub fn upload_activity_report(
     jira_ticket_id: Option<String>,
     duration_seconds: i32
 ) -> Result<(), String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let session = get_user_session(&conn)
@@ -602,7 +602,7 @@ pub fn upload_activity_report(
 // Get all teams the current user belongs to
 #[tauri::command]
 pub fn get_user_teams() -> Result<serde_json::Value, String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let session = get_user_session(&conn)
@@ -679,7 +679,7 @@ pub fn get_user_teams() -> Result<serde_json::Value, String> {
 // Set the active team for the current user (persists to SQLite)
 #[tauri::command]
 pub fn set_active_team(team_id: String) -> Result<(), String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let session = get_user_session(&conn)
@@ -699,7 +699,7 @@ pub fn set_active_team(team_id: String) -> Result<(), String> {
 // Join a team using an invitation token
 #[tauri::command]
 pub fn join_team(token: String) -> Result<serde_json::Value, String> {
-    let db_path = dirs::data_local_dir().unwrap().join("FlowSight").join("dev-agent.db");
+    let db_path = crate::paths::db_path()?;
     refresh_session_if_expiring(&db_path);
 
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;

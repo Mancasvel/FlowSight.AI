@@ -15,7 +15,6 @@ seed_supabase.sql
 Cargo.lock
 # Application crate: lockfile must be committed so CI matches local Tauri/Rust versions
 !apps/agent/src-tauri/Cargo.lock
-/scripts
 # ================================
 # Build outputs
 # ================================
@@ -23,6 +22,12 @@ dist/
 dist-electron/
 **/dist/
 *.exe
+# Excepcio\u0301n: los binarios de llama.cpp (llama-server.exe + *.dll ggml)
+# son runtime necesario para el agente. Se commitean al repo porque caben
+# en git (max 53 MB, total ~139 MB). Solo los GGUF quedan fuera (ver mas
+# abajo, se distribuyen via GitHub Releases).
+!local_llm/bin/*.exe
+!local_llm/bin/*.dll
 *.msi
 *.dmg
 *.app
@@ -96,16 +101,19 @@ models/
 *.onnx
 *.safetensors
 
-# Legacy local_llm checkpoint dirs (superseded by current vision bundle)
-local_llm/Qwen2-VL-2B-Instruct/
-local_llm/Qwen3-VL-2B/
-
 # ================================
-# Runtime binaries (llama.cpp — each developer installs via setup_llm.py)
+# Runtime binaries (llama.cpp)
 # ================================
-local_llm/bin/*.dll
-local_llm/bin/*.exe
+# Nota: los binarios (llama-server.exe + *.dll) SI se commitean;
+# la excepcio\u0301n esta\u0301 arriba en la seccio\u0301n Build outputs.
+# Aqui\u0301 solo excluimos artifacts menores.
 local_llm/bin/cli_output.txt
+
+# Source tree de llama.cpp (si alguna vez lo clonas para experimentar,
+# que no entre al repo: pesa ~5 GB y ya tenemos los binarios vendoreados
+# en local_llm/bin/).
+/llama.cpp/
+local_llm/llama.cpp/
 
 # ================================
 # Diagnostic / debug artifacts (one-off scripts output)

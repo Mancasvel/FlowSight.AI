@@ -291,7 +291,7 @@ pub async fn capture_context_snapshot(
 
     // Run ALL heavy work on a background thread to avoid blocking the main/UI thread
     tauri::async_runtime::spawn_blocking(move || {
-        use crate::context::{get_system_context, get_git_context};
+        use crate::context::get_system_context;
         use std::path::PathBuf;
 
         // 1. Capture Screen
@@ -307,9 +307,13 @@ pub async fn capture_context_snapshot(
                 let err_msg = format!("[Agent] AI Analysis Failed: {}", e);
                 println!("{}", err_msg);
                 
-                // Log to file for debugging (Current Dir)
-                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("agent_error.log") {
-                    let _ = writeln!(file, "{}", err_msg);
+                // Log a archivo en el app data dir (antes era "agent_error.log"
+                // con path relativo: en release cwd puede ser Program Files y
+                // el write fallaba silencioso por UAC).
+                if let Ok(log_path) = crate::paths::agent_error_log_path() {
+                    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+                        let _ = writeln!(file, "{}", err_msg);
+                    }
                 }
                 
                 "Screen analysis failed. Category: General".to_string()
@@ -323,17 +327,12 @@ pub async fn capture_context_snapshot(
         let sys = get_system_context();
         
         // 4. Git Context (Project)
-        let mut git = None;
-        if let Some(_title) = &sys.window_title {
-            let home = dirs::desktop_dir().unwrap_or(PathBuf::from("."));
-            let possible_path = home.join("FlowSight.AI"); 
-            if possible_path.exists() {
-                 git = get_git_context(possible_path.to_str().unwrap());
-            }
-        }
-        if git.is_none() {
-            git = get_git_context(".");
-        }
+        // Antes: hardcodeaba ~/Desktop/FlowSight.AI (solo exist\u00eda en la m\u00e1quina
+        // del dev) y ca\u00eda a CWD=="." en release, que en una instalaci\u00f3n a
+        // Program Files es in\u00fatil y puede filtrar metadata ajena.
+        // Hoy devolvemos `None` hasta tener una estrategia real para resolver
+        // el repo del usuario desde la ventana activa (ver SystemContext).
+        let git: Option<crate::context::GitContext> = None;
 
         // Cleanup temp file
         let _ = std::fs::remove_file(&path);
@@ -528,59 +527,14 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
     })
 }
 
-fn get_ollama_bin() -> String {
-    use std::process::Command;
-    #[cfg(windows)]
-    use std::os::windows::process::CommandExt;
-
-    #[cfg(windows)]
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    
-    // 1. Try plain "ollama" (if in PATH)
-    let mut which_cmd = Command::new(if cfg!(windows) { "where" } else { "which" });
-    which_cmd.arg("ollama");
-    #[cfg(windows)]
-    which_cmd.creation_flags(CREATE_NO_WINDOW);
-    if let Ok(o) = which_cmd.output() {
-        if o.status.success() {
-            return "ollama".to_string();
-        }
-    }
-
-    // 2. Common Windows paths if not in PATH
-    if cfg!(windows) {
-        let mut paths = Vec::new();
-        
-        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-            paths.push(format!(r"{}\Programs\Ollama\ollama.exe", local_app_data));
-        }
-        
-        if let Ok(user_profile) = std::env::var("USERPROFILE") {
-            paths.push(format!(r"{}\AppData\Local\Programs\Ollama\ollama.exe", user_profile));
-        }
-
-        paths.push(r"C:\Program Files\Ollama\ollama.exe".to_string());
-        paths.push(r"C:\Users\manue\AppData\Local\Programs\Ollama\ollama.exe".to_string()); // Hardcoded as fallback since we saw it there
-
-        for p in paths {
-            if std::path::Path::new(&p).exists() {
-                println!("[Ollama] Found binary at: {}", p);
-                return p;
-            }
-        }
-    }
-
-    println!("[Ollama] Using fallback 'ollama' command");
-    "ollama".to_string()
-}
-
+// Health check against nuestro llama-server local (NO es ollama; el nombre se
+// mantuvo en el tauri command hist\u00f3ricamente pero el endpoint es de llama.cpp).
 #[tauri::command]
-pub fn check_ollama() -> Result<serde_json::Value, String> {
+pub fn check_local_server() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(1))
         .build().map_err(|e| e.to_string())?;
-    
-    // llama-server local health check (workflow compatibility)
+
     match client.get("http://localhost:8080/health").send() {
         Ok(r) if r.status().is_success() => Ok(serde_json::json!({
             "online": true,
@@ -600,162 +554,40 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
     }
 }
 
+// Legacy alias: el frontend todav\u00eda llama `check_ollama` en dos sitios. Lo
+// mantenemos como thin wrapper para no cambiar el contrato en un solo PR.
+// TODO: migrar los `invoke('check_ollama')` del renderer y borrar este alias.
 #[tauri::command]
-pub fn install_ollama() -> Result<serde_json::Value, String> {
-    use std::process::Command;
-    
-    if cfg!(windows) {
-        // Use winget for silent install
-        let output = Command::new("winget")
-            .args(["install", "Ollama.Ollama", "--silent", "--accept-package-agreements", "--accept-source-agreements"])
-            .output()
-            .map_err(|e| format!("Failed to run winget: {}", e))?;
-        
-        if output.status.success() {
-            Ok(serde_json::json!({"success": true, "message": "Ollama installed successfully"}))
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!("Winget failed: {}", stderr))
-        }
-    } else {
-        // For non-windows, still open the link (manual)
-        let url = "https://ollama.ai/download";
-        let _ = if cfg!(target_os = "macos") {
-            Command::new("open").arg(url).spawn()
-        } else {
-            Command::new("xdg-open").arg(url).spawn()
-        };
-        Ok(serde_json::json!({
-            "success": false, 
-            "message": "Manual installation required on this OS. Opening download page."
-        }))
-    }
-}
-
-#[derive(Serialize, Clone)]
-struct ProgressPayload {
-    status: String,
-    completed: Option<u64>,
-    total: Option<u64>,
-}
-
-#[tauri::command]
-pub async fn pull_model(window: tauri::Window, model: String) -> Result<serde_json::Value, String> {
-    use tauri::Emitter;
-    use std::io::{BufRead, BufReader};
-    use std::process::{Command, Stdio};
-
-    let ollama_bin = get_ollama_bin();
-    let mut child = Command::new(&ollama_bin)
-        .args(["pull", &model])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn ollama ({}): {}", ollama_bin, e))?;
-
-    let mut stderr_content = String::new();
-    let stderr = child.stderr.take().unwrap();
-    let reader = BufReader::new(stderr);
-
-    for line in reader.lines() {
-        if let Ok(l) = line {
-            stderr_content.push_str(&l);
-            stderr_content.push('\n');
-            // Ollama prints progress to stderr. It's not stable JSON, but we can try to emit it as text
-            let _ = window.emit("ollama-progress", ProgressPayload {
-                status: l.clone(),
-                completed: None,
-                total: None,
-            });
-        }
-    }
-
-    let status = child.wait().map_err(|e| format!("Ollama failed: {}", e))?;
-    
-    if status.success() {
-        Ok(serde_json::json!({"success": true, "model": model}))
-    } else {
-        Err(format!("Failed to pull model: {}", stderr_content))
-    }
-}
-
-#[tauri::command]
-pub fn start_ollama() -> Result<serde_json::Value, String> {
-    use std::process::Command;
-    #[cfg(windows)]
-    use std::os::windows::process::CommandExt;
-    
-    let ollama_bin = get_ollama_bin();
-    
-    // Try to start Ollama in background
-    let mut cmd = Command::new(&ollama_bin);
-    cmd.arg("serve");
-    
-    // FORCE CPU MODE for testing low-end hardware
-    // This makes Ollama ignore the GPU and run in system RAM
-    // cmd.env("OLLAMA_NUM_GPU", "0");
-    // println!("[Ollama] Starting in CPU-ONLY mode (OLLAMA_NUM_GPU=0)");
-    
-    // Ensure no window on Windows
-    #[cfg(windows)]
-    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    
-    match cmd.spawn() {
-        Ok(_) => Ok(serde_json::json!({"started": true})),
-        Err(e) => Err(format!("Failed to start Ollama ({}): {}", ollama_bin, e))
-    }
+pub fn check_ollama() -> Result<serde_json::Value, String> {
+    check_local_server()
 }
 
 // LLAMA SERVER COMMANDS
 
 static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
-fn find_project_root() -> Result<PathBuf, String> {
-    let check = |dir: &std::path::Path| dir.join("local_llm").join("bin").exists();
-
-    if let Ok(exe) = std::env::current_exe() {
-        let mut dir = exe.parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
-        for _ in 0..6 {
-            if check(&dir) { return Ok(dir); }
-            if !dir.pop() { break; }
-        }
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        let mut dir = cwd;
-        for _ in 0..4 {
-            if check(&dir) { return Ok(dir); }
-            if !dir.pop() { break; }
-        }
-    }
-
-    let fallback = PathBuf::from(r"C:\Users\manue\FlowSight.AI");
-    if check(&fallback) { return Ok(fallback); }
-
-    Err("Could not find project root (local_llm/bin not found). Run setup_llm.py first.".to_string())
-}
-
 #[tauri::command]
-pub fn start_server() -> Result<serde_json::Value, String> {
+pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let mut guard = SERVER_PROCESS.lock().unwrap();
     if guard.is_some() {
         return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
     }
 
-    let root = find_project_root()?;
-    let local_llm_dir = root.join("local_llm");
+    // Runtime (binarios + pesos) empacados como Tauri bundle resources. En
+    // dev cae al layout del repo autom\u00e1ticamente.
+    let local_llm_dir = crate::paths::resource_local_llm_dir(&app)?;
     let bin_path = local_llm_dir.join("bin").join("llama-server.exe");
     let model_path = local_llm_dir.join(VISION_GGUF_FILENAME);
     let mmproj_path = local_llm_dir.join(VISION_MMPROJ_FILENAME);
 
     if !bin_path.exists() {
-        return Err(format!("llama-server not found at {:?}. Run setup_llm.py first.", bin_path));
+        return Err(format!("llama-server not found at {:?}. Reinstall FlowSight Agent.", bin_path));
     }
     if !model_path.exists() {
-        return Err(format!("Model not found at {:?}. Run setup_llm.py first.", model_path));
+        return Err(format!("Vision weights not found at {:?}. Reinstall FlowSight Agent.", model_path));
     }
     if !mmproj_path.exists() {
-        return Err(format!("Vision projector not found at {:?}. Run setup_llm.py first.", mmproj_path));
+        return Err(format!("Vision projector not found at {:?}. Reinstall FlowSight Agent.", mmproj_path));
     }
 
     use std::process::Command;
@@ -773,6 +605,9 @@ pub fn start_server() -> Result<serde_json::Value, String> {
        .arg("--threads").arg("2")
        .arg("--n-gpu-layers").arg("50");
 
+    // CWD = carpeta del binario. llama-server resuelve las DLLs (ggml-*.dll,
+    // llama.dll) por PATH relativo al ejecutable, as\u00ed que no podemos
+    // spawnearlo desde otro cwd o no las encuentra en Windows.
     if let Some(parent) = bin_path.parent() {
         cmd.current_dir(parent);
     }
@@ -780,7 +615,8 @@ pub fn start_server() -> Result<serde_json::Value, String> {
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY);
 
-    let log_path = root.join("apps").join("agent").join("src-tauri").join("server.log");
+    // Log va al app data dir (escribible), nunca al install dir de Program Files.
+    let log_path = crate::paths::server_log_path()?;
     if let Ok(file) = std::fs::File::create(&log_path) {
         if let Ok(file_err) = file.try_clone() {
             cmd.stdout(std::process::Stdio::from(file));
@@ -799,7 +635,11 @@ pub fn start_server() -> Result<serde_json::Value, String> {
                 return Err(format!(
                     "llama-server exited during startup (code: {:?}). {}",
                     status.code(),
-                    if log_tail.is_empty() { "See apps/agent/src-tauri/server.log".to_string() } else { format!("Log tail: {}", log_tail) }
+                    if log_tail.is_empty() {
+                        format!("See {:?}", log_path)
+                    } else {
+                        format!("Log tail: {}", log_tail)
+                    }
                 ));
             }
 
