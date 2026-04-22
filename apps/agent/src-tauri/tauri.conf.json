@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "pnpm vite",
-    "beforeBuildCommand": "python ../../../scripts/fetch-models.py && pnpm vite build"
+    "beforeBuildCommand": "python ../../scripts/fetch-models.py && pnpm vite build"
   },
   "app": {
     "windows": [
