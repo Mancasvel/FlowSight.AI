@@ -63,13 +63,19 @@ pub fn run() {
             get_today_history
         ])
     .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
+      // Log a archivo en TODOS los builds. En release el usuario no ve stderr,
+      // así que sin esto no hay forma de diagnosticar crashes post-login.
+      // Los archivos quedan en %LOCALAPPDATA%\ai.flowsight.agent\logs\ (Windows)
+      // o equivalente del OS según tauri-plugin-log.
+      app.handle().plugin(
+        tauri_plugin_log::Builder::default()
+          .level(log::LevelFilter::Info)
+          .targets([
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
+          ])
+          .build(),
+      )?;
       Ok(())
     })
     .run(tauri::generate_context!())

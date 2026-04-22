@@ -21,15 +21,33 @@ struct OAuthState {
 
 fn set_oauth_state(verifier: String, provider: String) {
     let mutex = OAUTH_STATE.get_or_init(|| Mutex::new(OAuthState::default()));
-    let mut lock = mutex.lock().unwrap();
-    lock.verifier = Some(verifier);
-    lock.provider = Some(provider);
+    // Usamos lock().ok() + default para sobrevivir a un poison: si un hilo
+    // panicó mientras sostenía este mutex, no queremos que el próximo login
+    // aborte el proceso.
+    match mutex.lock() {
+        Ok(mut lock) => {
+            lock.verifier = Some(verifier);
+            lock.provider = Some(provider);
+        }
+        Err(poisoned) => {
+            let mut lock = poisoned.into_inner();
+            lock.verifier = Some(verifier);
+            lock.provider = Some(provider);
+            println!("[Auth] OAuth state mutex was poisoned; recovered.");
+        }
+    }
 }
 
 fn get_oauth_state() -> (Option<String>, Option<String>) {
     let mutex = OAUTH_STATE.get_or_init(|| Mutex::new(OAuthState::default()));
-    let lock = mutex.lock().unwrap();
-    (lock.verifier.clone(), lock.provider.clone())
+    match mutex.lock() {
+        Ok(lock) => (lock.verifier.clone(), lock.provider.clone()),
+        Err(poisoned) => {
+            let lock = poisoned.into_inner();
+            println!("[Auth] OAuth state mutex was poisoned; recovered.");
+            (lock.verifier.clone(), lock.provider.clone())
+        }
+    }
 }
 
 // Provider configs
@@ -284,14 +302,17 @@ pub fn start_auth(provider: String) -> Result<String, String> {
         auth_url.query_pairs_mut().append_pair("audience", "api.atlassian.com");
     }
     
-    // Open browser (use `open` on Windows too — avoids a flashing cmd window from `cmd /c start`)
+    // Open browser
     open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
     
-    // Start callback listener
+    // Start callback listener — aislado en catch_unwind por si un panic
+    // suelto en el hilo llega a abortar el proceso (depende de profile.panic).
     std::thread::spawn(move || {
-        listen_for_callback();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            listen_for_callback();
+        }));
     });
-    
+
     Ok(format!("Browser opened for {} login", provider))
 }
 
@@ -309,21 +330,26 @@ fn start_supabase_oauth(provider: &str) -> Result<String, String> {
     
     println!("[Auth] Opening Supabase OAuth URL: {}", auth_url);
     
-    // Use open crate - more reliable on Windows
     open::that(&auth_url).map_err(|e| format!("Failed to open browser: {}", e))?;
     
-    // Start callback listener for Supabase tokens
+    // Start callback listener for Supabase tokens — envuelto en catch_unwind
+    // para no poder tumbar el proceso ante un panic inesperado.
     std::thread::spawn(move || {
-        listen_for_supabase_callback();
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            listen_for_supabase_callback();
+        }));
     });
-    
+
     Ok(format!("Browser opened for {} login via Supabase", provider))
 }
 
 fn listen_for_callback() {
+    // Give any previous listener thread time to release the port
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
     let mut server_opt = None;
     for attempt in 0..5 {
-        match Server::http("0.0.0.0:12345") {
+        match Server::http("127.0.0.1:12345") {
             Ok(s) => { server_opt = Some(s); break; }
             Err(_) => {
                 println!("[Auth] Port 12345 busy (attempt {}), retrying...", attempt + 1);
@@ -338,24 +364,54 @@ fn listen_for_callback() {
             return;
         }
     };
-    
-    println!("[Auth] Listening for callback on 12345...");
-    
-    for request in server.incoming_requests() {
+
+    // Auto-exit after 120s so este hilo nunca queda parkeado bloqueando el
+    // puerto 12345 (tiny_http no tiene set_read_timeout; hay que usar
+    // recv_timeout con deadline manual).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+
+    println!("[Auth] Listening for callback on 127.0.0.1:12345...");
+
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            println!("[Auth] Listener timed out waiting for OAuth callback");
+            break;
+        }
+        let request = match server.recv_timeout(remaining) {
+            Ok(Some(r)) => r,
+            Ok(None) => {
+                println!("[Auth] Listener timed out waiting for OAuth callback");
+                break;
+            }
+            Err(e) => {
+                println!("[Auth] Listener error: {}", e);
+                break;
+            }
+        };
+
         let url = format!("http://localhost:12345{}", request.url());
-        let parsed = Url::parse(&url).unwrap();
-        let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
-        
-        if let Some(code) = pairs.get("code") {
-            let (verifier_opt, provider_opt) = get_oauth_state();
-            
-            if verifier_opt.is_none() || provider_opt.is_none() {
-                let _ = request.respond(Response::from_string("Error: Invalid OAuth state"));
+        let parsed = match Url::parse(&url) {
+            Ok(p) => p,
+            Err(e) => {
+                println!("[Auth] Ignoring unparsable callback URL ({}): {}", e, url);
+                let _ = request.respond(Response::from_string("Bad request"));
                 continue;
             }
-            
-            let verifier = verifier_opt.unwrap();
-            let provider = provider_opt.unwrap();
+        };
+        let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+
+        if let Some(code) = pairs.get("code") {
+            let (verifier_opt, provider_opt) = get_oauth_state();
+
+            let (verifier, provider) = match (verifier_opt, provider_opt) {
+                (Some(v), Some(p)) => (v, p),
+                _ => {
+                    println!("[Auth] Callback received but OAuth state is missing");
+                    let _ = request.respond(Response::from_string("Error: Invalid OAuth state"));
+                    continue;
+                }
+            };
             
             match exchange_code(&provider, code, &verifier) {
                 Ok(session) => {
@@ -379,12 +435,17 @@ fn listen_for_callback() {
 }
 
 // Supabase OAuth callback - handles tokens in URL fragment
-// Supabase returns tokens in hash fragment (#access_token=...) which browsers don't send to servers
-// So we serve an HTML page that extracts the fragment and redirects with query params
+// Supabase returns tokens in hash fragment (#access_token=...) which browsers
+// never send to the server. We serve an HTML page that extracts the fragment
+// and submits it back via a same-origin <form> GET — this is never blocked
+// by browser cross-origin navigation policies unlike window.location.href.
 fn listen_for_supabase_callback() {
+    // Give any previous listener thread time to release port 12345
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
     let mut server_opt = None;
     for attempt in 0..5 {
-        match Server::http("0.0.0.0:12345") {
+        match Server::http("127.0.0.1:12345") {
             Ok(s) => { server_opt = Some(s); break; }
             Err(_) => {
                 println!("[Auth] Supabase port 12345 busy (attempt {}), retrying...", attempt + 1);
@@ -399,40 +460,96 @@ fn listen_for_supabase_callback() {
             return;
         }
     };
+
+    // Auto-exit after 120s para no dejar el puerto pegado si el usuario
+    // abandona el login. tiny_http no soporta set_read_timeout: aplicamos
+    // deadline manual + recv_timeout más abajo.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+
+    println!("[Auth] Listening for Supabase callback on 127.0.0.1:12345...");
     
-    println!("[Auth] Listening for Supabase callback on 12345...");
-    
-    // HTML page that extracts hash fragment and redirects
+    // FIX: Use a same-origin <form> submit instead of window.location.href.
+    // Chrome 115+ and Firefox block cross-origin href redirects to localhost
+    // when the initiating page comes from a Supabase/Google domain. A form
+    // submit is always same-origin (the target is our own localhost server)
+    // and is never intercepted by browser security policies.
     let capture_html = r#"<!DOCTYPE html>
 <html>
-<head><title>FlowSight Login</title></head>
+<head>
+  <meta charset="UTF-8">
+  <title>FlowSight Login</title>
+</head>
 <body>
-<p>Processing login...</p>
-<script>
-  const hash = window.location.hash.substring(1);
-  if (hash) {
-    window.location.href = '/token?' + hash;
-  } else {
-    document.body.innerHTML = '<p>Login failed - no token received</p>';
-  }
-</script>
+  <p>Completing login, please wait...</p>
+  <script>
+    (function () {
+      var hash = window.location.hash.substring(1);
+      if (!hash) {
+        document.body.innerHTML = '<p style="color:red">Login failed &ndash; no token received. Please close this tab and try again.</p>';
+        return;
+      }
+      // Build a <form> and submit it as a GET to /token.
+      // This is a same-origin request and is NEVER blocked by browser
+      // cross-origin navigation guards (unlike window.location.href).
+      var form = document.createElement('form');
+      form.method = 'GET';
+      form.action = '/token';
+      hash.split('&').forEach(function (pair) {
+        var eqIdx = pair.indexOf('=');
+        if (eqIdx === -1) return;
+        var key = decodeURIComponent(pair.substring(0, eqIdx));
+        var val = decodeURIComponent(pair.substring(eqIdx + 1));
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = key;
+        inp.value = val;
+        form.appendChild(inp);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    })();
+  </script>
 </body>
 </html>"#;
     
-    for request in server.incoming_requests() {
+    loop {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            println!("[Auth] Supabase listener timed out waiting for callback");
+            break;
+        }
+        let request = match server.recv_timeout(remaining) {
+            Ok(Some(r)) => r,
+            Ok(None) => {
+                println!("[Auth] Supabase listener timed out waiting for callback");
+                break;
+            }
+            Err(e) => {
+                println!("[Auth] Supabase listener error: {}", e);
+                break;
+            }
+        };
+
         let url = format!("http://localhost:12345{}", request.url());
-        let parsed = Url::parse(&url).unwrap();
+        let parsed = match Url::parse(&url) {
+            Ok(p) => p,
+            Err(e) => {
+                println!("[Auth] Ignoring unparsable Supabase callback URL ({}): {}", e, url);
+                let _ = request.respond(Response::from_string("Bad request"));
+                continue;
+            }
+        };
         let path = parsed.path();
-        
-        // First request: serve HTML to capture hash fragment
+
+        // First request: serve HTML to capture hash fragment via form submit
         if path == "/callback" {
-            println!("[Auth] Serving token capture page...");
+            println!("[Auth] Serving token capture page (form-submit method)...");
             let _ = request.respond(Response::from_string(capture_html)
-                .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
+                .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap()));
             continue;
         }
         
-        // Second request: receive tokens via query params
+        // Second request: receive tokens via query params from the form submit
         if path == "/token" {
             let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
             
@@ -455,11 +572,13 @@ fn listen_for_supabase_callback() {
                         break;
                     }
                     Err(e) => {
+                        println!("[Auth] Failed to fetch Supabase user: {}", e);
                         let _ = request.respond(Response::from_string(format!("Error: {}", e)));
                     }
                 }
             } else if let Some(error) = pairs.get("error") {
                 let desc = pairs.get("error_description").map(|s| s.as_str()).unwrap_or("");
+                println!("[Auth] OAuth error from Supabase: {} - {}", error, desc);
                 let _ = request.respond(Response::from_string(format!("Auth Error: {} - {}", error, desc)));
                 break;
             }
@@ -577,11 +696,27 @@ fn fetch_user_info(provider: &str, access_token: &str) -> Result<AuthUser, Strin
 }
 
 fn get_db_conn() -> Result<Connection, String> {
-    let db_path = dirs::data_local_dir()
-        .unwrap()
-        .join("FlowSight")
-        .join("dev-agent.db");
-    Connection::open(db_path).map_err(|e| e.to_string())
+    // En instalación fresca, %LOCALAPPDATA%\FlowSight\ todavía no existe hasta
+    // que corre FlowSightAgent::new(). El callback OAuth llega ANTES de que
+    // `initialize_agent` haya corrido (el usuario no está logueado todavía),
+    // así que hay que garantizar el directorio acá o sqlite devuelve
+    // "unable to open database file" y perdemos la sesión en silencio.
+    let base = dirs::data_local_dir().ok_or("No local data dir")?;
+    let dir = base.join("FlowSight");
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    let db_path = dir.join("dev-agent.db");
+    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
+    // Asegurar tabla `config` por si somos los primeros en abrir la DB (antes
+    // de que agent::init_db corra). Sin esto, los INSERT posteriores también
+    // fallan en silencio.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn)
 }
 
 // Save Jira-specific tokens so jira.rs functions can find them
@@ -624,13 +759,18 @@ fn save_jira_specific_tokens(session: &AuthSession) {
 }
 
 fn save_auth_session(session: &AuthSession) {
-    if let Ok(conn) = get_db_conn() {
-        let json = serde_json::to_string(session).unwrap_or_default();
-        let _ = conn.execute(
-            "INSERT OR REPLACE INTO config (key, value) VALUES ('auth_session', ?1)",
-            [&json]
-        );
-        println!("[Auth] Session saved for: {}", session.user.email);
+    match get_db_conn() {
+        Ok(conn) => {
+            let json = serde_json::to_string(session).unwrap_or_default();
+            match conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES ('auth_session', ?1)",
+                [&json],
+            ) {
+                Ok(_) => println!("[Auth] Session saved for: {}", session.user.email),
+                Err(e) => println!("[Auth] FAILED to persist session for {}: {}", session.user.email, e),
+            }
+        }
+        Err(e) => println!("[Auth] FAILED to open DB while saving session: {}", e),
     }
 }
 
