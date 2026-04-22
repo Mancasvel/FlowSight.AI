@@ -17,77 +17,10 @@ permissions:
 # (Opcional: TAURI_LINEAR_CLIENT_ID, TAURI_LINEAR_CLIENT_SECRET si usáis Linear.)
 # No commitees .env.local; el CI inyecta estos valores en `pnpm build`.
 
+# Note: Linux builds live in a separate repo (Mancasvel/FlowSight_linux).
+# This workflow only produces Windows and macOS artifacts.
+
 jobs:
-  build-linux:
-    runs-on: ubuntu-22.04
-    env:
-      TAURI_JIRA_CLIENT_ID: ${{ secrets.TAURI_JIRA_CLIENT_ID }}
-      TAURI_JIRA_CLIENT_SECRET: ${{ secrets.TAURI_JIRA_CLIENT_SECRET }}
-      TAURI_LINEAR_CLIENT_ID: ${{ secrets.TAURI_LINEAR_CLIENT_ID }}
-      TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLIC_KEY: ${{ secrets.VITE_SUPABASE_PUBLIC_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      # The release workflow checks out the tag’s commit. An old tag still has tauri 2.9.x while npm resolves @tauri-apps/api 2.10.x → CLI error. Fix: new tag on latest main (with committed Cargo.lock).
-      - name: Reject outdated tauri 2.9.x (stale release tag)
-        shell: bash
-        run: |
-          set -euo pipefail
-          f=apps/agent/src-tauri/Cargo.toml
-          if grep -qE 'tauri = \{ version = "2\.9' "$f"; then
-            echo "::error title=Stale release tag::This build uses an old commit with \`tauri\` 2.9.x while JS packages are 2.10.x. Create a **new tag** on the latest \`main\` and publish a **new** GitHub Release (do not reuse an old tag)."
-            grep -E 'tauri' "$f" || true
-            exit 1
-          fi
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 8.15.0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: apps/agent/src-tauri -> target
-
-      - name: Linux dependencies (Tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libxdo-dev \
-            patchelf
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build app
-        run: pnpm build
-
-      - name: Upload Linux bundles
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-bundle
-          path: |
-            apps/agent/src-tauri/target/release/bundle/deb/*.deb
-            apps/agent/src-tauri/target/release/bundle/appimage/*.AppImage
-          if-no-files-found: warn
-
   build-windows:
     runs-on: windows-latest
     env:
@@ -196,7 +129,7 @@ jobs:
           if-no-files-found: warn
 
   attach-to-release:
-    needs: [build-linux, build-windows, build-macos]
+    needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -212,8 +145,6 @@ jobs:
           tag_name: ${{ github.event.release.tag_name }}
           fail_on_unmatched_files: false
           files: |
-            artifacts/**/*.deb
-            artifacts/**/*.AppImage
             artifacts/**/*.exe
             artifacts/**/*.msi
             artifacts/**/*.dmg
