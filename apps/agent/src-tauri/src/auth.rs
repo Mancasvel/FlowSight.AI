@@ -10,8 +10,109 @@ use tiny_http::{Server, Response};
 use rusqlite::Connection;
 use std::sync::{Mutex, OnceLock};
 use base64::Engine;
+use std::io::Write;
 
 static OAUTH_STATE: OnceLock<Mutex<OAuthState>> = OnceLock::new();
+
+fn auth_log(message: impl AsRef<str>) {
+    let message = message.as_ref();
+    let line = format!(
+        "[{}] {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        message
+    );
+
+    log::info!("{}", message);
+
+    if let Ok(dir) = crate::paths::app_data_dir() {
+        let path = dir.join("auth.log");
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = file.write_all(line.as_bytes());
+        }
+    }
+}
+
+fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic>".to_string()
+    }
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn supabase_login_error_html(error: &str, description: &str) -> String {
+    let error = html_escape(error);
+    let description = html_escape(description);
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowSight - Login Failed</title>
+  <style>
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #0a0a0a;
+      color: #fafafa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+    }}
+    .container {{
+      max-width: 520px;
+      padding: 32px;
+      text-align: center;
+    }}
+    .error {{
+      color: #ef4444;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }}
+    .details {{
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+      color: #d4d4d8;
+      word-break: break-word;
+      font-size: 13px;
+      line-height: 1.5;
+    }}
+    .hint {{
+      color: #a1a1aa;
+      font-size: 13px;
+      margin-top: 18px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="error">Login failed</h1>
+    <div class="details">
+      <strong>Supabase error:</strong> {error}<br>
+      <strong>Description:</strong> {description}
+    </div>
+    <p class="hint">Copy this error and check %LOCALAPPDATA%\FlowSight\auth.log for the full OAuth trace.</p>
+  </div>
+</body>
+</html>"#
+    )
+}
 
 #[derive(Default)]
 struct OAuthState {
@@ -276,6 +377,8 @@ fn create_oauth_client(provider: &str) -> Result<BasicClient, String> {
 
 #[tauri::command]
 pub fn start_auth(provider: String) -> Result<String, String> {
+    auth_log(format!("[Auth] start_auth requested for provider: {}", provider));
+
     // Google uses Supabase OAuth (configured in Supabase Dashboard)
     if provider == "google" {
         return start_supabase_oauth(&provider);
@@ -302,15 +405,23 @@ pub fn start_auth(provider: String) -> Result<String, String> {
         auth_url.query_pairs_mut().append_pair("audience", "api.atlassian.com");
     }
     
+    auth_log(format!("[Auth] Opening direct OAuth URL for provider: {}", provider));
+
     // Open browser
     open::that(auth_url.as_str()).map_err(|e| e.to_string())?;
     
     // Start callback listener — aislado en catch_unwind por si un panic
     // suelto en el hilo llega a abortar el proceso (depende de profile.panic).
     std::thread::spawn(move || {
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             listen_for_callback();
         }));
+        if let Err(payload) = result {
+            auth_log(format!(
+                "[Auth] Direct OAuth callback listener panicked: {}",
+                panic_payload_to_string(payload)
+            ));
+        }
     });
 
     Ok(format!("Browser opened for {} login", provider))
@@ -319,6 +430,7 @@ pub fn start_auth(provider: String) -> Result<String, String> {
 // Supabase OAuth for providers configured in Supabase Dashboard (Google, etc.)
 fn start_supabase_oauth(provider: &str) -> Result<String, String> {
     set_oauth_state("supabase".to_string(), provider.to_string());
+    auth_log(format!("[Auth] Starting Supabase OAuth for provider: {}", provider));
     
     let redirect_to = "http://localhost:12345/callback";
     let auth_url = format!(
@@ -328,16 +440,25 @@ fn start_supabase_oauth(provider: &str) -> Result<String, String> {
         urlencoding::encode(redirect_to)
     );
     
-    println!("[Auth] Opening Supabase OAuth URL: {}", auth_url);
+    auth_log(format!("[Auth] Opening Supabase OAuth URL: {}", auth_url));
     
-    open::that(&auth_url).map_err(|e| format!("Failed to open browser: {}", e))?;
+    open::that(&auth_url).map_err(|e| {
+        auth_log(format!("[Auth] Failed to open browser: {}", e));
+        format!("Failed to open browser: {}", e)
+    })?;
     
     // Start callback listener for Supabase tokens — envuelto en catch_unwind
     // para no poder tumbar el proceso ante un panic inesperado.
     std::thread::spawn(move || {
-        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             listen_for_supabase_callback();
         }));
+        if let Err(payload) = result {
+            auth_log(format!(
+                "[Auth] Supabase callback listener panicked: {}",
+                panic_payload_to_string(payload)
+            ));
+        }
     });
 
     Ok(format!("Browser opened for {} login via Supabase", provider))
@@ -440,15 +561,24 @@ fn listen_for_callback() {
 // and submits it back via a same-origin <form> GET — this is never blocked
 // by browser cross-origin navigation policies unlike window.location.href.
 fn listen_for_supabase_callback() {
+    auth_log("[Auth] Supabase callback listener starting");
+
     // Give any previous listener thread time to release port 12345
     std::thread::sleep(std::time::Duration::from_millis(300));
 
     let mut server_opt = None;
     for attempt in 0..5 {
         match Server::http("127.0.0.1:12345") {
-            Ok(s) => { server_opt = Some(s); break; }
+            Ok(s) => {
+                auth_log(format!(
+                    "[Auth] Supabase callback listener bound to 127.0.0.1:12345 on attempt {}",
+                    attempt + 1
+                ));
+                server_opt = Some(s);
+                break;
+            }
             Err(_) => {
-                println!("[Auth] Supabase port 12345 busy (attempt {}), retrying...", attempt + 1);
+                auth_log(format!("[Auth] Supabase port 12345 busy (attempt {}), retrying...", attempt + 1));
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
@@ -456,7 +586,7 @@ fn listen_for_supabase_callback() {
     let server = match server_opt {
         Some(s) => s,
         None => {
-            println!("[Auth] Could not bind port 12345 for Supabase after 5 attempts");
+            auth_log("[Auth] Could not bind port 12345 for Supabase after 5 attempts");
             return;
         }
     };
@@ -466,7 +596,7 @@ fn listen_for_supabase_callback() {
     // deadline manual + recv_timeout más abajo.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
 
-    println!("[Auth] Listening for Supabase callback on 127.0.0.1:12345...");
+    auth_log("[Auth] Listening for Supabase callback on 127.0.0.1:12345...");
     
     // FIX: Use a same-origin <form> submit instead of window.location.href.
     // Chrome 115+ and Firefox block cross-origin href redirects to localhost
@@ -515,35 +645,52 @@ fn listen_for_supabase_callback() {
     loop {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         if remaining.is_zero() {
-            println!("[Auth] Supabase listener timed out waiting for callback");
+            auth_log("[Auth] Supabase listener timed out waiting for callback");
             break;
         }
         let request = match server.recv_timeout(remaining) {
             Ok(Some(r)) => r,
             Ok(None) => {
-                println!("[Auth] Supabase listener timed out waiting for callback");
+                auth_log("[Auth] Supabase listener timed out waiting for callback");
                 break;
             }
             Err(e) => {
-                println!("[Auth] Supabase listener error: {}", e);
+                auth_log(format!("[Auth] Supabase listener error: {}", e));
                 break;
             }
         };
 
         let url = format!("http://localhost:12345{}", request.url());
+        auth_log(format!("[Auth] Supabase callback request received: {}", url));
         let parsed = match Url::parse(&url) {
             Ok(p) => p,
             Err(e) => {
-                println!("[Auth] Ignoring unparsable Supabase callback URL ({}): {}", e, url);
+                auth_log(format!("[Auth] Ignoring unparsable Supabase callback URL ({}): {}", e, url));
                 let _ = request.respond(Response::from_string("Bad request"));
                 continue;
             }
         };
         let path = parsed.path();
+        let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+
+        if let Some(error) = pairs.get("error") {
+            let desc = pairs
+                .get("error_description")
+                .or_else(|| pairs.get("error_code"))
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            auth_log(format!(
+                "[Auth] Supabase OAuth error on {}: {} - {}",
+                path, error, desc
+            ));
+            let _ = request.respond(Response::from_string(supabase_login_error_html(error, desc))
+                .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap()));
+            break;
+        }
 
         // First request: serve HTML to capture hash fragment via form submit
         if path == "/callback" {
-            println!("[Auth] Serving token capture page (form-submit method)...");
+            auth_log("[Auth] Serving token capture page (form-submit method)...");
             let _ = request.respond(Response::from_string(capture_html)
                 .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap()));
             continue;
@@ -551,11 +698,16 @@ fn listen_for_supabase_callback() {
         
         // Second request: receive tokens via query params from the form submit
         if path == "/token" {
-            let pairs: std::collections::HashMap<_, _> = parsed.query_pairs().into_owned().collect();
+            auth_log("[Auth] Supabase token callback received");
             
             if let Some(access_token) = pairs.get("access_token") {
                 let (_, provider_opt) = get_oauth_state();
                 let provider = provider_opt.unwrap_or_else(|| "google".to_string());
+                auth_log(format!(
+                    "[Auth] Supabase access token received (provider: {}, refresh_token: {})",
+                    provider,
+                    pairs.contains_key("refresh_token")
+                ));
                 
                 // Fetch user info from Supabase
                 match fetch_supabase_user(access_token) {
@@ -567,21 +719,30 @@ fn listen_for_supabase_callback() {
                             provider,
                         };
                         save_auth_session(&session);
+                        auth_log(format!(
+                            "[Auth] Supabase login successful for {} ({})",
+                            session.user.email, session.user.id
+                        ));
                         let _ = request.respond(Response::from_string(supabase_login_success_html())
                             .with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap()));
                         break;
                     }
                     Err(e) => {
-                        println!("[Auth] Failed to fetch Supabase user: {}", e);
+                        auth_log(format!("[Auth] Failed to fetch Supabase user: {}", e));
                         let _ = request.respond(Response::from_string(format!("Error: {}", e)));
                     }
                 }
             } else if let Some(error) = pairs.get("error") {
                 let desc = pairs.get("error_description").map(|s| s.as_str()).unwrap_or("");
-                println!("[Auth] OAuth error from Supabase: {} - {}", error, desc);
+                auth_log(format!("[Auth] OAuth error from Supabase: {} - {}", error, desc));
                 let _ = request.respond(Response::from_string(format!("Auth Error: {} - {}", error, desc)));
                 break;
+            } else {
+                auth_log("[Auth] /token callback received without access_token or error");
             }
+        } else {
+            auth_log(format!("[Auth] Ignoring unexpected Supabase callback path: {}", path));
+            let _ = request.respond(Response::from_string("Not found").with_status_code(404));
         }
     }
 }
