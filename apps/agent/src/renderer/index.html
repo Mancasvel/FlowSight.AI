@@ -252,6 +252,35 @@
       box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
     }
 
+    .auth-error {
+      display: none;
+      padding: 8px 10px;
+      border: 1px solid hsl(var(--destructive) / 0.25);
+      border-radius: calc(var(--radius) - 2px);
+      background: hsl(var(--destructive) / 0.08);
+      color: hsl(var(--destructive));
+      font-size: 11px;
+      text-align: left;
+    }
+
+    .login-divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: hsl(var(--muted-foreground));
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .login-divider::before,
+    .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: hsl(var(--border));
+    }
+
     .select {
       width: 100%;
       padding: 6px 10px;
@@ -688,6 +717,24 @@
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 10px;">
+        <form id="workerLoginForm" style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
+          <div id="workerLoginError" class="auth-error"></div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="label" for="workerEmail">Email</label>
+            <input type="email" id="workerEmail" class="input" placeholder="worker@company.com" autocomplete="email" required>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="label" for="workerPassword">Password</label>
+            <input type="password" id="workerPassword" class="input" placeholder="Password from your PM"
+              autocomplete="current-password" required>
+          </div>
+          <button class="button button-primary" id="workerLoginBtn" type="submit" style="width: 100%; padding: 10px;">
+            Sign in with work credentials
+          </button>
+        </form>
+
+        <div class="login-divider">or connect an integration</div>
+
         <button class="button button-secondary" id="loginGoogle" onclick="window.handleLoginClick('google')"
           style="width: 100%; padding: 10px;">
           <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right: 8px;">
@@ -930,6 +977,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
     import { jsPDF } from 'jspdf';
+    import { getFriendlyAuthError, signInWorker, signOutWorker } from './auth-service.js';
 
     console.log('[FlowSight] Imports loaded successfully');
 
@@ -951,6 +999,29 @@
       } catch (e) {
         console.log("[Auth] No session:", e);
       }
+
+      try {
+        const workerSession = await invoke('get_current_user');
+        if (workerSession) {
+          authSession = {
+            access_token: workerSession.access_token,
+            refresh_token: workerSession.refresh_token,
+            provider: 'worker',
+            user: {
+              id: workerSession.user_id,
+              email: workerSession.email,
+              display_name: workerSession.email,
+              provider: 'worker',
+            },
+          };
+          currentUser = authSession.user;
+          showMainApp();
+          return true;
+        }
+      } catch (e) {
+        console.log("[Auth] No worker session:", e);
+      }
+
       showLoginScreen();
       return false;
     }
@@ -966,7 +1037,7 @@
 
       // Update user info
       if (currentUser) {
-        document.getElementById('userName').textContent = currentUser.display_name || 'User';
+        document.getElementById('userName').textContent = currentUser.display_name || currentUser.name || 'User';
         document.getElementById('userEmail').textContent = currentUser.email || currentUser.provider;
         if (currentUser.avatar_url) {
           document.getElementById('userAvatar').src = currentUser.avatar_url;
@@ -1090,6 +1161,74 @@
       }
     });
 
+    function setWorkerLoginError(message) {
+      const errorEl = document.getElementById('workerLoginError');
+      errorEl.textContent = message || '';
+      errorEl.style.display = message ? 'block' : 'none';
+    }
+
+    async function handleWorkerLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('workerEmail').value.trim();
+      const password = document.getElementById('workerPassword').value;
+      const btn = document.getElementById('workerLoginBtn');
+
+      if (!email || !password) {
+        setWorkerLoginError('Enter the email and password provided by your PM.');
+        return;
+      }
+
+      setWorkerLoginError('');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Signing in...';
+
+      let supabaseSessionCreated = false;
+      try {
+        const result = await signInWorker(email, password);
+        supabaseSessionCreated = true;
+        const displayName = result.profile.display_name || result.user.email || 'Worker';
+        const workerAuthSession = {
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+          provider: 'worker',
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            display_name: displayName,
+            name: displayName,
+            avatar_url: result.profile.avatar_url,
+            provider: 'worker',
+          },
+        };
+
+        await invoke('save_user_session', {
+          userId: result.user.id,
+          teamId: result.membership.team_id,
+          accessToken: result.session.access_token,
+          refreshToken: result.session.refresh_token,
+          email: result.user.email,
+        });
+
+        authSession = workerAuthSession;
+        currentUser = workerAuthSession.user;
+        showMainApp();
+        await initMainApp();
+        showToast('Logged in successfully', 'success');
+      } catch (error) {
+        if (supabaseSessionCreated) {
+          await signOutWorker().catch((signOutError) => console.error('[Auth] Cleanup sign out failed:', signOutError));
+        }
+        authSession = null;
+        currentUser = null;
+        const message = error?.message || getFriendlyAuthError(error);
+        setWorkerLoginError(message);
+        showToast(message, 'error', 4500);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Sign in with work credentials';
+      }
+    }
+
     async function handleLogin(provider) {
       const btn = document.getElementById('login' + provider.charAt(0).toUpperCase() + provider.slice(1));
       const originalText = btn.innerHTML;
@@ -1134,6 +1273,9 @@
 
     async function handleLogout() {
       try {
+        if (authSession?.provider === 'worker') {
+          await signOutWorker();
+        }
         await invoke('logout');
         authSession = null;
         currentUser = null;
@@ -1337,6 +1479,7 @@
     }, 1000);
 
     // Login button handlers (fallback if inline onclick fails)
+    document.getElementById('workerLoginForm').onsubmit = handleWorkerLogin;
     document.getElementById('loginGoogle').onclick = () => handleLogin('google');
     document.getElementById('loginJira').onclick = () => handleLogin('jira');
     document.getElementById('loginLinear').onclick = () => handleLogin('linear');
@@ -1380,7 +1523,7 @@
     async function saveConfig() {
       await invoke('update_config', {
         config: {
-          devName: currentUser.name || 'Guest',
+          devName: currentUser?.name || currentUser?.display_name || 'Guest',
           captureInterval: 60000,
           visionModel: 'FlowSight/local-vision'
         }
@@ -1665,7 +1808,7 @@
           jiraTicket: jiraTicket
         });
 
-        const devName = currentUser ? (currentUser.name || 'Developer') : 'Developer';
+        const devName = currentUser ? (currentUser.name || currentUser.display_name || 'Developer') : 'Developer';
         addActivityItem(devName, snapshot.description, snapshot.category, jiraTicket);
         document.getElementById('statSent').textContent = parseInt(document.getElementById('statSent').textContent) + 1;
 
@@ -1883,7 +2026,7 @@
       y += 10;
       doc.setFontSize(12);
       doc.setTextColor(100);
-      doc.text(`Date: ${data.date} | User: ${currentUser.name || 'Developer'}`, margin, y);
+      doc.text(`Date: ${data.date} | User: ${currentUser?.name || currentUser?.display_name || 'Developer'}`, margin, y);
       y += 15;
 
       // Summary

@@ -605,11 +605,20 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
        .arg("--threads").arg("2")
        .arg("--n-gpu-layers").arg("50");
 
-    // CWD = carpeta del binario. llama-server resuelve las DLLs (ggml-*.dll,
-    // llama.dll) por PATH relativo al ejecutable, as\u00ed que no podemos
-    // spawnearlo desde otro cwd o no las encuentra en Windows.
+    // CWD y PATH apuntan a la carpeta del binario. Algunos backends de
+    // llama.cpp cargan DLLs dinámicamente por nombre, y en instalaciones
+    // Windows no siempre basta con que estén junto al exe.
     if let Some(parent) = bin_path.parent() {
         cmd.current_dir(parent);
+        if let Some(existing_path) = std::env::var_os("PATH") {
+            let mut paths = vec![parent.to_path_buf()];
+            paths.extend(std::env::split_paths(&existing_path));
+            if let Ok(joined_path) = std::env::join_paths(paths) {
+                cmd.env("PATH", joined_path);
+            }
+        } else {
+            cmd.env("PATH", parent);
+        }
     }
 
     #[cfg(windows)]
