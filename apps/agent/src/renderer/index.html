@@ -986,6 +986,22 @@
     let currentUser = null;
     let authSession = null;
 
+    function reportRuntimeError(error) {
+      console.error('[FlowSight] Runtime error:', error);
+      const message = error?.message || String(error || 'Unexpected app error');
+      const loginErrorEl = document.getElementById('workerLoginError');
+      if (loginErrorEl && document.getElementById('loginScreen')?.style.display !== 'none') {
+        loginErrorEl.textContent = message;
+        loginErrorEl.style.display = 'block';
+      }
+      if (typeof showToast === 'function') {
+        showToast(message, 'error', 6000);
+      }
+    }
+
+    window.addEventListener('error', (event) => reportRuntimeError(event.error || event.message));
+    window.addEventListener('unhandledrejection', (event) => reportRuntimeError(event.reason));
+
     // ===== AUTH FUNCTIONS =====
     async function checkAuth() {
       try {

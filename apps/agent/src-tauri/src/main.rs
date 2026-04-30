@@ -3,15 +3,10 @@
 
 fn main() {
   // Env loading strategy:
-  // - En dev (cargo tauri dev) el CWD es el repo y `../../.env.local` resuelve
-  //   bien. Vite ya hornea los VITE_* al build; esto es solo para el caso
-  //   ra\u00edsimo de leer envs en runtime desde Rust.
-  // - En release el `.exe` corre desde Program Files y esos paths no existen;
-  //   probamos junto al ejecutable como \u00fanica ruta v\u00e1lida para override.
-  if cfg!(debug_assertions) {
-    let _ = dotenv::from_filename(".env.local");
-    let _ = dotenv::from_filename("../../.env.local");
-  }
+  // - No leemos `.env.local` ni rutas relativas del repo en runtime: no existen
+  //   en otros PCs y no deben ser parte del comportamiento instalado.
+  // - El `.exe` instalado solo acepta un `.env` junto al ejecutable como override
+  //   opcional. La configuracion publica de Supabase tiene defaults en codigo.
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
       let _ = dotenv::from_filename(dir.join(".env"));
