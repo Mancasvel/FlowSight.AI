@@ -5,7 +5,7 @@ use crate::vision_model::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::State;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Local;
@@ -566,6 +566,70 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
 
 static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
+fn configure_llama_command(
+    bin_path: &Path,
+    model_path: &Path,
+    mmproj_path: &Path,
+    log_path: &Path,
+    #[allow(unused_variables)] with_windows_flags: bool,
+) -> Result<std::process::Command, String> {
+    use std::process::Command;
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+
+    #[cfg(windows)]
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    #[cfg(windows)]
+    const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
+
+    let mut cmd = Command::new(bin_path);
+    cmd.arg("-m")
+        .arg(model_path)
+        .arg("--mmproj")
+        .arg(mmproj_path)
+        .arg("--port")
+        .arg("8080")
+        .arg("--ctx-size")
+        .arg("4096")
+        .arg("--parallel")
+        .arg("2")
+        .arg("--threads")
+        .arg("2")
+        .arg("--n-gpu-layers")
+        .arg("50");
+
+    // CWD y PATH apuntan a la carpeta del binario. Algunos backends de
+    // llama.cpp cargan DLLs dinámicamente por nombre, y en instalaciones
+    // Windows no siempre basta con que estén junto al exe.
+    if let Some(parent) = bin_path.parent() {
+        cmd.current_dir(parent);
+        if let Some(existing_path) = std::env::var_os("PATH") {
+            let mut paths = vec![parent.to_path_buf()];
+            paths.extend(std::env::split_paths(&existing_path));
+            if let Ok(joined_path) = std::env::join_paths(paths) {
+                cmd.env("PATH", joined_path);
+            }
+        } else {
+            cmd.env("PATH", parent);
+        }
+    }
+
+    #[cfg(windows)]
+    if with_windows_flags {
+        cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY);
+    }
+
+    // Log va al app data dir (escribible), nunca al install dir de Program Files.
+    if let Ok(file) = std::fs::File::create(log_path) {
+        if let Ok(file_err) = file.try_clone() {
+            cmd.stdout(std::process::Stdio::from(file));
+            cmd.stderr(std::process::Stdio::from(file_err));
+        }
+    }
+
+    Ok(cmd)
+}
+
 #[tauri::command]
 pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let mut guard = SERVER_PROCESS.lock().unwrap();
@@ -590,50 +654,30 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
         return Err(format!("Vision projector not found at {:?}. Reinstall FlowSight Agent.", mmproj_path));
     }
 
-    use std::process::Command;
-    #[cfg(windows)]
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
-
-    let mut cmd = Command::new(&bin_path);
-    cmd.arg("-m").arg(&model_path)
-       .arg("--mmproj").arg(&mmproj_path)
-       .arg("--port").arg("8080")
-       .arg("--ctx-size").arg("4096")
-       .arg("--parallel").arg("2")
-       .arg("--threads").arg("2")
-       .arg("--n-gpu-layers").arg("50");
-
-    // CWD y PATH apuntan a la carpeta del binario. Algunos backends de
-    // llama.cpp cargan DLLs dinámicamente por nombre, y en instalaciones
-    // Windows no siempre basta con que estén junto al exe.
-    if let Some(parent) = bin_path.parent() {
-        cmd.current_dir(parent);
-        if let Some(existing_path) = std::env::var_os("PATH") {
-            let mut paths = vec![parent.to_path_buf()];
-            paths.extend(std::env::split_paths(&existing_path));
-            if let Ok(joined_path) = std::env::join_paths(paths) {
-                cmd.env("PATH", joined_path);
-            }
-        } else {
-            cmd.env("PATH", parent);
-        }
-    }
-
-    #[cfg(windows)]
-    cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY);
-
-    // Log va al app data dir (escribible), nunca al install dir de Program Files.
     let log_path = crate::paths::server_log_path()?;
-    if let Ok(file) = std::fs::File::create(&log_path) {
-        if let Ok(file_err) = file.try_clone() {
-            cmd.stdout(std::process::Stdio::from(file));
-            cmd.stderr(std::process::Stdio::from(file_err));
-        }
-    }
 
-    match cmd.spawn() {
+    #[cfg(windows)]
+    let spawn_result = {
+        let mut cmd = configure_llama_command(&bin_path, &model_path, &mmproj_path, &log_path, true)?;
+        match cmd.spawn() {
+            Err(err) if err.raw_os_error() == Some(50) => {
+                // Some Windows environments reject specific creation flags.
+                // Retry without flags so startup still works.
+                let mut fallback =
+                    configure_llama_command(&bin_path, &model_path, &mmproj_path, &log_path, false)?;
+                fallback.spawn()
+            }
+            other => other,
+        }
+    };
+
+    #[cfg(not(windows))]
+    let spawn_result = {
+        let mut cmd = configure_llama_command(&bin_path, &model_path, &mmproj_path, &log_path, false)?;
+        cmd.spawn()
+    };
+
+    match spawn_result {
         Ok(mut child) => {
             std::thread::sleep(std::time::Duration::from_secs(2));
             if let Ok(Some(status)) = child.try_wait() {
