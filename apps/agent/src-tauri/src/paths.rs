@@ -19,6 +19,7 @@ const DB_FILE: &str = "dev-agent.db";
 const SERVER_LOG_FILE: &str = "server.log";
 const AGENT_ERROR_LOG_FILE: &str = "agent_error.log";
 const CRASH_LOG_FILE: &str = "crash.log";
+const SCREENSHOTS_TMP_DIR: &str = "screenshots_tmp";
 
 /// `%LOCALAPPDATA%\FlowSight\` (creado si no existe).
 ///
@@ -57,6 +58,16 @@ pub fn crash_log_path_or_fallback() -> PathBuf {
     app_data_dir()
         .map(|d| d.join(CRASH_LOG_FILE))
         .unwrap_or_else(|_| PathBuf::from(CRASH_LOG_FILE))
+}
+
+/// PNG de captura persistentes solo para depuración; mismo árbol que la BD/logs
+/// (`%LOCALAPPDATA%\FlowSight\screenshots_tmp\`), no el Escritorio ni la carpeta de instalación.
+pub fn screenshots_tmp_dir() -> Result<PathBuf, String> {
+    let dir = app_data_dir()?.join(SCREENSHOTS_TMP_DIR);
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create {:?}: {}", dir, e))?;
+    }
+    Ok(dir)
 }
 
 /// Resuelve el directorio de recursos bundlados donde vive `local_llm/`.

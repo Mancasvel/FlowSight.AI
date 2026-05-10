@@ -227,13 +227,9 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
         
     // println!("[Agent] Captured screenshot size: {} bytes", png.len());
     
-    // Persist to tmp for debug (optional)
-    let desktop = dirs::desktop_dir().unwrap_or(std::path::PathBuf::from("."));
-    let debug_dir = desktop.join("flowsight_screenshots_tmp");
-    if !debug_dir.exists() {
-        let _ = std::fs::create_dir_all(&debug_dir);
-    }
-    
+    // Persist to tmp for debug (optional): junto a datos de la app, no en Escritorio
+    let debug_dir = crate::paths::screenshots_tmp_dir()?;
+
     let timestamp = chrono::Local::now().format("%H%M%S");
     let filename = format!("capture_{}.png", timestamp);
     let debug_path = debug_dir.join(filename);
