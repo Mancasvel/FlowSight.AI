@@ -465,17 +465,21 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
     let agent = agent.as_ref().ok_or("Agent not initialized")?;
     
     let conn = Connection::open(&agent.db_path).map_err(|e| e.to_string())?;
+    // Calendar 'today' in local TZ must use UTC→local conversion: `created_at`
+    // defaults to CURRENT_TIMESTAMP (UTC). Comparing plain `date(created_at)`
+    // to `date('now','localtime')` used mismatched halves and often returned zero rows.
     let today = Local::now().format("%Y-%m-%d").to_string();
-    
-    // Get all entries for today
-    let mut stmt = conn.prepare(
-        "SELECT created_at, description, activity_type, jira_ticket_id, duration_seconds 
-         FROM reports 
-         WHERE date(created_at) = date('now', 'localtime')
-         ORDER BY created_at DESC"
-    ).map_err(|e| e.to_string())?;
-    
-    let entries: Vec<DayHistoryEntry> = stmt.query_map([], |row| {
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT created_at, description, activity_type, jira_ticket_id, duration_seconds
+         FROM reports
+         WHERE date(created_at, 'localtime') = ?1
+         ORDER BY datetime(created_at) DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let entries: Vec<DayHistoryEntry> = stmt.query_map(params![today], |row| {
         Ok(DayHistoryEntry {
             time: row.get::<_, String>(0).unwrap_or_default(),
             description: row.get::<_, String>(1).unwrap_or_default(),
