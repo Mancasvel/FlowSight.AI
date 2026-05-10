@@ -571,18 +571,16 @@ fn configure_llama_command(
     model_path: &Path,
     mmproj_path: &Path,
     log_path: &Path,
-    #[allow(unused_variables)] with_windows_flags: bool,
+    redirect_log_to_file: bool,
+    #[cfg_attr(not(windows), allow(unused_variables))] creation_flags: Option<u32>,
 ) -> Result<std::process::Command, String> {
     use std::process::Command;
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
 
-    #[cfg(windows)]
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    #[cfg(windows)]
-    const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
-
     let mut cmd = Command::new(bin_path);
+    // Evita heredar stdin inválido tras FreeConsole en el proceso padre (release Windows).
+    cmd.stdin(std::process::Stdio::null());
     cmd.arg("-m")
         .arg(model_path)
         .arg("--mmproj")
@@ -615,15 +613,16 @@ fn configure_llama_command(
     }
 
     #[cfg(windows)]
-    if with_windows_flags {
-        cmd.creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY);
+    if let Some(flags) = creation_flags {
+        cmd.creation_flags(flags);
     }
 
-    // Log va al app data dir (escribible), nunca al install dir de Program Files.
-    if let Ok(file) = std::fs::File::create(log_path) {
-        if let Ok(file_err) = file.try_clone() {
-            cmd.stdout(std::process::Stdio::from(file));
-            cmd.stderr(std::process::Stdio::from(file_err));
+    if redirect_log_to_file {
+        if let Ok(file) = std::fs::File::create(log_path) {
+            if let Ok(file_err) = file.try_clone() {
+                cmd.stdout(std::process::Stdio::from(file));
+                cmd.stderr(std::process::Stdio::from(file_err));
+            }
         }
     }
 
@@ -658,22 +657,60 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
 
     #[cfg(windows)]
     let spawn_result = {
-        let mut cmd = configure_llama_command(&bin_path, &model_path, &mmproj_path, &log_path, true)?;
-        match cmd.spawn() {
-            Err(err) if err.raw_os_error() == Some(50) => {
-                // Some Windows environments reject specific creation flags.
-                // Retry without flags so startup still works.
-                let mut fallback =
-                    configure_llama_command(&bin_path, &model_path, &mmproj_path, &log_path, false)?;
-                fallback.spawn()
+        use std::io::Error as IoError;
+
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
+
+        let attempts: [(Option<u32>, bool); 6] = [
+            (Some(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY), true),
+            (Some(CREATE_NO_WINDOW), true),
+            (None, true),
+            (Some(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY), false),
+            (Some(CREATE_NO_WINDOW), false),
+            (None, false),
+        ];
+
+        let mut last_err =
+            IoError::new(std::io::ErrorKind::Other, "llama-server spawn failed (no attempts)");
+        let mut spawned: Option<std::process::Child> = None;
+        for &(flags, redirect_log) in &attempts {
+            let mut cmd = configure_llama_command(
+                &bin_path,
+                &model_path,
+                &mmproj_path,
+                &log_path,
+                redirect_log,
+                flags,
+            )?;
+
+            match cmd.spawn() {
+                Ok(child) => {
+                    spawned = Some(child);
+                    break;
+                }
+                Err(e) => {
+                    let retry_os50 = e.raw_os_error() == Some(50);
+                    last_err = e;
+                    if !retry_os50 {
+                        break;
+                    }
+                }
             }
-            other => other,
         }
+        spawned.ok_or(last_err)
     };
 
     #[cfg(not(windows))]
     let spawn_result = {
-        let mut cmd = configure_llama_command(&bin_path, &model_path, &mmproj_path, &log_path, false)?;
+        let mut cmd = configure_llama_command(
+            &bin_path,
+            &model_path,
+            &mmproj_path,
+            &log_path,
+            true,
+            None,
+        )?;
         cmd.spawn()
     };
 

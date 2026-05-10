@@ -57,7 +57,7 @@ pnpm dev
 ```
 
 The dev command starts the agent with hot reload. The first run downloads
-the GGUF model from the repository's GitHub Release (see `scripts/fetch-models.py`).
+the GGUF model from the repository's GitHub Release (see `scripts/fetch-models.mjs`).
 
 ### Build a release installer
 
@@ -102,7 +102,7 @@ local_llm/
   bin/            llama-server.exe + DLLs (committed, ~50 MB)
   *.gguf          Local model weights (fetched at build time, not committed)
 scripts/
-  fetch-models.py Prebuild hook that downloads GGUF from GitHub Releases
+  fetch-models.mjs  Prebuild hook (Node-only): downloads GGUF from GitHub Releases
 .github/
   workflows/      CI (build, release, gitleaks)
 ```

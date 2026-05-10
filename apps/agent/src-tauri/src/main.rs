@@ -17,9 +17,10 @@
 // AppInit_DLLs entirely — ASProxy64.dll never enters the process.
 //
 // The only side-effect of SUBSYSTEM:CONSOLE is that the OS allocates a console
-// window.  We call FreeConsole() immediately (also kernel32, no user32 needed)
-// in release builds so no console is ever visible.  Debug builds keep the
-// console so log output is readable during development.
+// window. In release builds we detach it with FreeConsole(); before that we
+// clear stdin/stdout/stderr onto the NUL device so spawned children do not inherit
+// broken console handles (Windows may return ERROR_NOT_SUPPORTED on spawn otherwise). Debug builds keep the console so log output is readable during
+// development.
 
 /// Must be the very first call in `main()` on Windows, before any user32 import.
 ///
@@ -32,7 +33,6 @@ fn harden_process_early() {
 
     extern "system" {
         fn SetProcessMitigationPolicy(policy: u32, buf: *const c_void, len: u32) -> i32;
-        fn FreeConsole() -> i32;
     }
 
     unsafe {
@@ -41,11 +41,82 @@ fn harden_process_early() {
         let policy: u32 = 1u32;
         SetProcessMitigationPolicy(6, &policy as *const u32 as *const c_void, 4);
 
-        // Release builds: detach the console the OS created for the CONSOLE subsystem.
-        // FreeConsole is in kernel32, so this is safe before user32 loads.
-        // The console window is deallocated before it ever paints — no visible flash.
+        // Release: detach console. Prefer real NUL device handles instead of NULL:
+        // some Win11 builds still make `CreateProcess`/spawn fail with ERROR_NOT_SUPPORTED
+        // after FreeConsole when std handles are NULL.
         #[cfg(not(debug_assertions))]
-        FreeConsole();
+        {
+            use std::ffi::OsStr;
+            use std::os::windows::ffi::OsStrExt;
+
+            extern "system" {
+                fn CreateFileW(
+                    lp_file_name: *const u16,
+                    dw_desired_access: u32,
+                    dw_share_mode: u32,
+                    lp_security_attributes: *mut c_void,
+                    dw_creation_disposition: u32,
+                    dw_flags_and_attributes: u32,
+                    h_template_file: *mut c_void,
+                ) -> *mut c_void;
+
+                fn SetStdHandle(n_std_handle: u32, h_handle: *mut c_void) -> i32;
+                fn FreeConsole() -> i32;
+            }
+
+            const GENERIC_READ: u32 = 0x8000_0000;
+            const GENERIC_WRITE: u32 = 0x4000_0000;
+            const OPEN_EXISTING: u32 = 3;
+            const FILE_SHARE_READ: u32 = 0x0000_0001;
+            const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+
+            const STD_INPUT_HANDLE: u32 = (-10_i32) as u32;
+            const STD_OUTPUT_HANDLE: u32 = (-11_i32) as u32;
+            const STD_ERROR_HANDLE: u32 = (-12_i32) as u32;
+
+            let nul_wide: Vec<u16> = OsStr::new(r"\\.\NUL")
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
+
+            unsafe {
+                unsafe fn open_nul(path_ptr: *const u16, inp: bool) -> *mut c_void {
+                    let access = if inp {
+                        GENERIC_READ
+                    } else {
+                        GENERIC_READ | GENERIC_WRITE
+                    };
+                    CreateFileW(
+                        path_ptr,
+                        access,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE,
+                        std::ptr::null_mut(),
+                        OPEN_EXISTING,
+                        0,
+                        std::ptr::null_mut(),
+                    )
+                }
+
+                let nin = open_nul(nul_wide.as_ptr(), true);
+                let nout = open_nul(nul_wide.as_ptr(), false);
+                let nerr = open_nul(nul_wide.as_ptr(), false);
+                let invalid = !0usize as *mut c_void;
+                let set_or_null =
+                    |h: *mut c_void, std_h: u32| {
+                        if h.is_null() || h == invalid {
+                            let _ =
+                                SetStdHandle(std_h, std::ptr::null_mut::<c_void>());
+                        } else {
+                            let _ = SetStdHandle(std_h, h);
+                        }
+                    };
+
+                set_or_null(nin, STD_INPUT_HANDLE);
+                set_or_null(nout, STD_OUTPUT_HANDLE);
+                set_or_null(nerr, STD_ERROR_HANDLE);
+                let _ = FreeConsole();
+            }
+        }
     }
 }
 
