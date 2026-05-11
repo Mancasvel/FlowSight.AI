@@ -18,7 +18,8 @@ permissions:
 # No commitees .env.local; el CI inyecta estos valores en `pnpm build`.
 
 # Note: Linux builds live in a separate repo (Mancasvel/FlowSight_linux).
-# This workflow only produces Windows and macOS artifacts.
+# Cliente iOS: repositorio dedicado FlowSight-iOS (fuera de este monorepo).
+# Este workflow solo produce instaladores Windows.
 
 jobs:
   build-windows:
@@ -75,61 +76,8 @@ jobs:
             apps/agent/src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: warn
 
-  build-macos:
-    runs-on: macos-latest
-    env:
-      TAURI_JIRA_CLIENT_ID: ${{ secrets.TAURI_JIRA_CLIENT_ID }}
-      TAURI_JIRA_CLIENT_SECRET: ${{ secrets.TAURI_JIRA_CLIENT_SECRET }}
-      TAURI_LINEAR_CLIENT_ID: ${{ secrets.TAURI_LINEAR_CLIENT_ID }}
-      TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Reject outdated tauri 2.9.x (stale release tag)
-        shell: bash
-        run: |
-          set -euo pipefail
-          f=apps/agent/src-tauri/Cargo.toml
-          if grep -qE 'tauri = \{ version = "2\.9' "$f"; then
-            echo "::error title=Stale release tag::Create a **new tag** on the latest \`main\` and publish a **new** GitHub Release."
-            grep -E 'tauri' "$f" || true
-            exit 1
-          fi
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 8.15.0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: apps/agent/src-tauri -> target
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build app
-        run: pnpm build
-
-      - name: Upload macOS bundles
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-bundle
-          path: |
-            apps/agent/src-tauri/target/release/bundle/dmg/*.dmg
-          if-no-files-found: warn
-
   attach-to-release:
-    needs: [build-windows, build-macos]
+    needs: [build-windows]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -147,4 +95,3 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.msi
-            artifacts/**/*.dmg
