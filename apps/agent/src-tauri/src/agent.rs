@@ -31,6 +31,8 @@ pub struct AgentConfig {
     pub capture_interval: Option<u64>,
     #[serde(rename = "visionModel")]
     pub vision_model: Option<String>,
+    /// `None` or `-1` => automatic GPU layer ladder on local llama-server.
+    /// `Some(n)` for `n >= 0` => fixed `--n-gpu-layers` (manual / power user).
     #[serde(rename = "gpuLayers")]
     pub gpu_layers: Option<i32>,
 }
@@ -62,7 +64,8 @@ impl FlowSightAgent {
                 dev_name: Some(whoami::realname()),
                 capture_interval: Some(60000),
                 vision_model: Some(CONFIG_VISION_MODEL_ID.to_string()),
-                gpu_layers: Some(16), // Default to Balanced Mode
+                // -1 = automatic tier probing (maximum compatibility + strongest profile that survives).
+                gpu_layers: Some(-1),
             },
             is_running: false,
             reports_sent: 0,
@@ -389,9 +392,22 @@ pub fn get_config(state: State<'_, AgentState>) -> Result<AgentConfig, String> {
 }
 
 #[tauri::command]
-pub fn update_config(state: State<'_, AgentState>, config: AgentConfig) -> Result<bool, String> {
+pub fn update_config(state: State<'_, AgentState>, patch: AgentConfig) -> Result<bool, String> {
     if let Some(agent) = state.lock().unwrap().as_mut() {
-        agent.config = config;
+        let c = &mut agent.config;
+        if patch.dev_name.is_some() {
+            c.dev_name = patch.dev_name;
+        }
+        if patch.capture_interval.is_some() {
+            c.capture_interval = patch.capture_interval;
+        }
+        if patch.vision_model.is_some() {
+            c.vision_model = patch.vision_model;
+        }
+        // callers (renderer) omit `gpuLayers`; full replace here used to wipe auto/manual choice
+        if patch.gpu_layers.is_some() {
+            c.gpu_layers = patch.gpu_layers;
+        }
         agent.save_config();
     }
     Ok(true)
@@ -534,6 +550,22 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
 // mientras el modelo termina de cargar; 1s provocaba falsos "offline" intermitentes.
 const LOCAL_HEALTH_HTTP_TIMEOUT_SECS: u64 = 12;
 
+/// Quick binary health check reused by diagnostics and automated tier probing.
+fn local_server_health_ok() -> bool {
+    let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(LOCAL_HEALTH_HTTP_TIMEOUT_SECS))
+        .build()
+    else {
+        return false;
+    };
+    client
+        .get("http://localhost:8080/health")
+        .send()
+        .ok()
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub fn check_local_server() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
@@ -575,13 +607,63 @@ fn clamp_llama_gpu_layers(n: i32) -> i32 {
     n.max(0).min(16_384)
 }
 
-fn gpu_layers_for_llama_server(state: &State<AgentState>) -> i32 {
+/// Descending CUDA/Vulkan offload steps for vision GGUF (+ mmproj): try the highest that
+/// survives startup + `/health`, then fall back toward CPU-only (`0`).
+const AUTO_GPU_LAYER_TIERS: &[i32] = &[56, 40, 24, 12, 0];
+/// Per-tier budget while the weights load (slow disks / AV can dominate here).
+const AUTO_TIER_HEALTH_WAIT_SECS: u64 = 56;
+
+#[derive(Clone, Copy, Debug)]
+enum GpuServeMode {
+    Automatic,
+    Manual(i32),
+}
+
+fn gpu_serve_mode(state: &State<AgentState>) -> GpuServeMode {
     let guard = state.lock().unwrap();
     let raw = match guard.as_ref() {
-        None => 50,
-        Some(a) => a.config.gpu_layers.unwrap_or(50),
+        None => return GpuServeMode::Automatic,
+        Some(a) => a.config.gpu_layers,
     };
-    clamp_llama_gpu_layers(raw)
+    match raw {
+        None | Some(-1) => GpuServeMode::Automatic,
+        Some(n) if n >= 0 => GpuServeMode::Manual(clamp_llama_gpu_layers(n)),
+        Some(_) => GpuServeMode::Automatic,
+    }
+}
+
+/// Returns true once `/health` succeeds. If the managed child exits, clears it and stops early.
+fn wait_for_managed_health_secs(max_secs: u64) -> bool {
+    for _ in 0..max_secs {
+        if local_server_health_ok() {
+            return true;
+        }
+
+        let still_running = {
+            let mut g = SERVER_PROCESS.lock().unwrap();
+            match g.as_mut() {
+                Some(ch) => match ch.try_wait() {
+                    Ok(Some(_)) => {
+                        g.take();
+                        false
+                    }
+                    Ok(None) => true,
+                    Err(_) => {
+                        let _ = g.take();
+                        false
+                    }
+                },
+                None => false,
+            }
+        };
+
+        if !still_running {
+            return false;
+        }
+
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    false
 }
 
 fn read_server_log_tail_chars(max_chars: usize) -> String {
@@ -798,23 +880,96 @@ fn spawn_llama_managed_child(app: &tauri::AppHandle, gpu_layers: i32) -> Result<
     }
 }
 
-/// Arranca llama-server respetando `gpu_layers` de la configuración del agente (o fallback razonable).
+/// Arranca llama-server: modo automático sube desde capas GPU altas hasta que `/health`
+/// responda; modo manual fuerza `--n-gpu-layers` fijo.
 #[tauri::command]
 pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<serde_json::Value, String> {
-    let mut guard = SERVER_PROCESS.lock().unwrap();
-    if guard.is_some() {
-        return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
+    let mode = gpu_serve_mode(&state);
+    {
+        let guard = SERVER_PROCESS.lock().unwrap();
+        if guard.is_some() {
+            return Ok(serde_json::json!({
+                "status": "already_running",
+                "message": "Server is already running",
+                "gpuAuto": false
+            }));
+        }
     }
 
-    let gpu_layers = gpu_layers_for_llama_server(&state);
-    let child = spawn_llama_managed_child(&app, gpu_layers)?;
-    *guard = Some(child);
-    Ok(serde_json::json!({
-        "status": "started",
-        "pid": "managed",
-        "model": VISION_STATUS_LABEL,
-        "gpuLayers": gpu_layers
-    }))
+    match mode {
+        GpuServeMode::Manual(gpu_layers) => {
+            let mut guard = SERVER_PROCESS.lock().unwrap();
+            let child = spawn_llama_managed_child(&app, gpu_layers)?;
+            *guard = Some(child);
+            Ok(serde_json::json!({
+                "status": "started",
+                "pid": "managed",
+                "model": VISION_STATUS_LABEL,
+                "gpuLayers": gpu_layers,
+                "gpuAuto": false
+            }))
+        }
+        GpuServeMode::Automatic => {
+            let mut last_err = String::from("unknown auto-start error");
+
+            for &layers in AUTO_GPU_LAYER_TIERS {
+                let _ = stop_server();
+                std::thread::sleep(std::time::Duration::from_millis(450));
+
+                let child = match spawn_llama_managed_child(&app, layers) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        log::warn!("[FlowSight llama-server] Auto tier gpu_layers={} spawn failed: {}", layers, e);
+                        last_err = e;
+                        continue;
+                    }
+                };
+
+                {
+                    let mut guard = SERVER_PROCESS.lock().unwrap();
+                    *guard = Some(child);
+                }
+
+                log::info!(
+                    "[FlowSight llama-server] Auto tier probing gpu_layers={}, waiting health up to {}s",
+                    layers,
+                    AUTO_TIER_HEALTH_WAIT_SECS
+                );
+
+                if wait_for_managed_health_secs(AUTO_TIER_HEALTH_WAIT_SECS) {
+                    return Ok(serde_json::json!({
+                        "status": "started",
+                        "pid": "managed",
+                        "model": VISION_STATUS_LABEL,
+                        "gpuLayers": layers,
+                        "gpuAuto": true
+                    }));
+                }
+
+                last_err = format!(
+                    "gpu_layers={} did not reach /health within {}s{}",
+                    layers,
+                    AUTO_TIER_HEALTH_WAIT_SECS,
+                    {
+                        let t = read_server_log_tail_chars(800);
+                        if t.is_empty() {
+                            String::new()
+                        } else {
+                            format!(". Last log excerpt: {}", t)
+                        }
+                    }
+                );
+                log::warn!("[FlowSight llama-server] {}", last_err);
+                let _ = stop_server();
+                std::thread::sleep(std::time::Duration::from_millis(350));
+            }
+
+            Err(format!(
+                "Automatic GPU tier startup failed on all steps. {}",
+                last_err
+            ))
+        }
+    }
 }
 
 /// Tras fallos interminables con GPU (drivers/hardware), reinicia sólo CPU — más lento pero mucho más compatible.
@@ -835,7 +990,8 @@ pub fn restart_llama_server_cpu_only(app: tauri::AppHandle) -> Result<serde_json
         "pid": "managed",
         "model": VISION_STATUS_LABEL,
         "gpuLayers": 0,
-        "cpuFallback": true
+        "cpuFallback": true,
+        "gpuAuto": false
     }))
 }
 
@@ -982,6 +1138,19 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
 #[cfg(test)]
 mod agent_struct_tests {
     use super::*;
+
+    #[test]
+    fn agent_config_json_roundtrip_negative_one_auto_marker() {
+        let c = AgentConfig {
+            dev_name: Some("Tester".into()),
+            capture_interval: Some(42_000),
+            vision_model: Some("model-id".into()),
+            gpu_layers: Some(-1),
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: AgentConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.gpu_layers, Some(-1));
+    }
 
     #[test]
     fn agent_config_json_roundtrip() {

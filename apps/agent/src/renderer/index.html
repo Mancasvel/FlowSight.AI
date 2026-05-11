@@ -1590,6 +1590,8 @@
           };
 
           const spawnedThisSession = res.status === 'started';
+          /** Rust auto tiers already descended to CPU (0); no need to duplicate `restart_llama_server_cpu_only`. */
+          const skipCpuFallback = res.gpuAuto === true;
           const HEALTH_POLL_MAX = 900;
           const CPU_FALLBACK_AFTER_SEC = 240;
           let polls = 0;
@@ -1615,6 +1617,7 @@
                 );
               }
               if (
+                !skipCpuFallback &&
                 !cpuFallbackDone &&
                 elapsedSec >= CPU_FALLBACK_AFTER_SEC &&
                 proc.managed &&
@@ -1651,7 +1654,11 @@
 
         // Finalize
         overlay.style.display = 'none';
-        showToast("Local AI Server Ready", "success");
+        const layerSuffix =
+          typeof res.gpuLayers === 'number'
+            ? ` (${res.gpuLayers} GPU layers${res.gpuAuto ? ', auto-selected' : ''})`
+            : '';
+        showToast(`Local AI Server Ready${layerSuffix}`, 'success');
 
         isMonitoring = true;
         document.getElementById('statStatus').textContent = 'On';
