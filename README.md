@@ -7,6 +7,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 [![Commercial License available](https://img.shields.io/badge/Commercial%20License-available-green.svg)](./COMMERCIAL-LICENSE.md)
 [![CLA required](https://img.shields.io/badge/CLA-required-orange.svg)](./CLA.md)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Mancasvel/FlowSight.AI)
 
 FlowSight is a desktop application that helps distributed engineering
 teams understand how their work flows, without the surveillance baggage of
