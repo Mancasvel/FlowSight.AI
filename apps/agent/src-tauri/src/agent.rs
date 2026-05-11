@@ -529,10 +529,15 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
 
 // Health check against nuestro llama-server local (NO es ollama; el nombre se
 // mantuvo en el tauri command hist\u00f3ricamente pero el endpoint es de llama.cpp).
+//
+// Timeout generoso: en equipos lentos o con antivirus el primer /health puede tardar
+// mientras el modelo termina de cargar; 1s provocaba falsos "offline" intermitentes.
+const LOCAL_HEALTH_HTTP_TIMEOUT_SECS: u64 = 12;
+
 #[tauri::command]
 pub fn check_local_server() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(1))
+        .timeout(std::time::Duration::from_secs(LOCAL_HEALTH_HTTP_TIMEOUT_SECS))
         .build().map_err(|e| e.to_string())?;
 
     match client.get("http://localhost:8080/health").send() {
@@ -566,11 +571,73 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
 
 static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
+fn clamp_llama_gpu_layers(n: i32) -> i32 {
+    n.max(0).min(16_384)
+}
+
+fn gpu_layers_for_llama_server(state: &State<AgentState>) -> i32 {
+    let guard = state.lock().unwrap();
+    let raw = match guard.as_ref() {
+        None => 50,
+        Some(a) => a.config.gpu_layers.unwrap_or(50),
+    };
+    clamp_llama_gpu_layers(raw)
+}
+
+fn read_server_log_tail_chars(max_chars: usize) -> String {
+    let Ok(path) = crate::paths::server_log_path() else {
+        return String::new();
+    };
+    let Ok(s) = std::fs::read_to_string(&path) else {
+        return String::new();
+    };
+    if s.len() <= max_chars {
+        s
+    } else {
+        s[s.len() - max_chars..].to_string()
+    }
+}
+
+/// Estado del proceso hijo que FlowSight lanzó (no confundir con un llama-server huérfano).
+#[tauri::command]
+pub fn llama_managed_process_status() -> Result<serde_json::Value, String> {
+    let mut guard = SERVER_PROCESS.lock().unwrap();
+    match guard.as_mut() {
+        None => Ok(serde_json::json!({
+            "managed": false,
+            "alive": null
+        })),
+        Some(child) => match child.try_wait() {
+            Ok(Some(status)) => {
+                let code = status.code();
+                guard.take();
+                Ok(serde_json::json!({
+                    "managed": true,
+                    "alive": false,
+                    "exitCode": code
+                }))
+            }
+            Ok(None) => Ok(serde_json::json!({
+                "managed": true,
+                "alive": true
+            })),
+            Err(e) => Err(e.to_string()),
+        },
+    }
+}
+
+#[tauri::command]
+pub fn llama_server_log_tail(max_chars: Option<usize>) -> Result<String, String> {
+    let n = max_chars.unwrap_or(1_200).max(200);
+    Ok(read_server_log_tail_chars(n))
+}
+
 fn configure_llama_command(
     bin_path: &Path,
     model_path: &Path,
     mmproj_path: &Path,
     log_path: &Path,
+    gpu_layers: i32,
     redirect_log_to_file: bool,
     #[cfg_attr(not(windows), allow(unused_variables))] creation_flags: Option<u32>,
 ) -> Result<std::process::Command, String> {
@@ -594,7 +661,7 @@ fn configure_llama_command(
         .arg("--threads")
         .arg("2")
         .arg("--n-gpu-layers")
-        .arg("50");
+        .arg(clamp_llama_gpu_layers(gpu_layers).to_string());
 
     // CWD y PATH apuntan a la carpeta del binario. Algunos backends de
     // llama.cpp cargan DLLs dinámicamente por nombre, y en instalaciones
@@ -629,16 +696,10 @@ fn configure_llama_command(
     Ok(cmd)
 }
 
-#[tauri::command]
-pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let mut guard = SERVER_PROCESS.lock().unwrap();
-    if guard.is_some() {
-        return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
-    }
-
+fn spawn_llama_managed_child(app: &tauri::AppHandle, gpu_layers: i32) -> Result<std::process::Child, String> {
     // Runtime (binarios + pesos) empacados como Tauri bundle resources. En
     // dev cae al layout del repo autom\u00e1ticamente.
-    let local_llm_dir = crate::paths::resource_local_llm_dir(&app)?;
+    let local_llm_dir = crate::paths::resource_local_llm_dir(app)?;
     let bin_path = local_llm_dir.join("bin").join("llama-server.exe");
     let model_path = local_llm_dir.join(VISION_GGUF_FILENAME);
     let mmproj_path = local_llm_dir.join(VISION_MMPROJ_FILENAME);
@@ -680,6 +741,7 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
                 &model_path,
                 &mmproj_path,
                 &log_path,
+                gpu_layers,
                 redirect_log,
                 flags,
             )?;
@@ -708,6 +770,7 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
             &model_path,
             &mmproj_path,
             &log_path,
+            gpu_layers,
             true,
             None,
         )?;
@@ -718,10 +781,7 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
         Ok(mut child) => {
             std::thread::sleep(std::time::Duration::from_secs(2));
             if let Ok(Some(status)) = child.try_wait() {
-                let log_tail = std::fs::read_to_string(&log_path)
-                    .ok()
-                    .map(|s| s.chars().rev().take(1200).collect::<String>().chars().rev().collect::<String>())
-                    .unwrap_or_default();
+                let log_tail = read_server_log_tail_chars(1_200);
                 return Err(format!(
                     "llama-server exited during startup (code: {:?}). {}",
                     status.code(),
@@ -732,16 +792,51 @@ pub fn start_server(app: tauri::AppHandle) -> Result<serde_json::Value, String> 
                     }
                 ));
             }
-
-            *guard = Some(child);
-            Ok(serde_json::json!({
-                "status": "started",
-                "pid": "managed",
-                "model": VISION_STATUS_LABEL
-            }))
-        },
-        Err(e) => Err(format!("Failed to start server: {}", e))
+            Ok(child)
+        }
+        Err(e) => Err(format!("Failed to start server: {}", e)),
     }
+}
+
+/// Arranca llama-server respetando `gpu_layers` de la configuración del agente (o fallback razonable).
+#[tauri::command]
+pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<serde_json::Value, String> {
+    let mut guard = SERVER_PROCESS.lock().unwrap();
+    if guard.is_some() {
+        return Ok(serde_json::json!({"status": "already_running", "message": "Server is already running"}));
+    }
+
+    let gpu_layers = gpu_layers_for_llama_server(&state);
+    let child = spawn_llama_managed_child(&app, gpu_layers)?;
+    *guard = Some(child);
+    Ok(serde_json::json!({
+        "status": "started",
+        "pid": "managed",
+        "model": VISION_STATUS_LABEL,
+        "gpuLayers": gpu_layers
+    }))
+}
+
+/// Tras fallos interminables con GPU (drivers/hardware), reinicia sólo CPU — más lento pero mucho más compatible.
+#[tauri::command]
+pub fn restart_llama_server_cpu_only(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let _ = stop_server();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let mut guard = SERVER_PROCESS.lock().unwrap();
+    if guard.is_some() {
+        return Err("Could not clear managed server slot; try restarting FlowSight.".to_string());
+    }
+
+    let child = spawn_llama_managed_child(&app, 0)?;
+    *guard = Some(child);
+    Ok(serde_json::json!({
+        "status": "started",
+        "pid": "managed",
+        "model": VISION_STATUS_LABEL,
+        "gpuLayers": 0,
+        "cpuFallback": true
+    }))
 }
 
 #[tauri::command]

@@ -1572,22 +1572,79 @@
         console.log("Server Start Result:", res);
 
         if (res.status === 'started' || res.status === 'already_running') {
-          showStep("Verifying Server...", "Waiting for health check...", 60);
+          showStep("Verifying Server...", "Waiting for health check — first start or slow disk may take several minutes…", 58);
 
-          // Poll for health (first start may download model files)
+          /** @type {number|null} */
+          let lastUiSec = null;
+          /** @param {number} elapsedSec */
+          const maybeUpdateWaitUi = (elapsedSec) => {
+            if (elapsedSec % 5 !== 0 && elapsedSec < 120 && elapsedSec !== 1) return;
+            if (lastUiSec === elapsedSec) return;
+            lastUiSec = elapsedSec;
+            const pct = Math.min(84, 56 + Math.floor(elapsedSec / 18));
+            showStep(
+              "Verifying Server…",
+              `Waiting for health (${elapsedSec}s) — local model is loading. Antivirus or a full disk can slow this step.`,
+              pct
+            );
+          };
+
+          const spawnedThisSession = res.status === 'started';
+          const HEALTH_POLL_MAX = 900;
+          const CPU_FALLBACK_AFTER_SEC = 240;
           let polls = 0;
           let online = false;
-          while (polls < 900) {
-            await new Promise(r => setTimeout(r, 1000));
-            const status = await invoke('check_ollama'); // Repurposed function
+          let cpuFallbackDone = false;
+
+          while (polls < HEALTH_POLL_MAX && !online) {
+            await new Promise((r) => setTimeout(r, 1000));
+            polls++;
+            const elapsedSec = polls;
+            maybeUpdateWaitUi(elapsedSec);
+
+            /** @type {{ managed?: boolean, alive?: boolean|null }} */
+            let proc = { managed: false, alive: null };
+            if (spawnedThisSession) {
+              proc = await invoke("llama_managed_process_status");
+              if (proc.managed === true && proc.alive === false) {
+                const tail = await invoke("llama_server_log_tail", { max_chars: 900 }).catch(() => "");
+                const hint =
+                  "The local vision server stopped. See %LOCALAPPDATA%\\FlowSight\\server.log (or your OS app data FlowSight folder).";
+                throw new Error(
+                  tail ? `Local server exited during startup.\nLast log:\n${tail.slice(-600)}` : hint
+                );
+              }
+              if (
+                !cpuFallbackDone &&
+                elapsedSec >= CPU_FALLBACK_AFTER_SEC &&
+                proc.managed &&
+                proc.alive
+              ) {
+                const sniff = await invoke("check_ollama");
+                if (!sniff.online) {
+                  cpuFallbackDone = true;
+                  showStep(
+                    "Verifying Server…",
+                    "No health response yet — restarting on CPU only (slower but more compatible).",
+                    64
+                  );
+                  await invoke("restart_llama_server_cpu_only");
+                }
+              }
+            }
+
+            const status = await invoke("check_ollama");
             if (status.online) {
               online = true;
               break;
             }
-            polls++;
           }
 
-          if (!online) throw new Error("Server started but did not respond to health check");
+          if (!online) {
+            throw new Error(
+              "Server never became healthy — check antivirus, firewall, port 8080, and %LOCALAPPDATA%\\FlowSight\\server.log"
+            );
+          }
         } else {
           throw new Error("Unexpected server status: " + JSON.stringify(res));
         }

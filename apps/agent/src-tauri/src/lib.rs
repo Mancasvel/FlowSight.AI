@@ -17,6 +17,7 @@ use agent::{
     capture_screen_command, save_activity,
     get_activity_log, get_today_history,
     check_ollama, check_local_server,
+    llama_managed_process_status, llama_server_log_tail, restart_llama_server_cpu_only,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -49,6 +50,9 @@ pub fn run() {
             sync::set_active_team,
             agent::start_server,
             agent::stop_server,
+            llama_managed_process_status,
+            llama_server_log_tail,
+            restart_llama_server_cpu_only,
             // Auth commands
             auth::start_auth,
             auth::get_auth_session,
