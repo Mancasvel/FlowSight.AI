@@ -12,6 +12,7 @@
 
 use std::path::PathBuf;
 
+use serde_json::json;
 use tauri::{AppHandle, Manager};
 
 const APP_DIR_NAME: &str = "FlowSight";
@@ -21,7 +22,11 @@ const AGENT_ERROR_LOG_FILE: &str = "agent_error.log";
 const CRASH_LOG_FILE: &str = "crash.log";
 const SCREENSHOTS_TMP_DIR: &str = "screenshots_tmp";
 
-/// `%LOCALAPPDATA%\FlowSight\` (creado si no existe).
+/// Carpeta local de datos de FlowSight dentro del perfil del usuario (creada si no existe).
+///
+/// Se resuelve con `dirs::data_local_dir()` (Known Folders en Windows, equivalentes en otros
+/// SO): **ruta real en disco**, sin depender del idioma de la interfaz ni de variables de entorno
+/// escritas en la UI para el usuario.
 ///
 /// Es el único lugar escribible que usamos. Tiene que funcionar igual en dev,
 /// en release portable y en instalaciones a `Program Files` (donde el
@@ -50,6 +55,10 @@ pub fn server_log_path() -> Result<PathBuf, String> {
     Ok(app_data_dir()?.join(SERVER_LOG_FILE))
 }
 
+pub fn auth_log_path() -> Result<PathBuf, String> {
+    Ok(app_data_dir()?.join("auth.log"))
+}
+
 pub fn agent_error_log_path() -> Result<PathBuf, String> {
     Ok(app_data_dir()?.join(AGENT_ERROR_LOG_FILE))
 }
@@ -61,13 +70,61 @@ pub fn crash_log_path_or_fallback() -> PathBuf {
 }
 
 /// PNG de captura persistentes solo para depuración; mismo árbol que la BD/logs
-/// (`%LOCALAPPDATA%\FlowSight\screenshots_tmp\`), no el Escritorio ni la carpeta de instalación.
+/// que [`app_data_dir`], subcarpeta `screenshots_tmp\`, no el Escritorio ni la carpeta de instalación.
 pub fn screenshots_tmp_dir() -> Result<PathBuf, String> {
     let dir = app_data_dir()?.join(SCREENSHOTS_TMP_DIR);
     if !dir.exists() {
         std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create {:?}: {}", dir, e))?;
     }
     Ok(dir)
+}
+
+/// Detecta bloqueos de escritura (p. ej. **Controlled Folder Access**, ACL, AV) antes de confiar en SQLite.
+pub fn verify_app_dir_filesystem_writable() -> Result<(), String> {
+    let dir = app_data_dir()?;
+    let probe = dir.join(".flowsight_fs_write_probe");
+    std::fs::write(&probe, b"ok").map_err(|e| {
+        format!(
+            "Cannot write application data under {} ({e}). On Windows 11 this may be Controlled Folder Access or Defender blocking an unsigned app—allow FlowSight or add an exclusion for this folder.",
+            dir.display()
+        )
+    })?;
+    let _ = std::fs::remove_file(&probe);
+    Ok(())
+}
+
+/// Elimina capturas de depuración `capture_*` más antiguas que `max_age` (retención / cumplimiento).
+pub fn prune_screenshots_tmp_older_than(max_age: std::time::Duration) -> Result<usize, String> {
+    use std::time::SystemTime;
+
+    let dir = screenshots_tmp_dir()?;
+    let now = SystemTime::now();
+    let mut removed = 0usize;
+    let entries =
+        std::fs::read_dir(&dir).map_err(|e| format!("Failed to read screenshots_tmp: {e}"))?;
+    for ent in entries.filter_map(Result::ok) {
+        let name = ent.file_name();
+        let s = name.to_string_lossy();
+        if !s.starts_with("capture_") {
+            continue;
+        }
+        let Ok(meta) = ent.metadata() else {
+            continue;
+        };
+        let Ok(mtime) = meta.modified() else {
+            continue;
+        };
+        let Ok(elapsed) = now.duration_since(mtime) else {
+            continue;
+        };
+        if elapsed > max_age {
+            let p = ent.path();
+            if std::fs::remove_file(&p).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
 }
 
 /// Resuelve el directorio de recursos bundlados donde vive `local_llm/`.
@@ -106,4 +163,15 @@ pub fn resource_local_llm_dir(app: &AppHandle) -> Result<PathBuf, String> {
         "local_llm runtime not found (looked in bundled resources at {:?} and dev tree)",
         bundled
     ))
+}
+
+#[tauri::command]
+pub fn get_flowsight_user_paths() -> Result<serde_json::Value, String> {
+    let dir = app_data_dir()?;
+    Ok(json!({
+        "appDataDir": dir.to_string_lossy(),
+        "serverLog": server_log_path()?.to_string_lossy(),
+        "authLog": auth_log_path()?.to_string_lossy(),
+        "agentErrorLog": agent_error_log_path()?.to_string_lossy(),
+    }))
 }

@@ -41,3 +41,10 @@ tiny_http = "0.12"
 open = "5.0"
 dotenv = "0.15"
 urlencoding = "2.1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_Security_Cryptography",
+] }

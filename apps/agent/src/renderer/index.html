@@ -1546,6 +1546,16 @@
       console.log("[Config] vision model:", "FlowSight/local-vision");
     }
 
+    /** Rutas absolutas desde el backend (dirs / Known Folders); no usar placeholders tipo %LOCALAPPDATA%. */
+    async function getFlowsightResolvedPaths() {
+      try {
+        const p = await invoke("get_flowsight_user_paths");
+        return p && typeof p === "object" ? p : null;
+      } catch {
+        return null;
+      }
+    }
+
     document.getElementById('startBtn').onclick = async () => {
       const btn = document.getElementById('startBtn');
       const originalText = btn.innerHTML;
@@ -1610,8 +1620,12 @@
               proc = await invoke("llama_managed_process_status");
               if (proc.managed === true && proc.alive === false) {
                 const tail = await invoke("llama_server_log_tail", { max_chars: 900 }).catch(() => "");
-                const hint =
-                  "The local vision server stopped. See %LOCALAPPDATA%\\FlowSight\\server.log (or your OS app data FlowSight folder).";
+                const rp = await getFlowsightResolvedPaths();
+                const logRef =
+                  rp && typeof rp.serverLog === "string"
+                    ? rp.serverLog
+                    : "your FlowSight app data folder (server.log)";
+                const hint = `The local vision server stopped. Logs: ${logRef}`;
                 throw new Error(
                   tail ? `Local server exited during startup.\nLast log:\n${tail.slice(-600)}` : hint
                 );
@@ -1644,8 +1658,13 @@
           }
 
           if (!online) {
+            const rp = await getFlowsightResolvedPaths();
+            const logRef =
+              rp && typeof rp.serverLog === "string"
+                ? rp.serverLog
+                : "FlowSight server.log under your account's local application data folder";
             throw new Error(
-              "Server never became healthy — check antivirus, firewall, port 8080, and %LOCALAPPDATA%\\FlowSight\\server.log"
+              `Server never became healthy — check antivirus, firewall, local listening port conflicts, and logs: ${logRef}`
             );
           }
         } else {
@@ -1698,7 +1717,7 @@
 
     async function checkOllama() {
       try {
-        const status = await invoke('check_ollama'); // Checks localhost:8080/health
+        const status = await invoke('check_ollama'); // dynamic 127.0.0.1:<port>/health
         const dot = document.getElementById('ollamaDot');
         const txt = document.getElementById('ollamaStatus');
         if (status.online) {
@@ -1736,6 +1755,13 @@
         console.log("[Agent] Backend initialized.");
       } catch (e) {
         console.error("Failed to init agent:", e);
+        showToast(
+          typeof e === "string"
+            ? e
+            : "FlowSight cannot write its data folder (check Windows Defender Controlled Folder Access or allowlisted app). Details: " + e,
+          "error",
+          10000
+        );
       } finally {
         if (startBtn) startBtn.disabled = false;
       }

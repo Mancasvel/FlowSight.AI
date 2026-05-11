@@ -14,7 +14,6 @@ const CLOUDSYNC_BATCH_LIMIT_DEFAULT: u64 = 500;
 const JWT_REFRESH_MARGIN_SECS: i64 = 300;
 /// Background poll interval for proactive JWT renewal.
 const TOKEN_REFRESH_POLL_SECS: u64 = 120;
-const LOCAL_CHAT_URL: &str = "http://localhost:8080/v1/chat/completions";
 /// Max Unicode characters of TASKS text sent to the local `/v1/chat/completions` endpoint.
 /// Default llama.cpp servers often use `n_ctx=2048`; prompt = instructions + tasks must stay under that.
 /// Override with env `FLOWSIGHT_SUMMARY_MAX_CHARS` (same unit: Unicode chars).
@@ -463,7 +462,15 @@ fn summarize_with_vision_model(text: &str) -> Result<String, String> {
         "max_tokens": 384
     });
 
-    let resp = client.post(LOCAL_CHAT_URL).json(&body).send().map_err(|e| e.to_string())?;
+    let resp = client
+        .post(
+            crate::llama_port::managed_chat_completions_url().ok_or_else(|| {
+                "Local AI server offline — cannot summarize (start Local AI monitoring first)".to_string()
+            })?,
+        )
+        .json(&body)
+        .send()
+        .map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
         let status = resp.status();
         let err_body = resp.text().unwrap_or_default();

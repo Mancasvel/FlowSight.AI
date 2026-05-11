@@ -11,6 +11,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Local;
 use rusqlite::{Connection, params};
 use std::io::Write;
+use std::time::Duration;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
 
@@ -50,11 +51,14 @@ impl Default for FlowSightAgent {
 
 impl FlowSightAgent {
     pub fn new() -> Self {
-        let db_path = dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("FlowSight")
-            .join("dev-agent.db");
-        
+        let db_path = crate::paths::db_path().unwrap_or_else(|e| {
+            log::error!("[Agent] paths::db_path unavailable ({}); using cwd fallback.", e);
+            dirs::data_local_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("FlowSight")
+                .join("dev-agent.db")
+        });
+
         if let Some(parent) = db_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
@@ -84,93 +88,114 @@ impl FlowSightAgent {
     }
     
     fn init_db(&self) {
-        if let Ok(conn) = Connection::open(&self.db_path) {
-            // Base table
-            let _ = conn.execute_batch(
-                "CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
-                 CREATE TABLE IF NOT EXISTS reports (
-                    id INTEGER PRIMARY KEY,
-                    description TEXT,
-                    activity_type TEXT,
-                    synced INTEGER DEFAULT 0,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-                 );"
-            );
-            
-            // Migrations (Add missing columns if they don't exist)
-            // SQLite is forgiving with duplicate add column if we handle error or check first.
-            // Simplest way: Try to add, ignore error.
-            let _ = conn.execute("ALTER TABLE reports ADD COLUMN jira_ticket_id TEXT", []);
-            let _ = conn.execute("ALTER TABLE reports ADD COLUMN duration_seconds INTEGER DEFAULT 30", []);
-            // Rename activity_type to category? No, sync.rs maps it manually or we fix sync.rs. 
-            // NOTE: sync.rs selects "category" but schema has "activity_type". 
-            // We should ensure sync.rs uses correct column name or we rename here.
-            // Let's assume sync.rs needs "activity_type" aliased as category or we just add category column?
-            // Better: Let's stick to activity_type in DB and fix sync.rs query.
-        }
-    }
-    
-    fn load_config(&mut self) {
-        if let Ok(conn) = Connection::open(&self.db_path) {
-            // Load String configs
-            for (key, field) in [
-                ("dev_name", &mut self.config.dev_name),
-                ("vision_model", &mut self.config.vision_model),
-            ] {
-                if let Ok(val) = conn.query_row::<String, _, _>(
-                    "SELECT value FROM config WHERE key = ?", [key], |r| r.get(0)
+        match Connection::open(&self.db_path) {
+            Ok(conn) => {
+                if let Err(e) = conn.execute_batch(
+                    "CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT);
+                     CREATE TABLE IF NOT EXISTS reports (
+                        id INTEGER PRIMARY KEY,
+                        description TEXT,
+                        activity_type TEXT,
+                        synced INTEGER DEFAULT 0,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                     );",
                 ) {
-                    *field = Some(val);
-                }
-            }
-            
-            // Load Integer configs (gpu_layers)
-            if let Ok(val) = conn.query_row::<String, _, _>(
-                "SELECT value FROM config WHERE key = 'gpu_layers'", [], |r| r.get(0)
-            ) {
-                if let Ok(parsed) = val.parse::<i32>() {
-                    self.config.gpu_layers = Some(parsed);
-                }
-            }
-        }
-    }
-    
-    fn save_config(&self) {
-        if let Ok(conn) = Connection::open(&self.db_path) {
-            // Save String configs
-            for (key, val) in [
-                ("dev_name", &self.config.dev_name),
-                ("vision_model", &self.config.vision_model),
-            ] {
-                if let Some(v) = val {
-                    let _ = conn.execute(
-                        "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                        params![key, v]
+                    log::error!(
+                        "[Agent] SQLite schema/bootstrap failed {:?}: {}",
+                        self.db_path,
+                        e
                     );
                 }
+                let _ = conn.execute("ALTER TABLE reports ADD COLUMN jira_ticket_id TEXT", []);
+                let _ = conn.execute(
+                    "ALTER TABLE reports ADD COLUMN duration_seconds INTEGER DEFAULT 30",
+                    [],
+                );
             }
-            
-            // Save Integer configs
-            if let Some(layers) = self.config.gpu_layers {
+            Err(e) => log::error!(
+                "[Agent] SQLite open failed {:?} (init_db): {}",
+                self.db_path,
+                e
+            ),
+        }
+    }
+
+    fn load_config(&mut self) {
+        let Ok(conn) = Connection::open(&self.db_path) else {
+            log::warn!(
+                "[Agent] load_config: cannot open {:?}; using defaults",
+                self.db_path
+            );
+            return;
+        };
+
+        for (key, field) in [
+            ("dev_name", &mut self.config.dev_name),
+            ("vision_model", &mut self.config.vision_model),
+        ] {
+            if let Ok(val) = conn.query_row::<String, _, _>(
+                "SELECT value FROM config WHERE key = ?",
+                [key],
+                |r| r.get(0),
+            ) {
+                *field = Some(val);
+            }
+        }
+
+        if let Ok(val) = conn.query_row::<String, _, _>(
+            "SELECT value FROM config WHERE key = 'gpu_layers'",
+            [],
+            |r| r.get(0),
+        ) {
+            if let Ok(parsed) = val.parse::<i32>() {
+                self.config.gpu_layers = Some(parsed);
+            }
+        }
+    }
+
+    fn save_config(&self) {
+        let Ok(conn) = Connection::open(&self.db_path) else {
+            log::warn!("[Agent] save_config: cannot open {:?}", self.db_path);
+            return;
+        };
+
+        for (key, val) in [
+            ("dev_name", &self.config.dev_name),
+            ("vision_model", &self.config.vision_model),
+        ] {
+            if let Some(v) = val {
                 let _ = conn.execute(
                     "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
-                    params!["gpu_layers", layers.to_string()]
+                    params![key, v],
                 );
             }
         }
-    }
-    
-    fn save_report(&self, desc: &str, activity_type: &str, ticket: Option<String>, duration: u64) -> Option<i64> {
-        if let Ok(conn) = Connection::open(&self.db_path) {
+
+        if let Some(layers) = self.config.gpu_layers {
             let _ = conn.execute(
-                "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds) VALUES (?, ?, ?, ?)",
-                params![desc, activity_type, ticket, duration]
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+                params!["gpu_layers", layers.to_string()],
             );
-            return Some(conn.last_insert_rowid());
         }
-        None
     }
-    
+
+    fn save_report(&self, desc: &str, activity_type: &str, ticket: Option<String>, duration: u64) -> Option<i64> {
+        let Ok(conn) = Connection::open(&self.db_path) else {
+            log::warn!("[Agent] save_report: cannot open {:?}", self.db_path);
+            return None;
+        };
+        if conn
+            .execute(
+                "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds) VALUES (?, ?, ?, ?)",
+                params![desc, activity_type, ticket, duration],
+            )
+            .is_err()
+        {
+            return None;
+        }
+        Some(conn.last_insert_rowid())
+    }
+
     #[allow(dead_code)]
     fn mark_synced(&self, id: i64) {
         if let Ok(conn) = Connection::open(&self.db_path) {
@@ -233,11 +258,11 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
     // Persist to tmp for debug (optional): junto a datos de la app, no en Escritorio
     let debug_dir = crate::paths::screenshots_tmp_dir()?;
 
-    let timestamp = chrono::Local::now().format("%H%M%S");
-    let filename = format!("capture_{}.png", timestamp);
-    let debug_path = debug_dir.join(filename);
-    let _ = std::fs::write(&debug_path, &png);
-    
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let stem = format!("capture_{}", timestamp);
+    let debug_path = crate::screenshot_disk::write_debug_capture_image(&png, &stem, &debug_dir)
+        .unwrap_or_else(|| debug_dir.join("_flowsight_no_disk_debug"));
+
     Ok((BASE64.encode(&png), debug_path))
 }
 
@@ -376,12 +401,50 @@ pub fn save_activity(state: State<'_, AgentState>, description: String, activity
 
 // ============== TAURI COMMANDS ==============
 
+/// Comprueba que SQLite puede **escribir** en `dev-agent.db` (CFA / solo lectura / disco lleno).
+fn probe_sqlite_database_rw() -> Result<(), String> {
+    let db_path = crate::paths::db_path()?;
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("SQLite cannot open {:?}: {e}", db_path))?;
+    conn.execute_batch(
+        "BEGIN IMMEDIATE;
+         CREATE TEMP TABLE IF NOT EXISTS _flowsight_io_probe (x INTEGER);
+         INSERT INTO _flowsight_io_probe VALUES (1);
+         COMMIT;",
+    )
+    .map_err(|e| {
+        format!(
+            "SQLite cannot write to {:?}. On Windows 11, verify Controlled Folder Access / Defender is not blocking this app from modifying its data folder ({e})",
+            db_path
+        )
+    })?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn initialize_agent(state: State<'_, AgentState>) -> Result<bool, String> {
     let mut g = state.lock().unwrap();
     if g.is_some() {
         return Ok(true);
     }
+
+    crate::paths::verify_app_dir_filesystem_writable()?;
+    probe_sqlite_database_rw()?;
+
+    let max_h: u64 = std::env::var("FLOWSIGHT_SCREENSHOT_TMP_MAX_HOURS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(72);
+    match crate::paths::prune_screenshots_tmp_older_than(Duration::from_secs(max_h * 3600)) {
+        Ok(n) if n > 0 => {
+            log::info!(
+                "[FlowSight] removed {n} screenshot(s) older than {max_h}h from screenshots_tmp"
+            );
+        }
+        Err(e) => log::warn!("[FlowSight] screenshots_tmp retention prune: {e}"),
+        _ => {}
+    }
+
     *g = Some(FlowSightAgent::new());
     Ok(true)
 }
@@ -552,6 +615,9 @@ const LOCAL_HEALTH_HTTP_TIMEOUT_SECS: u64 = 12;
 
 /// Quick binary health check reused by diagnostics and automated tier probing.
 fn local_server_health_ok() -> bool {
+    let Some(health_url) = crate::llama_port::managed_health_url() else {
+        return false;
+    };
     let Ok(client) = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(LOCAL_HEALTH_HTTP_TIMEOUT_SECS))
         .build()
@@ -559,7 +625,7 @@ fn local_server_health_ok() -> bool {
         return false;
     };
     client
-        .get("http://localhost:8080/health")
+        .get(&health_url)
         .send()
         .ok()
         .map(|r| r.status().is_success())
@@ -570,14 +636,24 @@ fn local_server_health_ok() -> bool {
 pub fn check_local_server() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(LOCAL_HEALTH_HTTP_TIMEOUT_SECS))
-        .build().map_err(|e| e.to_string())?;
+        .build()
+        .map_err(|e| e.to_string())?;
 
-    match client.get("http://localhost:8080/health").send() {
+    let Some(health_url) = crate::llama_port::managed_health_url() else {
+        return Ok(serde_json::json!({
+            "online": false,
+            "installed": true,
+            "error": "No managed llama-server port (start Local AI first)."
+        }));
+    };
+
+    match client.get(&health_url).send() {
         Ok(r) if r.status().is_success() => Ok(serde_json::json!({
             "online": true,
             "installed": true,
             "models": [VISION_STATUS_LABEL],
-            "hasVisionModel": true
+            "hasVisionModel": true,
+            "localServerPort": crate::llama_port::current_managed_listen_port(),
         })),
         Ok(r) => Ok(serde_json::json!({
             "online": false,
@@ -602,6 +678,9 @@ pub fn check_ollama() -> Result<serde_json::Value, String> {
 // LLAMA SERVER COMMANDS
 
 static SERVER_PROCESS: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+/// Puertos nuevos ante `EADDRINUSE`/fallo rápido de escucha tras TOCTOU o TIME_WAIT.
+const LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS: u8 = 8;
 
 fn clamp_llama_gpu_layers(n: i32) -> i32 {
     n.max(0).min(16_384)
@@ -719,6 +798,7 @@ fn configure_llama_command(
     model_path: &Path,
     mmproj_path: &Path,
     log_path: &Path,
+    listen_port: u16,
     gpu_layers: i32,
     redirect_log_to_file: bool,
     #[cfg_attr(not(windows), allow(unused_variables))] creation_flags: Option<u32>,
@@ -734,8 +814,10 @@ fn configure_llama_command(
         .arg(model_path)
         .arg("--mmproj")
         .arg(mmproj_path)
+        .arg("--host")
+        .arg("127.0.0.1")
         .arg("--port")
-        .arg("8080")
+        .arg(listen_port.to_string())
         .arg("--ctx-size")
         .arg("4096")
         .arg("--parallel")
@@ -778,6 +860,92 @@ fn configure_llama_command(
     Ok(cmd)
 }
 
+fn log_suggests_listen_bind_failure(tail: &str) -> bool {
+    let t = tail.to_ascii_lowercase();
+    t.contains("eaddrinuse")
+        || t.contains("address already in use")
+        || t.contains("10048")
+        || t.contains("failed to bind")
+        || t.contains("bind failed")
+        || t.contains("could not bind")
+        || (t.contains("bind") && t.contains("in use"))
+        || (t.contains("error") && t.contains("listen") && t.contains("socket"))
+}
+
+fn try_spawn_llama_process(
+    bin_path: &Path,
+    model_path: &Path,
+    mmproj_path: &Path,
+    log_path: &Path,
+    listen_port: u16,
+    gpu_layers: i32,
+) -> Result<std::process::Child, std::io::Error> {
+    #[cfg(windows)]
+    {
+        use std::io::Error as IoError;
+
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
+
+        let attempts: [(Option<u32>, bool); 6] = [
+            (Some(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY), true),
+            (Some(CREATE_NO_WINDOW), true),
+            (None, true),
+            (Some(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY), false),
+            (Some(CREATE_NO_WINDOW), false),
+            (None, false),
+        ];
+
+        let mut last_err =
+            IoError::new(std::io::ErrorKind::Other, "llama-server spawn failed (no attempts)");
+        let mut spawned: Option<std::process::Child> = None;
+        for &(flags, redirect_log) in &attempts {
+            let mut cmd = configure_llama_command(
+                bin_path,
+                model_path,
+                mmproj_path,
+                log_path,
+                listen_port,
+                gpu_layers,
+                redirect_log,
+                flags,
+            )
+            .map_err(|msg| IoError::new(std::io::ErrorKind::Other, msg))?;
+
+            match cmd.spawn() {
+                Ok(child) => {
+                    spawned = Some(child);
+                    break;
+                }
+                Err(e) => {
+                    let retry_os50 = e.raw_os_error() == Some(50);
+                    last_err = e;
+                    if !retry_os50 {
+                        break;
+                    }
+                }
+            }
+        }
+        spawned.ok_or(last_err)
+    }
+
+    #[cfg(not(windows))]
+    {
+        let mut cmd = configure_llama_command(
+            bin_path,
+            model_path,
+            mmproj_path,
+            log_path,
+            listen_port,
+            gpu_layers,
+            true,
+            None,
+        )
+        .map_err(|msg| std::io::Error::new(std::io::ErrorKind::Other, msg))?;
+        cmd.spawn()
+    }
+}
+
 fn spawn_llama_managed_child(app: &tauri::AppHandle, gpu_layers: i32) -> Result<std::process::Child, String> {
     // Runtime (binarios + pesos) empacados como Tauri bundle resources. En
     // dev cae al layout del repo autom\u00e1ticamente.
@@ -798,86 +966,77 @@ fn spawn_llama_managed_child(app: &tauri::AppHandle, gpu_layers: i32) -> Result<
 
     let log_path = crate::paths::server_log_path()?;
 
-    #[cfg(windows)]
-    let spawn_result = {
-        use std::io::Error as IoError;
+    let mut last_err: Option<String> = None;
 
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        const BELOW_NORMAL_PRIORITY: u32 = 0x00004000;
+    for attempt in 0..LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS {
+        let listen_port = crate::llama_port::pick_localhost_listen_port()?;
 
-        let attempts: [(Option<u32>, bool); 6] = [
-            (Some(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY), true),
-            (Some(CREATE_NO_WINDOW), true),
-            (None, true),
-            (Some(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY), false),
-            (Some(CREATE_NO_WINDOW), false),
-            (None, false),
-        ];
+        let spawn_result =
+            try_spawn_llama_process(&bin_path, &model_path, &mmproj_path, &log_path, listen_port, gpu_layers);
 
-        let mut last_err =
-            IoError::new(std::io::ErrorKind::Other, "llama-server spawn failed (no attempts)");
-        let mut spawned: Option<std::process::Child> = None;
-        for &(flags, redirect_log) in &attempts {
-            let mut cmd = configure_llama_command(
-                &bin_path,
-                &model_path,
-                &mmproj_path,
-                &log_path,
-                gpu_layers,
-                redirect_log,
-                flags,
-            )?;
-
-            match cmd.spawn() {
-                Ok(child) => {
-                    spawned = Some(child);
-                    break;
-                }
-                Err(e) => {
-                    let retry_os50 = e.raw_os_error() == Some(50);
-                    last_err = e;
-                    if !retry_os50 {
-                        break;
+        match spawn_result {
+            Ok(mut child) => {
+                crate::llama_port::set_managed_llama_port(listen_port);
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                if let Ok(Some(status)) = child.try_wait() {
+                    crate::llama_port::clear_managed_llama_port();
+                    let log_tail = read_server_log_tail_chars(1_200);
+                    let can_retry_port = (attempt + 1) < LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS
+                        && log_suggests_listen_bind_failure(&log_tail);
+                    if can_retry_port {
+                        log::warn!(
+                            "[FlowSight llama-server] quick exit (code {:?}); retrying another listen port (attempt {}/{})",
+                            status.code(),
+                            attempt + 2,
+                            LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(
+                            40_u64.saturating_mul(u64::from(attempt) + 1),
+                        ));
+                        continue;
                     }
+                    return Err(format!(
+                        "llama-server exited during startup (code: {:?}). {}",
+                        status.code(),
+                        if log_tail.is_empty() {
+                            format!("See {:?}", log_path)
+                        } else {
+                            format!("Log tail: {}", log_tail)
+                        }
+                    ));
                 }
+                #[cfg(windows)]
+                if let Err(e) =
+                    crate::llama_windows_job::assign_llama_child_to_kill_on_close_job(&child)
+                {
+                    log::warn!("[FlowSight llama-server] Windows job-object attach skipped: {}", e);
+                }
+                return Ok(child);
+            }
+            Err(e) => {
+                let msg = format!("Failed to start server: {}", e);
+                last_err = Some(msg.clone());
+                if (attempt + 1) < LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS && crate::llama_port::tcp_bind_addr_in_use(&e)
+                {
+                    log::warn!(
+                        "[FlowSight llama-server] spawn EADDRINUSE-style error; retrying another port ({}/{}) — {}",
+                        attempt + 2,
+                        LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS,
+                        e
+                    );
+                    std::thread::sleep(std::time::Duration::from_millis(
+                        50_u64.saturating_mul(u64::from(attempt) + 1),
+                    ));
+                    continue;
+                }
+                return Err(msg);
             }
         }
-        spawned.ok_or(last_err)
-    };
-
-    #[cfg(not(windows))]
-    let spawn_result = {
-        let mut cmd = configure_llama_command(
-            &bin_path,
-            &model_path,
-            &mmproj_path,
-            &log_path,
-            gpu_layers,
-            true,
-            None,
-        )?;
-        cmd.spawn()
-    };
-
-    match spawn_result {
-        Ok(mut child) => {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            if let Ok(Some(status)) = child.try_wait() {
-                let log_tail = read_server_log_tail_chars(1_200);
-                return Err(format!(
-                    "llama-server exited during startup (code: {:?}). {}",
-                    status.code(),
-                    if log_tail.is_empty() {
-                        format!("See {:?}", log_path)
-                    } else {
-                        format!("Log tail: {}", log_tail)
-                    }
-                ));
-            }
-            Ok(child)
-        }
-        Err(e) => Err(format!("Failed to start server: {}", e)),
     }
+
+    Err(last_err.unwrap_or_else(|| {
+        "Failed to start server: exhausted listen-port retries.".to_string()
+    }))
 }
 
 /// Arranca llama-server: modo automático sube desde capas GPU altas hasta que `/health`
@@ -891,7 +1050,8 @@ pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Resu
             return Ok(serde_json::json!({
                 "status": "already_running",
                 "message": "Server is already running",
-                "gpuAuto": false
+                "gpuAuto": false,
+                "localServerPort": crate::llama_port::current_managed_listen_port(),
             }));
         }
     }
@@ -906,7 +1066,8 @@ pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Resu
                 "pid": "managed",
                 "model": VISION_STATUS_LABEL,
                 "gpuLayers": gpu_layers,
-                "gpuAuto": false
+                "gpuAuto": false,
+                "localServerPort": crate::llama_port::current_managed_listen_port(),
             }))
         }
         GpuServeMode::Automatic => {
@@ -942,7 +1103,8 @@ pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Resu
                         "pid": "managed",
                         "model": VISION_STATUS_LABEL,
                         "gpuLayers": layers,
-                        "gpuAuto": true
+                        "gpuAuto": true,
+                        "localServerPort": crate::llama_port::current_managed_listen_port(),
                     }));
                 }
 
@@ -991,7 +1153,8 @@ pub fn restart_llama_server_cpu_only(app: tauri::AppHandle) -> Result<serde_json
         "model": VISION_STATUS_LABEL,
         "gpuLayers": 0,
         "cpuFallback": true,
-        "gpuAuto": false
+        "gpuAuto": false,
+        "localServerPort": crate::llama_port::current_managed_listen_port(),
     }))
 }
 
@@ -1000,8 +1163,15 @@ pub fn stop_server() -> Result<bool, String> {
     let mut guard = SERVER_PROCESS.lock().unwrap();
     if let Some(mut child) = guard.take() {
         let _ = child.kill();
+        crate::llama_port::clear_managed_llama_port();
+        #[cfg(windows)]
+        crate::llama_windows_job::reset_llama_job();
         return Ok(true);
     }
+
+    crate::llama_port::clear_managed_llama_port();
+    #[cfg(windows)]
+    crate::llama_windows_job::reset_llama_job();
 
     use std::process::Command;
     #[cfg(windows)]
@@ -1039,11 +1209,13 @@ fn truncate_repetition(text: &str) -> String {
 // RESTORED AI ANALYSIS (Backend)
 #[tauri::command]
 fn analyze_image_with_vision(base64_img: &str, current_task: &str, _gpu_layers: Option<i32>) -> Result<String, String> {
+    let chat_url = crate::llama_port::managed_chat_completions_url().ok_or_else(|| {
+        "Local vision server URL unknown — start the embedded Local AI server first.".to_string()
+    })?;
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|e| e.to_string())?;
-    let url = "http://localhost:8080/v1/chat/completions";
 
     let system_msg = "You are a screenshot analysis assistant. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. You describe exactly what you observe in the screenshot.";
 
@@ -1097,7 +1269,7 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
             "stream": false
         });
 
-        let resp = client.post(url)
+        let resp = client.post(&chat_url)
             .json(&body)
             .send()
             .map_err(|e| format!("Request failed: {}", e))?;

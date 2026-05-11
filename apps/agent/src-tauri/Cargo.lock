@@ -145,6 +145,7 @@ dependencies = [
  "url",
  "urlencoding",
  "whoami",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

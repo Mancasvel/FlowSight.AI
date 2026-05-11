@@ -1,4 +1,7 @@
 mod vision_model;
+mod llama_port;
+mod llama_windows_job;
+mod screenshot_disk;
 mod agent;
 mod agent_pure;
 mod jira;
@@ -63,7 +66,8 @@ pub fn run() {
             linear::fetch_linear_tasks,
             linear::fetch_linear_profile,
             // History commands
-            get_today_history
+            get_today_history,
+            paths::get_flowsight_user_paths,
         ])
     .setup(|app| {
       // Log a archivo en TODOS los builds. En release el usuario no ve stderr,

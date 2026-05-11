@@ -24,8 +24,7 @@ fn auth_log(message: impl AsRef<str>) {
 
     log::info!("{}", message);
 
-    if let Ok(dir) = crate::paths::app_data_dir() {
-        let path = dir.join("auth.log");
+    if let Ok(path) = crate::paths::auth_log_path() {
         if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
             let _ = file.write_all(line.as_bytes());
         }
@@ -54,6 +53,9 @@ fn html_escape(value: &str) -> String {
 fn supabase_login_error_html(error: &str, description: &str) -> String {
     let error = html_escape(error);
     let description = html_escape(description);
+    let auth_log_hint = crate::paths::auth_log_path()
+        .map(|p| html_escape(&p.to_string_lossy()))
+        .unwrap_or_else(|_| html_escape("auth.log under FlowSight's local app data folder"));
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -107,7 +109,7 @@ fn supabase_login_error_html(error: &str, description: &str) -> String {
       <strong>Supabase error:</strong> {error}<br>
       <strong>Description:</strong> {description}
     </div>
-    <p class="hint">Copy this error and check %LOCALAPPDATA%\FlowSight\auth.log for the full OAuth trace.</p>
+    <p class="hint">Copy this error and check <code>{auth_log_hint}</code> for the full OAuth trace.</p>
   </div>
 </body>
 </html>"#
