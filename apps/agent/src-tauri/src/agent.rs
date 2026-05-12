@@ -691,6 +691,10 @@ fn clamp_llama_gpu_layers(n: i32) -> i32 {
 const AUTO_GPU_LAYER_TIERS: &[i32] = &[56, 40, 24, 12, 0];
 /// Per-tier budget while the weights load (slow disks / AV can dominate here).
 const AUTO_TIER_HEALTH_WAIT_SECS: u64 = 56;
+/// Tras la ronda con descubrimiento Vulkan por defecto, probar cada índice físico por
+/// separado (`GGML_VK_VISIBLE_DEVICES` en ggml-vulkan). Útil cuando el primer dispositivo
+/// Vulkan de la lista es inválido para cómputo (GPU dual, drivers híbridos, `vkCreateFence`).
+const AUTO_VULKAN_VISIBLE_DEVICE_TRIES: &[&str] = &["0", "1", "2", "3"];
 
 #[derive(Clone, Copy, Debug)]
 enum GpuServeMode {
@@ -800,12 +804,15 @@ fn configure_llama_command(
     log_path: &Path,
     listen_port: u16,
     gpu_layers: i32,
+    vulkan_visible_device_index: Option<&str>,
     redirect_log_to_file: bool,
     #[cfg_attr(not(windows), allow(unused_variables))] creation_flags: Option<u32>,
 ) -> Result<std::process::Command, String> {
     use std::process::Command;
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
+
+    let n_gpu_layers = clamp_llama_gpu_layers(gpu_layers);
 
     let mut cmd = Command::new(bin_path);
     // Evita heredar stdin inválido tras FreeConsole en el proceso padre (release Windows).
@@ -825,7 +832,19 @@ fn configure_llama_command(
         .arg("--threads")
         .arg("2")
         .arg("--n-gpu-layers")
-        .arg(clamp_llama_gpu_layers(gpu_layers).to_string());
+        .arg(n_gpu_layers.to_string());
+
+    if let Some(idx) = vulkan_visible_device_index {
+        cmd.env("GGML_VK_VISIBLE_DEVICES", idx);
+    }
+
+    // Con pesos sólo en CPU, los builds con Vulkan pueden igual inicializar la API y fallar
+    // (p. ej. `vkCreateFence: Invalid device`) antes de que `/health` responda.
+    // GGML + llama.cpp respetan estas variables sin pasar flags extra por CLI.
+    if n_gpu_layers == 0 {
+        cmd.env("GGML_DISABLE_VULKAN", "1");
+        cmd.env("LLAMA_ARG_DEVICE", "none");
+    }
 
     // CWD y PATH apuntan a la carpeta del binario. Algunos backends de
     // llama.cpp cargan DLLs dinámicamente por nombre, y en instalaciones
@@ -879,6 +898,7 @@ fn try_spawn_llama_process(
     log_path: &Path,
     listen_port: u16,
     gpu_layers: i32,
+    vulkan_visible_device_index: Option<&str>,
 ) -> Result<std::process::Child, std::io::Error> {
     #[cfg(windows)]
     {
@@ -907,6 +927,7 @@ fn try_spawn_llama_process(
                 log_path,
                 listen_port,
                 gpu_layers,
+                vulkan_visible_device_index,
                 redirect_log,
                 flags,
             )
@@ -938,6 +959,7 @@ fn try_spawn_llama_process(
             log_path,
             listen_port,
             gpu_layers,
+            vulkan_visible_device_index,
             true,
             None,
         )
@@ -946,7 +968,11 @@ fn try_spawn_llama_process(
     }
 }
 
-fn spawn_llama_managed_child(app: &tauri::AppHandle, gpu_layers: i32) -> Result<std::process::Child, String> {
+fn spawn_llama_managed_child(
+    app: &tauri::AppHandle,
+    gpu_layers: i32,
+    vulkan_visible_device_index: Option<&str>,
+) -> Result<std::process::Child, String> {
     // Runtime (binarios + pesos) empacados como Tauri bundle resources. En
     // dev cae al layout del repo autom\u00e1ticamente.
     let local_llm_dir = crate::paths::resource_local_llm_dir(app)?;
@@ -971,8 +997,15 @@ fn spawn_llama_managed_child(app: &tauri::AppHandle, gpu_layers: i32) -> Result<
     for attempt in 0..LLAMA_LISTEN_PORT_SPAWN_ATTEMPTS {
         let listen_port = crate::llama_port::pick_localhost_listen_port()?;
 
-        let spawn_result =
-            try_spawn_llama_process(&bin_path, &model_path, &mmproj_path, &log_path, listen_port, gpu_layers);
+        let spawn_result = try_spawn_llama_process(
+            &bin_path,
+            &model_path,
+            &mmproj_path,
+            &log_path,
+            listen_port,
+            gpu_layers,
+            vulkan_visible_device_index,
+        );
 
         match spawn_result {
             Ok(mut child) => {
@@ -1059,7 +1092,7 @@ pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Resu
     match mode {
         GpuServeMode::Manual(gpu_layers) => {
             let mut guard = SERVER_PROCESS.lock().unwrap();
-            let child = spawn_llama_managed_child(&app, gpu_layers)?;
+            let child = spawn_llama_managed_child(&app, gpu_layers, None)?;
             *guard = Some(child);
             Ok(serde_json::json!({
                 "status": "started",
@@ -1073,57 +1106,72 @@ pub fn start_server(app: tauri::AppHandle, state: State<'_, AgentState>) -> Resu
         GpuServeMode::Automatic => {
             let mut last_err = String::from("unknown auto-start error");
 
-            for &layers in AUTO_GPU_LAYER_TIERS {
-                let _ = stop_server();
-                std::thread::sleep(std::time::Duration::from_millis(450));
+            let vk_rounds: Vec<Option<&str>> = std::iter::once(None)
+                .chain(AUTO_VULKAN_VISIBLE_DEVICE_TRIES.iter().copied().map(Some))
+                .collect();
 
-                let child = match spawn_llama_managed_child(&app, layers) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        log::warn!("[FlowSight llama-server] Auto tier gpu_layers={} spawn failed: {}", layers, e);
-                        last_err = e;
-                        continue;
-                    }
-                };
+            for vk_vis in vk_rounds {
+                let vk_label = vk_vis.unwrap_or("default");
+                for &layers in AUTO_GPU_LAYER_TIERS {
+                    let _ = stop_server();
+                    std::thread::sleep(std::time::Duration::from_millis(450));
 
-                {
-                    let mut guard = SERVER_PROCESS.lock().unwrap();
-                    *guard = Some(child);
-                }
-
-                log::info!(
-                    "[FlowSight llama-server] Auto tier probing gpu_layers={}, waiting health up to {}s",
-                    layers,
-                    AUTO_TIER_HEALTH_WAIT_SECS
-                );
-
-                if wait_for_managed_health_secs(AUTO_TIER_HEALTH_WAIT_SECS) {
-                    return Ok(serde_json::json!({
-                        "status": "started",
-                        "pid": "managed",
-                        "model": VISION_STATUS_LABEL,
-                        "gpuLayers": layers,
-                        "gpuAuto": true,
-                        "localServerPort": crate::llama_port::current_managed_listen_port(),
-                    }));
-                }
-
-                last_err = format!(
-                    "gpu_layers={} did not reach /health within {}s{}",
-                    layers,
-                    AUTO_TIER_HEALTH_WAIT_SECS,
-                    {
-                        let t = read_server_log_tail_chars(800);
-                        if t.is_empty() {
-                            String::new()
-                        } else {
-                            format!(". Last log excerpt: {}", t)
+                    let child = match spawn_llama_managed_child(&app, layers, vk_vis) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log::warn!(
+                                "[FlowSight llama-server] Auto tier GGML_VK_VISIBLE_DEVICES={} gpu_layers={} spawn failed: {}",
+                                vk_label,
+                                layers,
+                                e
+                            );
+                            last_err = e;
+                            continue;
                         }
+                    };
+
+                    {
+                        let mut guard = SERVER_PROCESS.lock().unwrap();
+                        *guard = Some(child);
                     }
-                );
-                log::warn!("[FlowSight llama-server] {}", last_err);
-                let _ = stop_server();
-                std::thread::sleep(std::time::Duration::from_millis(350));
+
+                    log::info!(
+                        "[FlowSight llama-server] Auto tier GGML_VK_VISIBLE_DEVICES={} gpu_layers={}, waiting health up to {}s",
+                        vk_label,
+                        layers,
+                        AUTO_TIER_HEALTH_WAIT_SECS
+                    );
+
+                    if wait_for_managed_health_secs(AUTO_TIER_HEALTH_WAIT_SECS) {
+                        return Ok(serde_json::json!({
+                            "status": "started",
+                            "pid": "managed",
+                            "model": VISION_STATUS_LABEL,
+                            "gpuLayers": layers,
+                            "gpuAuto": true,
+                            "vulkanVisibleDevice": vk_label,
+                            "localServerPort": crate::llama_port::current_managed_listen_port(),
+                        }));
+                    }
+
+                    last_err = format!(
+                        "GGML_VK_VISIBLE_DEVICES={} gpu_layers={} did not reach /health within {}s{}",
+                        vk_label,
+                        layers,
+                        AUTO_TIER_HEALTH_WAIT_SECS,
+                        {
+                            let t = read_server_log_tail_chars(800);
+                            if t.is_empty() {
+                                String::new()
+                            } else {
+                                format!(". Last log excerpt: {}", t)
+                            }
+                        }
+                    );
+                    log::warn!("[FlowSight llama-server] {}", last_err);
+                    let _ = stop_server();
+                    std::thread::sleep(std::time::Duration::from_millis(350));
+                }
             }
 
             Err(format!(
@@ -1145,7 +1193,7 @@ pub fn restart_llama_server_cpu_only(app: tauri::AppHandle) -> Result<serde_json
         return Err("Could not clear managed server slot; try restarting FlowSight.".to_string());
     }
 
-    let child = spawn_llama_managed_child(&app, 0)?;
+    let child = spawn_llama_managed_child(&app, 0, None)?;
     *guard = Some(child);
     Ok(serde_json::json!({
         "status": "started",
