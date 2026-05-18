@@ -1,6 +1,6 @@
 {
   "name": "flowsight-ai",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "private": true,
   "description": "FlowSight AI - Privacy-first developer activity monitor with local AI",
   "scripts": {
