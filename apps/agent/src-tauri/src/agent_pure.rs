@@ -12,63 +12,48 @@ pub(crate) fn parse_analysis(raw: &str) -> (String, String) {
     (description, category)
 }
 
+/// Strip to a single lowercase alnum token so "Code Review", "code_review", "CodeReview" → `codereview`.
+fn normalize_category_value(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
 /// Extract category from an explicit "CATEGORY: Xyz" line in the model output.
+/// The value may be multi-word (e.g. "Code Review"); we normalize instead of taking only the first word.
 fn extract_category_from_field(lower: &str) -> Option<String> {
-    let valid_categories = [
-        "coding",
-        "debugging",
-        "codereview",
-        "testing",
-        "documentation",
-        "design",
-        "planning",
-        "meeting",
-        "communication",
-        "research",
-        "learning",
-        "devops",
-        "database",
-        "sales",
-        "admin",
-        "browsing",
-        "idle",
-        "general",
+    const MAP: &[(&str, &str)] = &[
+        ("coding", "Coding"),
+        ("debugging", "Debugging"),
+        ("codereview", "CodeReview"),
+        ("testing", "Testing"),
+        ("documentation", "Documentation"),
+        ("design", "Design"),
+        ("planning", "Planning"),
+        ("meeting", "Meeting"),
+        ("communication", "Communication"),
+        ("research", "Research"),
+        ("learning", "Learning"),
+        ("devops", "DevOps"),
+        ("database", "Database"),
+        ("sales", "Sales"),
+        ("admin", "Admin"),
+        ("browsing", "Browsing"),
+        ("idle", "Idle"),
+        ("general", "General"),
     ];
 
-    if let Some(idx) = lower.rfind("category:") {
-        let after = lower[idx + 9..].trim();
-        let cat_word = after
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .trim_matches(|c: char| !c.is_alphanumeric());
-
-        for valid in &valid_categories {
-            if cat_word.starts_with(valid) {
-                return Some(
-                    match *valid {
-                        "coding" => "Coding",
-                        "debugging" => "Debugging",
-                        "codereview" => "CodeReview",
-                        "testing" => "Testing",
-                        "documentation" => "Documentation",
-                        "design" => "Design",
-                        "planning" => "Planning",
-                        "meeting" => "Meeting",
-                        "communication" => "Communication",
-                        "research" => "Research",
-                        "learning" => "Learning",
-                        "devops" => "DevOps",
-                        "database" => "Database",
-                        "sales" => "Sales",
-                        "admin" => "Admin",
-                        "browsing" => "Browsing",
-                        "idle" => "Idle",
-                        _ => "General",
-                    }
-                    .to_string(),
-                );
-            }
+    let idx = lower.rfind("category:")?;
+    let after = lower[idx + "category:".len()..].trim_start();
+    let first_line = after.lines().next()?.trim();
+    if first_line.is_empty() {
+        return None;
+    }
+    let norm = normalize_category_value(first_line);
+    for (key, label) in MAP {
+        if norm == *key {
+            return Some((*label).to_string());
         }
     }
     None
@@ -88,11 +73,26 @@ fn infer_category_from_content(lower: &str) -> String {
         || lower.contains("test suite")
     {
         "Testing"
+    } else if lower.contains("microsoft excel")
+        || lower.contains("google sheets")
+        || lower.contains("libreoffice calc")
+        || lower.contains("spreadsheet")
+        || lower.contains(".xlsx")
+        || lower.contains(".xls")
+    {
+        // Spreadsheets are often miscategorized as "Coding" when the prompt mentions a generic "editor".
+        "Admin"
     } else if lower.contains("writing code")
-        || lower.contains("editor")
         || lower.contains("visual studio code")
         || lower.contains("vs code")
-        || lower.contains("ide")
+        || lower.contains("vscode")
+        || lower.contains("intellij")
+        || lower.contains("pycharm")
+        || lower.contains("webstorm")
+        || lower.contains("rider")
+        || lower.contains("xcode")
+        || lower.contains("android studio")
+        || lower.contains("neovim")
     {
         "Coding"
     } else if lower.contains("writing docs") || lower.contains("readme") {
@@ -205,6 +205,13 @@ mod tests {
     }
 
     #[test]
+    fn parse_category_field_accepts_multiword_code_review() {
+        let raw = "APP: Gh\nCATEGORY: Code Review\n";
+        let (_desc, cat) = parse_analysis(raw);
+        assert_eq!(cat, "CodeReview");
+    }
+
+    #[test]
     fn parse_infers_debugging() {
         let raw = "VISIBLE: using the debugger and a breakpoint";
         let (_d, c) = parse_analysis(raw);
@@ -217,6 +224,7 @@ mod tests {
             ("code review here", "CodeReview"),
             ("test suite green", "Testing"),
             ("writing code in editor", "Coding"),
+            ("excel spreadsheet open", "Admin"),
             ("readme writing docs", "Documentation"),
             ("figma open", "Design"),
             ("jira board", "Planning"),
@@ -235,6 +243,13 @@ mod tests {
             let (_, c) = parse_analysis(text);
             assert_eq!(c, expected, "text={text:?}");
         }
+    }
+
+    #[test]
+    fn parse_generic_editor_word_not_auto_coding() {
+        let raw = "VISIBLE: drafting text in a generic editor window";
+        let (_, c) = parse_analysis(raw);
+        assert_ne!(c, "Coding");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::sync_env::{supabase_anon_key, supabase_url};
 use crate::vision_model::LLAMA_CHAT_MODEL_ID;
-use crate::sync_pure::{jwt_exp, select_unsynced_pending_sql, truncate_tasks_for_summary};
+use crate::sync_pure::{clamp_line_for_summary, jwt_exp, select_unsynced_pending_sql, truncate_tasks_for_summary};
 use reqwest::blocking::{Client, Response};
 use std::thread;
 use std::time::Duration;
@@ -18,6 +18,8 @@ const TOKEN_REFRESH_POLL_SECS: u64 = 120;
 /// Default llama.cpp servers often use `n_ctx=2048`; prompt = instructions + tasks must stay under that.
 /// Override with env `FLOWSIGHT_SUMMARY_MAX_CHARS` (same unit: Unicode chars).
 const SUMMARY_MAX_TASK_CHARS: usize = 5000;
+/// Avoid one verbose vision capture consuming the whole summary budget (`FLOWSIGHT_SUMMARY_MAX_LINE_CHARS` to override).
+const SUMMARY_MAX_LINE_CHARS_DEFAULT: usize = 450;
 
 // User session stored locally after login
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -292,9 +294,16 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
     let mut categories = std::collections::HashMap::new();
     let mut tickets = std::collections::HashMap::new();
 
+    let line_cap = std::env::var("FLOWSIGHT_SUMMARY_MAX_LINE_CHARS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n >= 80)
+        .unwrap_or(SUMMARY_MAX_LINE_CHARS_DEFAULT);
+
     for r in rows {
         if let Ok((id, desc, cat, dur, ticket)) = r {
             ids.push(id);
+            let desc = clamp_line_for_summary(&desc, line_cap);
             full_text.push_str(&format!("- [{}] {}\n", cat, desc));
             total_duration += dur;
             

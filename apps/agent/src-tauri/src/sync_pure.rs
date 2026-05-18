@@ -30,12 +30,30 @@ pub(crate) fn jwt_exp(token: &str) -> i64 {
         .unwrap_or(0)
 }
 
+/// Shorten a single task description so many rows fit under `FLOWSIGHT_SUMMARY_MAX_CHARS`.
+pub(crate) fn clamp_line_for_summary(s: &str, max_chars: usize) -> String {
+    let n = s.chars().count();
+    if n <= max_chars {
+        return s.to_string();
+    }
+    let take = max_chars.saturating_sub(1);
+    let mut out: String = s.chars().take(take).collect();
+    out.push('…');
+    out
+}
+
+/// When the batch exceeds the summary budget, keep the **suffix** (newest tasks: `full_text` is oldest→newest).
 pub(crate) fn truncate_tasks_for_summary(text: &str, max_chars: usize) -> String {
     let n = text.chars().count();
     if n <= max_chars {
         return text.to_string();
     }
-    text.chars().take(max_chars).collect()
+    const OMIT: &str = "[... earlier activity omitted; excerpt is the most recent part of the batch ...]\n\n";
+    let overhead = OMIT.chars().count();
+    let budget = max_chars.saturating_sub(overhead);
+    let skip = n.saturating_sub(budget);
+    let suffix: String = text.chars().skip(skip).collect();
+    format!("{}{}", OMIT, suffix)
 }
 
 #[cfg(test)]
@@ -70,10 +88,20 @@ mod tests {
     }
 
     #[test]
-    fn truncate_unicode_boundary() {
+    fn truncate_unicode_boundary_keeps_suffix_and_budget() {
         let s: String = (0..6000).map(|_| 'a').collect();
         let t = truncate_tasks_for_summary(&s, 5000);
         assert_eq!(t.chars().count(), 5000);
+        assert!(t.contains("omitted"));
+        assert!(t.ends_with('a'));
+    }
+
+    #[test]
+    fn clamp_line_adds_ellipsis_when_long() {
+        let s: String = (0..500).map(|_| 'b').collect();
+        let t = clamp_line_for_summary(&s, 20);
+        assert_eq!(t.chars().count(), 20);
+        assert!(t.ends_with('…'));
     }
 
     #[test]

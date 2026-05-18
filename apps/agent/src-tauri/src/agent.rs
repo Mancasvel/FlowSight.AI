@@ -1265,23 +1265,25 @@ fn analyze_image_with_vision(base64_img: &str, current_task: &str, _gpu_layers: 
         .build()
         .map_err(|e| e.to_string())?;
 
-    let system_msg = "You are a screenshot analysis assistant. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. You describe exactly what you observe in the screenshot.";
+    let system_msg = "You are a screenshot analysis assistant. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. Be accurate and concise: capture the user's primary task, not a full inventory of the UI.";
 
     let prompt = format!(
-        r#"Look at this screenshot carefully and fill in EVERY field below. Do NOT skip any field. Do NOT use markdown. Write plain text only.
+        r#"Study this screenshot and complete EVERY field below. Plain text only (no markdown). If the screen is very dense (spreadsheet, large table, dashboard, long doc), stay high-level — do NOT transcribe cell values, columns, or long lists.
 
-TASK CONTEXT: {}
+TASK CONTEXT (may be empty): {}
 
-Fill in this template exactly:
+Complete this template exactly:
 
-APP: [name of the application visible, e.g. Visual Studio Code, Chrome, Terminal]
-WINDOW TITLE: [exact window title visible in the title bar]
-VISIBLE CONTENT: [describe what is shown on screen in 2-3 sentences: files open, tabs, panels, text, UI elements]
-FILES OR URLS: [list any file names, URLs, or document names visible, or write None if not readable]
-CURRENT ACTION: [what the user appears to be doing right now in 1-2 sentences]
-PROGRESS: [any errors, warnings, build status, test results visible, or write None visible]
-NEXT STEP: [what the user will likely do next based on what is visible, in 1 sentence]
-CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Documentation, Design, Planning, Meeting, Communication, Research, Learning, DevOps, Database, Sales, Admin, Browsing, Idle, General]"#,
+APP: [application name, e.g. Microsoft Excel, Google Chrome, Visual Studio Code]
+WINDOW TITLE: [title bar text if readable]
+VISIBLE CONTENT: [1–2 short sentences: the main artifact on screen and what it is for — not every panel or control]
+FILES OR URLS: [up to about five of the most relevant file names, paths, or URLs; otherwise None]
+CURRENT ACTION: [what the user appears to be doing right now, one sentence]
+PROGRESS: [errors, warnings, build/test status if any, or None visible]
+NEXT STEP: [one short sentence: likely next action]
+CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Documentation, Design, Planning, Meeting, Communication, Research, Learning, DevOps, Database, Sales, Admin, Browsing, Idle, General]
+
+CATEGORY rules: use Coding ONLY for software development (editing code, debugging in an IDE, repo/PR review in a dev tool, programming-focused terminal). Spreadsheets (Excel/Sheets), email, chat, slides, PDFs, CRM, and generic browsing are NOT Coding unless the visible work is clearly programming.]"#,
         current_task
     );
 
@@ -1331,11 +1333,18 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
 
         // Detect empty or refusal responses
         let is_empty = content.is_empty();
-        let is_refusal = content.to_lowercase().contains("i'm unable to")
-            || content.to_lowercase().contains("i cannot")
-            || content.to_lowercase().contains("i am unable")
-            || content.to_lowercase().contains("unable to view")
-            || content.to_lowercase().contains("unable to analyze");
+        let c = content.to_lowercase();
+        let is_refusal = c.contains("i'm unable to")
+            || c.contains("i cannot")
+            || c.contains("i can't")
+            || c.contains("i am unable")
+            || c.contains("unable to view")
+            || c.contains("unable to analyze")
+            || c.contains("can't assist")
+            || c.contains("cannot assist")
+            || c.contains("as an ai language model")
+            || c.contains("no puedo ver")
+            || c.contains("no puedo analizar");
 
         if is_empty || is_refusal {
             println!("[Vision] Attempt {}/{}: empty or refusal response, retrying...", attempt, max_attempts);
@@ -1343,9 +1352,11 @@ CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Docume
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 continue;
             }
-            if is_empty {
-                return Err("Model returned empty response after retries".to_string());
-            }
+            return Err(if is_empty {
+                "Model returned empty response after retries".to_string()
+            } else {
+                "Model refused or could not analyze the screenshot after retries".to_string()
+            });
         }
 
         let content = truncate_repetition(content);
