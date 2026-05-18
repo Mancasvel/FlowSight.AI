@@ -1,6 +1,6 @@
 {
   "name": "@flowsight/agent",
-  "version": "2.6.2",
+  "version": "2.7.0",
   "private": true,
   "description": "FlowSight DEV Agent - Screen capture and AI analysis",
   "scripts": {
