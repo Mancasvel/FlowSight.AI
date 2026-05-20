@@ -866,13 +866,35 @@
       color: hsl(var(--muted-foreground));
       font-size: 10px;
       font-weight: 500;
-      transition: color 0.15s;
       border-radius: 12px;
+      transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
     }
 
     .nav-item svg {
       width: 22px;
       height: 22px;
+      transition: transform 0.18s ease, color 0.18s ease;
+    }
+
+    .nav-item:hover {
+      color: hsl(var(--primary));
+      background: hsl(var(--muted));
+    }
+
+    .nav-item:hover svg {
+      transform: scale(1.12);
+    }
+
+    .nav-item.active:hover {
+      background: hsl(262 83% 92%);
+    }
+
+    .nav-item:active {
+      transform: scale(0.96);
+    }
+
+    .nav-item:active svg {
+      transform: scale(1.04);
     }
 
     .nav-item.active {
