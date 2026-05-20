@@ -1622,6 +1622,196 @@
       overflow-y: auto;
     }
 
+    /* Onboarding wizard */
+    .onboarding-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1050;
+      display: none;
+      flex-direction: column;
+      background: hsl(var(--background));
+    }
+
+    .onboarding-overlay.visible {
+      display: flex;
+    }
+
+    .onboarding-top {
+      padding: 12px 16px 8px;
+      flex-shrink: 0;
+    }
+
+    .onboarding-top-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .onboarding-back {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: hsl(var(--foreground));
+      font-size: 18px;
+      border-radius: 8px;
+    }
+
+    .onboarding-back:hover { background: hsl(var(--muted) / 0.5); }
+
+    .onboarding-progress-track {
+      flex: 1;
+      height: 6px;
+      background: hsl(var(--muted) / 0.45);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .onboarding-progress-fill {
+      height: 100%;
+      background: hsl(var(--primary));
+      border-radius: 999px;
+      transition: width 0.25s ease;
+    }
+
+    .onboarding-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 20px 100px;
+    }
+
+    .onboarding-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      margin: 8px 0 6px;
+    }
+
+    .onboarding-subtitle {
+      font-size: 13px;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 18px;
+    }
+
+    .onboarding-name-input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;
+      border-radius: 14px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      margin-top: 8px;
+    }
+
+    .onboarding-other-job {
+      margin-top: 14px;
+    }
+
+    .onboarding-other-job label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: hsl(var(--foreground));
+    }
+
+    .onboarding-other-job .onboarding-name-input {
+      margin-top: 0;
+    }
+
+    .onboarding-options {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .onboarding-option {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 14px;
+      border-radius: 16px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+    }
+
+    .onboarding-option:hover {
+      border-color: hsl(var(--primary) / 0.35);
+    }
+
+    .onboarding-option.selected {
+      border-color: hsl(var(--primary));
+      box-shadow: 0 0 0 1px hsl(var(--primary) / 0.2);
+    }
+
+    .onboarding-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 2px solid hsl(var(--border));
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #fff;
+    }
+
+    .onboarding-option.selected .onboarding-check {
+      background: hsl(var(--primary));
+      border-color: hsl(var(--primary));
+    }
+
+    .onboarding-option-text {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
+    .onboarding-option-icon {
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .onboarding-footer {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 400px;
+      padding: 12px 20px 20px;
+      background: linear-gradient(to top, hsl(var(--background)) 70%, transparent);
+    }
+
+    .onboarding-continue {
+      width: 100%;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .onboarding-continue:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .onboarding-prefs-summary {
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+
     .plan-badge-free {
       background: hsl(var(--muted));
       color: hsl(var(--muted-foreground));
@@ -2394,6 +2584,24 @@
   </header>
 
   <div class="app-viewport">
+  <!-- ONBOARDING WIZARD (first-run work preferences) -->
+  <div class="onboarding-overlay" id="onboardingOverlay" aria-hidden="true">
+    <div class="onboarding-top">
+      <div class="onboarding-top-row">
+        <button type="button" class="onboarding-back" id="onboardingBackBtn" aria-label="Back">‹</button>
+        <div class="onboarding-progress-track">
+          <div class="onboarding-progress-fill" id="onboardingProgressFill" style="width:20%"></div>
+        </div>
+      </div>
+    </div>
+    <div class="onboarding-body" id="onboardingBody"></div>
+    <div class="onboarding-footer">
+      <button type="button" class="button button-primary onboarding-continue" id="onboardingContinueBtn" disabled>
+        Continue
+      </button>
+    </div>
+  </div>
+
   <!-- CLOUD ACTIVATION OVERLAY (optional — not required to use the app) -->
   <div class="cloud-activation-overlay" id="loginScreen">
     <div class="app-container cloud-activation-panel">
@@ -2636,6 +2844,16 @@
               <button class="button button-ghost" id="logoutBtn" title="Sign out of cloud features" style="padding: 4px 8px; display: none;"><svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
             </div>
           </div>
+        </div>
+
+        <div class="card" id="workPreferencesCard">
+          <div class="card-header">
+            <div class="card-title">Work preferences</div>
+          </div>
+          <p class="onboarding-prefs-summary" id="workPreferencesSummary">Not set yet.</p>
+          <button type="button" class="button button-secondary" id="editWorkPreferencesBtn" style="width:100%;margin-top:8px;">
+            Edit work preferences
+          </button>
         </div>
 
         <div class="card" id="integrationsCard">
@@ -3141,6 +3359,7 @@
         showMainApp();
         await initMainApp();
         await loadUserTeams();
+        await promptOnboardingIfNeeded();
         showToast('Cloud features activated', 'success');
       } catch (error) {
         if (supabaseSessionCreated) {
@@ -3200,8 +3419,8 @@
       if (h < 12) period = 'morning';
       else if (h < 18) period = 'afternoon';
       else period = 'night';
-      const name = currentUser?.display_name || currentUser?.name || 'there';
-      const first = name.split(' ')[0];
+      const name = currentUser?.display_name || currentUser?.name || userPreferences?.displayName || 'there';
+      const first = String(name).split(' ')[0];
       el.textContent = `Good ${period}, ${first}!`;
     }
 
@@ -3569,6 +3788,7 @@
             hideCloudActivationPanel();
             showMainApp();
             await initMainApp();
+            await promptOnboardingIfNeeded();
             return;
           }
 
@@ -4221,6 +4441,358 @@
       }
     }
 
+    let userPreferences = null;
+
+    const ONBOARDING_ROLE_OPTIONS = [
+      { id: 'software_developer', label: 'Software development', icon: '💻' },
+      { id: 'design', label: 'Design & UX', icon: '🎨' },
+      { id: 'product', label: 'Product / project management', icon: '📋' },
+      { id: 'data', label: 'Data & analytics', icon: '📊' },
+      { id: 'student', label: 'Learning / student work', icon: '📚' },
+      { id: 'other', label: 'Other knowledge work', icon: '✨' },
+    ];
+
+    const ONBOARDING_ACTIVITY_OPTIONS = [
+      { id: 'coding', label: 'Writing & shipping code', icon: '⌨️' },
+      { id: 'debugging', label: 'Debugging & fixing issues', icon: '🐛' },
+      { id: 'code_review', label: 'Code review & collaboration', icon: '👀' },
+      { id: 'meetings', label: 'Meetings & calls', icon: '📞' },
+      { id: 'planning', label: 'Planning & documentation', icon: '📝' },
+      { id: 'research', label: 'Research & learning', icon: '🔍' },
+      { id: 'design_work', label: 'Design & prototyping', icon: '🖌️' },
+      { id: 'support', label: 'Support & operations', icon: '🛠️' },
+    ];
+
+    const ONBOARDING_GOAL_OPTIONS = [
+      { id: 'distractions', label: 'Spend less time on distracting apps', icon: '🌙' },
+      { id: 'time_awareness', label: 'Understand how I spend my time and make better decisions', icon: '📊' },
+      { id: 'focus', label: 'Improve my attention and deep focus', icon: '🧩' },
+      { id: 'balance', label: 'Improve work-life balance', icon: '⚖️' },
+      { id: 'accountability', label: 'Track progress on goals and tickets', icon: '🎯' },
+      { id: 'wellbeing', label: 'Feel good about my productivity', icon: '💡' },
+    ];
+
+    const ONBOARDING_GOAL_HOURS = [4, 5, 6, 7, 8];
+
+    const onboardingState = {
+      step: 0,
+      displayName: '',
+      workRoles: [],
+      customJob: '',
+      workActivities: [],
+      improvementGoals: [],
+      dailyGoalHours: 6,
+      reopening: false,
+    };
+
+    function onboardingRoleLabel(id, customJob) {
+      if (id === 'other' && customJob?.trim()) return customJob.trim();
+      return ONBOARDING_ROLE_OPTIONS.find((o) => o.id === id)?.label || id;
+    }
+
+    function onboardingFirstName() {
+      const n = onboardingState.displayName.trim() || 'there';
+      return n.split(' ')[0];
+    }
+
+    function renderWorkPreferencesSummary(prefs) {
+      const el = document.getElementById('workPreferencesSummary');
+      if (!el) return;
+      if (!prefs?.onboardingCompleted) {
+        el.textContent = authSession
+          ? 'Complete the setup wizard to personalize reports and greetings.'
+          : 'Sign in to cloud features to set up your work preferences.';
+        return;
+      }
+      const roleLabels = (prefs.workRoles || [])
+        .map((id) => onboardingRoleLabel(id, prefs.customJob))
+        .join(', ');
+      const goalLabels = (prefs.improvementGoals || [])
+        .map((id) => ONBOARDING_GOAL_OPTIONS.find((o) => o.id === id)?.label || id)
+        .slice(0, 2)
+        .join('; ');
+      el.textContent = [
+        prefs.displayName ? `Name: ${prefs.displayName}` : null,
+        roleLabels ? `Focus: ${roleLabels}` : null,
+        goalLabels ? `Goals: ${goalLabels}` : null,
+        prefs.dailyGoalHours != null ? `Daily goal: ${prefs.dailyGoalHours}h` : null,
+      ].filter(Boolean).join(' · ');
+    }
+
+    async function loadUserPreferences() {
+      try {
+        userPreferences = await invoke('get_user_preferences');
+      } catch (_) {
+        userPreferences = { onboardingCompleted: false };
+      }
+      if (!userPreferences.displayName) {
+        try {
+          const config = await invoke('get_config');
+          if (config?.devName) userPreferences.displayName = config.devName;
+        } catch (_) { /* ignore */ }
+      }
+      renderWorkPreferencesSummary(userPreferences);
+      return userPreferences;
+    }
+
+    async function persistUserPreferences(partial, completed = false) {
+      const prefs = {
+        onboardingCompleted: completed,
+        displayName: partial.displayName ?? onboardingState.displayName ?? userPreferences?.displayName ?? null,
+        workRoles: partial.workRoles ?? onboardingState.workRoles ?? userPreferences?.workRoles ?? [],
+        customJob: (() => {
+          const roles = partial.workRoles ?? onboardingState.workRoles ?? userPreferences?.workRoles ?? [];
+          if (!roles.includes('other')) return null;
+          const job = (partial.customJob ?? onboardingState.customJob ?? userPreferences?.customJob ?? '').trim();
+          return job || null;
+        })(),
+        workActivities: partial.workActivities ?? onboardingState.workActivities ?? userPreferences?.workActivities ?? [],
+        improvementGoals: partial.improvementGoals ?? onboardingState.improvementGoals ?? userPreferences?.improvementGoals ?? [],
+        dailyGoalHours: partial.dailyGoalHours ?? onboardingState.dailyGoalHours ?? userPreferences?.dailyGoalHours ?? 6,
+      };
+      userPreferences = await invoke('save_user_preferences_command', { prefs });
+      if (prefs.displayName) {
+        await invoke('update_config', { patch: { devName: prefs.displayName } });
+      }
+      if (prefs.dailyGoalHours != null) {
+        await setDailyGoalHours(prefs.dailyGoalHours);
+      }
+      renderWorkPreferencesSummary(userPreferences);
+      updateTodayGreeting();
+      return userPreferences;
+    }
+
+    function onboardingCanContinue() {
+      switch (onboardingState.step) {
+        case 0: return onboardingState.displayName.trim().length >= 2;
+        case 1: {
+          if (onboardingState.workRoles.length === 0) return false;
+          if (onboardingState.workRoles.includes('other')) {
+            return onboardingState.customJob.trim().length >= 2;
+          }
+          return true;
+        }
+        case 2: return onboardingState.workActivities.length > 0;
+        case 3: return onboardingState.improvementGoals.length > 0;
+        case 4: return onboardingState.dailyGoalHours != null;
+        default: return false;
+      }
+    }
+
+    function onboardingToggleWorkRole(id) {
+      const arr = onboardingState.workRoles;
+      const idx = arr.indexOf(id);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+        if (id === 'other') onboardingState.customJob = '';
+      } else {
+        arr.push(id);
+      }
+      renderOnboardingStep();
+    }
+
+    function onboardingToggleMulti(key, id) {
+      const arr = onboardingState[key];
+      const idx = arr.indexOf(id);
+      if (idx >= 0) arr.splice(idx, 1);
+      else arr.push(id);
+      renderOnboardingStep();
+    }
+
+    function renderOnboardingStep() {
+      const body = document.getElementById('onboardingBody');
+      const continueBtn = document.getElementById('onboardingContinueBtn');
+      const backBtn = document.getElementById('onboardingBackBtn');
+      const fill = document.getElementById('onboardingProgressFill');
+      if (!body || !continueBtn) return;
+
+      const step = onboardingState.step;
+      fill.style.width = `${((step + 1) / 5) * 100}%`;
+      backBtn.style.visibility = step === 0 ? 'hidden' : 'visible';
+
+      if (step === 0) {
+        body.innerHTML = `
+          <h1 class="onboarding-title">Welcome to FlowSight</h1>
+          <p class="onboarding-subtitle">Let's personalize your experience. What should we call you?</p>
+          <input type="text" class="onboarding-name-input" id="onboardingNameInput"
+            placeholder="Your first name" maxlength="40" value="${escapeHtml(onboardingState.displayName)}" autocomplete="name">`;
+        const input = document.getElementById('onboardingNameInput');
+        input?.focus();
+        input?.addEventListener('input', (e) => {
+          onboardingState.displayName = e.target.value;
+          continueBtn.disabled = !onboardingCanContinue();
+        });
+        continueBtn.textContent = 'Continue';
+      } else if (step === 1) {
+        const showOtherJob = onboardingState.workRoles.includes('other');
+        body.innerHTML = `
+          <h1 class="onboarding-title">What kind of work do you do, ${escapeHtml(onboardingFirstName())}?</h1>
+          <p class="onboarding-subtitle">Pick one or more that describe your role.</p>
+          <div class="onboarding-options">${ONBOARDING_ROLE_OPTIONS.map((o) => `
+            <button type="button" class="onboarding-option ${onboardingState.workRoles.includes(o.id) ? 'selected' : ''}"
+              data-onboard-role="${o.id}">
+              <span class="onboarding-check">${onboardingState.workRoles.includes(o.id) ? '✓' : ''}</span>
+              <span class="onboarding-option-text">${escapeHtml(o.label)}</span>
+              <span class="onboarding-option-icon">${o.icon}</span>
+            </button>`).join('')}</div>
+          ${showOtherJob ? `
+          <div class="onboarding-other-job">
+            <label for="onboardingCustomJobInput">Describe your job</label>
+            <input type="text" class="onboarding-name-input" id="onboardingCustomJobInput"
+              placeholder="e.g. Technical writer, QA engineer, Founder…" maxlength="80"
+              value="${escapeHtml(onboardingState.customJob)}" autocomplete="organization-title">
+          </div>` : ''}`;
+        body.querySelectorAll('[data-onboard-role]').forEach((btn) => {
+          btn.onclick = () => onboardingToggleWorkRole(btn.dataset.onboardRole);
+        });
+        const jobInput = document.getElementById('onboardingCustomJobInput');
+        if (jobInput) {
+          jobInput.focus();
+          jobInput.addEventListener('input', (e) => {
+            onboardingState.customJob = e.target.value;
+            continueBtn.disabled = !onboardingCanContinue();
+          });
+        }
+        if (showOtherJob && !onboardingState.customJob.trim()) {
+          continueBtn.textContent = 'Enter your job to continue';
+        } else {
+          continueBtn.textContent = onboardingState.workRoles.length ? 'Continue' : 'Pick at least one';
+        }
+      } else if (step === 2) {
+        body.innerHTML = `
+          <h1 class="onboarding-title">What fills your workday?</h1>
+          <p class="onboarding-subtitle">Select the activities you spend the most time on.</p>
+          <div class="onboarding-options">${ONBOARDING_ACTIVITY_OPTIONS.map((o) => `
+            <button type="button" class="onboarding-option ${onboardingState.workActivities.includes(o.id) ? 'selected' : ''}"
+              data-onboard-activity="${o.id}">
+              <span class="onboarding-check">${onboardingState.workActivities.includes(o.id) ? '✓' : ''}</span>
+              <span class="onboarding-option-text">${escapeHtml(o.label)}</span>
+              <span class="onboarding-option-icon">${o.icon}</span>
+            </button>`).join('')}</div>`;
+        body.querySelectorAll('[data-onboard-activity]').forEach((btn) => {
+          btn.onclick = () => onboardingToggleMulti('workActivities', btn.dataset.onboardActivity);
+        });
+        continueBtn.textContent = onboardingState.workActivities.length ? 'Continue' : 'Pick at least one';
+      } else if (step === 3) {
+        body.innerHTML = `
+          <h1 class="onboarding-title">What do you want to improve?</h1>
+          <p class="onboarding-subtitle">Pick one or more goals — we'll tailor insights and reports to these.</p>
+          <div class="onboarding-options">${ONBOARDING_GOAL_OPTIONS.map((o) => `
+            <button type="button" class="onboarding-option ${onboardingState.improvementGoals.includes(o.id) ? 'selected' : ''}"
+              data-onboard-goal="${o.id}">
+              <span class="onboarding-check">${onboardingState.improvementGoals.includes(o.id) ? '✓' : ''}</span>
+              <span class="onboarding-option-text">${escapeHtml(o.label)}</span>
+              <span class="onboarding-option-icon">${o.icon}</span>
+            </button>`).join('')}</div>`;
+        body.querySelectorAll('[data-onboard-goal]').forEach((btn) => {
+          btn.onclick = () => onboardingToggleMulti('improvementGoals', btn.dataset.onboardGoal);
+        });
+        continueBtn.textContent = onboardingState.improvementGoals.length ? 'Continue' : 'Pick at least one';
+      } else if (step === 4) {
+        body.innerHTML = `
+          <h1 class="onboarding-title">Set your daily tracking goal</h1>
+          <p class="onboarding-subtitle">How many focused hours do you want to track on a typical day?</p>
+          <div class="onboarding-options">${ONBOARDING_GOAL_HOURS.map((h) => `
+            <button type="button" class="onboarding-option ${onboardingState.dailyGoalHours === h ? 'selected' : ''}"
+              data-onboard-hours="${h}">
+              <span class="onboarding-check">${onboardingState.dailyGoalHours === h ? '✓' : ''}</span>
+              <span class="onboarding-option-text">${h} hours per day</span>
+              <span class="onboarding-option-icon">⏱️</span>
+            </button>`).join('')}</div>`;
+        body.querySelectorAll('[data-onboard-hours]').forEach((btn) => {
+          btn.onclick = () => {
+            onboardingState.dailyGoalHours = Number(btn.dataset.onboardHours);
+            renderOnboardingStep();
+          };
+        });
+        continueBtn.textContent = 'Finish setup';
+      }
+
+      continueBtn.disabled = !onboardingCanContinue();
+    }
+
+    function showOnboardingWizard(fromProfile = false) {
+      onboardingState.reopening = fromProfile;
+      onboardingState.step = 0;
+      if (userPreferences) {
+        onboardingState.displayName = userPreferences.displayName || '';
+        onboardingState.workRoles = [...(userPreferences.workRoles || [])];
+        onboardingState.customJob = userPreferences.customJob || '';
+        onboardingState.workActivities = [...(userPreferences.workActivities || [])];
+        onboardingState.improvementGoals = [...(userPreferences.improvementGoals || [])];
+        onboardingState.dailyGoalHours = userPreferences.dailyGoalHours ?? 6;
+      }
+      if (!onboardingState.displayName.trim()) {
+        onboardingState.displayName =
+          currentUser?.display_name || currentUser?.name || currentUser?.email?.split('@')[0] || '';
+      }
+      const overlay = document.getElementById('onboardingOverlay');
+      overlay?.classList.add('visible');
+      overlay?.setAttribute('aria-hidden', 'false');
+      renderOnboardingStep();
+    }
+
+    function hideOnboardingWizard() {
+      const overlay = document.getElementById('onboardingOverlay');
+      overlay?.classList.remove('visible');
+      overlay?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function onboardingContinue() {
+      if (!onboardingCanContinue()) return;
+      if (onboardingState.step < 4) {
+        await persistUserPreferences({}, false);
+        onboardingState.step += 1;
+        renderOnboardingStep();
+        return;
+      }
+      const continueBtn = document.getElementById('onboardingContinueBtn');
+      if (continueBtn) {
+        continueBtn.disabled = true;
+        continueBtn.textContent = 'Saving…';
+      }
+      try {
+        await persistUserPreferences({}, true);
+        hideOnboardingWizard();
+        if (!onboardingState.reopening) {
+          showMainApp();
+          await restoreCloudSession();
+          await initMainApp();
+        } else {
+          showToast('Work preferences updated', 'success');
+        }
+      } catch (e) {
+        showToast('Could not save preferences: ' + e, 'error');
+      } finally {
+        const btn = document.getElementById('onboardingContinueBtn');
+        if (btn) {
+          btn.disabled = !onboardingCanContinue();
+          btn.textContent = onboardingState.step === 4 ? 'Finish setup' : 'Continue';
+        }
+      }
+    }
+
+    async function promptOnboardingIfNeeded() {
+      if (!authSession && !currentUser) return false;
+      await loadUserPreferences();
+      if (userPreferences?.onboardingCompleted) return false;
+      showOnboardingWizard(false);
+      return true;
+    }
+
+    document.getElementById('onboardingContinueBtn')?.addEventListener('click', () => {
+      onboardingContinue().catch((e) => showToast(String(e), 'error'));
+    });
+    document.getElementById('onboardingBackBtn')?.addEventListener('click', () => {
+      if (onboardingState.step > 0) {
+        onboardingState.step -= 1;
+        renderOnboardingStep();
+      }
+    });
+    document.getElementById('editWorkPreferencesBtn')?.addEventListener('click', () => {
+      showOnboardingWizard(true);
+    });
+
     async function init() {
       const playBtn = document.getElementById('playTimerBtn');
       try {
@@ -4240,9 +4812,11 @@
         if (playBtn) playBtn.disabled = false;
       }
 
+      await loadUserPreferences();
       showMainApp();
       await restoreCloudSession();
       await initMainApp();
+      await promptOnboardingIfNeeded();
     }
 
     init();
@@ -5573,7 +6147,10 @@
         showToast("Login Successful", "success");
         authSession = session;
         currentUser = session.user;
+        hideCloudActivationPanel();
+        showMainApp();
         await initMainApp();
+        await promptOnboardingIfNeeded();
       } catch (e) {
         console.error(e);
         showToast("Login Failed: " + e, "error");

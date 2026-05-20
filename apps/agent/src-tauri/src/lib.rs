@@ -13,6 +13,7 @@ mod linear;
 mod oauth_env;
 mod entitlements;
 mod insights_local;
+mod user_preferences;
 pub mod context;
 pub mod paths;
 
@@ -61,6 +62,8 @@ pub fn run() {
             entitlements::fetch_cloud_insights,
             entitlements::request_cloud_insights,
             insights_local::generate_local_status_report,
+            user_preferences::get_user_preferences,
+            user_preferences::save_user_preferences_command,
             agent::start_server,
             agent::stop_server,
             llama_managed_process_status,

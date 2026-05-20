@@ -423,7 +423,10 @@ pub fn generate_local_status_report(
     crate::agent::ensure_local_llm_ready(app, state)?;
     emit_report_progress(&app_handle, 0, "warmup", "Starting local AI engine", "Local AI ready", "done");
 
-    let (report, generation_passes) = match generate_report_by_sections(&app_handle, &local_data) {
+    let user_prefs = crate::user_preferences::load_user_preferences(&db_path).unwrap_or_default();
+    let prefs_block = crate::user_preferences::preferences_llm_block(&user_prefs);
+
+    let (report, generation_passes) = match generate_report_by_sections(&app_handle, &local_data, &prefs_block) {
         Ok(result) => result,
         Err(err) => {
             log::warn!("[LocalReport] Pipeline incomplete ({}), merging partial + structured fallback", err);
@@ -450,6 +453,7 @@ pub fn generate_local_status_report(
     Ok(serde_json::json!({
         "local_data": local_data,
         "report": report,
+        "user_preferences": user_prefs,
         "generated_at": Local::now().format("%Y-%m-%d %H:%M").to_string(),
         "model": "FlowSight Local Vision",
         "ai_powered": ai_powered,
@@ -667,19 +671,21 @@ fn build_report_meta(local_data: &serde_json::Value) -> serde_json::Value {
 fn generate_report_by_sections(
     app: &tauri::AppHandle,
     local_data: &serde_json::Value,
+    prefs_block: &str,
 ) -> Result<(serde_json::Value, Vec<serde_json::Value>), String> {
     let mut passes = Vec::new();
     let rule_fallback = build_rule_based_report(local_data);
+    let stats = |section_id: &str| build_section_stats_snapshot(section_id, local_data, prefs_block);
 
     let project = llm_section(
         app,
         1,
         "project_summary",
         "Section — project summary",
-        &build_section_stats_snapshot("project_summary", local_data),
+        &stats("project_summary"),
         "English only. Use ONLY STATS (SQLite activity reports: descriptions, tickets, durations).\n\
-Reference top categories, tickets, hours, peak day, and focus ratio with numbers.\n\
-Return JSON: {\"project_name\":\"short focus area label\",\"focus_target\":\"specific next priority\",\"summary\":\"4-6 sentences detailed executive summary citing concrete work items\"}",
+Use USER_PROFILE to personalize tone and priorities. Reference top categories, tickets, hours, peak day, and focus ratio with numbers.\n\
+Return JSON: {\"project_name\":\"short focus area label\",\"focus_target\":\"specific next priority aligned with USER_PROFILE\",\"summary\":\"4-6 sentences detailed executive summary citing concrete work items\"}",
         640,
         0.25,
         serde_json::json!({
@@ -695,10 +701,10 @@ Return JSON: {\"project_name\":\"short focus area label\",\"focus_target\":\"spe
         2,
         "overall_health",
         "Section — overall workflow health",
-        &build_section_stats_snapshot("overall_health", local_data),
-        "English only. Use ONLY STATS.\n\
+        &stats("overall_health"),
+        "English only. Use ONLY STATS and USER_PROFILE improvement goals.\n\
 Explain health using focus ratio, distraction time, deep-focus session count, tracking consistency, and ticket coverage.\n\
-Return JSON: {\"overall_health\":\"On track|Attention|At risk\",\"health_notes\":\"detailed paragraph (3-5 sentences) with specific metrics and dates\"}",
+Return JSON: {\"overall_health\":\"On track|Attention|At risk\",\"health_notes\":\"detailed paragraph (3-5 sentences) with specific metrics, dates, and personalized recommendations\"}",
         560,
         0.2,
         serde_json::json!({
@@ -713,7 +719,7 @@ Return JSON: {\"overall_health\":\"On track|Attention|At risk\",\"health_notes\"
         3,
         "health_breakdown",
         "Section — health breakdown table",
-        &build_section_stats_snapshot("health_breakdown", local_data),
+        &stats("health_breakdown"),
         "English only. Use ONLY STATS. Up to 6 rows covering categories AND top tickets where relevant.\n\
 Each notes field must cite hours, activity count, or a concrete description sample.\n\
 Return JSON: {\"health_breakdown\":[{\"element\":\"work area, category, or ticket\",\"status\":\"On track|Attention|At risk\",\"owner_team\":\"Self\",\"notes\":\"specific 1-2 sentence insight\"}]}",
@@ -728,7 +734,7 @@ Return JSON: {\"health_breakdown\":[{\"element\":\"work area, category, or ticke
         4,
         "timeline_insights",
         "Section — timeline review",
-        &build_section_stats_snapshot("timeline_insights", local_data),
+        &stats("timeline_insights"),
         "English only. Use ONLY STATS.\n\
 Describe daily rhythm, peak/quiet days, hourly focus peaks, context switching, and period-over-period change.\n\
 Return JSON: {\"caption\":\"3-5 sentences detailed timeline narrative with dates and hours\"}",
@@ -748,7 +754,7 @@ Return JSON: {\"caption\":\"3-5 sentences detailed timeline narrative with dates
         5,
         "known_issues",
         "Section — known issues",
-        &build_section_stats_snapshot("known_issues", local_data),
+        &stats("known_issues"),
         "English only. Use ONLY STATS. Up to 6 bullets.\n\
 Each bullet must name a category, ticket, date, or description pattern from the data.\n\
 Return JSON: {\"known_issues\":[\"specific issue with evidence from STATS\"]}",
@@ -763,7 +769,7 @@ Return JSON: {\"known_issues\":[\"specific issue with evidence from STATS\"]}",
         6,
         "potential_risks",
         "Section — potential risks",
-        &build_section_stats_snapshot("potential_risks", local_data),
+        &stats("potential_risks"),
         "English only. Use ONLY STATS. Up to 6 bullets.\n\
 Include risks from low tracking consistency, unticketed work, prior-period decline, or fragmented focus.\n\
 Return JSON: {\"potential_risks\":[\"specific risk with evidence\"]}",
@@ -778,7 +784,7 @@ Return JSON: {\"potential_risks\":[\"specific risk with evidence\"]}",
         7,
         "progress_tasks",
         "Section — progress & tasks completed",
-        &build_section_stats_snapshot("progress_tasks", local_data),
+        &stats("progress_tasks"),
         "English only. Use ONLY STATS. Up to 6 items per array.\n\
 tasks_completed: cite tickets and/or longest session descriptions. work_progress: cite daily totals and themes.\n\
 Return JSON: {\"work_progress\":[\"daily or thematic highlight with date/hours\"],\"tasks_completed\":[\"specific completed work from tickets or descriptions\"]}",
@@ -796,10 +802,10 @@ Return JSON: {\"work_progress\":[\"daily or thematic highlight with date/hours\"
         8,
         "lessons_recommendations",
         "Section — lessons & recommendations",
-        &build_section_stats_snapshot("lessons_recommendations", local_data),
-        "English only. Use ONLY STATS. Up to 4 lessons, up to 5 recommendations.\n\
-Each lesson body must reference a concrete pattern from the data (category, hour, ticket, or distraction).\n\
-Return JSON: {\"lessons_learned\":[{\"title\":\"\",\"body\":\"2-3 sentences\"}],\"recommendations\":[\"actionable step tied to STATS\"]}",
+        &stats("lessons_recommendations"),
+        "English only. Use ONLY STATS and USER_PROFILE. Up to 4 lessons, up to 5 recommendations.\n\
+Each lesson body must reference a concrete pattern from the data and the user's stated improvement goals.\n\
+Return JSON: {\"lessons_learned\":[{\"title\":\"\",\"body\":\"2-3 sentences\"}],\"recommendations\":[\"actionable step tied to STATS and USER_PROFILE\"]}",
         720,
         0.2,
         serde_json::json!({
@@ -910,8 +916,18 @@ fn build_diagnosis_from_stats(
     })
 }
 
-fn build_section_stats_snapshot(section_id: &str, local_data: &serde_json::Value) -> String {
+fn build_section_stats_snapshot(
+    section_id: &str,
+    local_data: &serde_json::Value,
+    prefs_block: &str,
+) -> String {
     let mut lines = build_stats_header_lines(local_data);
+    if !prefs_block.is_empty() {
+        lines.push(prefs_block.to_string());
+        lines.push(
+            "Personalize insights for USER_PROFILE roles, activities, and improvement goals.".to_string(),
+        );
+    }
 
     match section_id {
         "project_summary" => {
