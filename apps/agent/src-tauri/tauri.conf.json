@@ -19,6 +19,7 @@
         "fullscreen": false,
         "minWidth": 340,
         "minHeight": 400,
+        "decorations": false,
         "theme": "Light",
         "backgroundColor": "#FAFAFA"
       }
