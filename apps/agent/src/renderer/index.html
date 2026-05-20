@@ -201,7 +201,6 @@
     /* Purple scrollbar — scrollable regions only (WebView2 / Chromium) */
     .tab-content,
     .app-container,
-    .activity-feed,
     .modal-body {
       scrollbar-width: thin;
       scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
@@ -209,7 +208,6 @@
 
     .tab-content::-webkit-scrollbar,
     .app-container::-webkit-scrollbar,
-    .activity-feed::-webkit-scrollbar,
     .modal-body::-webkit-scrollbar {
       width: var(--scrollbar-size);
       height: var(--scrollbar-size);
@@ -219,7 +217,6 @@
 
     .tab-content::-webkit-scrollbar-thumb,
     .app-container::-webkit-scrollbar-thumb,
-    .activity-feed::-webkit-scrollbar-thumb,
     .modal-body::-webkit-scrollbar-thumb {
       background: linear-gradient(180deg, #a78bfa 0%, var(--scrollbar-thumb) 50%, #6d28d9 100%);
       border-radius: 100px;
@@ -229,7 +226,6 @@
 
     .tab-content::-webkit-scrollbar-track,
     .app-container::-webkit-scrollbar-track,
-    .activity-feed::-webkit-scrollbar-track,
     .modal-body::-webkit-scrollbar-track {
       background: var(--scrollbar-track);
       border-radius: 100px;
@@ -237,21 +233,18 @@
 
     .tab-content::-webkit-scrollbar-thumb:hover,
     .app-container::-webkit-scrollbar-thumb:hover,
-    .activity-feed::-webkit-scrollbar-thumb:hover,
     .modal-body::-webkit-scrollbar-thumb:hover {
       background: linear-gradient(180deg, #c4b5fd 0%, var(--scrollbar-thumb-hover) 55%, #5b21b6 100%);
     }
 
     .tab-content::-webkit-scrollbar-thumb:active,
     .app-container::-webkit-scrollbar-thumb:active,
-    .activity-feed::-webkit-scrollbar-thumb:active,
     .modal-body::-webkit-scrollbar-thumb:active {
       background: var(--scrollbar-thumb-hover);
     }
 
     .tab-content::-webkit-scrollbar-corner,
     .app-container::-webkit-scrollbar-corner,
-    .activity-feed::-webkit-scrollbar-corner,
     .modal-body::-webkit-scrollbar-corner {
       background: transparent;
     }
@@ -541,50 +534,6 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-top: 2px;
-    }
-
-    .activity-feed {
-      max-height: 200px;
-      overflow-y: auto;
-    }
-
-    .activity-item {
-      padding: 8px;
-      border-bottom: 1px solid hsl(var(--border));
-    }
-
-    .activity-item:last-child {
-      border-bottom: none;
-    }
-
-    .activity-time {
-      font-size: 10px;
-      color: hsl(var(--muted-foreground));
-      margin-bottom: 3px;
-    }
-
-    .activity-desc {
-      font-size: 11px;
-      color: hsl(var(--foreground));
-      white-space: pre-wrap;
-    }
-
-    .activity-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 3px;
-    }
-
-    .activity-user {
-      font-weight: 500;
-      font-size: 11px;
-    }
-
-    .activity-category {
-      font-size: 10px;
-      color: hsl(var(--muted-foreground));
-      font-weight: 500;
     }
 
     .empty-state {
@@ -1305,28 +1254,45 @@
     .focus-chart {
       display: flex;
       align-items: flex-end;
-      gap: 2px;
-      height: 48px;
-      margin-bottom: 8px;
+      gap: 3px;
+      height: 52px;
     }
 
     .focus-bar {
       flex: 1;
       background: hsl(var(--summary-teal));
-      border-radius: 2px 2px 0 0;
+      border-radius: 3px 3px 0 0;
       min-height: 4px;
-      opacity: 0.7;
+      transition: height 0.3s ease;
     }
 
-    .focus-stat {
-      font-size: 18px;
-      font-weight: 700;
-      color: hsl(var(--summary-teal));
+    .focus-bar-empty {
+      background: hsl(var(--muted));
+      opacity: 0.55;
     }
 
-    .focus-stat-label {
+    .focus-chart-wrap {
+      margin-bottom: 4px;
+    }
+
+    .focus-chart-axis {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 4px;
+    }
+
+    .focus-chart-caption {
       font-size: 11px;
       color: hsl(var(--muted-foreground));
+      margin-top: 2px;
+    }
+
+    .focus-chart-empty {
+      font-size: 12px;
+      color: hsl(var(--muted-foreground));
+      padding: 6px 0 2px;
     }
 
     .distraction-row {
@@ -1351,22 +1317,64 @@
       color: hsl(var(--muted-foreground));
     }
 
-    .summary-icon-btn {
-      width: 36px;
+    .summary-download-btn {
+      display: inline-flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-end;
+      flex-shrink: 0;
       height: 36px;
-      border-radius: 50%;
+      width: 36px;
+      padding: 0;
       border: none;
+      border-radius: 999px;
       background: hsl(var(--accent));
       color: hsl(var(--primary));
       cursor: pointer;
+      overflow: hidden;
+      white-space: nowrap;
+      transition: width 0.28s ease, padding 0.28s ease, background 0.15s ease;
+    }
+
+    .summary-download-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: -0.1px;
+      opacity: 0;
+      max-width: 0;
+      overflow: hidden;
+      margin-right: 0;
+      transform: translateX(10px);
+      transition: opacity 0.22s ease, max-width 0.28s ease, margin 0.28s ease, transform 0.28s ease;
+    }
+
+    .summary-download-icon {
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.15s;
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
     }
 
-    .summary-icon-btn:hover {
-      background: hsl(var(--primary) / 0.15);
+    .summary-download-btn:hover:not(:disabled),
+    .summary-download-btn:focus-visible:not(:disabled) {
+      width: 152px;
+      padding: 0 2px 0 14px;
+      background: hsl(var(--primary) / 0.14);
+    }
+
+    .summary-download-btn:hover:not(:disabled) .summary-download-label,
+    .summary-download-btn:focus-visible:not(:disabled) .summary-download-label {
+      opacity: 1;
+      max-width: 120px;
+      margin-right: 2px;
+      transform: translateX(0);
+    }
+
+    .summary-download-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
 
     .card-flat {
@@ -1378,33 +1386,12 @@
 
     /* ===== Today / Timer Screen ===== */
     .today-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
       margin-bottom: 4px;
     }
 
     .today-greeting {
       font-size: 13px;
       color: hsl(var(--muted-foreground));
-    }
-
-    .today-stopwatch-btn {
-      width: 40px;
-      height: 40px;
-      border: none;
-      background: transparent;
-      color: hsl(var(--foreground));
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
-    .today-stopwatch-btn:hover {
-      background: hsl(var(--muted));
     }
 
     .today-timer-section {
@@ -1745,11 +1732,6 @@
       <div id="tabToday" class="tab-panel active">
         <div class="today-header">
           <div class="today-greeting" id="todayGreeting">Good morning!</div>
-          <button class="today-stopwatch-btn" id="captureBtn" title="Capture now">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/><path d="M12 2v2"/>
-            </svg>
-          </button>
         </div>
 
         <div class="today-timer-section">
@@ -1836,15 +1818,6 @@
           <button id="startBtn"></button>
           <button id="pauseBtn"></button>
           <button id="stopBtn"></button>
-        </div>
-
-        <div class="card" style="box-shadow: 0 2px 8px rgb(0 0 0 / 0.05); border: none;">
-          <div class="card-header" style="border-bottom: none; padding-bottom: 0;">
-            <div class="card-title">Activity Feed</div>
-          </div>
-          <div class="activity-feed" id="activityList">
-            <div class="empty-state">No activity yet</div>
-          </div>
         </div>
       </div>
 
@@ -2216,7 +2189,10 @@
       const el = document.getElementById('todayGreeting');
       if (!el) return;
       const h = new Date().getHours();
-      const period = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening';
+      let period;
+      if (h < 12) period = 'morning';
+      else if (h < 18) period = 'afternoon';
+      else period = 'night';
       const name = currentUser?.display_name || currentUser?.name || 'there';
       const first = name.split(' ')[0];
       el.textContent = `Good ${period}, ${first}!`;
@@ -2394,6 +2370,7 @@
     }
 
     async function refreshTodayView() {
+      updateTodayGreeting();
       updateGoalUI();
       try {
         const week = await invoke('get_week_summary').catch(() => null);
@@ -3095,8 +3072,6 @@
       if (isMonitoring || isPaused) await stopMonitoring();
     };
 
-    document.getElementById('captureBtn').onclick = captureAndAnalyze;
-
     let ollamaConfirmedOnline = false;
 
     async function checkOllama() {
@@ -3289,7 +3264,7 @@
       return { task, jiraTicket };
     }
 
-    async function recordActivity(description, category, jiraTicket, { addToFeed = true, toast = false } = {}) {
+    async function recordActivity(description, category, jiraTicket, { toast = false } = {}) {
       await invoke('save_activity', {
         description,
         activityType: category,
@@ -3299,13 +3274,6 @@
       const statSent = document.getElementById('statSent');
       if (statSent) {
         statSent.textContent = parseInt(statSent.textContent || '0', 10) + 1;
-      }
-
-      if (addToFeed) {
-        const devName = currentUser
-          ? (currentUser.name || currentUser.display_name || 'Developer')
-          : 'Developer';
-        addActivityItem(devName, description, category, jiraTicket);
       }
 
       refreshTodayView();
@@ -3321,16 +3289,14 @@
         await recordActivity(
           lastGoodSnapshot.description,
           lastGoodSnapshot.category,
-          jiraTicket,
-          { addToFeed: false, toast: false }
+          jiraTicket
         );
         return;
       }
       await recordActivity(
         'Tracking continued (analysis temporarily unavailable)',
         'General',
-        jiraTicket,
-        { addToFeed: false, toast: false }
+        jiraTicket
       );
     }
 
@@ -3349,8 +3315,6 @@
       }
 
       isSyncing = true;
-      const btn = document.getElementById('captureBtn');
-      if (btn) btn.style.opacity = '0.5';
 
       const { task, jiraTicket } = getTaskContext();
 
@@ -3376,7 +3340,6 @@
 
         log(`Snapshot ready: ${snapshot.description.substring(0, 50)}...`);
         await recordActivity(snapshot.description, snapshot.category, jiraTicket, {
-          addToFeed: true,
           toast: !isRetry
         });
       } catch (e) {
@@ -3390,36 +3353,7 @@
         if (isMonitoring) scheduleCaptureRetry();
       } finally {
         isSyncing = false;
-        if (btn) btn.style.opacity = '1';
       }
-    }
-
-    function addActivityItem(devName, desc, category, ticket) {
-      const list = document.getElementById('activityList');
-
-      if (list.querySelector('.empty-state')) {
-        list.innerHTML = '';
-      }
-
-      const div = document.createElement('div');
-      div.className = 'activity-item';
-
-      let displayDesc = desc ? desc.trim() : "";
-      if (!displayDesc) displayDesc = "<em>No output from AI model</em>";
-      else if (displayDesc.length > 900) displayDesc = displayDesc.substring(0, 900) + "...";
-
-      const ticketBadge = ticket ? `<span class="badge badge-success" style="margin-top: 3px;">${ticket}</span>` : '';
-
-      div.innerHTML = `
-        <div class="activity-time">${new Date().toLocaleTimeString()}</div>
-        <div class="activity-meta">
-          <span class="activity-user">${devName}</span>
-          <span class="activity-category">${category || 'Unknown'}</span>
-        </div>
-        <div class="activity-desc">${displayDesc}</div>
-        ${ticketBadge}
-      `;
-      list.insertBefore(div, list.firstChild);
     }
 
     // ===== TAB NAVIGATION =====
@@ -3566,13 +3500,38 @@
 
     function renderFocusChart(entries) {
       const focusEntries = entries.filter(e => FOCUS_CATEGORIES.has(e.category));
-      const bars = focusEntries.slice(0, 24);
-      if (!bars.length) return '<div class="focus-chart"></div>';
-      const maxDur = Math.max(...bars.map(e => e.duration_seconds));
-      return `<div class="focus-chart">${bars.map(e => {
-        const h = maxDur > 0 ? Math.round((e.duration_seconds / maxDur) * 100) : 20;
-        return `<div class="focus-bar" style="height:${Math.max(h, 15)}%"></div>`;
-      }).join('')}</div>`;
+      if (!focusEntries.length) {
+        return '<div class="focus-chart-empty">No deep focus sessions yet today</div>';
+      }
+
+      const byHour = new Array(24).fill(0);
+      focusEntries.forEach(e => {
+        const hour = new Date(e.time).getHours();
+        byHour[hour] += e.duration_seconds || 0;
+      });
+
+      const startHour = 8;
+      const endHour = 20;
+      const slots = [];
+      for (let h = startHour; h < endHour; h++) {
+        slots.push({ hour: h, seconds: byHour[h] });
+      }
+
+      const maxSec = Math.max(...slots.map(s => s.seconds), 1);
+      const bars = slots.map(({ hour, seconds }) => {
+        const pct = seconds > 0 ? Math.max(Math.round((seconds / maxSec) * 100), 12) : 8;
+        const mins = Math.round(seconds / 60);
+        const tip = mins > 0 ? `${hour}:00 — ${mins} min focus` : `${hour}:00 — no focus`;
+        const cls = seconds > 0 ? 'focus-bar' : 'focus-bar focus-bar-empty';
+        return `<div class="${cls}" style="height:${pct}%" title="${tip}"></div>`;
+      }).join('');
+
+      return `
+        <div class="focus-chart-wrap">
+          <div class="focus-chart">${bars}</div>
+          <div class="focus-chart-axis"><span>8am</span><span>8pm</span></div>
+          <div class="focus-chart-caption">Deep focus minutes per hour · hover a bar for details</div>
+        </div>`;
     }
 
     function renderTimeline(entries) {
@@ -3603,8 +3562,11 @@
         summaryBody.innerHTML = `
           <div class="summary-header">
             <h1 class="summary-title">Summary</h1>
-            <button class="summary-icon-btn" id="exportPdfBtn" title="Export PDF" disabled>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <button class="summary-download-btn" id="exportPdfBtn" title="Download report" aria-label="Download report" disabled>
+              <span class="summary-download-label">Download report</span>
+              <span class="summary-download-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </span>
             </button>
           </div>
           <div class="summary-date">${formatDisplayDate(data.date)}</div>
@@ -3633,8 +3595,11 @@
       summaryBody.innerHTML = `
         <div class="summary-header">
           <h1 class="summary-title">Summary</h1>
-          <button class="summary-icon-btn" id="exportPdfBtn" title="Export PDF">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <button class="summary-download-btn" id="exportPdfBtn" title="Download report" aria-label="Download report">
+            <span class="summary-download-label">Download report</span>
+            <span class="summary-download-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </span>
           </button>
         </div>
         <div class="summary-date">${formatDisplayDate(data.date)}</div>
@@ -3660,8 +3625,6 @@
           <div class="highlight-card-header">${renderIcon('target', 15)} Deep Focus</div>
           <div class="highlight-insight">${focusInsight}</div>
           ${renderFocusChart(data.entries)}
-          <div class="focus-stat">${formatShortDuration(focusSeconds)}</div>
-          <div class="focus-stat-label">You</div>
         </div>
 
         <div class="highlight-card highlight-distraction">
