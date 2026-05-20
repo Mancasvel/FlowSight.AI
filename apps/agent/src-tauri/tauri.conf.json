@@ -6,19 +6,21 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeDevCommand": "pnpm vite",
-    "beforeBuildCommand": "pnpm exec node ../../scripts/fetch-models.mjs && pnpm vite build"
+    "beforeDevCommand": "pnpm --filter @flowsight/agent vite",
+    "beforeBuildCommand": "pnpm --filter @flowsight/agent exec node ../../scripts/fetch-models.mjs && pnpm --filter @flowsight/agent vite build"
   },
   "app": {
     "windows": [
       {
-        "title": "FlowSight AI - Developer Productivity Agent",
+        "title": "FlowSight — Understand your own Workflows",
         "width": 370,
         "height": 700,
         "resizable": true,
         "fullscreen": false,
         "minWidth": 340,
-        "minHeight": 400
+        "minHeight": 400,
+        "theme": "Light",
+        "backgroundColor": "#FAFAFA"
       }
     ],
     "security": {

@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use tauri::State;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::Local;
+use chrono::{Datelike, Local};
 use rusqlite::{Connection, params};
 use std::io::Write;
 use std::time::Duration;
@@ -36,6 +36,8 @@ pub struct AgentConfig {
     /// `Some(n)` for `n >= 0` => fixed `--n-gpu-layers` (manual / power user).
     #[serde(rename = "gpuLayers")]
     pub gpu_layers: Option<i32>,
+    #[serde(rename = "dailyGoalHours")]
+    pub daily_goal_hours: Option<f64>,
 }
 
 pub struct FlowSightAgent {
@@ -70,6 +72,7 @@ impl FlowSightAgent {
                 vision_model: Some(CONFIG_VISION_MODEL_ID.to_string()),
                 // -1 = automatic tier probing (maximum compatibility + strongest profile that survives).
                 gpu_layers: Some(-1),
+                daily_goal_hours: Some(6.0),
             },
             is_running: false,
             reports_sent: 0,
@@ -151,6 +154,16 @@ impl FlowSightAgent {
                 self.config.gpu_layers = Some(parsed);
             }
         }
+
+        if let Ok(val) = conn.query_row::<String, _, _>(
+            "SELECT value FROM config WHERE key = 'daily_goal_hours'",
+            [],
+            |r| r.get(0),
+        ) {
+            if let Ok(parsed) = val.parse::<f64>() {
+                self.config.daily_goal_hours = Some(parsed.clamp(0.0, 24.0));
+            }
+        }
     }
 
     fn save_config(&self) {
@@ -175,6 +188,13 @@ impl FlowSightAgent {
             let _ = conn.execute(
                 "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
                 params!["gpu_layers", layers.to_string()],
+            );
+        }
+
+        if let Some(hours) = self.config.daily_goal_hours {
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)",
+                params!["daily_goal_hours", hours.to_string()],
             );
         }
     }
@@ -286,6 +306,7 @@ pub struct ContextSnapshot {
     pub dimension: usize,
     pub description: String,
     pub category: String, // NEW
+    pub analysis_failed: bool,
     pub metadata: SnapshotMetadata,
 }
 
@@ -326,7 +347,7 @@ pub async fn capture_context_snapshot(
         let task_context = jira_ticket.clone().or(user_task.clone()).unwrap_or_else(|| "General".to_string());
         
         let raw_analysis = match analyze_image_with_vision(&base64, &task_context, gpu_layers) {
-            Ok(res) => res,
+            Ok(res) => (res, false),
             Err(e) => {
                 let err_msg = format!("[Agent] AI Analysis Failed: {}", e);
                 println!("{}", err_msg);
@@ -340,12 +361,14 @@ pub async fn capture_context_snapshot(
                     }
                 }
                 
-                "Screen analysis failed. Category: General".to_string()
+                ("Screen analysis failed. Category: General".to_string(), true)
             }
         };
         
         // Parse category from response
-        let (description, category) = parse_analysis(&raw_analysis);
+        let (description, category) = parse_analysis(&raw_analysis.0);
+        let analysis_failed = raw_analysis.1
+            || description.eq_ignore_ascii_case("No analysis available");
 
         // 3. System Context (Window/App)
         let sys = get_system_context();
@@ -366,6 +389,7 @@ pub async fn capture_context_snapshot(
             dimension: 0,
             description,
             category,
+            analysis_failed,
             metadata: SnapshotMetadata {
                 task: jira_ticket.or(user_task),
                 file: sys.file_name,
@@ -470,6 +494,11 @@ pub fn update_config(state: State<'_, AgentState>, patch: AgentConfig) -> Result
         // callers (renderer) omit `gpuLayers`; full replace here used to wipe auto/manual choice
         if patch.gpu_layers.is_some() {
             c.gpu_layers = patch.gpu_layers;
+        }
+        if patch.daily_goal_hours.is_some() {
+            c.daily_goal_hours = patch
+                .daily_goal_hours
+                .map(|h| h.clamp(0.0, 24.0));
         }
         agent.save_config();
     }
@@ -603,6 +632,84 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
         category_breakdown,
         ticket_breakdown,
         date: today,
+    })
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DayActivity {
+    pub date: String,
+    pub weekday: String,
+    pub total_seconds: i32,
+    pub has_activity: bool,
+    pub is_today: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WeekSummary {
+    pub days: Vec<DayActivity>,
+    pub yesterday_seconds: i32,
+}
+
+#[tauri::command]
+pub fn get_week_summary(state: State<'_, AgentState>) -> Result<WeekSummary, String> {
+    let agent = state.lock().unwrap();
+    let agent = agent.as_ref().ok_or("Agent not initialized")?;
+
+    let conn = Connection::open(&agent.db_path).map_err(|e| e.to_string())?;
+    let today = Local::now().date_naive();
+    let weekday = today.weekday().num_days_from_monday();
+    let week_start = today - chrono::Duration::days(weekday as i64);
+    let week_end = week_start + chrono::Duration::days(6);
+    let yesterday = today - chrono::Duration::days(1);
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT date(created_at, 'localtime') as d, SUM(duration_seconds) as total
+         FROM reports
+         WHERE date(created_at, 'localtime') >= ?1 AND date(created_at, 'localtime') <= ?2
+         GROUP BY d",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let start_str = week_start.format("%Y-%m-%d").to_string();
+    let end_str = week_end.format("%Y-%m-%d").to_string();
+
+    let mut day_totals: std::collections::HashMap<String, i32> =
+        std::collections::HashMap::new();
+    let rows = stmt
+        .query_map(params![start_str, end_str], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i32>(1).unwrap_or(0),
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows.filter_map(|r| r.ok()) {
+        day_totals.insert(row.0, row.1);
+    }
+
+    let weekday_labels = ["M", "T", "W", "T", "F", "S", "S"];
+    let mut days = Vec::with_capacity(7);
+    for offset in 0..7 {
+        let day = week_start + chrono::Duration::days(offset);
+        let date_str = day.format("%Y-%m-%d").to_string();
+        let total = day_totals.get(&date_str).copied().unwrap_or(0);
+        days.push(DayActivity {
+            date: date_str,
+            weekday: weekday_labels[offset as usize].to_string(),
+            total_seconds: total,
+            has_activity: total > 0,
+            is_today: day == today,
+        });
+    }
+
+    let yesterday_str = yesterday.format("%Y-%m-%d").to_string();
+    let yesterday_seconds = day_totals.get(&yesterday_str).copied().unwrap_or(0);
+
+    Ok(WeekSummary {
+        days,
+        yesterday_seconds,
     })
 }
 
@@ -1377,6 +1484,7 @@ mod agent_struct_tests {
             capture_interval: Some(42_000),
             vision_model: Some("model-id".into()),
             gpu_layers: Some(-1),
+            daily_goal_hours: Some(6.0),
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: AgentConfig = serde_json::from_str(&json).unwrap();
@@ -1390,6 +1498,7 @@ mod agent_struct_tests {
             capture_interval: Some(42_000),
             vision_model: Some("model-id".into()),
             gpu_layers: Some(4),
+            daily_goal_hours: Some(8.0),
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: AgentConfig = serde_json::from_str(&json).unwrap();

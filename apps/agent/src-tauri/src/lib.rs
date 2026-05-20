@@ -14,11 +14,13 @@ mod oauth_env;
 pub mod context;
 pub mod paths;
 
+use tauri::Manager;
+
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
     get_status, start_monitoring, stop_monitoring,
     capture_screen_command, save_activity,
-    get_activity_log, get_today_history,
+    get_activity_log, get_today_history, get_week_summary,
     check_ollama, check_local_server,
     llama_managed_process_status, llama_server_log_tail, restart_llama_server_cpu_only,
 };
@@ -67,9 +69,14 @@ pub fn run() {
             linear::fetch_linear_profile,
             // History commands
             get_today_history,
+            get_week_summary,
             paths::get_flowsight_user_paths,
         ])
     .setup(|app| {
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_theme(Some(tauri::Theme::Light));
+      }
+
       // Log a archivo en TODOS los builds. En release el usuario no ve stderr,
       // así que sin esto no hay forma de diagnosticar crashes post-login.
       // Los archivos quedan en %LOCALAPPDATA%\ai.flowsight.agent\logs\ (Windows)

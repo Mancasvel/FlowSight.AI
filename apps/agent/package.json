@@ -2,7 +2,7 @@
   "name": "@flowsight/agent",
   "version": "2.8.0",
   "private": true,
-  "description": "FlowSight DEV Agent - Screen capture and AI analysis",
+  "description": "FlowSight Agent — Understand your own Workflows",
   "scripts": {
     "vite": "vite",
     "dev": "tauri dev",
