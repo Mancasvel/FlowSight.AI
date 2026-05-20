@@ -1599,6 +1599,764 @@
       clip: rect(0, 0, 0, 0);
       border: 0;
     }
+
+    .cloud-activation-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgb(0 0 0 / 0.45);
+      backdrop-filter: blur(4px);
+    }
+
+    .cloud-activation-overlay.visible {
+      display: flex;
+    }
+
+    .cloud-activation-panel {
+      width: min(100%, 380px);
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+
+    .plan-badge-free {
+      background: hsl(var(--muted));
+      color: hsl(var(--muted-foreground));
+    }
+
+    .plan-badge-individual {
+      background: hsl(221 83% 53% / 0.12);
+      color: hsl(221 83% 40%);
+    }
+
+    .plan-badge-team {
+      background: hsl(142 76% 36% / 0.12);
+      color: hsl(142 76% 30%);
+    }
+
+    .paid-feature-locked {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .upgrade-hint {
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
+    .cloud-insights-card {
+      background: hsl(var(--card));
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgb(0 0 0 / 0.05);
+    }
+
+    .cloud-insights-card h4 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .cloud-insights-card p {
+      margin: 0;
+      font-size: 12px;
+      color: hsl(var(--muted-foreground));
+      line-height: 1.45;
+    }
+
+    /* Work status report (local AI, TBI-style) */
+    .status-report {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sr-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      background: linear-gradient(135deg, hsl(262 83% 58% / 0.12), hsl(var(--card)));
+      border-radius: 16px;
+      padding: 16px 18px;
+      border: 1px solid hsl(var(--border));
+    }
+
+    .sr-kicker {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 4px;
+    }
+
+    .sr-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    .sr-period {
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 4px;
+    }
+
+    .sr-health-badge {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .sr-health-on-track {
+      background: hsl(142 76% 36% / 0.15);
+      color: hsl(142 70% 28%);
+    }
+
+    .sr-health-attention {
+      background: hsl(38 92% 50% / 0.18);
+      color: hsl(32 90% 32%);
+    }
+
+    .sr-health-at-risk {
+      background: hsl(0 72% 51% / 0.14);
+      color: hsl(0 65% 40%);
+    }
+
+    .sr-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .sr-metric {
+      background: hsl(var(--card));
+      border-radius: 12px;
+      padding: 12px 10px;
+      text-align: center;
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+    }
+
+    .sr-metric-val {
+      display: block;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .sr-metric-lbl {
+      display: block;
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 4px;
+    }
+
+    .sr-card {
+      background: hsl(var(--card));
+      border-radius: 14px;
+      padding: 14px 16px;
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 1px 4px rgb(0 0 0 / 0.04);
+    }
+
+    .sr-card h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .sr-card h4 {
+      margin: 12px 0 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: hsl(var(--foreground));
+    }
+
+    .sr-card p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: hsl(var(--foreground));
+    }
+
+    .sr-health-notes {
+      margin-bottom: 10px !important;
+      color: hsl(var(--muted-foreground)) !important;
+    }
+
+    .sr-breakdown-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sr-breakdown-row {
+      display: grid;
+      grid-template-columns: 88px 78px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 8px 10px;
+      background: hsl(var(--muted) / 0.35);
+      border-radius: 10px;
+      font-size: 11px;
+    }
+
+    .sr-element {
+      font-weight: 600;
+    }
+
+    .sr-status-pill {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .sr-status-pill.sr-health-on-track { background: hsl(142 76% 36% / 0.15); color: hsl(142 70% 28%); }
+    .sr-status-pill.sr-health-attention { background: hsl(38 92% 50% / 0.18); color: hsl(32 90% 32%); }
+    .sr-status-pill.sr-health-at-risk { background: hsl(0 72% 51% / 0.14); color: hsl(0 65% 40%); }
+
+    .sr-notes {
+      color: hsl(var(--muted-foreground));
+      line-height: 1.4;
+    }
+
+    .sr-two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .sr-card-risk ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: hsl(var(--foreground));
+    }
+
+    .sr-card-risk-potential {
+      border-color: hsl(38 92% 50% / 0.25);
+    }
+
+    .sr-progress-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 11px;
+      padding: 6px 0;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+
+    .sr-progress-item:last-child { border-bottom: none; }
+
+    .sr-progress-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: hsl(var(--primary));
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .sr-lessons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sr-lesson-card {
+      background: hsl(262 83% 58% / 0.08);
+      border: 1px solid hsl(262 83% 58% / 0.18);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .sr-lesson-title {
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .sr-lesson-body {
+      font-size: 11px;
+      line-height: 1.5;
+      color: hsl(var(--muted-foreground));
+      margin: 0;
+    }
+
+    .sr-recs ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .sr-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 4px;
+    }
+
+    .sr-passes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .sr-pass-chip {
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: hsl(var(--muted));
+      color: hsl(var(--muted-foreground));
+    }
+
+    .sr-pass-chip.done {
+      background: hsl(142 76% 36% / 0.12);
+      color: hsl(142 70% 28%);
+    }
+
+    .sr-download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .sr-download-btn:hover {
+      background: hsl(var(--muted));
+    }
+
+    .sr-generating {
+      margin-top: 16px;
+      background: hsl(var(--card));
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid hsl(var(--border));
+      text-align: center;
+    }
+
+    .sr-gen-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .sr-gen-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+
+    .sr-gen-step {
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+      padding: 8px 12px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sr-gen-step.active {
+      background: hsl(var(--primary) / 0.1);
+      color: hsl(var(--primary));
+      font-weight: 600;
+    }
+
+    .sr-gen-step.done {
+      color: hsl(142 70% 28%);
+    }
+
+    .sr-gen-detail {
+      display: block;
+      font-size: 10px;
+      font-weight: 400;
+      color: hsl(var(--muted-foreground));
+      margin-top: 3px;
+      line-height: 1.35;
+    }
+
+    .sr-week-strip {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+    }
+
+    .sr-week-bar {
+      flex: 1;
+      height: 36px;
+      border-radius: 6px;
+      background: hsl(var(--muted));
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .sr-week-bar-fill {
+      width: 100%;
+      background: hsl(var(--primary));
+      border-radius: 6px 6px 0 0;
+      min-height: 4px;
+    }
+
+    .sr-week-bar-label {
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 600;
+      color: hsl(var(--muted-foreground));
+    }
+
+    @media (max-width: 420px) {
+      .sr-metrics { grid-template-columns: repeat(2, 1fr); }
+      .sr-two-col { grid-template-columns: 1fr; }
+      .sr-breakdown-row { grid-template-columns: 1fr; gap: 4px; }
+      .sr-tbi-meta-row { grid-template-columns: 1fr; }
+      .sr-tbi-health-row { grid-template-columns: 1fr; }
+      .sr-tbi-table-head,
+      .sr-tbi-table-row { grid-template-columns: 1fr 1fr; }
+      .sr-tbi-table-head span:nth-child(3),
+      .sr-tbi-table-head span:nth-child(4),
+      .sr-tbi-table-row span:nth-child(3),
+      .sr-tbi-table-row span:nth-child(4) { display: none; }
+    }
+
+    /* TBI-style report layout */
+    .status-report-tbi {
+      gap: 16px;
+    }
+
+    .sr-tbi-title-block {
+      text-align: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+
+    .sr-tbi-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .sr-tbi-subline {
+      margin-top: 6px;
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .sr-tbi-meta-row {
+      display: grid;
+      grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .sr-tbi-meta-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sr-tbi-meta-box {
+      background: hsl(var(--muted) / 0.35);
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid hsl(var(--border));
+    }
+
+    .sr-tbi-meta-box label {
+      display: block;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 3px;
+    }
+
+    .sr-tbi-meta-box span {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .sr-tbi-summary-box {
+      background: hsl(199 89% 48% / 0.1);
+      border: 1px solid hsl(199 70% 45% / 0.2);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .sr-tbi-summary-box p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: hsl(var(--foreground));
+    }
+
+    .sr-tbi-section-title {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: hsl(var(--foreground));
+    }
+
+    .sr-tbi-health-row {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .sr-tbi-health-badge {
+      min-height: 72px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #fff;
+      text-align: center;
+      padding: 10px;
+    }
+
+    .sr-tbi-health-badge.sr-health-on-track { background: #4db6ac; }
+    .sr-tbi-health-badge.sr-health-attention { background: #ffd54f; color: #5d4037; }
+    .sr-tbi-health-badge.sr-health-at-risk { background: #e57373; }
+
+    .sr-tbi-health-notes {
+      font-size: 11px;
+      line-height: 1.55;
+      color: hsl(var(--foreground));
+      margin: 0;
+      padding-top: 4px;
+    }
+
+    .sr-tbi-table {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid hsl(var(--border));
+    }
+
+    .sr-tbi-table-head,
+    .sr-tbi-table-row {
+      display: grid;
+      grid-template-columns: 1.1fr 0.8fr 0.7fr 1.4fr;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      font-size: 10px;
+    }
+
+    .sr-tbi-table-head {
+      background: hsl(220 10% 28%);
+      color: #fff;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .sr-tbi-table-row:nth-child(even) { background: hsl(var(--muted) / 0.25); }
+    .sr-tbi-table-row:nth-child(odd) { background: hsl(var(--card)); }
+
+    .sr-tbi-timeline {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .sr-tbi-timeline-caption {
+      margin: 10px 0 0;
+      font-size: 11px;
+      line-height: 1.5;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .sr-tbi-cat-bars {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sr-tbi-cat-bar-row {
+      display: grid;
+      grid-template-columns: 72px 1fr 36px;
+      gap: 8px;
+      align-items: center;
+      font-size: 10px;
+    }
+
+    .sr-tbi-cat-bar-track {
+      height: 8px;
+      background: hsl(var(--muted) / 0.5);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .sr-tbi-cat-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: hsl(var(--summary-purple));
+    }
+
+    .sr-tbi-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .sr-tbi-risk-block,
+    .sr-tbi-progress-block {
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid hsl(var(--border));
+    }
+
+    .sr-tbi-risk-block { background: hsl(45 90% 50% / 0.08); }
+    .sr-tbi-progress-block { background: hsl(199 89% 48% / 0.08); }
+
+    .sr-tbi-block-title {
+      margin: 0 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sr-tbi-risk-block ul,
+    .sr-tbi-progress-block ul {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .sr-tbi-lessons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Status report modal */
+    .report-modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      background: rgb(0 0 0 / 0.5);
+      backdrop-filter: blur(6px);
+    }
+
+    .report-modal-overlay.visible {
+      display: flex;
+    }
+
+    .report-modal {
+      width: min(100%, 520px);
+      max-height: calc(100vh - 24px);
+      background: hsl(var(--background));
+      border-radius: 20px;
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 24px 48px rgb(0 0 0 / 0.2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .report-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      flex-shrink: 0;
+    }
+
+    .report-modal-header h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .report-modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--background));
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      color: hsl(var(--muted-foreground));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .report-modal-close:hover {
+      background: hsl(var(--muted));
+    }
+
+    .report-modal-body {
+      overflow-y: auto;
+      padding: 14px 16px 18px;
+      flex: 1;
+    }
+
+    .report-modal-body .status-report {
+      margin-top: 0;
+    }
   </style>
 </head>
 
@@ -1636,14 +2394,15 @@
   </header>
 
   <div class="app-viewport">
-  <!-- LOGIN SCREEN -->
-  <div class="app-container" id="loginScreen">
+  <!-- CLOUD ACTIVATION OVERLAY (optional — not required to use the app) -->
+  <div class="cloud-activation-overlay" id="loginScreen">
+    <div class="app-container cloud-activation-panel">
     <div class="card" style="padding: 24px; text-align: center;">
       <div style="margin-bottom: 20px;">
         <div class="login-brand">
           <img src="/flowsight_sinfondo.png" alt="" class="login-logo" width="140" height="auto" />
-          <h1 id="loginTitle" style="font-size: 20px; font-weight: 600; margin-top: 12px; margin-bottom: 4px;">FlowSight Agent</h1>
-          <p id="loginSubtitle" style="font-size: 12px; color: hsl(var(--muted-foreground));">Understand your own Workflows</p>
+          <h1 id="loginTitle" style="font-size: 20px; font-weight: 600; margin-top: 12px; margin-bottom: 4px;">Activate cloud features</h1>
+          <p id="loginSubtitle" style="font-size: 12px; color: hsl(var(--muted-foreground));">Individual or Team license required for sync and cloud AI insights. Jira and Linear linking unlock with a paid plan.</p>
         </div>
       </div>
 
@@ -1652,19 +2411,23 @@
           <div id="workerLoginError" class="auth-error"></div>
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="workerEmail">Email</label>
-            <input type="email" id="workerEmail" class="input" placeholder="worker@company.com" autocomplete="email" required>
+            <input type="email" id="workerEmail" class="input" placeholder="you@company.com" autocomplete="email" required>
           </div>
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="workerPassword">Password</label>
-            <input type="password" id="workerPassword" class="input" placeholder="Password from your PM"
+            <input type="password" id="workerPassword" class="input" placeholder="License account password"
               autocomplete="current-password" required>
           </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="label" for="licenseCode">License code (Individual)</label>
+            <input type="text" id="licenseCode" class="input" placeholder="FS-XXXX-XXXX" autocomplete="off">
+          </div>
           <button class="button button-primary" id="workerLoginBtn" type="submit" style="width: 100%; padding: 10px;">
-            Sign in with work credentials
+            Sign in to activate
           </button>
         </form>
 
-        <div class="login-divider">or connect an integration</div>
+        <div class="login-divider">or continue with</div>
 
         <button class="button button-secondary" id="loginGoogle" onclick="window.handleLoginClick('google')"
           style="width: 100%; padding: 10px;">
@@ -1681,23 +2444,6 @@
           Continue with Google
         </button>
 
-        <button class="button button-secondary" id="loginJira" onclick="window.handleLoginClick('jira')"
-          style="width: 100%; padding: 10px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right: 8px;">
-            <path fill="#2684FF"
-              d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005zm5.723-5.756H5.736a5.215 5.215 0 0 0 5.212 5.214h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001 1.001 0 0 0-1-1.001zM23 .262H11.443a5.218 5.218 0 0 0 5.215 5.215h2.129v2.057A5.215 5.215 0 0 0 24 12.749V1.263A1.001 1.001 0 0 0 23 .262z" />
-          </svg>
-          Continue with Jira
-        </button>
-
-        <button class="button button-secondary" id="loginLinear" onclick="window.handleLoginClick('linear')"
-          style="width: 100%; padding: 10px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right: 8px;">
-            <path fill="#5E6AD2"
-              d="M3.357 3.357a12.19 12.19 0 0 1 17.286 0 12.19 12.19 0 0 1 0 17.286 12.19 12.19 0 0 1-17.286 0 12.19 12.19 0 0 1 0-17.286zm6.88 11.17L7.4 11.68a.5.5 0 0 0-.707.707l3.182 3.182a.5.5 0 0 0 .707 0l6.364-6.364a.5.5 0 0 0-.707-.707l-6.002 6.002z" />
-          </svg>
-          Continue with Linear
-        </button>
       </div>
 
       <div style="font-size: 11px; margin-top: 20px; color: hsl(var(--muted-foreground));">
@@ -1719,13 +2465,28 @@
       </div>
 
       <p style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 20px;">
-        By signing in, you agree to FlowSight's Terms of Service
+        By activating cloud features, you agree to FlowSight's Terms of Service
       </p>
+      <button class="button button-ghost" id="closeCloudActivationBtn" type="button" style="width: 100%; margin-top: 10px;">
+        Continue in Free (Local) mode
+      </button>
+    </div>
     </div>
   </div>
 
-  <!-- MAIN APP (hidden until logged in) -->
-  <div class="app-shell" id="mainApp" style="display: none;">
+  <!-- WORK STATUS REPORT MODAL -->
+  <div class="report-modal-overlay" id="statusReportModal" aria-hidden="true">
+    <div class="report-modal" role="dialog" aria-labelledby="statusReportModalTitle">
+      <div class="report-modal-header">
+        <h2 id="statusReportModalTitle">Work Status Report</h2>
+        <button type="button" class="report-modal-close" id="closeStatusReportModal" aria-label="Close report">&times;</button>
+      </div>
+      <div class="report-modal-body" id="statusReportModalBody"></div>
+    </div>
+  </div>
+
+  <!-- MAIN APP (free-first — visible without login) -->
+  <div class="app-shell" id="mainApp">
     <div class="tab-content">
 
       <!-- TAB: Today -->
@@ -1794,17 +2555,17 @@
         <div class="today-task-card">
           <div class="form-group" style="margin-bottom: 8px;">
             <label class="label">Current Task</label>
-            <div style="display: flex; gap: 6px;">
+            <div id="todayIntegrationControls" style="display: flex; gap: 6px;">
               <select id="jiraSelect" class="select" style="flex: 1;">
                 <option value="">Select Task...</option>
                 <option value="General">General / No Ticket</option>
               </select>
               <button class="button button-ghost" id="refreshJiraBtn" title="Refresh"><svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
             </div>
-            <input type="text" id="manualTask" class="input" placeholder="Manual task..."
+            <input type="text" id="manualTask" class="input" placeholder="What are you working on?"
               style="margin-top: 6px; display: none;">
           </div>
-          <label class="checkbox-wrapper">
+          <label class="checkbox-wrapper" id="syncToJiraWrapper">
             <input type="checkbox" id="syncToJira" class="checkbox" checked>
             <span class="checkbox-label">Sync time to Jira</span>
           </label>
@@ -1828,6 +2589,24 @@
         </div>
       </div>
 
+      <!-- TAB: Work Insights (Individual / Team) -->
+      <div id="tabCloudInsights" class="tab-panel">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" id="cloudInsightsTitle">Work Insights</div>
+            <button class="button button-primary" id="generateCloudInsightsBtn" style="padding: 6px 10px; font-size: 11px;">
+              Generate report
+            </button>
+          </div>
+          <p class="upgrade-hint" id="cloudInsightsHint">
+            Individual: AI report from your local activity (OpenRouter). Team: synced cloud history.
+          </p>
+          <div id="cloudInsightsBody">
+            <div class="empty-state">No cloud insights yet.</div>
+          </div>
+        </div>
+      </div>
+
       <!-- TAB: Profile -->
       <div id="tabProfile" class="tab-panel">
         <div class="card">
@@ -1836,7 +2615,7 @@
               <img src="/flowsight_sinfondo.png" alt="" class="header-logo" width="26" height="26" />
               <div class="card-title">FlowSight Agent</div>
             </div>
-            <div class="badge badge-success" id="loginBadge">Connected</div>
+            <div class="badge badge-success plan-badge-free" id="loginBadge">Free (Local)</div>
           </div>
 
           <div class="status-indicator">
@@ -1846,23 +2625,26 @@
 
           <div id="userProfile">
             <div class="user-profile">
-              <img id="userAvatar" class="user-avatar" src="" alt="">
+              <img id="userAvatar" class="user-avatar" src="" alt="" style="display: none;">
               <div class="user-info">
-                <div class="user-name" id="userName">Loading...</div>
-                <div class="user-email" id="userEmail">Connected</div>
+                <div class="user-name" id="userName">Guest</div>
+                <div class="user-email" id="userEmail">Free local mode</div>
               </div>
-              <button class="button button-ghost" id="logoutBtn" title="Logout" style="padding: 4px 8px;"><svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+              <button class="button button-primary" id="activateCloudBtn" style="padding: 6px 10px; font-size: 11px;">
+                Activate cloud
+              </button>
+              <button class="button button-ghost" id="logoutBtn" title="Sign out of cloud features" style="padding: 4px 8px; display: none;"><svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
             </div>
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="integrationsCard">
           <div class="card-header">
             <div class="card-title">Integrations</div>
           </div>
 
-          <div style="margin-bottom: 12px;">
-            <div class="label" style="margin-bottom: 6px;">Task Provider</div>
+          <div style="margin-bottom: 12px;" id="integrationsProviderRow">
+            <div class="label" style="margin-bottom: 6px;">Task Provider (paid plans)</div>
             <div style="display: flex; gap: 6px;">
               <button class="button button-secondary" id="linkJiraBtn" style="flex: 1; padding: 8px; font-size: 11px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" style="margin-right: 4px;">
@@ -1881,7 +2663,11 @@
             </div>
           </div>
 
-          <div class="form-group">
+          <p class="upgrade-hint" id="integrationsUpgradeHint" style="display: none;">
+            Jira and Linear linking require an Individual or Team license.
+          </p>
+
+          <div class="form-group" id="teamCodeGroup">
             <label class="label">Team Code (from PM)</label>
             <div style="display: flex; gap: 6px;">
               <input type="text" id="teamCodeInput" class="select" placeholder="Enter team code..."
@@ -1915,6 +2701,12 @@
           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
         </svg>
         <span class="nav-label">Summary</span>
+      </button>
+      <button class="nav-item" data-tab="tabCloudInsights" id="navCloudInsights" style="display: none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><circle cx="12" cy="12" r="4"/><path d="M4.2 4.2l2.1 2.1"/><path d="M17.7 17.7l2.1 2.1"/><path d="M19.8 4.2l-2.1 2.1"/><path d="M6.3 17.7l-2.1 2.1"/>
+        </svg>
+        <span class="nav-label" id="navCloudInsightsLabel">Insights</span>
       </button>
       <button class="nav-item" data-tab="tabProfile" id="navProfile">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1954,7 +2746,7 @@
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { jsPDF } from 'jspdf';
-    import { getFriendlyAuthError, signInWorker, signOutWorker } from './auth-service.js';
+    import { getFriendlyAuthError, signInForCloudFeatures, signOutWorker } from './auth-service.js';
 
     console.log('[FlowSight] Imports loaded successfully');
 
@@ -2061,12 +2853,149 @@
     let monitoringInterval = null;
     let currentUser = null;
     let authSession = null;
+    let currentEntitlements = null;
+
+    function isPaidActive() {
+      return Boolean(
+        currentEntitlements &&
+        currentEntitlements.status === 'active' &&
+        (currentEntitlements.can_sync || currentEntitlements.can_cloud_ai || currentEntitlements.can_integrations)
+      );
+    }
+
+    function requirePaidFeature(feature, message) {
+      const allowed = currentEntitlements && (
+        feature === 'sync' ? currentEntitlements.can_sync :
+        feature === 'cloud_ai' ? currentEntitlements.can_cloud_ai :
+        feature === 'integrations' ? currentEntitlements.can_integrations :
+        isPaidActive()
+      );
+      if (allowed) return true;
+      showToast(message || 'This feature requires an Individual or Team license.', 'error', 4500);
+      showCloudActivationPanel();
+      return false;
+    }
+
+    function updatePlanBadge() {
+      const badge = document.getElementById('loginBadge');
+      const activateBtn = document.getElementById('activateCloudBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const navCloud = document.getElementById('navCloudInsights');
+      const integrationsCard = document.getElementById('integrationsCard');
+      const integrationsProviderRow = document.getElementById('integrationsProviderRow');
+      const upgradeHint = document.getElementById('integrationsUpgradeHint');
+      const teamCodeGroup = document.getElementById('teamCodeGroup');
+      const todayIntegrationControls = document.getElementById('todayIntegrationControls');
+      const manualTask = document.getElementById('manualTask');
+      const syncToJiraWrapper = document.getElementById('syncToJiraWrapper');
+      const canIntegrate = Boolean(currentEntitlements?.can_integrations);
+
+      if (!badge) return;
+
+      badge.classList.remove('plan-badge-free', 'plan-badge-individual', 'plan-badge-team', 'badge-success');
+
+      if (todayIntegrationControls) todayIntegrationControls.style.display = canIntegrate ? '' : 'none';
+      if (manualTask) manualTask.style.display = canIntegrate ? 'none' : 'block';
+      if (syncToJiraWrapper) syncToJiraWrapper.style.display = canIntegrate ? '' : 'none';
+
+      if (!isPaidActive()) {
+        badge.textContent = 'Free (Local)';
+        badge.classList.add('plan-badge-free');
+        if (activateBtn) activateBtn.style.display = '';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (navCloud) navCloud.style.display = 'none';
+        if (integrationsCard) integrationsCard.classList.add('paid-feature-locked');
+        if (integrationsProviderRow) integrationsProviderRow.style.display = 'none';
+        if (upgradeHint) upgradeHint.style.display = 'block';
+        if (teamCodeGroup) teamCodeGroup.style.display = 'none';
+        return;
+      }
+
+      const plan = currentEntitlements.plan || 'paid';
+      badge.textContent = plan === 'individual' ? 'Individual' : plan === 'team' ? 'Team' : 'Licensed';
+      badge.classList.add(plan === 'individual' ? 'plan-badge-individual' : 'plan-badge-team');
+      if (activateBtn) activateBtn.style.display = 'none';
+      if (logoutBtn) logoutBtn.style.display = '';
+      if (integrationsCard) integrationsCard.classList.remove('paid-feature-locked');
+      if (integrationsProviderRow) integrationsProviderRow.style.display = canIntegrate ? '' : 'none';
+      if (upgradeHint) upgradeHint.style.display = canIntegrate ? 'none' : 'block';
+      if (teamCodeGroup) teamCodeGroup.style.display = currentEntitlements.plan === 'team' ? '' : 'none';
+
+      if (navCloud && currentEntitlements.can_cloud_ai) {
+        navCloud.style.display = '';
+        const navLabel = document.getElementById('navCloudInsightsLabel');
+        const titleEl = document.getElementById('cloudInsightsTitle');
+        const hintEl = document.getElementById('cloudInsightsHint');
+        const isIndividual = currentEntitlements.plan === 'individual';
+        if (navLabel) navLabel.textContent = isIndividual ? 'Insights' : 'Team AI';
+        if (titleEl) titleEl.textContent = isIndividual ? 'Your work report' : 'Team insights';
+        if (hintEl) {
+          hintEl.textContent = isIndividual
+            ? 'PM-style report from local SQLite + cloud sync, powered by MiMo v2.5 Pro via OpenRouter.'
+            : 'Aggregated insights from synced team activity in Supabase.';
+        }
+      } else if (navCloud) {
+        navCloud.style.display = 'none';
+      }
+    }
+
+    async function persistEntitlements(entitlements) {
+      currentEntitlements = entitlements;
+      await invoke('save_entitlements_command', {
+        entitlements: {
+          plan: entitlements.plan ?? null,
+          status: entitlements.status ?? 'free',
+          team_ids: entitlements.team_ids ?? entitlements.teamIds ?? [],
+          active_team_id: entitlements.active_team_id ?? entitlements.activeTeamId ?? null,
+          can_sync: Boolean(entitlements.can_sync ?? entitlements.canSync),
+          can_cloud_ai: Boolean(entitlements.can_cloud_ai ?? entitlements.canCloudAi),
+          can_integrations: Boolean(entitlements.can_integrations ?? entitlements.canIntegrations),
+        },
+      }).catch((e) => console.warn('[Entitlements] save failed:', e));
+      updatePlanBadge();
+    }
+
+    async function loadEntitlementsFromBackend() {
+      try {
+        const entitlements = await invoke('get_entitlements');
+        currentEntitlements = entitlements;
+        updatePlanBadge();
+        return entitlements;
+      } catch (e) {
+        console.warn('[Entitlements] load failed:', e);
+        currentEntitlements = null;
+        updatePlanBadge();
+        return null;
+      }
+    }
+
+    function showCloudActivationPanel() {
+      document.getElementById('loginScreen')?.classList.add('visible');
+    }
+
+    function hideCloudActivationPanel() {
+      document.getElementById('loginScreen')?.classList.remove('visible');
+      setWorkerLoginError('');
+    }
+
+    function showFreeProfileState() {
+      currentUser = null;
+      authSession = null;
+      document.getElementById('userName').textContent = 'Guest';
+      document.getElementById('userEmail').textContent = 'Free local mode';
+      const avatar = document.getElementById('userAvatar');
+      if (avatar) {
+        avatar.style.display = 'none';
+        avatar.src = '';
+      }
+      updatePlanBadge();
+    }
 
     function reportRuntimeError(error) {
       console.error('[FlowSight] Runtime error:', error);
       const message = error?.message || String(error || 'Unexpected app error');
       const loginErrorEl = document.getElementById('workerLoginError');
-      if (loginErrorEl && document.getElementById('loginScreen')?.style.display !== 'none') {
+      if (loginErrorEl && document.getElementById('loginScreen')?.classList.contains('visible')) {
         loginErrorEl.textContent = message;
         loginErrorEl.style.display = 'block';
       }
@@ -2079,17 +3008,20 @@
     window.addEventListener('unhandledrejection', (event) => reportRuntimeError(event.reason));
 
     // ===== AUTH FUNCTIONS =====
-    async function checkAuth() {
+    async function restoreCloudSession() {
+      await loadEntitlementsFromBackend();
+
       try {
         const session = await invoke('get_auth_session');
         if (session) {
           authSession = session;
           currentUser = session.user;
-          showMainApp();
+          await invoke('refresh_entitlements').then(persistEntitlements).catch(() => {});
+          updateProfileHeader();
           return true;
         }
       } catch (e) {
-        console.log("[Auth] No session:", e);
+        console.log("[Auth] No OAuth session:", e);
       }
 
       try {
@@ -2098,58 +3030,133 @@
           authSession = {
             access_token: workerSession.access_token,
             refresh_token: workerSession.refresh_token,
-            provider: 'worker',
+            provider: 'cloud',
             user: {
               id: workerSession.user_id,
               email: workerSession.email,
               display_name: workerSession.email,
-              provider: 'worker',
+              provider: 'cloud',
             },
           };
           currentUser = authSession.user;
-          showMainApp();
+          await invoke('refresh_entitlements').then(persistEntitlements).catch(() => {});
+          updateProfileHeader();
+          await loadUserTeams();
           return true;
         }
       } catch (e) {
-        console.log("[Auth] No worker session:", e);
+        console.log("[Auth] No cloud session:", e);
       }
 
-      showLoginScreen();
+      showFreeProfileState();
       return false;
     }
 
-    function showLoginScreen() {
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('mainApp').style.display = 'none';
+    function updateProfileHeader() {
+      if (!currentUser) {
+        showFreeProfileState();
+        return;
+      }
+      document.getElementById('userName').textContent = currentUser.display_name || currentUser.name || currentUser.email || 'User';
+      document.getElementById('userEmail').textContent = currentUser.email || 'Cloud features active';
+      const avatar = document.getElementById('userAvatar');
+      if (currentUser.avatar_url) {
+        avatar.src = currentUser.avatar_url;
+        avatar.style.display = '';
+      } else {
+        avatar.style.display = 'none';
+        avatar.src = '';
+      }
+      updatePlanBadge();
     }
 
     function showMainApp() {
-      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('loginScreen')?.classList.remove('visible');
       document.getElementById('mainApp').style.display = 'flex';
+      updateProfileHeader();
 
-      // Update user info
-      if (currentUser) {
-        document.getElementById('userName').textContent = currentUser.display_name || currentUser.name || 'User';
-        document.getElementById('userEmail').textContent = currentUser.email || currentUser.provider;
-        if (currentUser.avatar_url) {
-          document.getElementById('userAvatar').src = currentUser.avatar_url;
-        }
-        document.getElementById('loginBadge').textContent = currentUser.provider.charAt(0).toUpperCase() + currentUser.provider.slice(1);
-      }
-
-      // Load tasks if Jira connected
-      if (authSession && authSession.provider === 'jira') {
+      if (currentEntitlements?.can_integrations && authSession && (authSession.provider === 'jira' || linkedProviders?.jira)) {
         refreshJira();
       }
 
-      // Load user teams
-      loadUserTeams();
-
-      // Restore linked integrations (Jira/Linear)
-      restoreLinkedProviders();
+      if (isPaidActive()) {
+        loadUserTeams();
+      }
+      if (currentEntitlements?.can_integrations) {
+        restoreLinkedProviders();
+      }
 
       updateTodayGreeting();
       refreshTodayView();
+    }
+
+    async function handleWorkerLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('workerEmail').value.trim();
+      const password = document.getElementById('workerPassword').value;
+      const licenseCode = document.getElementById('licenseCode')?.value?.trim() || '';
+      const btn = document.getElementById('workerLoginBtn');
+
+      if (!email || !password) {
+        setWorkerLoginError('Enter the email and password for your license account.');
+        return;
+      }
+
+      setWorkerLoginError('');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span> Signing in...';
+
+      let supabaseSessionCreated = false;
+      try {
+        const result = await signInForCloudFeatures(email, password, licenseCode || undefined);
+        supabaseSessionCreated = true;
+        const displayName = result.profile.display_name || result.user.email || 'User';
+        const teamId = result.membership?.team_id || result.entitlements.active_team_id || null;
+        const workerAuthSession = {
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+          provider: 'cloud',
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            display_name: displayName,
+            name: displayName,
+            avatar_url: result.profile.avatar_url,
+            provider: 'cloud',
+          },
+        };
+
+        await invoke('save_user_session', {
+          userId: result.user.id,
+          teamId,
+          accessToken: result.session.access_token,
+          refreshToken: result.session.refresh_token,
+          email: result.user.email,
+        });
+
+        await persistEntitlements(result.entitlements);
+        authSession = workerAuthSession;
+        currentUser = workerAuthSession.user;
+        hideCloudActivationPanel();
+        showMainApp();
+        await initMainApp();
+        await loadUserTeams();
+        showToast('Cloud features activated', 'success');
+      } catch (error) {
+        if (supabaseSessionCreated) {
+          await signOutWorker().catch((signOutError) => console.error('[Auth] Cleanup sign out failed:', signOutError));
+        }
+        authSession = null;
+        currentUser = null;
+        currentEntitlements = null;
+        updatePlanBadge();
+        const message = error?.message || getFriendlyAuthError(error);
+        setWorkerLoginError(message);
+        showToast(message, 'error', 4500);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Sign in to activate';
+      }
     }
 
     let dailyGoalHours = 6;
@@ -2411,6 +3418,10 @@
 
     // ===== RESTORE LINKED PROVIDERS ON STARTUP =====
     async function restoreLinkedProviders() {
+      if (!currentEntitlements?.can_integrations) {
+        return;
+      }
+
       // Jira
       if (localStorage.getItem('flowsight_jira_linked') === 'true') {
         try {
@@ -2452,6 +3463,10 @@
     async function loadUserTeams() {
       const select = document.getElementById('teamSelect');
       const group = document.getElementById('teamSelectorGroup');
+      if (!isPaidActive()) {
+        if (group) group.style.display = 'none';
+        return;
+      }
       try {
         const data = await invoke('get_user_teams');
         const teams = data.teams || [];
@@ -2519,70 +3534,19 @@
       errorEl.style.display = message ? 'block' : 'none';
     }
 
-    async function handleWorkerLogin(e) {
-      e.preventDefault();
-      const email = document.getElementById('workerEmail').value.trim();
-      const password = document.getElementById('workerPassword').value;
-      const btn = document.getElementById('workerLoginBtn');
+    async function handleLogin(provider) {
+      if (provider === 'jira' || provider === 'linear') {
+        if (!requirePaidFeature('integrations', 'Jira and Linear require an Individual or Team license.')) {
+          return;
+        }
+      }
 
-      if (!email || !password) {
-        setWorkerLoginError('Enter the email and password provided by your PM.');
+      const btnId = provider === 'google' ? 'loginGoogle' : `login${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
+      const btn = document.getElementById(btnId);
+      if (!btn) {
+        showToast('Login option unavailable.', 'error');
         return;
       }
-
-      setWorkerLoginError('');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Signing in...';
-
-      let supabaseSessionCreated = false;
-      try {
-        const result = await signInWorker(email, password);
-        supabaseSessionCreated = true;
-        const displayName = result.profile.display_name || result.user.email || 'Worker';
-        const workerAuthSession = {
-          access_token: result.session.access_token,
-          refresh_token: result.session.refresh_token,
-          provider: 'worker',
-          user: {
-            id: result.user.id,
-            email: result.user.email,
-            display_name: displayName,
-            name: displayName,
-            avatar_url: result.profile.avatar_url,
-            provider: 'worker',
-          },
-        };
-
-        await invoke('save_user_session', {
-          userId: result.user.id,
-          teamId: result.membership.team_id,
-          accessToken: result.session.access_token,
-          refreshToken: result.session.refresh_token,
-          email: result.user.email,
-        });
-
-        authSession = workerAuthSession;
-        currentUser = workerAuthSession.user;
-        showMainApp();
-        await initMainApp();
-        showToast('Logged in successfully', 'success');
-      } catch (error) {
-        if (supabaseSessionCreated) {
-          await signOutWorker().catch((signOutError) => console.error('[Auth] Cleanup sign out failed:', signOutError));
-        }
-        authSession = null;
-        currentUser = null;
-        const message = error?.message || getFriendlyAuthError(error);
-        setWorkerLoginError(message);
-        showToast(message, 'error', 4500);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Sign in with work credentials';
-      }
-    }
-
-    async function handleLogin(provider) {
-      const btn = document.getElementById('login' + provider.charAt(0).toUpperCase() + provider.slice(1));
       const originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Connecting...';
@@ -2598,10 +3562,12 @@
           attempts++;
           btn.innerHTML = `<span class="loading"></span> Waiting for login... (${attempts}/${maxAttempts})`;
 
-          await checkAuth();
+          await restoreCloudSession();
           if (authSession) {
             btn.disabled = false;
             btn.innerHTML = originalText;
+            hideCloudActivationPanel();
+            showMainApp();
             await initMainApp();
             return;
           }
@@ -2625,13 +3591,28 @@
 
     async function handleLogout() {
       try {
-        if (authSession?.provider === 'worker') {
+        if (authSession?.provider === 'cloud' || authSession?.provider === 'worker') {
           await signOutWorker();
         }
         await invoke('logout');
+        await invoke('clear_user_session').catch(() => {});
         authSession = null;
         currentUser = null;
-        showLoginScreen();
+        currentEntitlements = null;
+        linkedProviders = { jira: false, linear: false };
+        localStorage.removeItem('flowsight_jira_linked');
+        localStorage.removeItem('flowsight_linear_linked');
+        const jiraStatus = document.getElementById('jiraLinkStatus');
+        const linearStatus = document.getElementById('linearLinkStatus');
+        const linkJiraBtn = document.getElementById('linkJiraBtn');
+        const linkLinearBtn = document.getElementById('linkLinearBtn');
+        if (jiraStatus) jiraStatus.textContent = 'Link Jira';
+        if (linearStatus) linearStatus.textContent = 'Link Linear';
+        if (linkJiraBtn) linkJiraBtn.classList.remove('button-success');
+        if (linkLinearBtn) linkLinearBtn.classList.remove('button-success');
+        hideCloudActivationPanel();
+        showFreeProfileState();
+        showToast('Back to Free (Local) mode', 'success');
       } catch (e) {
         console.error("Logout failed:", e);
       }
@@ -2645,6 +3626,10 @@
     let currentTeamCode = localStorage.getItem('flowsight_team_code') || '';
 
     async function linkProvider(provider) {
+      if (!requirePaidFeature('integrations', 'Jira and Linear require an Individual or Team license.')) {
+        return;
+      }
+
       const btn = document.getElementById('link' + provider.charAt(0).toUpperCase() + provider.slice(1) + 'Btn');
       const statusEl = document.getElementById(provider + 'LinkStatus');
       const originalText = statusEl.textContent;
@@ -2708,6 +3693,10 @@
 
     // Team code handler
     document.getElementById('joinTeamBtn').onclick = async () => {
+      if (!requirePaidFeature('sync', 'Joining a team requires a Team license.')) {
+        return;
+      }
+
       const code = document.getElementById('teamCodeInput').value.trim();
       const statusEl = document.getElementById('teamStatus');
 
@@ -2809,31 +3798,153 @@
       }
     }
 
-    // Restore linked status from localStorage
-    if (localStorage.getItem('flowsight_jira_linked') === 'true') {
-      linkedProviders.jira = true;
-      document.getElementById('jiraLinkStatus').textContent = 'Linked';
-      document.getElementById('linkJiraBtn').classList.add('button-success');
-    }
-    if (localStorage.getItem('flowsight_linear_linked') === 'true') {
-      linkedProviders.linear = true;
-      document.getElementById('linearLinkStatus').textContent = 'Linked';
-      document.getElementById('linkLinearBtn').classList.add('button-success');
-    }
-
+    // Restore linked status from localStorage after entitlements are known
     document.getElementById('refreshJiraBtn').onclick = refreshTasks;
-
-    // Auto-load tasks on init if already linked
-    setTimeout(async () => {
-      if (linkedProviders.jira || linkedProviders.linear) await refreshTasks();
-    }, 1000);
 
     // Login button handlers (fallback if inline onclick fails)
     document.getElementById('workerLoginForm').onsubmit = handleWorkerLogin;
     document.getElementById('loginGoogle').onclick = () => handleLogin('google');
-    document.getElementById('loginJira').onclick = () => handleLogin('jira');
-    document.getElementById('loginLinear').onclick = () => handleLogin('linear');
     document.getElementById('logoutBtn').onclick = handleLogout;
+    document.getElementById('activateCloudBtn').onclick = showCloudActivationPanel;
+    document.getElementById('closeCloudActivationBtn').onclick = hideCloudActivationPanel;
+    document.getElementById('generateCloudInsightsBtn').onclick = generateCloudInsights;
+
+    async function loadCloudInsights() {
+      const body = document.getElementById('cloudInsightsBody');
+      if (!body) return;
+
+      if (!requirePaidFeature('cloud_ai', 'Cloud AI Insights require an Individual or Team license.')) {
+        body.innerHTML = '<div class="empty-state">Activate a license to use Cloud AI Insights.</div>';
+        return;
+      }
+
+      body.innerHTML = '<div class="empty-state"><span class="loading"></span> Loading cloud insights...</div>';
+      try {
+        const insights = await invoke('fetch_cloud_insights', { limit: 10 });
+        renderCloudInsights(insights);
+      } catch (e) {
+        body.innerHTML = `<div class="empty-state">Could not load insights: ${e}</div>`;
+      }
+    }
+
+    function escapeHtml(text) {
+      return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function extractEnglishText(text) {
+      if (!text) return '';
+      const cleaned = String(text).replace(/[\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u30FF\uAC00-\uD7AF]/g, ' ');
+      const segments = cleaned
+        .split(/(?<=[.!?])\s+|\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .filter((seg) => {
+          const letters = seg.replace(/[^A-Za-z]/g, '').length;
+          const allLetters = seg.replace(/[^A-Za-z\u00C0-\u024F]/g, '').length;
+          return allLetters === 0 || letters / allLetters >= 0.55;
+        });
+      return (segments.length ? segments.join(' ') : cleaned).replace(/\s+/g, ' ').trim();
+    }
+
+    function enReport(text) {
+      return escapeHtml(extractEnglishText(text));
+    }
+
+    function renderInsightSection(title, text) {
+      if (!text) return '';
+      return `
+        <div style="margin-top: 10px;">
+          <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</div>
+          <p style="margin: 0; font-size: 12px; line-height: 1.45; color: hsl(var(--muted-foreground));">${escapeHtml(text)}</p>
+        </div>`;
+    }
+
+    function renderInsightList(title, items) {
+      if (!items || !items.length) return '';
+      return `
+        <div style="margin-top: 10px;">
+          <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</div>
+          <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.45;">
+            ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>`;
+    }
+
+    function renderCloudInsights(insights) {
+      const body = document.getElementById('cloudInsightsBody');
+      if (!body) return;
+
+      if (!insights || insights.length === 0) {
+        const isIndividual = currentEntitlements?.plan === 'individual';
+        body.innerHTML = isIndividual
+          ? '<div class="empty-state">No report yet. Track locally, then tap <strong>Generate report</strong>.</div>'
+          : '<div class="empty-state">No insights yet. Sync activity, then tap Generate report.</div>';
+        return;
+      }
+
+      body.innerHTML = insights.map((item) => {
+        const content = item.content || {};
+        const period = item.period_start && item.period_end
+          ? `${item.period_start} → ${item.period_end}`
+          : new Date(item.created_at || Date.now()).toLocaleDateString();
+        const isPmReport = item.insight_type === 'pm_individual_report';
+        const score = content.productivity_score != null
+          ? `<span style="font-size:11px; opacity:0.8;">Score ${content.productivity_score}/100</span>`
+          : '';
+        const model = content.model ? `<span style="font-size:10px; opacity:0.65;"> · ${escapeHtml(content.model)}</span>` : '';
+        const summary = content.executive_summary || content.summary || 'Report generated.';
+        const hours = content.total_hours != null ? `${content.total_hours}h tracked` : '';
+        const meta = [hours, content.activity_count != null ? `${content.activity_count} activities` : '', content.focus_hours != null ? `${content.focus_hours}h focus` : ''].filter(Boolean).join(' · ');
+
+        if (isPmReport) {
+          return `
+            <div class="cloud-insights-card">
+              <h4>Work report · ${escapeHtml(period)} ${score}${model}</h4>
+              <p style="margin-top:6px;">${escapeHtml(summary)}</p>
+              ${meta ? `<p style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">${escapeHtml(meta)}</p>` : ''}
+              ${renderInsightSection('Focus', content.focus_analysis)}
+              ${renderInsightSection('Distractions', content.distraction_patterns)}
+              ${renderInsightSection('Trend', content.week_trend)}
+              ${renderInsightList('Recommendations', content.recommendations)}
+              ${renderInsightList('Highlights', content.highlights)}
+            </div>`;
+        }
+
+        return `
+          <div class="cloud-insights-card">
+            <h4>${escapeHtml(item.insight_type || 'Insight')} · ${escapeHtml(period)}</h4>
+            <p>${escapeHtml(summary)}</p>
+            ${meta ? `<p style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">${escapeHtml(meta)}</p>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    async function generateCloudInsights() {
+      if (!requirePaidFeature('cloud_ai', 'Work Insights require an Individual or Team license.')) {
+        return;
+      }
+
+      const btn = document.getElementById('generateCloudInsightsBtn');
+      const body = document.getElementById('cloudInsightsBody');
+      btn.disabled = true;
+      const isIndividual = currentEntitlements?.plan === 'individual';
+      body.innerHTML = `<div class="empty-state"><span class="loading"></span> ${isIndividual ? 'Generating AI report (MiMo v2.5 Pro)…' : 'Generating insight…'}</div>`;
+
+      try {
+        await invoke('request_cloud_insights', { periodDays: 7 });
+        showToast(isIndividual ? 'Work report generated' : 'Insight generated', 'success');
+        await loadCloudInsights();
+      } catch (e) {
+        body.innerHTML = `<div class="empty-state">Generation failed: ${escapeHtml(e)}</div>`;
+        showToast(String(e), 'error', 5000);
+      } finally {
+        btn.disabled = false;
+      }
+    }
 
     // ===== ORIGINAL FUNCTIONS =====
     function getDeviceId() {
@@ -3104,8 +4215,8 @@
       if (todayRefreshInterval) clearInterval(todayRefreshInterval);
       todayRefreshInterval = setInterval(refreshTodayView, 60000);
 
-      // If logged in with Jira, fetch tasks
-      if (authSession && authSession.provider === 'jira') {
+      // If logged in with Jira on a paid plan, fetch tasks
+      if (currentEntitlements?.can_integrations && authSession && authSession.provider === 'jira') {
         refreshJira();
       }
     }
@@ -3129,16 +4240,18 @@
         if (playBtn) playBtn.disabled = false;
       }
 
-      // Check if already logged in
-      const isLoggedIn = await checkAuth();
-      if (isLoggedIn) {
-        await initMainApp();
-      }
+      showMainApp();
+      await restoreCloudSession();
+      await initMainApp();
     }
 
     init();
 
     async function refreshTasks() {
+      if (!isPaidActive() || !currentEntitlements?.can_integrations) {
+        return;
+      }
+
       const btn = document.getElementById('refreshJiraBtn');
       const sel = document.getElementById('jiraSelect');
       btn.disabled = true;
@@ -3255,11 +4368,18 @@
       let task = 'General';
       let jiraTicket = null;
       const sel = document.getElementById('jiraSelect');
+      const manualTask = document.getElementById('manualTask');
+
+      if (!currentEntitlements?.can_integrations) {
+        task = manualTask?.value?.trim() || 'General';
+        return { task, jiraTicket };
+      }
+
       if (sel.value && sel.value !== 'MANUAL') {
         jiraTicket = sel.value;
         task = sel.options[sel.selectedIndex].text;
       } else if (sel.value === 'MANUAL') {
-        task = document.getElementById('manualTask').value || 'Manual Work';
+        task = manualTask?.value || 'Manual Work';
       }
       return { task, jiraTicket };
     }
@@ -3360,6 +4480,42 @@
     const summaryBody = document.getElementById('summaryBody');
     let currentHistoryData = null;
     let currentWeekData = null;
+    let lastStatusReportPayload = null;
+    let reportProgressUnlisten = null;
+    let reportProgressState = { activeStep: 0, doneThrough: -1, detail: '' };
+
+    const REPORT_GEN_STEP_LABELS = [
+      'Starting local AI engine…',
+      'Section — project summary',
+      'Section — overall workflow health',
+      'Section — health breakdown table',
+      'Section — timeline review',
+      'Section — known issues',
+      'Section — potential risks',
+      'Section — progress & tasks completed',
+      'Section — lessons & recommendations',
+    ];
+
+    function openStatusReportModal() {
+      const modal = document.getElementById('statusReportModal');
+      if (modal) {
+        modal.classList.add('visible');
+        modal.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    function closeStatusReportModal() {
+      const modal = document.getElementById('statusReportModal');
+      if (modal) {
+        modal.classList.remove('visible');
+        modal.setAttribute('aria-hidden', 'true');
+      }
+    }
+
+    document.getElementById('closeStatusReportModal')?.addEventListener('click', closeStatusReportModal);
+    document.getElementById('statusReportModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'statusReportModal') closeStatusReportModal();
+    });
     const TASK_BAR_COLORS = [
       'hsl(var(--summary-purple))',
       'hsl(var(--summary-magenta))',
@@ -3377,6 +4533,7 @@
       document.getElementById(tabId)?.classList.add('active');
       document.querySelector(`.nav-item[data-tab="${tabId}"]`)?.classList.add('active');
       if (tabId === 'tabSummary') loadHistory();
+      if (tabId === 'tabCloudInsights') loadCloudInsights();
       if (tabId === 'tabToday') refreshTodayView();
     }
 
@@ -3562,8 +4719,8 @@
         summaryBody.innerHTML = `
           <div class="summary-header">
             <h1 class="summary-title">Summary</h1>
-            <button class="summary-download-btn" id="exportPdfBtn" title="Download report" aria-label="Download report" disabled>
-              <span class="summary-download-label">Download report</span>
+            <button class="summary-download-btn" id="generateReportBtn" title="Generate AI work report" aria-label="Generate AI work report">
+              <span class="summary-download-label">Work report</span>
               <span class="summary-download-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               </span>
@@ -3572,6 +4729,9 @@
           <div class="summary-date">${formatDisplayDate(data.date)}</div>
           <div class="week-row">${renderWeekRow(week)}</div>
           <div class="empty-state">No activity recorded today</div>`;
+        document.getElementById('generateReportBtn').onclick = () => {
+          generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
+        };
         return;
       }
 
@@ -3595,8 +4755,8 @@
       summaryBody.innerHTML = `
         <div class="summary-header">
           <h1 class="summary-title">Summary</h1>
-          <button class="summary-download-btn" id="exportPdfBtn" title="Download report" aria-label="Download report">
-            <span class="summary-download-label">Download report</span>
+          <button class="summary-download-btn" id="generateReportBtn" title="Generate AI work report" aria-label="Generate AI work report">
+            <span class="summary-download-label">Work report</span>
             <span class="summary-download-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </span>
@@ -3638,9 +4798,311 @@
 
         ${renderTimeline(data.entries)}`;
 
-      document.getElementById('exportPdfBtn').onclick = () => {
-        exportHistoryToPDF().catch(e => showToast('PDF export failed: ' + e, 'error'));
+      document.getElementById('generateReportBtn').onclick = () => {
+        generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
       };
+    }
+
+    function healthStatusClass(status) {
+      const s = String(status ?? '').toLowerCase();
+      if (s.includes('risk')) return 'sr-health-at-risk';
+      if (s.includes('attention')) return 'sr-health-attention';
+      return 'sr-health-on-track';
+    }
+
+    function renderReportGeneratingUI() {
+      openStatusReportModal();
+      const host = document.getElementById('statusReportModalBody');
+      if (!host) return;
+
+      const { activeStep, doneThrough, detail } = reportProgressState;
+
+      host.innerHTML = `
+        <div class="sr-generating">
+          <div class="sr-gen-title"><span class="loading"></span> Building your work report</div>
+          <div class="sr-gen-steps" id="srGenSteps">
+            ${REPORT_GEN_STEP_LABELS.map((label, i) => {
+              const isDone = i <= doneThrough;
+              const isActive = i === activeStep && !isDone;
+              const icon = isDone ? '✓' : isActive ? '…' : '○';
+              const stepDetail = isActive && detail
+                ? `<span class="sr-gen-detail">${escapeHtml(extractEnglishText(detail))}</span>`
+                : isDone && i === doneThrough && detail && i > 0
+                  ? `<span class="sr-gen-detail">${escapeHtml(extractEnglishText(detail).slice(0, 120))}</span>`
+                  : '';
+              return `
+              <div class="sr-gen-step ${isActive ? 'active' : isDone ? 'done' : ''}" data-step="${i}">
+                <span>${icon} ${escapeHtml(label)}</span>
+                ${stepDetail}
+              </div>`;
+            }).join('')}
+          </div>
+          <p style="font-size:10px;color:hsl(var(--muted-foreground));margin:14px 0 0;">
+            Step ${Math.min(doneThrough + 2, REPORT_GEN_STEP_LABELS.length)} of ${REPORT_GEN_STEP_LABELS.length} · Local AI sections (English)
+          </p>
+        </div>`;
+    }
+
+    function handleReportProgress(payload) {
+      const step = Number(payload?.step ?? 0);
+      const phase = payload?.phase || 'start';
+      const detail = payload?.detail || payload?.label || '';
+
+      if (phase === 'start') {
+        reportProgressState.activeStep = step;
+        reportProgressState.detail = detail;
+      } else if (phase === 'done') {
+        reportProgressState.doneThrough = Math.max(reportProgressState.doneThrough, step);
+        reportProgressState.activeStep = Math.min(step + 1, REPORT_GEN_STEP_LABELS.length - 1);
+        reportProgressState.detail = detail;
+      }
+
+      renderReportGeneratingUI();
+    }
+
+    async function beginReportProgressListen() {
+      if (reportProgressUnlisten) {
+        await reportProgressUnlisten();
+        reportProgressUnlisten = null;
+      }
+      reportProgressUnlisten = await listen('local-report-progress', (event) => {
+        handleReportProgress(event.payload);
+      });
+    }
+
+    async function endReportProgressListen() {
+      if (reportProgressUnlisten) {
+        await reportProgressUnlisten();
+        reportProgressUnlisten = null;
+      }
+    }
+
+    function renderReportCategoryBars(local) {
+      const cats = (local.category_breakdown || []).slice(0, 5);
+      if (!cats.length) return '';
+      const maxSec = Math.max(...cats.map((c) => c.total_seconds || 0), 1);
+      return `
+        <div class="sr-tbi-cat-bars">
+          ${cats.map((c, i) => {
+            const pct = Math.max(4, Math.round(((c.total_seconds || 0) / maxSec) * 100));
+            const color = TASK_BAR_COLORS[i % TASK_BAR_COLORS.length];
+            return `
+              <div class="sr-tbi-cat-bar-row">
+                <span>${escapeHtml(c.category)}</span>
+                <div class="sr-tbi-cat-bar-track">
+                  <div class="sr-tbi-cat-bar-fill" style="width:${pct}%;background:${color}"></div>
+                </div>
+                <span>${((c.total_seconds || 0) / 3600).toFixed(1)}h</span>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    function renderStatusReportPanel(payload) {
+      openStatusReportModal();
+      const host = document.getElementById('statusReportModalBody');
+      if (!host || !payload) return;
+
+      const report = payload.report || {};
+      const meta = report.report_meta || {};
+      const local = payload.local_data || {};
+      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Developer';
+      const period = meta.period_label || (local.period_start && local.period_end
+        ? `${local.period_start} → ${local.period_end}`
+        : '');
+      const healthClass = healthStatusClass(report.overall_health);
+      const focusPct = local.total_seconds > 0
+        ? Math.round((local.focus_seconds / local.total_seconds) * 100)
+        : 0;
+      const generatedDate = payload.generated_at || new Date().toLocaleDateString(undefined, {
+        month: 'long', day: 'numeric', year: 'numeric',
+      });
+
+      const breakdownHtml = (report.health_breakdown || []).map((row, idx) => `
+        <div class="sr-tbi-table-row" style="${idx === 0 ? '' : ''}">
+          <span>${enReport(row.element)}</span>
+          <span class="sr-status-pill ${healthStatusClass(row.status)}">${enReport(row.status)}</span>
+          <span>${enReport(row.owner_team || 'Self')}</span>
+          <span>${enReport(row.notes)}</span>
+        </div>`).join('');
+
+      const listItems = (items) => (items || []).map((i) => `<li>${enReport(i)}</li>`).join('');
+
+      const lessonsHtml = (report.lessons_learned || []).map((l) => `
+        <div class="sr-lesson-card">
+          <div class="sr-lesson-title">${enReport(l.title)}</div>
+          <p class="sr-lesson-body">${enReport(l.body)}</p>
+        </div>`).join('');
+
+      const passesHtml = (payload.generation_passes || []).map((p) => `
+        <span class="sr-pass-chip done" title="${escapeHtml(p.detail || '')}">${escapeHtml((p.label || p.id || '').replace(/^Section — /, ''))}</span>`).join('');
+
+      const weekDays = currentWeekData?.days || [];
+      const weekMax = Math.max(...weekDays.map((d) => d.total_seconds || 0), 1);
+      const weekStrip = weekDays.length ? `
+        <div class="sr-week-strip">
+          ${weekDays.map((d) => {
+            const pct = Math.max(8, Math.round(((d.total_seconds || 0) / weekMax) * 100));
+            return `<div class="sr-week-bar" title="${d.date}: ${((d.total_seconds || 0) / 3600).toFixed(1)}h">
+              <div class="sr-week-bar-fill" style="height:${pct}%"></div>
+              <span class="sr-week-bar-label">${escapeHtml(d.weekday)}</span>
+            </div>`;
+          }).join('')}
+        </div>` : '';
+
+      host.innerHTML = `
+        <div class="status-report status-report-tbi">
+          <div class="sr-tbi-title-block">
+            <h2 class="sr-tbi-title">Work Status Report</h2>
+            <div class="sr-tbi-subline">FlowSight · ${escapeHtml(generatedDate)} · ${escapeHtml(userName)}</div>
+          </div>
+
+          <div class="sr-tbi-meta-row">
+            <div class="sr-tbi-meta-col">
+              <div class="sr-tbi-meta-box">
+                <label>Period</label>
+                <span>${escapeHtml(period)}</span>
+              </div>
+              <div class="sr-tbi-meta-box">
+                <label>Focus target</label>
+                <span>${enReport(report.focus_target || meta.focus_target || '—')}</span>
+              </div>
+              <div class="sr-tbi-meta-box">
+                <label>Tracked hours</label>
+                <span>${local.total_hours ?? 0}h · ${focusPct}% focus</span>
+              </div>
+            </div>
+            <div class="sr-tbi-summary-box">
+              <p>${enReport(report.executive_overview || report.work_summary || '')}</p>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="sr-tbi-section-title">Overall project health</h3>
+            <div class="sr-tbi-health-row">
+              <div class="sr-tbi-health-badge ${healthClass}">${enReport(report.overall_health || 'Attention')}</div>
+              <p class="sr-tbi-health-notes">${enReport(report.health_notes || '')}</p>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="sr-tbi-section-title">Project health breakdown</h3>
+            <div class="sr-tbi-table">
+              <div class="sr-tbi-table-head">
+                <span>Element</span><span>Status</span><span>Owner/team</span><span>Notes</span>
+              </div>
+              ${breakdownHtml || '<div class="sr-tbi-table-row"><span colspan="4">No breakdown available.</span></div>'}
+            </div>
+          </div>
+
+          <div>
+            <h3 class="sr-tbi-section-title">Timeline review</h3>
+            <div class="sr-tbi-timeline">
+              ${weekStrip}
+              ${renderReportCategoryBars(local)}
+              <p class="sr-tbi-timeline-caption">${enReport(report.timeline_caption || report.work_summary || '')}</p>
+            </div>
+          </div>
+
+          <div class="sr-tbi-footer">
+            <div>
+              <div class="sr-tbi-risk-block" style="margin-bottom:8px;">
+                <h4 class="sr-tbi-block-title">💡 Known issues</h4>
+                <ul>${listItems(report.known_issues) || '<li>None flagged</li>'}</ul>
+              </div>
+              <div class="sr-tbi-risk-block">
+                <h4 class="sr-tbi-block-title">⚠ Potential risks</h4>
+                <ul>${listItems(report.potential_risks) || '<li>None flagged</li>'}</ul>
+              </div>
+            </div>
+            <div class="sr-tbi-progress-block">
+              <h4 class="sr-tbi-block-title">Team progress</h4>
+              <p style="font-size:10px;font-weight:700;margin:0 0 6px;">Tasks completed</p>
+              <ul>${listItems(report.tasks_completed) || '<li>No tasks listed</li>'}</ul>
+              <p style="font-size:10px;font-weight:700;margin:12px 0 6px;">Highlights</p>
+              <ul>${listItems(report.work_progress) || '<li>No highlights</li>'}</ul>
+            </div>
+          </div>
+
+          <div class="sr-tbi-lessons">
+            <h3 class="sr-tbi-section-title">Lessons learned</h3>
+            ${lessonsHtml || '<p style="font-size:11px;color:hsl(var(--muted-foreground))">No lessons generated.</p>'}
+          </div>
+
+          ${(report.recommendations || []).length ? `
+          <div class="sr-card sr-recs">
+            <h3>Recommendations</h3>
+            <ul>${listItems(report.recommendations)}</ul>
+          </div>` : ''}
+
+          <div class="sr-footer">
+            <div class="sr-passes">
+              ${passesHtml}
+              ${payload.ai_powered ? '' : '<span class="sr-pass-chip">Basic mode</span>'}
+            </div>
+            <button type="button" class="sr-download-btn" id="downloadReportPdfBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download PDF
+            </button>
+          </div>
+        </div>`;
+
+      document.getElementById('downloadReportPdfBtn')?.addEventListener('click', () => {
+        exportStatusReportPdf(payload).catch((e) => showToast('PDF export failed: ' + e, 'error'));
+      });
+    }
+
+    async function generateStatusReport() {
+      const btn = document.getElementById('generateReportBtn');
+      const labelEl = btn?.querySelector('.summary-download-label');
+      const originalLabel = labelEl?.textContent;
+
+      if (btn) {
+        btn.disabled = true;
+        if (labelEl) labelEl.textContent = 'Generating…';
+      }
+
+      openStatusReportModal();
+      reportProgressState = { activeStep: 0, doneThrough: -1, detail: 'Connecting…' };
+      renderReportGeneratingUI();
+      await beginReportProgressListen();
+
+      try {
+        const payload = await invoke('generate_local_status_report', { periodDays: 7 });
+        lastStatusReportPayload = payload;
+        reportProgressState = {
+          activeStep: REPORT_GEN_STEP_LABELS.length - 1,
+          doneThrough: REPORT_GEN_STEP_LABELS.length - 1,
+          detail: 'Complete',
+        };
+        renderReportGeneratingUI();
+        await new Promise((r) => setTimeout(r, 400));
+        renderStatusReportPanel(payload);
+        showToast(payload.ai_powered ? 'Work report ready' : 'Basic report ready (AI unavailable)', 'success');
+      } catch (e) {
+        const host = document.getElementById('statusReportModalBody');
+        if (host) {
+          host.innerHTML = `<div class="empty-state" style="color:hsl(var(--destructive))">Report failed: ${escapeHtml(String(e))}</div>`;
+        }
+        throw e;
+      } finally {
+        await endReportProgressListen();
+        if (btn) {
+          btn.disabled = false;
+          if (labelEl && originalLabel) labelEl.textContent = originalLabel;
+        }
+      }
+    }
+
+    async function exportStatusReportPdf(payload) {
+      if (!payload) payload = lastStatusReportPayload;
+      if (!payload) {
+        showToast('Generate a report first', 'error');
+        return;
+      }
+      const { doc, fileDate } = buildStatusReportPdf(payload, currentHistoryData, currentWeekData);
+      doc.save(`FlowSight_Status_Report_${fileDate}.pdf`);
+      showToast('PDF downloaded', 'success');
     }
 
     function renderBreakdown(items, typeKey) {
@@ -3681,112 +5143,396 @@
       }
     }
 
-    async function exportHistoryToPDF() {
-      if (!currentHistoryData) return;
+    const PDF_MARGIN = 16;
+    const PDF_PAGE_W = 210;
+    const PDF_CONTENT_W = PDF_PAGE_W - PDF_MARGIN * 2;
 
-      const doc = new jsPDF();
-      const data = currentHistoryData;
-      const margin = 20;
-      let y = 20;
-
-      try {
-        const res = await fetch('/flowsight_sinfondo.png');
-        const blob = await res.blob();
-        const dataUrl = await new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.onerror = reject;
-          r.readAsDataURL(blob);
-        });
-        const img = new Image();
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = dataUrl;
-        });
-        const w = 40;
-        const h = Math.min((img.height / img.width) * w, 22);
-        doc.addImage(dataUrl, 'PNG', margin, y, w, h);
-        y += h + 10;
-      } catch (_) {
-        /* logo optional */
+    function pdfEnsureSpace(doc, y, needed = 20) {
+      if (y + needed > 282) {
+        doc.addPage();
+        return PDF_MARGIN;
       }
-
-      // Title
-      doc.setFontSize(20);
-      doc.text(`FlowSight Daily Report`, margin, y);
-      y += 10;
-      doc.setFontSize(12);
-      doc.setTextColor(100);
-      doc.text(`Date: ${data.date} | User: ${currentUser?.name || currentUser?.display_name || 'Developer'}`, margin, y);
-      y += 15;
-
-      // Summary
-      const hours = Math.floor(data.total_seconds / 3600);
-      const mins = Math.floor((data.total_seconds % 3600) / 60);
-      doc.setFontSize(14);
-      doc.setTextColor(0);
-      doc.text(`Total Time: ${hours}h ${mins}m`, margin, y);
-      y += 15;
-
-      // Category Breakdown
-      doc.setFontSize(14);
-      doc.text("Category Breakdown", margin, y);
-      y += 8;
-      doc.setFontSize(10);
-      doc.setTextColor(50);
-
-      data.category_breakdown.forEach(item => {
-        if (y > 270) { doc.addPage(); y = 20; }
-        const mins = Math.round(item.total_seconds / 60);
-        doc.text(`${item.category}: ${mins} min`, margin, y);
-        y += 6;
-      });
-      y += 10;
-
-      // Ticket Breakdown
-      if (data.ticket_breakdown.length > 0) {
-        if (y > 270) { doc.addPage(); y = 20; }
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text("Ticket Breakdown", margin, y);
-        y += 8;
-        doc.setFontSize(10);
-        doc.setTextColor(50);
-
-        data.ticket_breakdown.forEach(item => {
-          if (y > 270) { doc.addPage(); y = 20; }
-          const mins = Math.round(item.total_seconds / 60);
-          doc.text(`${item.ticket}: ${mins} min`, margin, y);
-          y += 6;
-        });
-        y += 10;
-      }
-
-      // Detailed Timeline
-      if (y > 260) { doc.addPage(); y = 20; }
-      doc.setFontSize(14);
-      doc.setTextColor(0);
-      doc.text("Detailed Timeline", margin, y);
-      y += 10;
-      doc.setFontSize(9);
-
-      data.entries.forEach(e => {
-        if (y > 280) { doc.addPage(); y = 20; }
-        const time = new Date(e.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const dur = Math.round(e.duration_seconds / 60) + 'm';
-        const ticket = e.ticket ? `[${e.ticket}] ` : '';
-
-        doc.setTextColor(100);
-        doc.text(`${time} (${dur})`, margin, y);
-        doc.setTextColor(0);
-        doc.text(`${ticket}${e.category} - ${e.description.substring(0, 80)}`, margin + 30, y);
-        y += 6;
-      });
-
-      doc.save(`FlowSight_Report_${data.date}.pdf`);
-      showToast('PDF Exported successfully', 'success');
+      return y;
     }
+
+    function pdfWrapText(doc, text, x, y, maxWidth, lineHeight = 4.8) {
+      const lines = doc.splitTextToSize(String(text ?? ''), maxWidth);
+      doc.text(lines, x, y);
+      return y + lines.length * lineHeight;
+    }
+
+    function pdfHealthColor(status) {
+      const s = String(status ?? '').toLowerCase();
+      if (s.includes('risk')) return [229, 115, 115];
+      if (s.includes('attention')) return [255, 213, 79];
+      return [77, 182, 172];
+    }
+
+    function pdfHealthTextColor(status) {
+      const s = String(status ?? '').toLowerCase();
+      if (s.includes('attention')) return [93, 64, 55];
+      return [255, 255, 255];
+    }
+
+    function pdfSectionLabel(doc, title, y) {
+      y = pdfEnsureSpace(doc, y, 12);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(35, 35, 40);
+      doc.text(String(title), PDF_MARGIN, y);
+      return y + 7;
+    }
+
+    function pdfDrawTbiTitle(doc, y, userName, generatedAt) {
+      y = pdfEnsureSpace(doc, y, 22);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(30, 30, 35);
+      doc.text('Work Status Report', PDF_PAGE_W / 2, y, { align: 'center' });
+      y += 8;
+      doc.setDrawColor(210, 210, 215);
+      doc.line(PDF_MARGIN, y, PDF_PAGE_W - PDF_MARGIN, y);
+      y += 6;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 110);
+      doc.text(`FlowSight · ${generatedAt} · ${userName}`, PDF_PAGE_W / 2, y, { align: 'center' });
+      return y + 10;
+    }
+
+    function pdfDrawMetaSummaryRow(doc, y, metaBoxes, summaryText) {
+      y = pdfEnsureSpace(doc, y, 42);
+      const leftW = 62;
+      const gap = 6;
+      const rightX = PDF_MARGIN + leftW + gap;
+      const rightW = PDF_CONTENT_W - leftW - gap;
+      const boxH = 11;
+      let leftY = y;
+
+      metaBoxes.forEach((box) => {
+        doc.setFillColor(245, 245, 248);
+        doc.setDrawColor(225, 225, 232);
+        doc.roundedRect(PDF_MARGIN, leftY, leftW, boxH, 2, 2, 'FD');
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(120, 120, 130);
+        doc.text(box.label.toUpperCase(), PDF_MARGIN + 4, leftY + 4);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(40, 40, 48);
+        doc.text(String(box.value).slice(0, 28), PDF_MARGIN + 4, leftY + 8.5);
+        leftY += boxH + 3;
+      });
+
+      const summaryH = Math.max(38, leftY - y);
+      doc.setFillColor(227, 242, 253);
+      doc.setDrawColor(179, 229, 252);
+      doc.roundedRect(rightX, y, rightW, summaryH, 3, 3, 'FD');
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(45, 55, 72);
+      pdfWrapText(doc, summaryText, rightX + 5, y + 7, rightW - 10, 4.3);
+      return y + summaryH + 8;
+    }
+
+    function pdfDrawOverallHealth(doc, y, status, notes) {
+      y = pdfSectionLabel(doc, 'Overall project health:', y);
+      y = pdfEnsureSpace(doc, y, 28);
+      const badgeW = 38;
+      const badgeH = 22;
+      const [r, g, b] = pdfHealthColor(status);
+      const [tr, tg, tb] = pdfHealthTextColor(status);
+      doc.setFillColor(r, g, b);
+      doc.roundedRect(PDF_MARGIN, y, badgeW, badgeH, 3, 3, 'F');
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(tr, tg, tb);
+      doc.text(String(status || 'Attention'), PDF_MARGIN + badgeW / 2, y + 13, { align: 'center' });
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(55, 55, 65);
+      const notesEnd = pdfWrapText(doc, notes, PDF_MARGIN + badgeW + 8, y + 5, PDF_CONTENT_W - badgeW - 8, 4.4);
+      return Math.max(y + badgeH, notesEnd) + 8;
+    }
+
+    function pdfDrawTbiTable(doc, y, rows) {
+      y = pdfSectionLabel(doc, 'Project health breakdown:', y);
+      y = pdfEnsureSpace(doc, y, 14);
+      const cols = { element: PDF_MARGIN + 2, status: 52, owner: 78, notes: 108 };
+      doc.setFillColor(55, 58, 64);
+      doc.roundedRect(PDF_MARGIN, y - 4, PDF_CONTENT_W, 7, 1, 1, 'F');
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(255, 255, 255);
+      doc.text('Element', cols.element, y);
+      doc.text('Status', cols.status, y);
+      doc.text('Owner/team', cols.owner, y);
+      doc.text('Notes', cols.notes, y);
+      y += 6;
+
+      rows.forEach((row, idx) => {
+        y = pdfEnsureSpace(doc, y, 10);
+        if (idx % 2 === 0) {
+          doc.setFillColor(248, 248, 250);
+          doc.rect(PDF_MARGIN, y - 3.5, PDF_CONTENT_W, 8, 'F');
+        }
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(40, 40, 48);
+        doc.text(String(row.element ?? '').slice(0, 16), cols.element, y);
+        const [r, g, b] = pdfHealthColor(row.status);
+        const [tr, tg, tb] = pdfHealthTextColor(row.status);
+        doc.setFillColor(r, g, b);
+        doc.roundedRect(cols.status, y - 3.2, 22, 5.5, 1, 1, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(tr, tg, tb);
+        doc.text(String(row.status ?? '').slice(0, 10), cols.status + 11, y, { align: 'center' });
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(70, 70, 80);
+        doc.text(String(row.owner_team ?? 'Self').slice(0, 12), cols.owner, y);
+        const notesY = pdfWrapText(doc, row.notes ?? '', cols.notes, y, PDF_PAGE_W - cols.notes - PDF_MARGIN, 3.8);
+        y = Math.max(y + 5, notesY) + 2;
+      });
+      return y + 4;
+    }
+
+    function pdfDrawTimelineReview(doc, y, weekDays, categories, caption) {
+      y = pdfSectionLabel(doc, 'Timeline review:', y);
+      y = pdfDrawWeekChart(doc, y, weekDays);
+      if (categories.length) {
+        const catMax = Math.max(...categories.map((c) => c.value), 1);
+        y = pdfDrawBarChart(doc, y, 'Time by category', categories, catMax);
+      }
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(90, 90, 100);
+      y = pdfWrapText(doc, caption, PDF_MARGIN, y, PDF_CONTENT_W, 4.2) + 6;
+      return y;
+    }
+
+    function pdfDrawRisksProgressColumns(doc, y, knownIssues, potentialRisks, tasksCompleted, workProgress) {
+      y = pdfEnsureSpace(doc, y, 50);
+      const colW = (PDF_CONTENT_W - 6) / 2;
+      const leftX = PDF_MARGIN;
+      const rightX = PDF_MARGIN + colW + 6;
+      const blockH = 46;
+
+      doc.setFillColor(255, 251, 235);
+      doc.roundedRect(leftX, y, colW, blockH, 2, 2, 'F');
+      doc.setFillColor(227, 242, 253);
+      doc.roundedRect(rightX, y, colW, blockH, 2, 2, 'F');
+
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 80, 20);
+      doc.text('Known issues', leftX + 4, y + 6);
+      doc.setTextColor(40, 90, 130);
+      doc.text('Team progress', rightX + 4, y + 6);
+
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7.2);
+      doc.setTextColor(60, 60, 70);
+      let ly = y + 11;
+      (knownIssues || []).slice(0, 3).forEach((item) => {
+        ly = pdfWrapText(doc, `• ${item}`, leftX + 4, ly, colW - 8, 3.6) + 1;
+      });
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(40, 90, 130);
+      doc.text('Potential risks', leftX + 4, y + 28);
+      doc.setFont(undefined, 'normal');
+      doc.setTextColor(60, 60, 70);
+      ly = y + 33;
+      (potentialRisks || []).slice(0, 2).forEach((item) => {
+        ly = pdfWrapText(doc, `• ${item}`, leftX + 4, ly, colW - 8, 3.6) + 1;
+      });
+
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(7);
+      doc.setTextColor(40, 90, 130);
+      doc.text('Tasks completed', rightX + 4, y + 12);
+      doc.setFont(undefined, 'normal');
+      let ry = y + 17;
+      (tasksCompleted || []).slice(0, 4).forEach((item) => {
+        ry = pdfWrapText(doc, `• ${item}`, rightX + 4, ry, colW - 8, 3.6) + 1;
+      });
+      doc.setFont(undefined, 'bold');
+      doc.text('Highlights', rightX + 4, y + 32);
+      doc.setFont(undefined, 'normal');
+      ry = y + 37;
+      (workProgress || []).slice(0, 2).forEach((item) => {
+        ry = pdfWrapText(doc, `• ${item}`, rightX + 4, ry, colW - 8, 3.6) + 1;
+      });
+
+      return y + blockH + 8;
+    }
+
+    function buildStatusReportPdf(payload, todayData, weekData) {
+      const doc = new jsPDF();
+      const report = payload?.report || {};
+      const meta = report.report_meta || {};
+      const local = payload?.local_data || {};
+      const en = (t) => extractEnglishText(t ?? '');
+      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Developer';
+      const period = meta.period_label || (local.period_start && local.period_end
+        ? `${local.period_start} — ${local.period_end}`
+        : (todayData?.date || new Date().toISOString().slice(0, 10)));
+      const focusPct = local.total_seconds > 0
+        ? Math.round((local.focus_seconds / local.total_seconds) * 100)
+        : 0;
+      const generatedAt = payload?.generated_at || new Date().toLocaleDateString(undefined, {
+        month: 'long', day: 'numeric', year: 'numeric',
+      });
+
+      let y = PDF_MARGIN;
+      y = pdfDrawTbiTitle(doc, y, userName, generatedAt);
+
+      y = pdfDrawMetaSummaryRow(doc, y, [
+        { label: 'Period', value: period },
+        { label: 'Focus target', value: en(report.focus_target || meta.focus_target || '—') },
+        { label: 'Tracked hours', value: `${local.total_hours ?? 0}h · ${focusPct}% focus` },
+      ], en(report.executive_overview || report.work_summary) || '—');
+
+      y = pdfDrawOverallHealth(doc, y, en(report.overall_health) || 'Attention', en(report.health_notes) || '—');
+
+      const tableRows = (report.health_breakdown || []).map((r) => ({
+        element: en(r.element),
+        status: en(r.status),
+        owner_team: en(r.owner_team || 'Self'),
+        notes: en(r.notes),
+      }));
+      y = pdfDrawTbiTable(doc, y, tableRows);
+
+      const weekDays = weekData?.days?.length
+        ? weekData.days
+        : (local.daily_totals || []).map((d) => ({ weekday: d.date?.slice(5), total_seconds: d.total_seconds }));
+      const categories = (local.category_breakdown || []).slice(0, 6).map((c) => ({
+        label: c.category,
+        value: c.total_seconds,
+        display: `${(c.total_seconds / 3600).toFixed(1)}h`,
+      }));
+      y = pdfDrawTimelineReview(
+        doc,
+        y,
+        weekDays,
+        categories,
+        en(report.timeline_caption || report.work_summary) || '—',
+      );
+
+      y = pdfDrawRisksProgressColumns(
+        doc,
+        y,
+        (report.known_issues || []).map(en),
+        (report.potential_risks || []).map(en),
+        (report.tasks_completed || []).map(en),
+        (report.work_progress || []).map(en),
+      );
+
+      y = pdfSectionLabel(doc, 'Lessons learned', y);
+      for (const lesson of (report.lessons_learned || []).slice(0, 3)) {
+        y = pdfEnsureSpace(doc, y, 18);
+        doc.setFillColor(237, 233, 254);
+        doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_W, 16, 2, 2, 'F');
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(80, 60, 140);
+        doc.text(en(lesson.title) || 'Lesson', PDF_MARGIN + 4, y + 5);
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(70, 70, 80);
+        y = pdfWrapText(doc, en(lesson.body), PDF_MARGIN + 4, y + 10, PDF_CONTENT_W - 8, 3.8) + 8;
+      }
+
+      if ((report.recommendations || []).length) {
+        y = pdfSectionLabel(doc, 'Recommendations', y);
+        y = pdfBulletList(doc, report.recommendations.map(en), y);
+      }
+
+      y = pdfEnsureSpace(doc, y, 8);
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 160);
+      const sectionCount = (payload.generation_passes || []).length;
+      doc.text(
+        `Generated locally · ${payload?.model || 'FlowSight'} · ${sectionCount} AI sections`,
+        PDF_MARGIN,
+        y,
+      );
+
+      const fileDate = local.period_end || todayData?.date || new Date().toISOString().slice(0, 10);
+      return { doc, fileDate };
+    }
+
+    function pdfBulletList(doc, items, y) {
+      doc.setFontSize(9.5);
+      doc.setTextColor(60, 60, 60);
+      for (const item of items || []) {
+        y = pdfEnsureSpace(doc, y, 8);
+        const bullet = `\u2022 ${item}`;
+        y = pdfWrapText(doc, bullet, PDF_MARGIN + 2, y, PDF_CONTENT_W - 4, 4.5) + 2;
+      }
+      return y + 2;
+    }
+
+    function pdfDrawBarChart(doc, y, title, items, maxVal) {
+      y = pdfEnsureSpace(doc, y, 20);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 80, 90);
+      doc.text(title, PDF_MARGIN, y);
+      y += 6;
+      const barMaxW = PDF_CONTENT_W - 52;
+      const colors = [[99, 102, 241], [34, 197, 94], [251, 146, 60], [236, 72, 153], [14, 165, 233], [168, 85, 247]];
+      items.forEach((item, idx) => {
+        y = pdfEnsureSpace(doc, y, 10);
+        const val = item.value || 0;
+        const pct = maxVal > 0 ? val / maxVal : 0;
+        const barW = Math.max(pct * barMaxW, val > 0 ? 4 : 0);
+        const [cr, cg, cb] = colors[idx % colors.length];
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 55);
+        doc.text(String(item.label).slice(0, 18), PDF_MARGIN, y + 3);
+        doc.setFillColor(235, 235, 240);
+        doc.roundedRect(PDF_MARGIN + 42, y - 2, barMaxW, 5, 1, 1, 'F');
+        if (barW > 0) {
+          doc.setFillColor(cr, cg, cb);
+          doc.roundedRect(PDF_MARGIN + 42, y - 2, barW, 5, 1, 1, 'F');
+        }
+        doc.setTextColor(90, 90, 100);
+        doc.text(item.display || '', PDF_MARGIN + 42 + barMaxW + 2, y + 3);
+        y += 7;
+      });
+      return y + 4;
+    }
+
+    function pdfDrawWeekChart(doc, y, days) {
+      if (!days?.length) return y;
+      y = pdfEnsureSpace(doc, y, 38);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(80, 80, 90);
+      doc.text('Weekly activity', PDF_MARGIN, y);
+      y += 5;
+      const chartH = 24;
+      const barW = (PDF_CONTENT_W - (days.length - 1) * 3) / days.length;
+      const maxSec = Math.max(...days.map((d) => d.total_seconds || d.seconds || 0), 1);
+      days.forEach((d, i) => {
+        const sec = d.total_seconds ?? d.seconds ?? 0;
+        const h = Math.max(2, (sec / maxSec) * chartH);
+        const x = PDF_MARGIN + i * (barW + 3);
+        doc.setFillColor(235, 235, 240);
+        doc.roundedRect(x, y + chartH - 2, barW, 2, 1, 1, 'F');
+        doc.setFillColor(99, 102, 241);
+        doc.roundedRect(x, y + chartH - h, barW, h, 1, 1, 'F');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 110);
+        const lbl = d.weekday || (d.date ? d.date.slice(5) : '');
+        doc.text(lbl, x + barW / 2, y + chartH + 5, { align: 'center' });
+      });
+      return y + chartH + 10;
+    }
+
 
     // ===== MANUAL LOGIN LOGIC =====
     const toggleManualLogin = document.getElementById('toggleManualLogin');

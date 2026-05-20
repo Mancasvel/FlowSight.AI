@@ -43,6 +43,8 @@ fn get_linear_token() -> Result<String, String> {
 
 #[tauri::command]
 pub fn fetch_linear_tasks() -> Result<Vec<LinearIssue>, String> {
+    let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "integrations")?;
     let access_token = get_linear_token()?;
     
     let client = Client::new();
@@ -92,6 +94,8 @@ pub struct LinearUser {
 
 #[tauri::command]
 pub fn fetch_linear_profile() -> Result<LinearUser, String> {
+    let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "integrations")?;
     let access_token = get_linear_token()?;
     
     let client = Client::new();

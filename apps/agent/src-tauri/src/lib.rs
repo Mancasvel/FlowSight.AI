@@ -11,6 +11,8 @@ mod sync;
 mod auth;
 mod linear;
 mod oauth_env;
+mod entitlements;
+mod insights_local;
 pub mod context;
 pub mod paths;
 
@@ -53,6 +55,12 @@ pub fn run() {
             sync::join_team,
             sync::get_user_teams,
             sync::set_active_team,
+            entitlements::get_entitlements,
+            entitlements::save_entitlements_command,
+            entitlements::refresh_entitlements,
+            entitlements::fetch_cloud_insights,
+            entitlements::request_cloud_insights,
+            insights_local::generate_local_status_report,
             agent::start_server,
             agent::stop_server,
             llama_managed_process_status,

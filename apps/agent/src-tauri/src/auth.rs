@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use reqwest::blocking::Client;
+use crate::sync_env::{supabase_anon_key, supabase_url};
 use oauth2::{
     basic::BasicClient, AuthUrl, ClientId, RedirectUrl, TokenUrl,
     PkceCodeChallenge, CsrfToken, Scope, AuthorizationCode, TokenResponse
@@ -381,10 +382,15 @@ fn create_oauth_client(provider: &str) -> Result<BasicClient, String> {
 pub fn start_auth(provider: String) -> Result<String, String> {
     auth_log(format!("[Auth] start_auth requested for provider: {}", provider));
 
+    let db_path = crate::paths::db_path()?;
+
     // Google uses Supabase OAuth (configured in Supabase Dashboard)
     if provider == "google" {
         return start_supabase_oauth(&provider);
     }
+
+    // Jira and Linear are paid-plan integrations only.
+    crate::entitlements::require_feature(&db_path, "integrations")?;
     
     // Jira and Linear use direct OAuth with .env keys
     let config = get_provider_config(&provider).ok_or("Unknown provider")?;
@@ -437,7 +443,7 @@ fn start_supabase_oauth(provider: &str) -> Result<String, String> {
     let redirect_to = "http://localhost:12345/callback";
     let auth_url = format!(
         "{}/auth/v1/authorize?provider={}&redirect_to={}",
-        SUPABASE_URL,
+        supabase_url(),
         provider,
         urlencoding::encode(redirect_to)
     );
@@ -751,8 +757,8 @@ fn listen_for_supabase_callback() {
 
 fn fetch_supabase_user(access_token: &str) -> Result<AuthUser, String> {
     let client = Client::new();
-    let resp = client.get(format!("{}/auth/v1/user", SUPABASE_URL))
-        .header("apikey", SUPABASE_KEY)
+    let resp = client.get(format!("{}/auth/v1/user", supabase_url()))
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .map_err(|e| e.to_string())?;
@@ -960,12 +966,10 @@ pub fn logout() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM config WHERE key = 'user_session'", [])
         .map_err(|e| e.to_string())?;
-    println!("[Auth] Logged out (cleared auth_session + user_session)");
+    crate::entitlements::clear_entitlements(&conn)?;
+    println!("[Auth] Logged out (cleared auth_session + user_session + entitlements)");
     Ok(())
 }
-
-const SUPABASE_URL: &str = "https://dzpyrdxelcgfpmcdojvb.supabase.co";
-const SUPABASE_KEY: &str = "sb_publishable_Ky02yQS5HHpkmrN1DE2yaw_EwENlsPZ";
 
 /// Parses `access_token` / optional `refresh_token` from a hash or query fragment, or treats `code` as a raw JWT.
 pub(crate) fn parse_tokens_from_oauth_code(code: &str) -> Result<(String, Option<String>), String> {
@@ -1010,8 +1014,8 @@ pub fn login_with_code(code: String) -> Result<AuthSession, String> {
     
     // Validate against Supabase Auth API
     let client = Client::new();
-    let resp = client.get(format!("{}/auth/v1/user", SUPABASE_URL))
-        .header("apikey", SUPABASE_KEY)
+    let resp = client.get(format!("{}/auth/v1/user", supabase_url()))
+        .header("apikey", supabase_anon_key())
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .map_err(|e| e.to_string())?;

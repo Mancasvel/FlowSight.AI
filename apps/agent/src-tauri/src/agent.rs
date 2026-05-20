@@ -856,6 +856,31 @@ fn wait_for_managed_health_secs(max_secs: u64) -> bool {
     false
 }
 
+/// Starts the managed llama-server if needed and waits until `/health` responds.
+pub fn ensure_local_llm_ready(app: tauri::AppHandle, state: State<'_, AgentState>) -> Result<(), String> {
+    if local_server_health_ok() {
+        return Ok(());
+    }
+
+    log::info!("[LocalReport] Local AI offline — starting server for insight generation…");
+    let result = start_server(app, state)?;
+    let status = result["status"].as_str().unwrap_or("");
+    if status != "started" && status != "already_running" {
+        return Err(format!("Could not start local AI: {}", result));
+    }
+
+    const REPORT_READY_WAIT_SECS: u64 = 180;
+    if wait_for_managed_health_secs(REPORT_READY_WAIT_SECS) {
+        log::info!("[LocalReport] Local AI ready for report generation");
+        return Ok(());
+    }
+
+    Err(format!(
+        "Local AI did not respond within {}s. Start monitoring from Today and retry.",
+        REPORT_READY_WAIT_SECS
+    ))
+}
+
 fn read_server_log_tail_chars(max_chars: usize) -> String {
     let Ok(path) = crate::paths::server_log_path() else {
         return String::new();

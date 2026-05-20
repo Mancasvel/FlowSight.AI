@@ -69,6 +69,8 @@ pub fn create_oauth_client() -> BasicClient {
 
 #[tauri::command]
 pub fn start_jira_oauth() -> Result<String, String> {
+    let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "integrations")?;
     // 1. Setup PKCE
     let client = create_oauth_client();
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -281,6 +283,8 @@ fn fetch_cloud_id(token: &str) -> Result<String, Box<dyn Error>> {
 
 #[tauri::command]
 pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
+    let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "integrations")?;
     // 1. Get valid token (auto-refreshes if expired)
     let access_token = get_valid_token()?;
     
@@ -359,6 +363,8 @@ pub struct JiraUser {
 
 #[tauri::command]
 pub fn fetch_jira_profile() -> Result<JiraUser, String> {
+    let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "integrations")?;
     // 1. Get valid token (auto-refreshes if expired)
     let access_token = get_valid_token()?;
     

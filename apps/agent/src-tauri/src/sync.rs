@@ -63,10 +63,17 @@ pub(crate) fn refresh_session_if_expiring(db_path: &std::path::PathBuf) {
     }
 
     match refresh_supabase_token(&session) {
-        Ok(_) => println!(
-            "[Sync] Proactive JWT refresh OK (previous access exp: {})",
-            exp
-        ),
+        Ok(new_session) => {
+            println!(
+                "[Sync] Proactive JWT refresh OK (previous access exp: {})",
+                exp
+            );
+            if let Ok(entitlements) =
+                crate::entitlements::refresh_entitlements_from_supabase(&new_session.access_token)
+            {
+                let _ = crate::entitlements::save_entitlements(&conn, &entitlements);
+            }
+        }
         Err(e) => println!("[Sync] Proactive JWT refresh failed: {}", e),
     }
 }
@@ -84,6 +91,7 @@ pub fn start_token_refresh_thread(db_path: std::path::PathBuf) {
 #[tauri::command]
 pub fn force_sync_now() -> Result<String, String> {
     let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "sync")?;
     match perform_sync(&db_path) {
         Ok(summary) => Ok(format!("Sync Report:\n\n{}", summary)),
         Err(e) => Err(format!("Sync failed: {}", e))
@@ -91,7 +99,7 @@ pub fn force_sync_now() -> Result<String, String> {
 }
 
 // Get user session from local config
-fn get_user_session(conn: &Connection) -> Option<UserSession> {
+pub(crate) fn get_user_session_from_conn(conn: &Connection) -> Option<UserSession> {
     // 1. Try 'user_session' (Internal sync session - has team_id)
     let user_session: Option<UserSession> = conn.query_row(
         "SELECT value FROM config WHERE key = 'user_session'",
@@ -156,6 +164,10 @@ fn get_user_session(conn: &Connection) -> Option<UserSession> {
         // Neither exists
         (None, None) => None,
     }
+}
+
+fn get_user_session(conn: &Connection) -> Option<UserSession> {
+    get_user_session_from_conn(conn)
 }
 
 // Save user session to local config
@@ -226,6 +238,7 @@ pub fn clear_user_session() -> Result<(), String> {
     
     conn.execute("DELETE FROM config WHERE key = 'user_session'", [])
         .map_err(|e| e.to_string())?;
+    crate::entitlements::clear_entitlements(&conn)?;
     
     println!("[Sync] User session cleared");
     Ok(())
@@ -252,6 +265,22 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
             return Ok("Not logged in - sync disabled".to_string());
         }
     };
+
+    if let Err(reason) = crate::entitlements::require_feature(db_path, "sync") {
+        println!("[CloudSync] {}", reason);
+        return Ok(reason);
+    }
+
+    if let Ok(entitlements) =
+        crate::entitlements::refresh_entitlements_from_supabase(&session.access_token)
+    {
+        let _ = crate::entitlements::save_entitlements(&conn, &entitlements);
+        if !entitlements.can_sync {
+            println!("[CloudSync] License inactive — sync disabled.");
+            return Ok("License inactive — sync disabled".to_string());
+        }
+    }
+
     println!("[CloudSync] REST base: {}", supabase_url());
     
     let batch_limit = std::env::var("FLOWSIGHT_SYNC_BATCH_LIMIT")
@@ -588,6 +617,7 @@ pub fn upload_activity_report(
     duration_seconds: i32
 ) -> Result<(), String> {
     let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "sync")?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
     let session = get_user_session(&conn)
@@ -716,6 +746,7 @@ pub fn set_active_team(team_id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn join_team(token: String) -> Result<serde_json::Value, String> {
     let db_path = crate::paths::db_path()?;
+    crate::entitlements::require_feature(&db_path, "sync")?;
     refresh_session_if_expiring(&db_path);
 
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;

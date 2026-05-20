@@ -20,7 +20,8 @@ Documento de arquitectura del **agente de escritorio** (Tauri) y límites funcio
 | `sync.rs` | Sincronización periódica con Supabase: lectura de informes no sincronizados, **resumen por LLM** local, subida `work_sessions` / `activity_reports`, sesión JWT y refresh. |
 | `sync_pure.rs` | Helpers puros: SQL de batch pendiente, JWT `exp`, truncado/clamp del texto enviado al modelo de resumen. |
 | `sync_env.rs` | URLs y claves públicas de Supabase (entorno / build). |
-| `auth.rs` | OAuth / sesión local expuesta al frontend. |
+| `entitlements.rs` | Licencias/tiers: caché local, RPC `get_user_entitlements`, gates de sync/integraciones/cloud AI. |
+| `auth.rs` | OAuth / sesión local expuesta al frontend (requiere licencia para integraciones). |
 | `jira.rs` | Integración Jira (OAuth, tareas). |
 | `linear.rs` | Integración Linear. |
 | `oauth_env.rs` | Config OAuth por proveedor. |
@@ -50,14 +51,29 @@ Variables útiles: `FLOWSIGHT_SUMMARY_MAX_CHARS`, `FLOWSIGHT_SUMMARY_MAX_LINE_CH
 
 ## Frontend (`apps/agent/src/renderer/`)
 
-- Configuración, monitorización, captura manual/automática, historial, PDFs, integración Jira/Linear y auth.
+- Arranque **free-first**: la app principal (Today/Summary) funciona sin login; captura y LLM local siempre en localhost.
+- Panel **Activate cloud features** (Profile o overlay): login Supabase + licencia Individual o Team.
 - Comunicación con Rust solo vía `invoke(...)` con los comandos declarados en `lib.rs`.
+
+## Modelo de tiers (Free / Individual / Team)
+
+| Tier | Internet | Features |
+|------|----------|----------|
+| **Free** | Solo localhost (`llama-server`) | Captura, SQLite, Summary local |
+| **Individual** | Supabase + integraciones | Sync cloud cada 10 min, Work Insights (local + OpenRouter MiMo v2.5 Pro), Jira/Linear/Google |
+| **Team** | Supabase + integraciones | Igual que Individual pero varios miembros; PM gestiona invitaciones fuera del agente |
+
+- Esquema y RLS: `supabase/migrations/20260521000000_tiers_and_entitlements.sql`
+- RPC principal: `get_user_entitlements()` — fuente de verdad para agente y políticas RLS.
+- Tablas nuevas: `cloud_insights`; `teams.is_personal` para cuentas Individual.
+- Licencias existentes: `public.licenses` + RPC `claim_license` (código FS-XXXX-XXXX); no hay tabla `subscriptions`.
+- Edge Function on-demand: `supabase/functions/generate-insights/` → escribe en `cloud_insights`.
 
 ## Dependencias conceptuales
 
 - **SQLite local** (`agent.rs`): fuente de verdad de capturas hasta sync; esquema evolutivo con `ALTER` tolerantes a fallo.
 - **Servidor LLM local**: requerido para visión y para el resumen de sync; puerto coordinado por `llama_port.rs`.
-- **Supabase**: destino cloud para sesiones de trabajo agregadas, no para filas crudas de `reports` completas.
+- **Supabase**: destino cloud para sesiones de trabajo agregadas y licencias; no para filas crudas de `reports` completas. Sync/integraciones bloqueados sin licencia activa (`entitlements.rs` + RLS).
 
 ## Al modificar comportamiento de IA
 
