@@ -1602,18 +1602,319 @@
 
     .cloud-activation-overlay {
       position: fixed;
-      inset: 0;
+      top: 44px;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 1000;
       display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      background: rgb(0 0 0 / 0.45);
-      backdrop-filter: blur(4px);
+      flex-direction: column;
+      background: hsl(220 16% 96%);
+      overflow: hidden;
     }
 
     .cloud-activation-overlay.visible {
       display: flex;
+    }
+
+    .login-splash {
+      width: 100%;
+      max-width: 400px;
+      height: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .login-splash-hero {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 6px 18px 16px;
+      overflow: hidden;
+    }
+
+    .login-preview-stage {
+      position: relative;
+      width: 100%;
+      max-width: 338px;
+      height: 172px;
+      margin: 0 auto;
+    }
+
+    .login-preview-card {
+      position: absolute;
+      background: hsl(var(--card));
+      border-radius: 16px;
+      box-shadow: 0 10px 28px rgb(15 23 42 / 0.09), 0 2px 8px rgb(15 23 42 / 0.05);
+      border: 1px solid hsl(var(--border) / 0.6);
+    }
+
+    .login-preview-summary {
+      top: auto;
+      bottom: 46px;
+      left: 4px;
+      width: 196px;
+      padding: 13px 13px 11px;
+      transform: rotate(-3deg);
+      z-index: 2;
+    }
+
+    .login-preview-summary-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: hsl(var(--muted-foreground));
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .login-preview-bar-row {
+      display: grid;
+      grid-template-columns: 38px 1fr 34px;
+      gap: 5px;
+      align-items: center;
+      margin-bottom: 7px;
+      font-size: 10px;
+    }
+
+    .login-preview-bar-row:last-child { margin-bottom: 0; }
+
+    .login-preview-bar-pct {
+      font-weight: 600;
+      color: hsl(var(--foreground));
+      font-size: 8px;
+      white-space: nowrap;
+    }
+
+    .login-preview-bar-track {
+      height: 6px;
+      background: hsl(var(--muted) / 0.45);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .login-preview-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+    }
+
+    .login-preview-bar-time {
+      font-size: 8px;
+      color: hsl(var(--muted-foreground));
+      text-align: right;
+    }
+
+    .login-preview-streak {
+      top: auto;
+      bottom: 50px;
+      right: 2px;
+      width: 158px;
+      padding: 12px;
+      transform: rotate(4deg);
+      z-index: 3;
+      background: linear-gradient(145deg, hsl(262 70% 58%), hsl(280 65% 52%));
+      border: none;
+      color: #fff;
+      box-shadow: 0 12px 32px hsl(262 70% 40% / 0.32);
+    }
+
+    .login-preview-streak-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9px;
+      font-weight: 600;
+      opacity: 0.95;
+      margin-bottom: 6px;
+    }
+
+    .login-preview-streak-num {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .login-preview-streak-days {
+      display: flex;
+      justify-content: space-between;
+      gap: 2px;
+    }
+
+    .login-preview-streak-day {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: rgb(255 255 255 / 0.2);
+      font-size: 7px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-preview-streak-day.done {
+      background: rgb(255 255 255 / 0.95);
+      color: hsl(262 70% 45%);
+    }
+
+    .login-preview-streak-note {
+      display: none;
+    }
+
+    .login-preview-report {
+      bottom: -22px;
+      left: 50%;
+      transform: translateX(-50%) rotate(-0.5deg);
+      width: calc(100% - 6px);
+      max-width: 326px;
+      padding: 11px 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 4;
+    }
+
+    .login-preview-report-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, hsl(262 83% 58% / 0.15), hsl(199 89% 48% / 0.12));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .login-preview-report-icon img {
+      width: 26px;
+      height: auto;
+    }
+
+    .login-preview-report-text strong {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: hsl(var(--primary));
+      margin-bottom: 2px;
+    }
+
+    .login-preview-report-text span {
+      display: -webkit-box;
+      font-size: 9px;
+      color: hsl(var(--muted-foreground));
+      line-height: 1.35;
+      overflow: hidden;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .login-splash-content {
+      flex: 0 0 auto;
+      padding: 4px 20px 10px;
+      text-align: center;
+    }
+
+    .login-splash-content h1 {
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 4px;
+      line-height: 1.15;
+    }
+
+    .login-splash-content .login-splash-tagline {
+      font-size: 12px;
+      color: hsl(var(--muted-foreground));
+      margin: 0 0 10px;
+      line-height: 1.35;
+      padding: 0 4px;
+    }
+
+    .login-splash-auth {
+      text-align: left;
+      background: hsl(var(--card));
+      border-radius: 16px;
+      padding: 12px;
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 4px 16px rgb(0 0 0 / 0.04);
+    }
+
+    .login-splash-auth .form-group {
+      margin-bottom: 6px;
+    }
+
+    .login-splash-auth .label {
+      font-size: 10px;
+      margin-bottom: 3px;
+    }
+
+    .login-splash-auth .input {
+      padding: 5px 9px;
+      font-size: 11px;
+    }
+
+    .login-splash-auth #workerLoginForm {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .login-splash-auth .login-divider {
+      margin: 8px 0;
+      font-size: 9px;
+    }
+
+    .login-splash-auth .login-manual-link {
+      font-size: 10px;
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .login-splash-auth .button-primary#workerLoginBtn {
+      padding: 9px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 12px;
+    }
+
+    .login-splash-auth .button-secondary#loginGoogle {
+      padding: 9px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .login-splash-footer {
+      font-size: 9px;
+      color: hsl(var(--muted-foreground));
+      margin-top: 8px;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .login-splash-skip {
+      width: 100%;
+      margin-top: 6px;
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+
+    .login-splash.login-splash--manual .login-splash-hero {
+      display: none;
+    }
+
+    .login-splash.login-splash--manual .login-splash-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding-bottom: 16px;
     }
 
     .cloud-activation-panel {
@@ -2602,83 +2903,125 @@
     </div>
   </div>
 
-  <!-- CLOUD ACTIVATION OVERLAY (optional — not required to use the app) -->
+  <!-- CLOUD ACTIVATION / LOGIN SPLASH -->
   <div class="cloud-activation-overlay" id="loginScreen">
-    <div class="app-container cloud-activation-panel">
-    <div class="card" style="padding: 24px; text-align: center;">
-      <div style="margin-bottom: 20px;">
-        <div class="login-brand">
-          <img src="/flowsight_sinfondo.png" alt="" class="login-logo" width="140" height="auto" />
-          <h1 id="loginTitle" style="font-size: 20px; font-weight: 600; margin-top: 12px; margin-bottom: 4px;">Activate cloud features</h1>
-          <p id="loginSubtitle" style="font-size: 12px; color: hsl(var(--muted-foreground));">Individual or Team license required for sync and cloud AI insights. Jira and Linear linking unlock with a paid plan.</p>
+    <div class="login-splash">
+      <div class="login-splash-hero">
+        <div class="login-preview-stage">
+          <div class="login-preview-card login-preview-summary">
+            <div class="login-preview-summary-title">Today's focus</div>
+            <div class="login-preview-bar-row">
+              <span class="login-preview-bar-pct">Coding</span>
+              <div class="login-preview-bar-track">
+                <div class="login-preview-bar-fill" style="width:82%;background:hsl(var(--summary-purple))"></div>
+              </div>
+              <span class="login-preview-bar-time">2h 10m</span>
+            </div>
+            <div class="login-preview-bar-row">
+              <span class="login-preview-bar-pct">Review</span>
+              <div class="login-preview-bar-track">
+                <div class="login-preview-bar-fill" style="width:55%;background:hsl(var(--summary-magenta))"></div>
+              </div>
+              <span class="login-preview-bar-time">1h 25m</span>
+            </div>
+            <div class="login-preview-bar-row">
+              <span class="login-preview-bar-pct">Debug</span>
+              <div class="login-preview-bar-track">
+                <div class="login-preview-bar-fill" style="width:36%;background:hsl(var(--summary-teal))"></div>
+              </div>
+              <span class="login-preview-bar-time">52m</span>
+            </div>
+          </div>
+
+          <div class="login-preview-card login-preview-streak">
+            <div class="login-preview-streak-head">
+              <span>Daily goal streak</span>
+              <span>🔥</span>
+            </div>
+            <div class="login-preview-streak-num">4</div>
+            <div class="login-preview-streak-days">
+              <span class="login-preview-streak-day done">M</span>
+              <span class="login-preview-streak-day done">T</span>
+              <span class="login-preview-streak-day done">W</span>
+              <span class="login-preview-streak-day done">T</span>
+              <span class="login-preview-streak-day">F</span>
+              <span class="login-preview-streak-day">S</span>
+              <span class="login-preview-streak-day">S</span>
+            </div>
+            <div class="login-preview-streak-note">Keep it up — 3 days to a 7-day streak!</div>
+          </div>
+
+          <div class="login-preview-card login-preview-report">
+            <div class="login-preview-report-icon">
+              <img src="/flowsight_sinfondo.png" alt="">
+            </div>
+            <div class="login-preview-report-text">
+              <strong>Work report ready</strong>
+              <span>Local AI generated your weekly status from tracked activity.</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <form id="workerLoginForm" style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
-          <div id="workerLoginError" class="auth-error"></div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="label" for="workerEmail">Email</label>
-            <input type="email" id="workerEmail" class="input" placeholder="you@company.com" autocomplete="email" required>
-          </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="label" for="workerPassword">Password</label>
-            <input type="password" id="workerPassword" class="input" placeholder="License account password"
-              autocomplete="current-password" required>
-          </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="label" for="licenseCode">License code (Individual)</label>
-            <input type="text" id="licenseCode" class="input" placeholder="FS-XXXX-XXXX" autocomplete="off">
-          </div>
-          <button class="button button-primary" id="workerLoginBtn" type="submit" style="width: 100%; padding: 10px;">
-            Sign in to activate
-          </button>
-        </form>
+      <div class="login-splash-content">
+        <h1 id="loginTitle">Welcome to FlowSight.</h1>
+        <p class="login-splash-tagline" id="loginSubtitle">Understand your own workflows.</p>
 
-        <div class="login-divider">or continue with</div>
+        <div class="login-splash-auth">
+          <form id="workerLoginForm">
+            <div id="workerLoginError" class="auth-error"></div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="label" for="workerEmail">Email</label>
+              <input type="email" id="workerEmail" class="input" placeholder="you@company.com" autocomplete="email" required>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="label" for="workerPassword">Password</label>
+              <input type="password" id="workerPassword" class="input" placeholder="Your account password"
+                autocomplete="current-password" required>
+            </div>
+            <button class="button button-primary" id="workerLoginBtn" type="submit">
+              Sign in
+            </button>
+          </form>
 
-        <button class="button button-secondary" id="loginGoogle" onclick="window.handleLoginClick('google')"
-          style="width: 100%; padding: 10px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right: 8px;">
-            <path fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-            <path fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-            <path fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-            <path fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-          </svg>
-          Continue with Google
+          <div class="login-divider">or continue with</div>
+
+          <div id="loginOAuthRow">
+            <button class="button button-secondary" id="loginGoogle" onclick="window.handleLoginClick('google')" style="width: 100%;">
+              <svg width="16" height="16" viewBox="0 0 24 24" style="margin-right: 8px;">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              Continue with Google
+            </button>
+          </div>
+
+          <div class="login-manual-link">
+            <a href="#" id="toggleManualLogin" style="color: hsl(var(--muted-foreground)); text-decoration: underline;">
+              Trouble connecting? Use manual code
+            </a>
+          </div>
+
+          <div id="manualLoginParams" style="display: none; margin-top: 8px;">
+            <div class="form-group">
+              <label class="label">Access Token (JWT)</label>
+              <input type="text" id="manualCodeInput" class="input" placeholder="Paste Supabase access token…"
+                style="font-family: monospace; font-size: 11px;">
+            </div>
+            <button class="button button-primary" id="manualLoginBtn" style="width: 100%;">Login with code</button>
+            <button class="button button-ghost" id="cancelManualLoginBtn" style="width: 100%; margin-top: 6px;">Back</button>
+          </div>
+        </div>
+
+        <p class="login-splash-footer">
+          By signing in, you agree to FlowSight's Terms of Service and Privacy Policy.
+        </p>
+        <button class="button button-ghost login-splash-skip" id="closeCloudActivationBtn" type="button">
+          Continue in Free (Local) mode
         </button>
-
       </div>
-
-      <div style="font-size: 11px; margin-top: 20px; color: hsl(var(--muted-foreground));">
-        <a href="#" id="toggleManualLogin"
-          style="color: hsl(var(--muted-foreground)); text-decoration: underline;">Trouble connecting? Use Manual
-          Code</a>
-      </div>
-
-      <!-- Manual Login Section (Hidden by default) -->
-      <div id="manualLoginParams" style="display: none; width: 100%; margin-top: 15px; text-align: left;">
-        <div class="form-group">
-          <label style="font-size: 11px; font-weight: 500;">Access Token (JWT)</label>
-          <input type="text" id="manualCodeInput" class="select" placeholder="Paste Supabase Access Token..."
-            style="font-family: monospace; font-size: 11px;">
-        </div>
-        <button class="button button-primary" id="manualLoginBtn" style="width: 100%;">Login with Code</button>
-        <button class="button button-ghost" id="cancelManualLoginBtn"
-          style="width: 100%; margin-top: 5px;">Back</button>
-      </div>
-
-      <p style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 20px;">
-        By activating cloud features, you agree to FlowSight's Terms of Service
-      </p>
-      <button class="button button-ghost" id="closeCloudActivationBtn" type="button" style="width: 100%; margin-top: 10px;">
-        Continue in Free (Local) mode
-      </button>
-    </div>
     </div>
   </div>
 
@@ -2846,6 +3189,26 @@
           </div>
         </div>
 
+        <div class="card" id="licenseActivationCard" style="display: none;">
+          <div class="card-header">
+            <div class="card-title">Activate license</div>
+          </div>
+          <p class="upgrade-hint" style="margin-bottom: 12px;">
+            Enter your Individual license code to unlock sync, cloud AI insights, and integrations.
+          </p>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="label" for="profileLicenseCode">License code</label>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="profileLicenseCode" class="input" placeholder="FS-XXXX-XXXX"
+                autocomplete="off" style="flex: 1; font-family: monospace;">
+              <button type="button" class="button button-primary" id="claimLicenseBtn" style="padding: 8px 12px;">
+                Activate
+              </button>
+            </div>
+            <div id="licenseActivationStatus" style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 6px;"></div>
+          </div>
+        </div>
+
         <div class="card" id="workPreferencesCard">
           <div class="card-header">
             <div class="card-title">Work preferences</div>
@@ -2964,7 +3327,14 @@
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { jsPDF } from 'jspdf';
-    import { getFriendlyAuthError, signInForCloudFeatures, signOutWorker } from './auth-service.js';
+    import {
+      claimLicenseCode,
+      ensurePersonalTeam,
+      getFriendlyAuthError,
+      getSupabaseClient,
+      signInForCloudFeatures,
+      signOutWorker,
+    } from './auth-service.js';
 
     console.log('[FlowSight] Imports loaded successfully');
 
@@ -3090,8 +3460,78 @@
       );
       if (allowed) return true;
       showToast(message || 'This feature requires an Individual or Team license.', 'error', 4500);
-      showCloudActivationPanel();
+      if (authSession) {
+        switchTab('tabProfile');
+        document.getElementById('profileLicenseCode')?.focus();
+      } else {
+        showCloudActivationPanel();
+      }
       return false;
+    }
+
+    function setLicenseActivationStatus(message, isError = false) {
+      const el = document.getElementById('licenseActivationStatus');
+      if (!el) return;
+      el.textContent = message || '';
+      el.style.color = isError ? 'hsl(var(--destructive))' : 'hsl(var(--muted-foreground))';
+    }
+
+    function updateLicenseActivationCard() {
+      const card = document.getElementById('licenseActivationCard');
+      if (!card) return;
+      card.style.display = authSession && !isPaidActive() ? '' : 'none';
+      if (!authSession || isPaidActive()) {
+        setLicenseActivationStatus('');
+      }
+    }
+
+    function handleActivateCloudClick() {
+      if (authSession && !isPaidActive()) {
+        switchTab('tabProfile');
+        document.getElementById('profileLicenseCode')?.focus();
+        return;
+      }
+      showCloudActivationPanel();
+    }
+
+    async function handleClaimLicense() {
+      const code = document.getElementById('profileLicenseCode')?.value?.trim();
+      if (!code) {
+        setLicenseActivationStatus('Enter your license code (FS-XXXX-XXXX).', true);
+        return;
+      }
+
+      const btn = document.getElementById('claimLicenseBtn');
+      btn.disabled = true;
+      setLicenseActivationStatus('Activating license...');
+
+      try {
+        const supabase = getSupabaseClient();
+        await claimLicenseCode(supabase, code);
+
+        let entitlements = await invoke('refresh_entitlements');
+        if (entitlements?.plan === 'individual' && entitlements?.status === 'active' && !entitlements?.active_team_id) {
+          await ensurePersonalTeam(supabase);
+          entitlements = await invoke('refresh_entitlements');
+        }
+
+        await persistEntitlements(entitlements);
+
+        if (!isPaidActive()) {
+          throw new Error('License could not be activated. Check your code and try again.');
+        }
+
+        setLicenseActivationStatus('');
+        document.getElementById('profileLicenseCode').value = '';
+        await loadUserTeams();
+        showToast('License activated', 'success');
+      } catch (error) {
+        const message = error?.message || 'Could not activate license.';
+        setLicenseActivationStatus(message, true);
+        showToast(message, 'error', 4500);
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     function updatePlanBadge() {
@@ -3106,6 +3546,7 @@
       const todayIntegrationControls = document.getElementById('todayIntegrationControls');
       const manualTask = document.getElementById('manualTask');
       const syncToJiraWrapper = document.getElementById('syncToJiraWrapper');
+      const licenseCard = document.getElementById('licenseActivationCard');
       const canIntegrate = Boolean(currentEntitlements?.can_integrations);
 
       if (!badge) return;
@@ -3117,17 +3558,33 @@
       if (syncToJiraWrapper) syncToJiraWrapper.style.display = canIntegrate ? '' : 'none';
 
       if (!isPaidActive()) {
-        badge.textContent = 'Free (Local)';
-        badge.classList.add('plan-badge-free');
-        if (activateBtn) activateBtn.style.display = '';
-        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (authSession) {
+          badge.textContent = 'Cloud account';
+          badge.classList.add('plan-badge-free');
+          if (activateBtn) {
+            activateBtn.style.display = '';
+            activateBtn.textContent = 'Activate license';
+          }
+          if (logoutBtn) logoutBtn.style.display = '';
+        } else {
+          badge.textContent = 'Free (Local)';
+          badge.classList.add('plan-badge-free');
+          if (activateBtn) {
+            activateBtn.style.display = '';
+            activateBtn.textContent = 'Activate cloud';
+          }
+          if (logoutBtn) logoutBtn.style.display = 'none';
+        }
         if (navCloud) navCloud.style.display = 'none';
         if (integrationsCard) integrationsCard.classList.add('paid-feature-locked');
         if (integrationsProviderRow) integrationsProviderRow.style.display = 'none';
         if (upgradeHint) upgradeHint.style.display = 'block';
         if (teamCodeGroup) teamCodeGroup.style.display = 'none';
+        updateLicenseActivationCard();
         return;
       }
+
+      if (licenseCard) licenseCard.style.display = 'none';
 
       const plan = currentEntitlements.plan || 'paid';
       badge.textContent = plan === 'individual' ? 'Individual' : plan === 'team' ? 'Team' : 'Licensed';
@@ -3187,12 +3644,28 @@
       }
     }
 
-    function showCloudActivationPanel() {
+    function resetLoginSplashCopy() {
+      const title = document.getElementById('loginTitle');
+      const sub = document.getElementById('loginSubtitle');
+      if (title) title.textContent = 'Welcome to FlowSight.';
+      if (sub) sub.textContent = 'Understand your own workflows.';
+    }
+
+    function showCloudActivationPanel(mode = 'cloud') {
+      const title = document.getElementById('loginTitle');
+      const sub = document.getElementById('loginSubtitle');
+      if (mode === 'cloud') {
+        if (title) title.textContent = 'Activate cloud features';
+        if (sub) sub.textContent = 'Sign in, then activate your license in Profile.';
+      } else {
+        resetLoginSplashCopy();
+      }
       document.getElementById('loginScreen')?.classList.add('visible');
     }
 
     function hideCloudActivationPanel() {
       document.getElementById('loginScreen')?.classList.remove('visible');
+      document.querySelector('.login-splash')?.classList.remove('login-splash--manual');
       setWorkerLoginError('');
     }
 
@@ -3312,11 +3785,10 @@
       e.preventDefault();
       const email = document.getElementById('workerEmail').value.trim();
       const password = document.getElementById('workerPassword').value;
-      const licenseCode = document.getElementById('licenseCode')?.value?.trim() || '';
       const btn = document.getElementById('workerLoginBtn');
 
       if (!email || !password) {
-        setWorkerLoginError('Enter the email and password for your license account.');
+        setWorkerLoginError('Enter your email and password.');
         return;
       }
 
@@ -3326,7 +3798,7 @@
 
       let supabaseSessionCreated = false;
       try {
-        const result = await signInForCloudFeatures(email, password, licenseCode || undefined);
+        const result = await signInForCloudFeatures(email, password);
         supabaseSessionCreated = true;
         const displayName = result.profile.display_name || result.user.email || 'User';
         const teamId = result.membership?.team_id || result.entitlements.active_team_id || null;
@@ -3358,9 +3830,16 @@
         hideCloudActivationPanel();
         showMainApp();
         await initMainApp();
-        await loadUserTeams();
+        if (isPaidActive()) {
+          await loadUserTeams();
+        }
         await promptOnboardingIfNeeded();
-        showToast('Cloud features activated', 'success');
+        showToast(
+          isPaidActive()
+            ? 'Cloud features activated'
+            : 'Signed in — activate your license in Profile',
+          'success',
+        );
       } catch (error) {
         if (supabaseSessionCreated) {
           await signOutWorker().catch((signOutError) => console.error('[Auth] Cleanup sign out failed:', signOutError));
@@ -3374,7 +3853,7 @@
         showToast(message, 'error', 4500);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = 'Sign in to activate';
+        btn.innerHTML = 'Sign in';
       }
     }
 
@@ -3789,6 +4268,12 @@
             showMainApp();
             await initMainApp();
             await promptOnboardingIfNeeded();
+            showToast(
+              isPaidActive()
+                ? 'Cloud features activated'
+                : 'Signed in — activate your license in Profile',
+              'success',
+            );
             return;
           }
 
@@ -4025,8 +4510,9 @@
     document.getElementById('workerLoginForm').onsubmit = handleWorkerLogin;
     document.getElementById('loginGoogle').onclick = () => handleLogin('google');
     document.getElementById('logoutBtn').onclick = handleLogout;
-    document.getElementById('activateCloudBtn').onclick = showCloudActivationPanel;
+    document.getElementById('activateCloudBtn').onclick = handleActivateCloudClick;
     document.getElementById('closeCloudActivationBtn').onclick = hideCloudActivationPanel;
+    document.getElementById('claimLicenseBtn').onclick = handleClaimLicense;
     document.getElementById('generateCloudInsightsBtn').onclick = generateCloudInsights;
 
     async function loadCloudInsights() {
@@ -6118,18 +6604,20 @@
       e.preventDefault();
       manualLoginParams.style.display = 'block';
       toggleManualLogin.style.display = 'none';
-      // Hide other buttons roughly
-      document.getElementById('loginGoogle').parentElement.style.display = 'none';
-      document.getElementById('loginTitle').innerText = "Manual Code Login";
-      document.getElementById('loginSubtitle').innerText = "Enter your access token directly";
+      document.getElementById('loginOAuthRow').style.display = 'none';
+      document.getElementById('workerLoginForm').style.display = 'none';
+      document.getElementById('loginTitle').innerText = 'Manual code login';
+      document.getElementById('loginSubtitle').innerText = 'Enter your access token directly';
+      document.querySelector('.login-splash')?.classList.add('login-splash--manual');
     };
 
     cancelManualLoginBtn.onclick = () => {
       manualLoginParams.style.display = 'none';
       toggleManualLogin.style.display = 'inline';
-      document.getElementById('loginGoogle').parentElement.style.display = 'flex';
-      document.getElementById('loginTitle').innerText = "FlowSight Agent";
-      document.getElementById('loginSubtitle').innerText = "Understand your own Workflows";
+      document.getElementById('loginOAuthRow').style.display = 'block';
+      document.getElementById('workerLoginForm').style.display = '';
+      document.querySelector('.login-splash')?.classList.remove('login-splash--manual');
+      resetLoginSplashCopy();
     };
 
     manualLoginBtn.onclick = async () => {

@@ -101,7 +101,7 @@ export async function claimLicenseCode(supabase, code) {
   return data;
 }
 
-export async function signInForCloudFeatures(email, password, licenseCode) {
+export async function signInForCloudFeatures(email, password) {
   const supabase = getSupabaseClient();
   const normalizedEmail = email.trim();
 
@@ -124,19 +124,8 @@ export async function signInForCloudFeatures(email, password, licenseCode) {
   }
 
   const user = userData.user;
-
-  if (licenseCode) {
-    await claimLicenseCode(supabase, licenseCode);
-  }
-
   let entitlements = await fetchUserEntitlements(supabase);
-
-  if (!entitlements.plan || entitlements.status !== 'active') {
-    return rejectSignedInUser(
-      supabase,
-      'No active license found. Enter your license code (FS-XXXX-XXXX) or join a team via invitation.',
-    );
-  }
+  const hasActiveLicense = Boolean(entitlements.plan && entitlements.status === 'active');
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
@@ -149,32 +138,37 @@ export async function signInForCloudFeatures(email, password, licenseCode) {
   }
 
   let activeTeamId = entitlements.activeTeamId;
+  let memberships = [];
 
-  if (entitlements.plan === 'individual' && !activeTeamId) {
-    activeTeamId = await ensurePersonalTeam(supabase);
-    entitlements = await fetchUserEntitlements(supabase);
-    activeTeamId = activeTeamId || entitlements.activeTeamId;
-  }
+  if (hasActiveLicense) {
+    if (entitlements.plan === 'individual' && !activeTeamId) {
+      activeTeamId = await ensurePersonalTeam(supabase);
+      entitlements = await fetchUserEntitlements(supabase);
+      activeTeamId = activeTeamId || entitlements.activeTeamId;
+    }
 
-  if (entitlements.plan === 'team' && entitlements.teamIds.length === 0) {
-    return rejectSignedInUser(
-      supabase,
-      'This Team license account is not assigned to a team yet. Ask your PM for an invitation code.',
-    );
-  }
+    if (entitlements.plan === 'team' && entitlements.teamIds.length === 0) {
+      return rejectSignedInUser(
+        supabase,
+        'This Team license account is not assigned to a team yet. Ask your PM for an invitation code.',
+      );
+    }
 
-  const { data: memberships, error: membershipError } = await supabase
-    .from('team_members')
-    .select('team_id, role')
-    .eq('user_id', user.id);
+    const { data: membershipRows, error: membershipError } = await supabase
+      .from('team_members')
+      .select('team_id, role')
+      .eq('user_id', user.id);
 
-  if (membershipError) {
-    return rejectSignedInUser(supabase, 'We could not load your team membership.');
+    if (membershipError) {
+      return rejectSignedInUser(supabase, 'We could not load your team membership.');
+    }
+
+    memberships = membershipRows ?? [];
   }
 
   const membership =
-    memberships?.find((m) => m.team_id === activeTeamId) ??
-    memberships?.[0] ??
+    memberships.find((m) => m.team_id === activeTeamId) ??
+    memberships[0] ??
     (activeTeamId ? { team_id: activeTeamId, role: 'owner' } : null);
 
   return {
@@ -187,7 +181,7 @@ export async function signInForCloudFeatures(email, password, licenseCode) {
       avatar_url: null,
     },
     membership,
-    memberships: memberships ?? [],
+    memberships,
     entitlements: {
       plan: entitlements.plan,
       status: entitlements.status,
