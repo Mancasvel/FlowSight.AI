@@ -7,6 +7,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 [![Commercial License available](https://img.shields.io/badge/Commercial%20License-available-green.svg)](./COMMERCIAL-LICENSE.md)
 [![CLA required](https://img.shields.io/badge/CLA-required-orange.svg)](./CLA.md)
+[![Support on Ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/flowsight)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Mancasvel/FlowSight.AI)
 
 FlowSight is a desktop application that helps distributed engineering
@@ -155,6 +156,37 @@ Participation is governed by the [Contributor Covenant](./CODE_OF_CONDUCT.md).
 If you find a vulnerability, **please do not open a public issue**. Use
 GitHub's private Security Advisory feature on this repository, or email
 **manuel@flowsight.site**.
+
+---
+
+## Support FlowSight
+
+FlowSight is free and open source. If it's useful to you, consider supporting the project:
+
+### 💜 [Support on Ko-fi](https://ko-fi.com/flowsight)
+
+Every coffee helps keep development going. All funds go directly to:
+
+- **Server costs** — CI/CD, model hosting, Supabase backend
+- **Model improvements** — better local LLMs for activity analysis
+- **Cross-platform** — Linux and macOS builds
+- **New features** — team analytics, integrations, plugin system
+
+### Sponsor Tiers
+
+| Tier | Amount | Badge |
+|------|--------|-------|
+| ☕ Supporter | €1-4 | Listed in [SPONSORS.md](./SPONSORS.md) |
+| ☕☕ Champion | €5-14 | Listed + name in app credits |
+| 💎 Founding Supporter | €15+ | Listed + featured in app About page |
+| 🔄 Monthly Backer | Any recurring | All above + early access to features |
+
+### Other ways to contribute
+
+- ⭐ **Star this repo** — helps with visibility
+- 🐛 **Report bugs** — open an issue
+- 💻 **Submit a PR** — see [CONTRIBUTING.md](./CONTRIBUTING.md)
+- 📣 **Spread the word** — share with your team
 
 ---
 
