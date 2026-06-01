@@ -7,6 +7,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 [![Commercial License available](https://img.shields.io/badge/Commercial%20License-available-green.svg)](./COMMERCIAL-LICENSE.md)
 [![CLA required](https://img.shields.io/badge/CLA-required-orange.svg)](./CLA.md)
+[![Support on Ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/flowsight)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Mancasvel/FlowSight.AI)
 
 FlowSight is a desktop application that helps distributed engineering
@@ -123,6 +124,41 @@ model assets from a private release.
 
 ---
 
+## Join Us
+
+**We're hiring our first engineer.**
+
+FlowSight is a privacy-first productivity tool that runs locally on your machine. No surveillance, no cloud dependency, no compromise. Backed by Microsoft for Startups, incubated at Xiji (Shanghai), part of AltaLab's accelerator.
+
+### The problem we're solving
+- Teams waste hours in meetings that could be a message
+- "Productivity tools" are surveillance with a nicer UI
+- No one trusts their data with the tools they use at work
+- Privacy and good UX shouldn't be mutually exclusive
+
+### Who we're looking for
+- You've shipped something end-to-end (side project, startup, open source)
+- You're comfortable with Rust, TypeScript, or systems-level work
+- You understand why privacy-first architecture matters
+- You want to build, not just code tickets
+
+### Why FlowSight
+- Equity-first role. Real ownership, not token options
+- Product is live. Not a pitch deck, a working app
+- Technical CEO who built it solo and needs a multiplier
+- Shanghai-based or remote. We care what you build
+
+### How to apply
+
+Send an email to **manuel@flowsight.site** with:
+- Something you've built that you're proud of
+- Why privacy-first AI matters to you
+- Your GitHub or portfolio
+
+No cover letters. No culture fit essays. Show us what you've done.
+
+---
+
 ## License and distribution
 
 FlowSight is distributed under a **dual licensing model**:
@@ -155,6 +191,37 @@ Participation is governed by the [Contributor Covenant](./CODE_OF_CONDUCT.md).
 If you find a vulnerability, **please do not open a public issue**. Use
 GitHub's private Security Advisory feature on this repository, or email
 **manuel@flowsight.site**.
+
+---
+
+## Support FlowSight
+
+FlowSight is free and open source. If it's useful to you, consider supporting the project:
+
+### 💜 [Support on Ko-fi](https://ko-fi.com/flowsight)
+
+Every coffee helps keep development going. All funds go directly to:
+
+- **Server costs** — CI/CD, model hosting, Supabase backend
+- **Model improvements** — better local LLMs for activity analysis
+- **Cross-platform** — Linux and macOS builds
+- **New features** — team analytics, integrations, plugin system
+
+### Sponsor Tiers
+
+| Tier | Amount | Badge |
+|------|--------|-------|
+| ☕ Supporter | €1-4 | Listed in [SPONSORS.md](./SPONSORS.md) |
+| ☕☕ Champion | €5-14 | Listed + name in app credits |
+| 💎 Founding Supporter | €15+ | Listed + featured in app About page |
+| 🔄 Monthly Backer | Any recurring | All above + early access to features |
+
+### Other ways to contribute
+
+- ⭐ **Star this repo** — helps with visibility
+- 🐛 **Report bugs** — open an issue
+- 💻 **Submit a PR** — see [CONTRIBUTING.md](./CONTRIBUTING.md)
+- 📣 **Spread the word** — share with your team
 
 ---
 
