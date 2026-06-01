@@ -1324,8 +1324,8 @@
       justify-content: flex-end;
       flex-shrink: 0;
       height: 32px;
-      width: 32px;
-      padding: 0;
+      width: 118px;
+      padding: 0 4px 0 8px;
       border: none;
       border-radius: 999px;
       background: hsl(var(--accent));
@@ -1333,19 +1333,18 @@
       cursor: pointer;
       overflow: hidden;
       white-space: nowrap;
-      transition: width 0.28s ease, padding 0.28s ease, background 0.15s ease;
+      transition: background 0.15s ease;
     }
 
     .summary-download-label {
       font-size: 11px;
       font-weight: 600;
       letter-spacing: -0.1px;
-      opacity: 0;
-      max-width: 0;
+      opacity: 1;
+      max-width: 72px;
       overflow: hidden;
       margin-right: 0;
-      transform: translateX(8px);
-      transition: opacity 0.22s ease, max-width 0.28s ease, margin 0.28s ease, transform 0.28s ease;
+      transform: translateX(0);
     }
 
     .summary-download-icon {
@@ -2847,6 +2846,23 @@
 
     .report-modal-body .status-report {
       margin-top: 0;
+    }
+
+    .pdf-download-path {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: hsl(var(--muted));
+      font-size: 11px;
+      line-height: 1.45;
+      word-break: break-all;
+      color: hsl(var(--foreground));
+    }
+
+    .pdf-download-filename {
+      font-weight: 600;
+      margin-bottom: 4px;
+      word-break: break-all;
     }
   </style>
 </head>
@@ -5988,7 +6004,7 @@
             }).join('')}
           </div>
           <p style="font-size:10px;color:hsl(var(--muted-foreground));margin:14px 0 0;">
-            Step ${Math.min(doneThrough + 2, REPORT_GEN_STEP_LABELS.length)} of ${REPORT_GEN_STEP_LABELS.length} · Local AI sections (English)
+            Step ${Math.min(doneThrough + 2, REPORT_GEN_STEP_LABELS.length)} of ${REPORT_GEN_STEP_LABELS.length}
           </p>
         </div>`;
     }
@@ -6244,15 +6260,75 @@
       }
     }
 
+    function buildStatusReportPdfFilename(payload, todayData) {
+      const local = payload?.local_data || {};
+      const isoDay = (value) => {
+        const s = String(value ?? '').trim();
+        const m = s.match(/(\d{4}-\d{2}-\d{2})/);
+        return m ? m[1] : '';
+      };
+      const start = isoDay(local.period_start);
+      const end = isoDay(local.period_end) || isoDay(todayData?.date) || new Date().toISOString().slice(0, 10);
+      if (start && end && start !== end) {
+        return `FlowSight_Work-Report_${start}_to_${end}.pdf`;
+      }
+      return `FlowSight_Work-Report_${end || start}.pdf`;
+    }
+
+    function showPdfDownloadModal(savedPath, filename) {
+      if (document.getElementById('pdfDownloadOverlay')) return;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'pdfDownloadOverlay';
+      overlay.style.zIndex = '2100';
+
+      const folderPath = savedPath.replace(/[/\\][^/\\]+$/, '') || savedPath;
+      const displayName = filename || savedPath.split(/[/\\]/).pop() || 'report.pdf';
+
+      overlay.innerHTML = `
+        <div class="modal-content" style="max-width:420px;">
+          <div class="modal-header">
+            <span class="modal-title">Report downloaded</span>
+          </div>
+          <div class="modal-body">
+            <p style="font-size:13px;margin:0 0 4px;">Your PDF is ready in your Downloads folder.</p>
+            <div class="pdf-download-path">
+              <div class="pdf-download-filename">${escapeHtml(displayName)}</div>
+              <div style="color:hsl(var(--muted-foreground));">${escapeHtml(folderPath)}</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">
+              <button type="button" id="pdfDownloadOpenFolderBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:1px solid hsl(var(--border));background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));">Open folder</button>
+              <button type="button" id="pdfDownloadOkBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:none;background:hsl(var(--primary));color:hsl(var(--primary-foreground));">OK</button>
+            </div>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.querySelector('#pdfDownloadOkBtn')?.addEventListener('click', close);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+      overlay.querySelector('#pdfDownloadOpenFolderBtn')?.addEventListener('click', async () => {
+        try {
+          await invoke('open_path_in_file_manager', { path: savedPath });
+        } catch (err) {
+          showToast('Could not open folder: ' + err, 'error');
+        }
+      });
+    }
+
     async function exportStatusReportPdf(payload) {
       if (!payload) payload = lastStatusReportPayload;
       if (!payload) {
         showToast('Generate a report first', 'error');
         return;
       }
-      const { doc, fileDate } = buildStatusReportPdf(payload, currentHistoryData, currentWeekData);
-      doc.save(`FlowSight_Status_Report_${fileDate}.pdf`);
-      showToast('PDF downloaded', 'success');
+      const { doc, filename } = buildStatusReportPdf(payload, currentHistoryData, currentWeekData);
+      const bytes = Array.from(new Uint8Array(doc.output('arraybuffer')));
+      const savedPath = await invoke('save_pdf_to_downloads', { filename, bytes });
+      showPdfDownloadModal(savedPath, filename);
     }
 
     function renderBreakdown(items, typeKey) {
@@ -6610,8 +6686,8 @@
         y,
       );
 
-      const fileDate = local.period_end || todayData?.date || new Date().toISOString().slice(0, 10);
-      return { doc, fileDate };
+      const filename = buildStatusReportPdfFilename(payload, todayData);
+      return { doc, filename };
     }
 
     function pdfBulletList(doc, items, y) {

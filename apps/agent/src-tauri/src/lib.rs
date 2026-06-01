@@ -82,6 +82,8 @@ pub fn run() {
             get_today_history,
             get_week_summary,
             paths::get_flowsight_user_paths,
+            paths::save_pdf_to_downloads,
+            paths::open_path_in_file_manager,
         ])
     .setup(|app| {
       if let Some(window) = app.get_webview_window("main") {

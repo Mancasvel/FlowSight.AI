@@ -165,6 +165,63 @@ pub fn resource_local_llm_dir(app: &AppHandle) -> Result<PathBuf, String> {
     ))
 }
 
+fn sanitize_pdf_filename(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() || !trimmed.to_ascii_lowercase().ends_with(".pdf") {
+        return Err("Invalid PDF filename".to_string());
+    }
+    let safe: String = trimmed
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        .collect();
+    if safe.len() < 5 {
+        return Err("Invalid PDF filename".to_string());
+    }
+    Ok(safe)
+}
+
+fn unique_download_path(downloads: &std::path::Path, filename: &str) -> PathBuf {
+    let mut path = downloads.join(filename);
+    if !path.exists() {
+        return path;
+    }
+    let stem = filename.strip_suffix(".pdf").unwrap_or(filename);
+    for n in 2..=99 {
+        let candidate = format!("{stem}_{n}.pdf");
+        path = downloads.join(&candidate);
+        if !path.exists() {
+            return path;
+        }
+    }
+    let stamp = chrono::Local::now().format("%H%M%S");
+    downloads.join(format!("{stem}_{stamp}.pdf"))
+}
+
+/// Guarda un PDF en la carpeta Descargas del usuario y devuelve la ruta absoluta escrita.
+#[tauri::command]
+pub fn save_pdf_to_downloads(filename: String, bytes: Vec<u8>) -> Result<String, String> {
+    let downloads = dirs::download_dir()
+        .ok_or_else(|| "Downloads folder not available on this system".to_string())?;
+    let safe = sanitize_pdf_filename(&filename)?;
+    let path = unique_download_path(&downloads, &safe);
+    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to save PDF: {e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Abre la carpeta que contiene `path` (si es un archivo, abre su directorio padre).
+#[tauri::command]
+pub fn open_path_in_file_manager(path: String) -> Result<(), String> {
+    let p = PathBuf::from(path);
+    let target = if p.is_file() {
+        p.parent()
+            .map(|parent| parent.to_path_buf())
+            .unwrap_or(p)
+    } else {
+        p
+    };
+    open::that(&target).map_err(|e| format!("Could not open folder: {e}"))
+}
+
 #[tauri::command]
 pub fn get_flowsight_user_paths() -> Result<serde_json::Value, String> {
     let dir = app_data_dir()?;
