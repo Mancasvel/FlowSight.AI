@@ -31,6 +31,9 @@ jobs:
       TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      # Required for signed auto-update artifacts (tauri-plugin-updater).
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -67,6 +70,45 @@ jobs:
       - name: Build app
         run: pnpm build
 
+      # Generate the updater manifest the app polls at
+      # releases/latest/download/latest.json. We point it at the NSIS installer
+      # because it self-updates per-user without a UAC prompt. GitHub renames
+      # release assets by replacing spaces with dots, so the download URL must too.
+      - name: Generate latest.json (updater manifest)
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          NSIS_DIR="apps/agent/src-tauri/target/release/bundle/nsis"
+          EXE="$(ls "$NSIS_DIR"/*-setup.exe | head -n1)"
+          SIG="$(ls "$NSIS_DIR"/*-setup.exe.sig | head -n1)"
+          BASENAME="$(basename "$EXE")"
+          # GitHub stores release assets with spaces replaced by dots.
+          export ASSET_NAME="$(echo "$BASENAME" | tr ' ' '.')"
+          export APP_VERSION="$(echo "$BASENAME" | sed -E 's/.*_([0-9]+\.[0-9]+\.[0-9]+)_.*/\1/')"
+          export DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
+          export SIGNATURE="$(cat "$SIG")"
+          export PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node -e '
+            const fs = require("fs");
+            const manifest = {
+              version: process.env.APP_VERSION,
+              notes: process.env.RELEASE_BODY || "",
+              pub_date: process.env.PUB_DATE,
+              platforms: {
+                "windows-x86_64": {
+                  signature: process.env.SIGNATURE,
+                  url: process.env.DOWNLOAD_URL
+                }
+              }
+            };
+            fs.writeFileSync("latest.json", JSON.stringify(manifest, null, 2));
+            console.log(manifest);
+          '
+
       - name: Upload Windows bundles
         uses: actions/upload-artifact@v4
         with:
@@ -74,6 +116,7 @@ jobs:
           path: |
             apps/agent/src-tauri/target/release/bundle/nsis/*.exe
             apps/agent/src-tauri/target/release/bundle/msi/*.msi
+            latest.json
           if-no-files-found: warn
 
   attach-to-release:
@@ -95,3 +138,4 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.msi
+            artifacts/**/latest.json

@@ -3325,6 +3325,8 @@
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
+    import { check as checkAppUpdate } from '@tauri-apps/plugin-updater';
+    import { relaunch } from '@tauri-apps/plugin-process';
     import { jsPDF } from 'jspdf';
     import {
       claimLicenseCode,
@@ -4668,6 +4670,108 @@
       }, duration);
     }
 
+    let updateCheckInFlight = false;
+
+    // Checks GitHub Releases for a newer signed build and asks the user before
+    // downloading. `manual = true` surfaces "up to date" / error feedback for an
+    // explicit "Check for updates" action; the startup check stays silent on no-op.
+    async function checkForUpdates({ manual = false } = {}) {
+      if (updateCheckInFlight) return;
+      updateCheckInFlight = true;
+      try {
+        const update = await checkAppUpdate();
+        if (!update) {
+          if (manual) showToast('You are on the latest version.', 'success');
+          return;
+        }
+        showUpdatePrompt(update);
+      } catch (err) {
+        console.warn('[Updater] Update check failed:', err);
+        if (manual) showToast('Could not check for updates. Try again later.', 'error');
+      } finally {
+        updateCheckInFlight = false;
+      }
+    }
+
+    function showUpdatePrompt(update) {
+      if (document.getElementById('updateOverlay')) return;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'updateOverlay';
+
+      const notes = (update.body || '').trim();
+      const notesHtml = notes
+        ? `<p style="margin-top:10px;font-size:12px;color:hsl(var(--muted-foreground));white-space:pre-wrap;max-height:120px;overflow-y:auto;">${escapeHtml(notes)}</p>`
+        : '';
+
+      overlay.innerHTML = `
+        <div class="modal-content" style="max-width:340px;">
+          <div class="modal-header">
+            <span class="modal-title">Update available</span>
+          </div>
+          <div class="modal-body">
+            <p style="font-size:13px;">FlowSight <strong>${escapeHtml(update.version)}</strong> is available.</p>
+            ${notesHtml}
+            <div id="updateProgress" style="display:none;margin-top:14px;">
+              <div style="height:6px;background:hsl(var(--muted));border-radius:999px;overflow:hidden;">
+                <div id="updateProgressBar" style="height:100%;width:0%;background:hsl(var(--primary));transition:width 0.2s ease;"></div>
+              </div>
+              <p id="updateProgressLabel" style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">Starting download…</p>
+            </div>
+            <div id="updateActions" style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+              <button id="updateLaterBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:1px solid hsl(var(--border));background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));">Later</button>
+              <button id="updateNowBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:none;background:hsl(var(--primary));color:hsl(var(--primary-foreground));">Update now</button>
+            </div>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      overlay.querySelector('#updateLaterBtn').addEventListener('click', close);
+
+      overlay.querySelector('#updateNowBtn').addEventListener('click', async () => {
+        const actions = overlay.querySelector('#updateActions');
+        const progress = overlay.querySelector('#updateProgress');
+        const bar = overlay.querySelector('#updateProgressBar');
+        const label = overlay.querySelector('#updateProgressLabel');
+        actions.style.display = 'none';
+        progress.style.display = 'block';
+
+        let downloaded = 0;
+        let total = 0;
+        try {
+          await update.downloadAndInstall((event) => {
+            switch (event.event) {
+              case 'Started':
+                total = event.data.contentLength || 0;
+                label.textContent = 'Downloading…';
+                break;
+              case 'Progress':
+                downloaded += event.data.chunkLength || 0;
+                if (total > 0) {
+                  const pct = Math.min(100, Math.round((downloaded / total) * 100));
+                  bar.style.width = pct + '%';
+                  label.textContent = `Downloading… ${pct}%`;
+                }
+                break;
+              case 'Finished':
+                bar.style.width = '100%';
+                label.textContent = 'Installing… the app will restart.';
+                break;
+            }
+          });
+          await relaunch();
+        } catch (err) {
+          console.error('[Updater] Install failed:', err);
+          progress.style.display = 'none';
+          actions.style.display = 'flex';
+          showToast('Update failed to install. Please try again.', 'error', 6000);
+        }
+      });
+    }
+
     async function loadConfig() {
       const config = await invoke('get_config');
       document.getElementById('statInterval').textContent = (config.captureInterval || 60000) / 1000 + 's';
@@ -5289,6 +5393,9 @@
       await restoreCloudSession();
       await initMainApp();
       await promptOnboardingIfNeeded();
+
+      // Background self-update check; never blocks startup and stays silent on no-op.
+      checkForUpdates().catch(() => {});
     }
 
     init();

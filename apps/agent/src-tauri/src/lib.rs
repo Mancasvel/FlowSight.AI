@@ -88,6 +88,14 @@ pub fn run() {
         let _ = window.set_theme(Some(tauri::Theme::Light));
       }
 
+      // Self-update support (GitHub Releases). Desktop-only; mobile targets skip it.
+      // `process` provides relaunch() so the frontend can restart after installing.
+      #[cfg(desktop)]
+      {
+        app.handle().plugin(tauri_plugin_process::init())?;
+        app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+      }
+
       // Log a archivo en TODOS los builds. En release el usuario no ve stderr,
       // así que sin esto no hay forma de diagnosticar crashes post-login.
       // Los archivos quedan en %LOCALAPPDATA%\ai.flowsight.agent\logs\ (Windows)

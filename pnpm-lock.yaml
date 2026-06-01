@@ -20,6 +20,12 @@ importers:
       '@tauri-apps/api':
         specifier: 2.10.1
         version: 2.10.1
+      '@tauri-apps/plugin-process':
+        specifier: ^2.3.0
+        version: 2.3.1
+      '@tauri-apps/plugin-updater':
+        specifier: ^2.9.0
+        version: 2.10.1
       jspdf:
         specifier: ^4.1.0
         version: 4.1.0
@@ -651,6 +657,18 @@ packages:
       '@tauri-apps/cli-win32-ia32-msvc': 2.10.1
       '@tauri-apps/cli-win32-x64-msvc': 2.10.1
     dev: true
+
+  /@tauri-apps/plugin-process@2.3.1:
+    resolution: {integrity: sha512-nCa4fGVaDL/B9ai03VyPOjfAHRHSBz5v6F/ObsB73r/dA3MHHhZtldaDMIc0V/pnUw9ehzr2iEG+XkSEyC0JJA==}
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+    dev: false
+
+  /@tauri-apps/plugin-updater@2.10.1:
+    resolution: {integrity: sha512-NFYMg+tWOZPJdzE/PpFj2qfqwAWwNS3kXrb1tm1gnBJ9mYzZ4WDRrwy8udzWoAnfGCHLuePNLY1WVCNHnh3eRA==}
+    dependencies:
+      '@tauri-apps/api': 2.10.1
+    dev: false
 
   /@types/estree@1.0.8:
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}

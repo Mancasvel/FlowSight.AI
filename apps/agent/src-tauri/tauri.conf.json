@@ -31,6 +31,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "windows": {
       "webviewInstallMode": {
         "type": "offlineInstaller",
@@ -49,6 +50,17 @@
       "../../../local_llm/bin/*.dll": "local_llm/bin/",
       "../../../local_llm/Qwen3-VL-2B-Instruct-Q3_K_M.gguf": "local_llm/Qwen3-VL-2B-Instruct-Q3_K_M.gguf",
       "../../../local_llm/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf": "local_llm/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_YOUR_TAURI_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/Mancasvel/FlowSight.AI/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
