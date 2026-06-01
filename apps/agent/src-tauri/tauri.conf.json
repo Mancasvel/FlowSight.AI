@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "FlowSight Agent",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "identifier": "ai.flowsight.agent",
   "build": {
     "frontendDist": "../dist",
@@ -54,7 +54,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_YOUR_TAURI_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQzQjY4MDk5MDFDN0UxNkYKUldSdjRjY0JtWUMyMDAzY0VFeXUxVHRXMkZPeVJJVVcrOVZpdnR5Ym9wWldaOEk1M0pEajkrR3AK",
       "endpoints": [
         "https://github.com/Mancasvel/FlowSight.AI/releases/latest/download/latest.json"
       ],
