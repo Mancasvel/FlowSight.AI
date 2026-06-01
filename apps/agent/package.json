@@ -13,13 +13,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
-    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/api": "2.11.0",
     "@tauri-apps/plugin-process": "^2.3.0",
     "@tauri-apps/plugin-updater": "^2.9.0",
     "jspdf": "^4.1.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.10.1",
+    "@tauri-apps/cli": "2.11.2",
     "dotenv": "^17.2.3",
     "vite": "^7.3.1"
   }
