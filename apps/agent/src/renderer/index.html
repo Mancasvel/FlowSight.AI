@@ -2160,6 +2160,296 @@
       line-height: 1.45;
     }
 
+    /* AI Coach (Pro) chat */
+    .coach-panel {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      margin: -16px -16px 0;
+      height: calc(100% + 16px);
+      padding: 0 !important;
+    }
+
+    .coach-chat-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      position: relative;
+    }
+
+    .coach-chat-shell.is-locked .coach-chat-inner {
+      filter: blur(6px);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .coach-chat-inner {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      padding: 12px 12px 0;
+    }
+
+    .coach-usage-bar {
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+      padding: 0 4px 8px;
+    }
+
+    .coach-usage-bar.warn {
+      color: hsl(32 90% 38%);
+    }
+
+    .coach-messages {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 4px 2px 12px;
+    }
+
+    .coach-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 8px;
+      padding: 24px 16px;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .coach-empty-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: hsl(var(--foreground));
+      letter-spacing: -0.02em;
+    }
+
+    .coach-empty-sub {
+      font-size: 12px;
+      line-height: 1.5;
+      max-width: 260px;
+    }
+
+    .coach-msg {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 92%;
+    }
+
+    .coach-msg.user {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+
+    .coach-msg.assistant {
+      align-self: flex-start;
+    }
+
+    .coach-msg-bubble {
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .coach-msg.user .coach-msg-bubble {
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border-bottom-right-radius: 4px;
+    }
+
+    .coach-msg.assistant .coach-msg-bubble {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-bottom-left-radius: 4px;
+    }
+
+    .coach-msg-bubble h1,
+    .coach-msg-bubble h2,
+    .coach-msg-bubble h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 8px 0 4px;
+    }
+
+    .coach-msg-bubble h1:first-child,
+    .coach-msg-bubble h2:first-child,
+    .coach-msg-bubble h3:first-child {
+      margin-top: 0;
+    }
+
+    .coach-msg-bubble p {
+      margin: 0 0 6px;
+    }
+
+    .coach-msg-bubble ul,
+    .coach-msg-bubble ol {
+      margin: 4px 0 6px;
+      padding-left: 18px;
+    }
+
+    .coach-msg-bubble li {
+      margin-bottom: 3px;
+    }
+
+    .coach-thinking {
+      align-self: flex-start;
+      font-size: 11px;
+      color: hsl(var(--muted-foreground));
+      padding: 4px 8px;
+    }
+
+    .coach-composer-wrap {
+      padding: 8px 12px 12px;
+      border-top: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+    }
+
+    .coach-composer {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 1px solid hsl(var(--border));
+      border-radius: 14px;
+      background: hsl(var(--background));
+      padding: 10px 10px 8px;
+      box-shadow: 0 2px 12px rgb(0 0 0 / 0.04);
+    }
+
+    .coach-composer:focus-within {
+      border-color: hsl(var(--ring));
+    }
+
+    .coach-input {
+      width: 100%;
+      min-height: 44px;
+      max-height: 120px;
+      resize: none;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      line-height: 1.45;
+      color: hsl(var(--foreground));
+      outline: none;
+      font-family: inherit;
+    }
+
+    .coach-input::placeholder {
+      color: hsl(var(--muted-foreground));
+    }
+
+    .coach-composer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .coach-char-count {
+      font-size: 10px;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .coach-char-count.warn {
+      color: hsl(32 90% 38%);
+    }
+
+    .coach-send-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 10px;
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      cursor: pointer;
+    }
+
+    .coach-send-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .coach-quick-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .coach-quick-btn {
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--background));
+      color: hsl(var(--muted-foreground));
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+
+    .coach-quick-btn:hover {
+      color: hsl(var(--foreground));
+      background: hsl(var(--accent));
+    }
+
+    .coach-lock-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 20;
+      background: hsl(var(--background) / 0.35);
+      backdrop-filter: blur(2px);
+    }
+
+    .coach-lock-overlay.visible {
+      display: flex;
+    }
+
+    .coach-lock-card {
+      max-width: 280px;
+      text-align: center;
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: 16px;
+      padding: 20px 18px;
+      box-shadow: 0 12px 40px rgb(0 0 0 / 0.12);
+    }
+
+    .coach-lock-card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .coach-lock-card p {
+      margin: 0 0 14px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .nav-item.nav-pro .nav-label {
+      font-weight: 600;
+    }
+
+    .nav-item.nav-pro-locked .nav-label {
+      opacity: 0.72;
+    }
+
     /* Work status report (local AI, TBI-style) */
     .status-report {
       margin-top: 20px;
@@ -3155,20 +3445,45 @@
         </div>
       </div>
 
-      <!-- TAB: Work Insights (Individual / Team) -->
-      <div id="tabCloudInsights" class="tab-panel">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title" id="cloudInsightsTitle">Work Insights</div>
-            <button class="button button-primary" id="generateCloudInsightsBtn" style="padding: 6px 10px; font-size: 11px;">
-              Generate report
-            </button>
+      <!-- TAB: AI Coach (Pro) -->
+      <div id="tabCloudInsights" class="tab-panel coach-panel">
+        <div class="coach-chat-shell" id="coachChatShell">
+          <div class="coach-chat-inner">
+            <div class="coach-usage-bar" id="coachUsageBar" style="display:none;"></div>
+            <div class="coach-messages" id="coachMessages">
+              <div class="coach-empty" id="coachEmptyState">
+                <div class="coach-empty-title">What's next for your work?</div>
+                <div class="coach-empty-sub">Focus, flow, and planning — grounded in your tracked activity.</div>
+              </div>
+            </div>
+            <div class="coach-thinking" id="coachThinking" style="display:none;">Thinking…</div>
           </div>
-          <p class="upgrade-hint" id="cloudInsightsHint">
-            Individual: AI report from your local activity (OpenRouter). Team: synced cloud history.
-          </p>
-          <div id="cloudInsightsBody">
-            <div class="empty-state">No cloud insights yet.</div>
+          <div class="coach-composer-wrap">
+            <form class="coach-composer" id="coachComposerForm">
+              <textarea id="coachInput" class="coach-input" rows="2"
+                placeholder="Ask about focus, activity, planning, or your week…" maxlength="500"></textarea>
+              <div class="coach-composer-footer">
+                <span class="coach-char-count" id="coachCharCount">0/500</span>
+                <button type="submit" class="coach-send-btn" id="coachSendBtn" title="Send" aria-label="Send">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                  </svg>
+                </button>
+              </div>
+            </form>
+            <div class="coach-quick-prompts" id="coachQuickPrompts">
+              <button type="button" class="coach-quick-btn" data-coach-prompt="How focused was I this week?">Focus this week</button>
+              <button type="button" class="coach-quick-btn" data-coach-prompt="What should I tackle next?">What's next?</button>
+              <button type="button" class="coach-quick-btn" data-coach-prompt="Where am I losing time to distractions?">Distractions</button>
+            </div>
+          </div>
+        </div>
+        <div class="coach-lock-overlay" id="coachLockOverlay">
+          <div class="coach-lock-card">
+            <h3 id="coachLockTitle">Upgrade to Pro</h3>
+            <p id="coachLockText">Unlock your AI coach — personalized guidance from your tracked activity.</p>
+            <button type="button" class="button button-primary" id="coachUpgradeBtn" style="width:100%;">Activate cloud</button>
           </div>
         </div>
       </div>
@@ -3298,11 +3613,12 @@
         </svg>
         <span class="nav-label">Summary</span>
       </button>
-      <button class="nav-item" data-tab="tabCloudInsights" id="navCloudInsights" style="display: none;">
+      <button class="nav-item nav-pro nav-pro-locked" data-tab="tabCloudInsights" id="navCloudInsights">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><circle cx="12" cy="12" r="4"/><path d="M4.2 4.2l2.1 2.1"/><path d="M17.7 17.7l2.1 2.1"/><path d="M19.8 4.2l-2.1 2.1"/><path d="M6.3 17.7l-2.1 2.1"/>
+          <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
+          <path d="M5 19h14"/><path d="M8 19v-3"/><path d="M16 19v-3"/>
         </svg>
-        <span class="nav-label" id="navCloudInsightsLabel">Insights</span>
+        <span class="nav-label" id="navCloudInsightsLabel">Pro</span>
       </button>
       <button class="nav-item" data-tab="tabProfile" id="navProfile">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -3585,12 +3901,16 @@
           }
           if (logoutBtn) logoutBtn.style.display = 'none';
         }
-        if (navCloud) navCloud.style.display = 'none';
+        if (navCloud) {
+          navCloud.style.display = '';
+          navCloud.classList.add('nav-pro-locked');
+        }
         if (integrationsCard) integrationsCard.classList.add('paid-feature-locked');
         if (integrationsProviderRow) integrationsProviderRow.style.display = 'none';
         if (upgradeHint) upgradeHint.style.display = 'block';
         if (teamCodeGroup) teamCodeGroup.style.display = 'none';
         updateLicenseActivationCard();
+        updateCoachLockState();
         return;
       }
 
@@ -3606,22 +3926,11 @@
       if (upgradeHint) upgradeHint.style.display = canIntegrate ? 'none' : 'block';
       if (teamCodeGroup) teamCodeGroup.style.display = currentEntitlements.plan === 'team' ? '' : 'none';
 
-      if (navCloud && currentEntitlements.can_cloud_ai) {
+      if (navCloud) {
         navCloud.style.display = '';
-        const navLabel = document.getElementById('navCloudInsightsLabel');
-        const titleEl = document.getElementById('cloudInsightsTitle');
-        const hintEl = document.getElementById('cloudInsightsHint');
-        const isIndividual = currentEntitlements.plan === 'individual';
-        if (navLabel) navLabel.textContent = isIndividual ? 'Insights' : 'Team AI';
-        if (titleEl) titleEl.textContent = isIndividual ? 'Your work report' : 'Team insights';
-        if (hintEl) {
-          hintEl.textContent = isIndividual
-            ? 'PM-style report from local SQLite + cloud sync, powered by MiMo v2.5 Pro via OpenRouter.'
-            : 'Aggregated insights from synced team activity in Supabase.';
-        }
-      } else if (navCloud) {
-        navCloud.style.display = 'none';
+        navCloud.classList.toggle('nav-pro-locked', !currentEntitlements.can_cloud_ai);
       }
+      updateCoachLockState();
     }
 
     async function persistEntitlements(entitlements) {
@@ -4517,25 +4826,242 @@
     document.getElementById('activateCloudBtn').onclick = handleActivateCloudClick;
     document.getElementById('closeCloudActivationBtn').onclick = hideCloudActivationPanel;
     document.getElementById('claimLicenseBtn').onclick = handleClaimLicense;
-    document.getElementById('generateCloudInsightsBtn').onclick = generateCloudInsights;
 
-    async function loadCloudInsights() {
-      const body = document.getElementById('cloudInsightsBody');
-      if (!body) return;
+    const COACH_MAX_CHARS = 500;
+    let coachMessages = [];
+    let coachSending = false;
+    let coachUsage = null;
 
-      if (!requirePaidFeature('cloud_ai', 'Cloud AI Insights require an Individual or Team license.')) {
-        body.innerHTML = '<div class="empty-state">Activate a license to use Cloud AI Insights.</div>';
+    function canUseCoachChat() {
+      return Boolean(
+        authSession &&
+        currentEntitlements &&
+        currentEntitlements.can_cloud_ai &&
+        isPaidActive()
+      );
+    }
+
+    function updateCoachLockState() {
+      const shell = document.getElementById('coachChatShell');
+      const overlay = document.getElementById('coachLockOverlay');
+      const title = document.getElementById('coachLockTitle');
+      const text = document.getElementById('coachLockText');
+      const btn = document.getElementById('coachUpgradeBtn');
+      const locked = !canUseCoachChat();
+
+      if (shell) shell.classList.toggle('is-locked', locked);
+      if (overlay) overlay.classList.toggle('visible', locked);
+
+      if (locked && title && text && btn) {
+        if (!authSession) {
+          title.textContent = 'Upgrade to Pro';
+          text.textContent = 'Unlock your AI coach — personalized guidance from your tracked activity.';
+          btn.textContent = 'Activate cloud';
+        } else if (!isPaidActive()) {
+          title.textContent = 'Upgrade to Pro';
+          text.textContent = 'Activate your Individual or Team license to chat with your AI coach.';
+          btn.textContent = 'Activate license';
+        } else {
+          title.textContent = 'Pro feature';
+          text.textContent = 'Your plan does not include the AI coach yet. Upgrade to Pro to continue.';
+          btn.textContent = 'View Profile';
+        }
+      }
+    }
+
+    function renderCoachMarkdown(text) {
+      let html = escapeHtml(text || '');
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+      html = html.replace(/^-\s+(.+)$/gm, '<li>$1</li>');
+      html = html.replace(/(<li>.*<\/li>\n?)+/g, (block) => `<ul>${block}</ul>`);
+      html = html.replace(/\n\n/g, '</p><p>');
+      html = `<p>${html}</p>`;
+      html = html.replace(/<p>\s*<\/p>/g, '');
+      html = html.replace(/<p>(<h[123]>)/g, '$1');
+      html = html.replace(/(<\/h[123]>)<\/p>/g, '$1');
+      html = html.replace(/<p>(<ul>)/g, '$1');
+      html = html.replace(/(<\/ul>)<\/p>/g, '$1');
+      return html;
+    }
+
+    function renderCoachMessages() {
+      const container = document.getElementById('coachMessages');
+      if (!container) return;
+
+      if (!coachMessages.length) {
+        container.innerHTML = `
+          <div class="coach-empty" id="coachEmptyState">
+            <div class="coach-empty-title">What's next for your work?</div>
+            <div class="coach-empty-sub">Focus, flow, and planning — grounded in your tracked activity.</div>
+          </div>`;
         return;
       }
 
-      body.innerHTML = '<div class="empty-state"><span class="loading"></span> Loading cloud insights...</div>';
+      container.innerHTML = coachMessages.map((msg) => {
+        const body = msg.role === 'assistant'
+          ? renderCoachMarkdown(msg.content)
+          : escapeHtml(msg.content);
+        return `
+          <div class="coach-msg ${msg.role}">
+            <div class="coach-msg-bubble">${body}</div>
+          </div>`;
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateCoachUsageBar() {
+      const bar = document.getElementById('coachUsageBar');
+      if (!bar) return;
+      if (!coachUsage || !coachUsage.limit) {
+        bar.style.display = 'none';
+        return;
+      }
+      bar.style.display = '';
+      const remainingText = coachUsage.remaining > 0
+        ? ` · ${coachUsage.remaining} left`
+        : ' · limit reached';
+      bar.textContent = `Coach: ${coachUsage.used}/${coachUsage.limit} prompts this month${remainingText}`;
+      bar.classList.toggle('warn', coachUsage.limit > 0 && coachUsage.remaining <= Math.ceil(coachUsage.limit * 0.2));
+    }
+
+    async function loadCoachChatUsage() {
+      if (!canUseCoachChat()) {
+        coachUsage = null;
+        updateCoachUsageBar();
+        return;
+      }
       try {
-        const insights = await invoke('fetch_cloud_insights', { limit: 10 });
-        renderCloudInsights(insights);
+        const data = await invoke('get_coach_chat_usage');
+        coachUsage = data?.usage ?? data;
+        updateCoachUsageBar();
       } catch (e) {
-        body.innerHTML = `<div class="empty-state">Could not load insights: ${e}</div>`;
+        console.warn('[Coach] usage load failed:', e);
       }
     }
+
+    async function loadCoachChat() {
+      updateCoachLockState();
+      if (!canUseCoachChat()) return;
+
+      try {
+        coachMessages = await invoke('get_coach_chat_messages') || [];
+      } catch (e) {
+        console.warn('[Coach] messages load failed:', e);
+        coachMessages = [];
+      }
+      renderCoachMessages();
+      await loadCoachChatUsage();
+    }
+
+    async function sendCoachMessage(text) {
+      const trimmed = (text || '').trim();
+      if (!trimmed || coachSending) return;
+      if (!canUseCoachChat()) {
+        updateCoachLockState();
+        switchTab('tabCloudInsights');
+        return;
+      }
+
+      coachSending = true;
+      const input = document.getElementById('coachInput');
+      const thinking = document.getElementById('coachThinking');
+      const sendBtn = document.getElementById('coachSendBtn');
+      if (input) input.value = '';
+      updateCoachCharCount();
+      if (thinking) thinking.style.display = '';
+      if (sendBtn) sendBtn.disabled = true;
+
+      coachMessages.push({
+        id: `u-${Date.now()}`,
+        role: 'user',
+        content: trimmed,
+      });
+      renderCoachMessages();
+
+      try {
+        const result = await invoke('send_coach_chat_message', { message: trimmed });
+        if (Array.isArray(result?.messages)) {
+          coachMessages = result.messages;
+        } else if (result?.reply) {
+          coachMessages.push({
+            id: `a-${Date.now()}`,
+            role: 'assistant',
+            content: result.reply,
+          });
+        }
+        if (result?.usage) {
+          coachUsage = result.usage;
+          updateCoachUsageBar();
+        } else {
+          await loadCoachChatUsage();
+        }
+      } catch (e) {
+        coachMessages.push({
+          id: `a-${Date.now()}`,
+          role: 'assistant',
+          content: String(e),
+        });
+        showToast(String(e), 'error', 4500);
+      } finally {
+        coachSending = false;
+        if (thinking) thinking.style.display = 'none';
+        if (sendBtn) sendBtn.disabled = false;
+        renderCoachMessages();
+      }
+    }
+
+    function updateCoachCharCount() {
+      const input = document.getElementById('coachInput');
+      const counter = document.getElementById('coachCharCount');
+      if (!input || !counter) return;
+      const len = input.value.length;
+      counter.textContent = `${len}/${COACH_MAX_CHARS}`;
+      counter.classList.toggle('warn', len >= COACH_MAX_CHARS);
+    }
+
+    document.getElementById('coachComposerForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('coachInput');
+      sendCoachMessage(input?.value || '');
+    });
+
+    document.getElementById('coachInput')?.addEventListener('input', updateCoachCharCount);
+    document.getElementById('coachInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendCoachMessage(e.target.value);
+      }
+    });
+
+    document.querySelectorAll('[data-coach-prompt]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!canUseCoachChat()) {
+          switchTab('tabCloudInsights');
+          return;
+        }
+        sendCoachMessage(btn.getAttribute('data-coach-prompt'));
+      });
+    });
+
+    document.getElementById('coachUpgradeBtn')?.addEventListener('click', () => {
+      if (!authSession) {
+        showCloudActivationPanel();
+        return;
+      }
+      if (!isPaidActive()) {
+        switchTab('tabProfile');
+        document.getElementById('profileLicenseCode')?.focus();
+        return;
+      }
+      switchTab('tabProfile');
+    });
+
+    updateCoachCharCount();
 
     function escapeHtml(text) {
       return String(text ?? '')
@@ -4562,98 +5088,6 @@
 
     function enReport(text) {
       return escapeHtml(extractEnglishText(text));
-    }
-
-    function renderInsightSection(title, text) {
-      if (!text) return '';
-      return `
-        <div style="margin-top: 10px;">
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</div>
-          <p style="margin: 0; font-size: 12px; line-height: 1.45; color: hsl(var(--muted-foreground));">${escapeHtml(text)}</p>
-        </div>`;
-    }
-
-    function renderInsightList(title, items) {
-      if (!items || !items.length) return '';
-      return `
-        <div style="margin-top: 10px;">
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px;">${escapeHtml(title)}</div>
-          <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.45;">
-            ${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
-          </ul>
-        </div>`;
-    }
-
-    function renderCloudInsights(insights) {
-      const body = document.getElementById('cloudInsightsBody');
-      if (!body) return;
-
-      if (!insights || insights.length === 0) {
-        const isIndividual = currentEntitlements?.plan === 'individual';
-        body.innerHTML = isIndividual
-          ? '<div class="empty-state">No report yet. Track locally, then tap <strong>Generate report</strong>.</div>'
-          : '<div class="empty-state">No insights yet. Sync activity, then tap Generate report.</div>';
-        return;
-      }
-
-      body.innerHTML = insights.map((item) => {
-        const content = item.content || {};
-        const period = item.period_start && item.period_end
-          ? `${item.period_start} → ${item.period_end}`
-          : new Date(item.created_at || Date.now()).toLocaleDateString();
-        const isPmReport = item.insight_type === 'pm_individual_report';
-        const score = content.productivity_score != null
-          ? `<span style="font-size:11px; opacity:0.8;">Score ${content.productivity_score}/100</span>`
-          : '';
-        const model = content.model ? `<span style="font-size:10px; opacity:0.65;"> · ${escapeHtml(content.model)}</span>` : '';
-        const summary = content.executive_summary || content.summary || 'Report generated.';
-        const hours = content.total_hours != null ? `${content.total_hours}h tracked` : '';
-        const meta = [hours, content.activity_count != null ? `${content.activity_count} activities` : '', content.focus_hours != null ? `${content.focus_hours}h focus` : ''].filter(Boolean).join(' · ');
-
-        if (isPmReport) {
-          return `
-            <div class="cloud-insights-card">
-              <h4>Work report · ${escapeHtml(period)} ${score}${model}</h4>
-              <p style="margin-top:6px;">${escapeHtml(summary)}</p>
-              ${meta ? `<p style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">${escapeHtml(meta)}</p>` : ''}
-              ${renderInsightSection('Focus', content.focus_analysis)}
-              ${renderInsightSection('Distractions', content.distraction_patterns)}
-              ${renderInsightSection('Trend', content.week_trend)}
-              ${renderInsightList('Recommendations', content.recommendations)}
-              ${renderInsightList('Highlights', content.highlights)}
-            </div>`;
-        }
-
-        return `
-          <div class="cloud-insights-card">
-            <h4>${escapeHtml(item.insight_type || 'Insight')} · ${escapeHtml(period)}</h4>
-            <p>${escapeHtml(summary)}</p>
-            ${meta ? `<p style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">${escapeHtml(meta)}</p>` : ''}
-          </div>`;
-      }).join('');
-    }
-
-    async function generateCloudInsights() {
-      if (!requirePaidFeature('cloud_ai', 'Work Insights require an Individual or Team license.')) {
-        return;
-      }
-
-      const btn = document.getElementById('generateCloudInsightsBtn');
-      const body = document.getElementById('cloudInsightsBody');
-      btn.disabled = true;
-      const isIndividual = currentEntitlements?.plan === 'individual';
-      body.innerHTML = `<div class="empty-state"><span class="loading"></span> ${isIndividual ? 'Generating AI report (MiMo v2.5 Pro)…' : 'Generating insight…'}</div>`;
-
-      try {
-        await invoke('request_cloud_insights', { periodDays: 7 });
-        showToast(isIndividual ? 'Work report generated' : 'Insight generated', 'success');
-        await loadCloudInsights();
-      } catch (e) {
-        body.innerHTML = `<div class="empty-state">Generation failed: ${escapeHtml(e)}</div>`;
-        showToast(String(e), 'error', 5000);
-      } finally {
-        btn.disabled = false;
-      }
     }
 
     // ===== ORIGINAL FUNCTIONS =====
@@ -5699,7 +6133,7 @@
       document.getElementById(tabId)?.classList.add('active');
       document.querySelector(`.nav-item[data-tab="${tabId}"]`)?.classList.add('active');
       if (tabId === 'tabSummary') loadHistory();
-      if (tabId === 'tabCloudInsights') loadCloudInsights();
+      if (tabId === 'tabCloudInsights') loadCoachChat();
       if (tabId === 'tabToday') refreshTodayView();
     }
 

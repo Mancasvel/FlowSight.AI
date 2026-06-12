@@ -13,6 +13,7 @@ mod linear;
 mod oauth_env;
 mod entitlements;
 mod insights_local;
+mod coach_chat;
 mod user_preferences;
 pub mod context;
 pub mod paths;
@@ -61,6 +62,10 @@ pub fn run() {
             entitlements::refresh_entitlements,
             entitlements::fetch_cloud_insights,
             entitlements::request_cloud_insights,
+            coach_chat::get_coach_chat_messages,
+            coach_chat::clear_coach_chat,
+            coach_chat::get_coach_chat_usage,
+            coach_chat::send_coach_chat_message,
             insights_local::generate_local_status_report,
             user_preferences::get_user_preferences,
             user_preferences::save_user_preferences_command,
