@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeDevCommand": "pnpm --filter @flowsight/agent vite",
-    "beforeBuildCommand": "pnpm --filter @flowsight/agent exec node ../../scripts/fetch-models.mjs && pnpm --filter @flowsight/agent vite build"
+    "beforeDevCommand": "corepack pnpm --filter @flowsight/agent vite",
+    "beforeBuildCommand": "corepack pnpm --filter @flowsight/agent exec node ../../scripts/fetch-models.mjs && corepack pnpm --filter @flowsight/agent vite build"
   },
   "app": {
     "windows": [

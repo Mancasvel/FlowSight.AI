@@ -2112,6 +2112,83 @@
       margin-top: 8px;
     }
 
+    /* First-launch analytics consent */
+    .consent-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1040;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: hsl(var(--background) / 0.72);
+      backdrop-filter: blur(6px);
+    }
+
+    .consent-overlay.visible {
+      display: flex;
+    }
+
+    .consent-card {
+      width: min(100%, 420px);
+      padding: 22px 22px 18px;
+      border-radius: 18px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      box-shadow: 0 18px 48px hsl(var(--foreground) / 0.08);
+    }
+
+    .consent-title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      margin: 0 0 10px;
+    }
+
+    .consent-copy,
+    .consent-note {
+      font-size: 13px;
+      color: hsl(var(--muted-foreground));
+      line-height: 1.55;
+      margin: 0 0 12px;
+    }
+
+    .consent-list {
+      margin: 0 0 12px 18px;
+      padding: 0;
+      font-size: 13px;
+      color: hsl(var(--foreground));
+      line-height: 1.5;
+    }
+
+    .consent-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .consent-actions .button {
+      flex: 1;
+      padding: 11px 12px;
+      font-size: 12px;
+    }
+
+    .consent-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .consent-toggle-row input {
+      width: 16px;
+      height: 16px;
+      accent-color: hsl(var(--primary));
+    }
+
     .plan-badge-free {
       background: hsl(var(--muted));
       color: hsl(var(--muted-foreground));
@@ -3209,6 +3286,28 @@
     </div>
   </div>
 
+  <!-- ANALYTICS CONSENT (first launch) -->
+  <div class="consent-overlay" id="analyticsConsentOverlay" aria-hidden="true" role="dialog" aria-labelledby="analyticsConsentTitle">
+    <div class="consent-card">
+      <h2 class="consent-title" id="analyticsConsentTitle">Would you like to help improve FlowSight?</h2>
+      <p class="consent-copy">
+        If you agree, FlowSight will store anonymized usage data including:
+      </p>
+      <ul class="consent-list">
+        <li>Daily time of use</li>
+        <li>The main core activity you perform during the week</li>
+      </ul>
+      <p class="consent-note">
+        This helps the FlowSight team improve the app. You can send additional feedback from Profile,
+        and change this preference there at any time. FlowSight works fully without sharing data.
+      </p>
+      <div class="consent-actions">
+        <button type="button" class="button button-secondary" id="analyticsConsentDeclineBtn">No thanks</button>
+        <button type="button" class="button button-primary" id="analyticsConsentAcceptBtn">Yes, help improve</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CLOUD ACTIVATION / LOGIN SPLASH -->
   <div class="cloud-activation-overlay" id="loginScreen">
     <div class="login-splash">
@@ -3547,6 +3646,28 @@
           <button type="button" class="button button-secondary" id="editWorkPreferencesBtn" style="width:100%;margin-top:8px;">
             Edit work preferences
           </button>
+        </div>
+
+        <div class="card" id="privacyAnalyticsCard">
+          <div class="card-header">
+            <div class="card-title">Privacy &amp; analytics</div>
+          </div>
+          <p class="upgrade-hint" style="margin-bottom: 0;">
+            Help improve FlowSight with anonymized usage data. No account or personal information is collected.
+          </p>
+          <label class="consent-toggle-row" for="analyticsConsentToggle">
+            <input type="checkbox" id="analyticsConsentToggle">
+            <span>Share anonymized usage data</span>
+          </label>
+          <p class="onboarding-prefs-summary" id="analyticsConsentStatus">Not set yet.</p>
+          <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+            <label class="label" for="appFeedbackInput">Send feedback</label>
+            <textarea id="appFeedbackInput" class="input" rows="3" maxlength="2000"
+              placeholder="Tell us what you think about FlowSight…"></textarea>
+            <button type="button" class="button button-secondary" id="sendFeedbackBtn" style="width:100%;margin-top:8px;">
+              Send feedback
+            </button>
+          </div>
         </div>
 
         <div class="card" id="integrationsCard">
@@ -5819,6 +5940,131 @@
       showOnboardingWizard(true);
     });
 
+    let analyticsConsent = null;
+    let analyticsConsentBusy = false;
+
+    function renderAnalyticsConsentSettings() {
+      const toggle = document.getElementById('analyticsConsentToggle');
+      const status = document.getElementById('analyticsConsentStatus');
+      if (!toggle || !status) return;
+
+      if (!analyticsConsent?.decided) {
+        toggle.checked = false;
+        toggle.indeterminate = false;
+        status.textContent = 'You have not chosen yet. The prompt appears on first launch.';
+        return;
+      }
+
+      toggle.checked = Boolean(analyticsConsent.consented);
+      toggle.indeterminate = false;
+      status.textContent = analyticsConsent.consented
+        ? 'Anonymous usage data is shared to help improve FlowSight. You can turn this off anytime.'
+        : 'Anonymous usage data is not shared. FlowSight remains fully local.';
+    }
+
+    async function loadAnalyticsConsent() {
+      try {
+        analyticsConsent = await invoke('get_analytics_consent');
+      } catch (_) {
+        analyticsConsent = { decided: false, consented: false };
+      }
+      renderAnalyticsConsentSettings();
+      return analyticsConsent;
+    }
+
+    function showAnalyticsConsentModal() {
+      const overlay = document.getElementById('analyticsConsentOverlay');
+      overlay?.classList.add('visible');
+      overlay?.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideAnalyticsConsentModal() {
+      const overlay = document.getElementById('analyticsConsentOverlay');
+      overlay?.classList.remove('visible');
+      overlay?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function applyAnalyticsConsent(consented, { fromFirstLaunch = false } = {}) {
+      if (analyticsConsentBusy) return;
+      analyticsConsentBusy = true;
+      const acceptBtn = document.getElementById('analyticsConsentAcceptBtn');
+      const declineBtn = document.getElementById('analyticsConsentDeclineBtn');
+      const toggle = document.getElementById('analyticsConsentToggle');
+      acceptBtn?.setAttribute('disabled', 'true');
+      declineBtn?.setAttribute('disabled', 'true');
+      if (toggle) toggle.disabled = true;
+
+      try {
+        analyticsConsent = await invoke('set_analytics_consent', { consented });
+        renderAnalyticsConsentSettings();
+        if (fromFirstLaunch) {
+          hideAnalyticsConsentModal();
+        }
+        if (consented) {
+          invoke('sync_anonymous_analytics').catch(() => {});
+          if (fromFirstLaunch) {
+            showToast('Thanks for helping improve FlowSight', 'success');
+          }
+        } else if (!fromFirstLaunch) {
+          showToast('Anonymous analytics turned off', 'success');
+        }
+        if (fromFirstLaunch) {
+          await promptOnboardingIfNeeded();
+        }
+      } catch (e) {
+        showToast('Could not save analytics preference: ' + e, 'error');
+      } finally {
+        analyticsConsentBusy = false;
+        acceptBtn?.removeAttribute('disabled');
+        declineBtn?.removeAttribute('disabled');
+        if (toggle) toggle.disabled = false;
+      }
+    }
+
+    async function promptAnalyticsConsentIfNeeded() {
+      await loadAnalyticsConsent();
+      if (analyticsConsent?.decided) return false;
+      showAnalyticsConsentModal();
+      return true;
+    }
+
+    document.getElementById('analyticsConsentAcceptBtn')?.addEventListener('click', () => {
+      applyAnalyticsConsent(true, { fromFirstLaunch: true }).catch((e) => showToast(String(e), 'error'));
+    });
+    document.getElementById('analyticsConsentDeclineBtn')?.addEventListener('click', () => {
+      applyAnalyticsConsent(false, { fromFirstLaunch: true }).catch((e) => showToast(String(e), 'error'));
+    });
+    document.getElementById('analyticsConsentToggle')?.addEventListener('change', (event) => {
+      const next = event.target.checked;
+      applyAnalyticsConsent(next).catch((e) => {
+        showToast(String(e), 'error');
+        renderAnalyticsConsentSettings();
+      });
+    });
+    async function submitAppFeedback() {
+      const input = document.getElementById('appFeedbackInput');
+      const btn = document.getElementById('sendFeedbackBtn');
+      const message = input?.value?.trim() || '';
+      if (message.length < 3) {
+        showToast('Please enter at least a few words of feedback.', 'error');
+        return;
+      }
+      if (btn) btn.disabled = true;
+      try {
+        await invoke('submit_product_feedback', { message });
+        if (input) input.value = '';
+        showToast('Thanks — your feedback was saved.', 'success');
+      } catch (e) {
+        showToast('Could not send feedback: ' + e, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    document.getElementById('sendFeedbackBtn')?.addEventListener('click', () => {
+      submitAppFeedback().catch((e) => showToast(String(e), 'error'));
+    });
+
     async function init() {
       const playBtn = document.getElementById('playTimerBtn');
       try {
@@ -5842,7 +6088,14 @@
       showMainApp();
       await restoreCloudSession();
       await initMainApp();
-      await promptOnboardingIfNeeded();
+      await loadAnalyticsConsent();
+      const waitingForConsent = await promptAnalyticsConsentIfNeeded();
+      if (!waitingForConsent) {
+        if (analyticsConsent?.consented) {
+          invoke('sync_anonymous_analytics').catch(() => {});
+        }
+        await promptOnboardingIfNeeded();
+      }
 
       // Background self-update check; never blocks startup and stays silent on no-op.
       checkForUpdates().catch(() => {});

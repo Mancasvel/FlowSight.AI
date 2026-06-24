@@ -5,7 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEFAULT_AZURE_ENDPOINT = "https://france-flow.services.ai.azure.com/openai/v1";
+const DEFAULT_AZURE_ENDPOINT =
+  "https://france-flow.services.ai.azure.com/api/projects/france/openai/v1";
 const DEFAULT_AZURE_DEPLOYMENT = "Mistral-Large-3";
 const MAX_MESSAGE_LEN = 500;
 const MAX_HISTORY = 12;

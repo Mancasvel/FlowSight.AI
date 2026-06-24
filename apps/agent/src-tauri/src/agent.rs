@@ -86,6 +86,8 @@ impl FlowSightAgent {
         crate::sync::start_sync_thread(agent.db_path.clone());
         // Proactive Supabase JWT refresh (~every 2m when near expiry)
         crate::sync::start_token_refresh_thread(agent.db_path.clone());
+        // Opt-in anonymous analytics sync (~every 6h when consented)
+        crate::anonymous_analytics::start_analytics_sync_thread(agent.db_path.clone());
         
         agent
     }

@@ -61,6 +61,22 @@ fn coach_http_client() -> Result<Client, String> {
         .map_err(|e| e.to_string())
 }
 
+fn extract_coach_api_error(payload: &serde_json::Value, status: reqwest::StatusCode) -> String {
+    if let Some(s) = payload.get("error").and_then(|v| v.as_str()) {
+        return s.to_string();
+    }
+    if let Some(s) = payload.get("message").and_then(|v| v.as_str()) {
+        return s.to_string();
+    }
+    if let Some(s) = payload.get("msg").and_then(|v| v.as_str()) {
+        return s.to_string();
+    }
+    if payload.is_object() && payload.as_object().is_some_and(|o| !o.is_empty()) {
+        return format!("Coach API error ({status}): {payload}");
+    }
+    format!("AI coach request failed ({status})")
+}
+
 #[tauri::command]
 pub fn get_coach_chat_messages() -> Result<Vec<CoachChatMessage>, String> {
     let db_path = crate::paths::db_path()?;
@@ -193,11 +209,7 @@ pub fn send_coach_chat_message(message: String) -> Result<serde_json::Value, Str
     let payload: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
 
     if !status.is_success() {
-        let err = payload
-            .get("error")
-            .and_then(|v| v.as_str())
-            .unwrap_or("AI coach request failed");
-        return Err(err.to_string());
+        return Err(extract_coach_api_error(&payload, status));
     }
 
     let reply = payload

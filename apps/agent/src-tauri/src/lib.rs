@@ -15,6 +15,7 @@ mod entitlements;
 mod insights_local;
 mod coach_chat;
 mod user_preferences;
+mod anonymous_analytics;
 pub mod context;
 pub mod paths;
 
@@ -69,6 +70,10 @@ pub fn run() {
             insights_local::generate_local_status_report,
             user_preferences::get_user_preferences,
             user_preferences::save_user_preferences_command,
+            anonymous_analytics::get_analytics_consent,
+            anonymous_analytics::set_analytics_consent,
+            anonymous_analytics::sync_anonymous_analytics,
+            anonymous_analytics::submit_product_feedback,
             agent::start_server,
             agent::stop_server,
             llama_managed_process_status,

@@ -143,9 +143,11 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "temp-env",
+ "tempfile",
  "tiny_http",
  "url",
  "urlencoding",
+ "uuid",
  "whoami",
  "windows-sys 0.61.2",
 ]
