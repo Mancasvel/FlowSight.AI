@@ -55,3 +55,24 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_JobObjects",
     "Win32_Security_Cryptography",
 ] }
+# Idiomatic `windows` crate (distinct from `windows-sys` above): needed for the
+# `telemetry` module's UI Automation COM interfaces (`#[implement]`, smart
+# pointers, BSTR) which `windows-sys`'s raw bindings don't provide, and for
+# `crash_guard`'s Vectored Exception Handler.
+windows-core = "0.61"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+    "Win32_UI_Accessibility",
+    "Win32_UI_WindowsAndMessaging",
+    # crash_guard: process-wide Vectored Exception Handler that contains
+    # hardware faults (illegal instruction / access violation) coming from
+    # third-party DLLs (e.g. broken Winsock LSPs) instead of letting them
+    # kill the whole process. `AddVectoredExceptionHandler`/`EXCEPTION_POINTERS`
+    # live under `Win32_System_Kernel`, not `Win32_System_Diagnostics_Debug`.
+    "Win32_System_Kernel",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+    "Win32_System_ProcessStatus",
+] }

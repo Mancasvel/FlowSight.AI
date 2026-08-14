@@ -41,8 +41,17 @@ fn get_linear_token() -> Result<String, String> {
         .ok_or("No access token".to_string())
 }
 
+// Async so Tauri keeps the blocking `reqwest` call below off the main
+// thread: it opens a real socket, which is what lets Windows inject a broken
+// Winsock LSP into this process (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn fetch_linear_tasks() -> Result<Vec<LinearIssue>, String> {
+pub async fn fetch_linear_tasks() -> Result<Vec<LinearIssue>, String> {
+    tauri::async_runtime::spawn_blocking(fetch_linear_tasks_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn fetch_linear_tasks_blocking() -> Result<Vec<LinearIssue>, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "integrations")?;
     let access_token = get_linear_token()?;
@@ -92,8 +101,16 @@ pub struct LinearUser {
     pub avatar_url: Option<String>,
 }
 
+// Async so Tauri keeps the blocking `reqwest` call below off the main
+// thread (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn fetch_linear_profile() -> Result<LinearUser, String> {
+pub async fn fetch_linear_profile() -> Result<LinearUser, String> {
+    tauri::async_runtime::spawn_blocking(fetch_linear_profile_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn fetch_linear_profile_blocking() -> Result<LinearUser, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "integrations")?;
     let access_token = get_linear_token()?;

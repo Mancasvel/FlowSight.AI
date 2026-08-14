@@ -3885,7 +3885,6 @@
 
     let isMonitoring = false;
     let isPaused = false;
-    let monitoringInterval = null;
     let currentUser = null;
     let authSession = null;
     let currentEntitlements = null;
@@ -4442,15 +4441,37 @@
       resumeSessionTimer();
     }
 
-    function pauseMonitoring() {
+    async function pushTaskContextToBackend() {
+      const { task, jiraTicket } = getTaskContext();
+      try {
+        await invoke('set_task_context', {
+          userTask: task || null,
+          jiraTicket: jiraTicket || null
+        });
+      } catch (e) {
+        console.warn('[Telemetry] set_task_context failed:', e);
+      }
+    }
+
+    async function startNativeMonitoring() {
+      await pushTaskContextToBackend();
+      await invoke('start_monitoring');
+    }
+
+    async function stopNativeMonitoring() {
+      try {
+        await invoke('stop_monitoring');
+      } catch (e) {
+        console.warn('[Telemetry] stop_monitoring failed:', e);
+      }
+    }
+
+    async function pauseMonitoring() {
       isMonitoring = false;
       isPaused = true;
       clearCaptureRetry();
       commitSessionTime();
-      if (monitoringInterval) {
-        clearInterval(monitoringInterval);
-        monitoringInterval = null;
-      }
+      await stopNativeMonitoring();
       document.getElementById('statStatus').textContent = 'Paused';
       document.getElementById('statStatus').style.color = 'hsl(var(--summary-orange))';
       const badge = document.getElementById('monitoringBadge');
@@ -4464,10 +4485,7 @@
       isPaused = false;
       clearCaptureRetry();
       commitSessionTime();
-      if (monitoringInterval) {
-        clearInterval(monitoringInterval);
-        monitoringInterval = null;
-      }
+      await stopNativeMonitoring();
       document.getElementById('statStatus').textContent = 'Off';
       document.getElementById('statStatus').style.color = '';
       const badge = document.getElementById('monitoringBadge');
@@ -4493,6 +4511,7 @@
           await startMonitoringFull();
           return;
         }
+        await startNativeMonitoring();
         isMonitoring = true;
         isPaused = false;
         document.getElementById('statStatus').textContent = 'On';
@@ -4501,8 +4520,6 @@
         if (badge) { badge.textContent = 'On'; badge.className = 'badge badge-success'; }
         resumeSessionTimer();
         updatePlayButtonState();
-        captureAndAnalyze();
-        monitoringInterval = setInterval(captureAndAnalyze, 60000);
         showToast('Tracking resumed', 'success');
       } catch (e) {
         console.error('Resume failed:', e);
@@ -5509,6 +5526,8 @@
           todayTotalSeconds = Math.max(todayTotalSeconds, history.total_seconds || 0);
         } catch (_) { /* keep local total */ }
 
+        await startNativeMonitoring();
+
         isMonitoring = true;
         isPaused = false;
         document.getElementById('statStatus').textContent = 'On';
@@ -5518,9 +5537,6 @@
 
         startSessionTimer();
         updatePlayButtonState();
-
-        captureAndAnalyze();
-        monitoringInterval = setInterval(captureAndAnalyze, 60000);
         ollamaConfirmedOnline = true;
         await checkOllama();
       } catch (e) {
@@ -5542,8 +5558,8 @@
       await startMonitoringFull();
     };
 
-    document.getElementById('pauseBtn').onclick = () => {
-      if (isMonitoring) pauseMonitoring();
+    document.getElementById('pauseBtn').onclick = async () => {
+      if (isMonitoring) await pauseMonitoring();
     };
 
     document.getElementById('stopBtn').onclick = async () => {
@@ -6101,6 +6117,17 @@
       checkForUpdates().catch(() => {});
     }
 
+    // Native telemetry (foreground/UIA + 60s aggregator vision+action review +
+    // action-triggered capture) persists reviewed reports to SQLite and emits
+    // this so the Today view updates without a renderer screenshot loop. Only
+    // fires while monitoring is on.
+    listen('activity-report', () => {
+      refreshTodayView().catch(() => {});
+      if (typeof loadHistory === 'function') {
+        loadHistory().catch(() => {});
+      }
+    });
+
     init();
 
     async function refreshTasks() {
@@ -6195,7 +6222,12 @@
       } else {
         document.getElementById('manualTask').style.display = 'none';
       }
+      if (isMonitoring) pushTaskContextToBackend();
     };
+
+    document.getElementById('manualTask')?.addEventListener('change', () => {
+      if (isMonitoring) pushTaskContextToBackend();
+    });
 
     let isSyncing = false;
     let lastGoodSnapshot = null;
@@ -6238,9 +6270,10 @@
     }
 
     async function recordActivity(description, category, jiraTicket, { toast = false } = {}) {
+      const activityType = (category && String(category).trim()) ? String(category).trim() : 'General';
       await invoke('save_activity', {
         description,
-        activityType: category,
+        activityType,
         jiraTicket: jiraTicket
       });
 
@@ -6551,16 +6584,19 @@
           <div class="timeline-section-title">Timeline</div>
           ${entries.map(e => {
             const time = new Date(e.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const dur = Math.round(e.duration_seconds / 60) + 'm';
-            const ticket = e.ticket ? `<span class="badge badge-success" style="font-size:10px;margin-left:6px;">${e.ticket}</span>` : '';
+            const dur = Math.round((e.duration_seconds || 0) / 60) + 'm';
+            const category = (e.category && String(e.category).trim()) ? String(e.category).trim() : 'General';
+            const ticket = e.ticket ? `<span class="badge badge-success" style="font-size:10px;margin-left:6px;">${escapeHtml(e.ticket)}</span>` : '';
             return `
               <div class="timeline-item">
                 <div style="flex:1;">
                   <div style="font-size:11px;color:hsl(var(--muted-foreground));display:flex;justify-content:space-between;">
                     <span>${time}</span><span>${dur}</span>
                   </div>
-                  <div style="font-size:12px;font-weight:500;margin-top:2px;">${e.category}${ticket}</div>
-                  <div style="font-size:11px;color:hsl(var(--foreground));opacity:0.8;">${e.description}</div>
+                  <div style="font-size:12px;font-weight:500;margin-top:2px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;">
+                    <span class="badge badge-default">${escapeHtml(category)}</span>${ticket}
+                  </div>
+                  <div style="font-size:11px;color:hsl(var(--foreground));opacity:0.8;">${escapeHtml(e.description || '')}</div>
                 </div>
               </div>`;
           }).join('')}

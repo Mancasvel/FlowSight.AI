@@ -2,6 +2,8 @@ mod vision_model;
 mod llama_port;
 mod llama_windows_job;
 mod screenshot_disk;
+mod crash_guard;
+mod telemetry;
 mod agent;
 mod agent_pure;
 mod jira;
@@ -28,10 +30,18 @@ use agent::{
     get_activity_log, get_today_history, get_week_summary,
     check_ollama, check_local_server,
     llama_managed_process_status, llama_server_log_tail, restart_llama_server_cpu_only,
+    set_task_context,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // Must be the very first thing `run()` does: installs the Vectored Exception
+  // Handler that contains hardware faults from third-party DLLs (e.g. a broken
+  // Winsock LSP such as an old VPN's network-intercept driver) so they can
+  // only ever take down the specific background thread that touched them,
+  // never the whole process. See `crash_guard` module docs.
+  crash_guard::install();
+
   tauri::Builder::default()
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![
@@ -91,6 +101,7 @@ pub fn run() {
             // History commands
             get_today_history,
             get_week_summary,
+            set_task_context,
             paths::get_flowsight_user_paths,
             paths::save_pdf_to_downloads,
             paths::open_path_in_file_manager,

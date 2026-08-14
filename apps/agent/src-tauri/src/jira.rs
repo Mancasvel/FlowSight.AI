@@ -281,8 +281,17 @@ fn fetch_cloud_id(token: &str) -> Result<String, Box<dyn Error>> {
 }
 
 
+// Async so Tauri keeps the blocking `reqwest` calls below off the main
+// thread: each one opens a real socket, which is what lets Windows inject a
+// broken Winsock LSP into this process (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
+pub async fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
+    tauri::async_runtime::spawn_blocking(fetch_jira_tasks_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn fetch_jira_tasks_blocking() -> Result<Vec<JiraIssue>, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "integrations")?;
     // 1. Get valid token (auto-refreshes if expired)
@@ -361,8 +370,16 @@ pub struct JiraUser {
     pub email: String,
 }
 
+// Async so Tauri keeps the blocking `reqwest` calls below off the main
+// thread (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn fetch_jira_profile() -> Result<JiraUser, String> {
+pub async fn fetch_jira_profile() -> Result<JiraUser, String> {
+    tauri::async_runtime::spawn_blocking(fetch_jira_profile_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn fetch_jira_profile_blocking() -> Result<JiraUser, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "integrations")?;
     // 1. Get valid token (auto-refreshes if expired)

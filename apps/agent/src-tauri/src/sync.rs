@@ -88,8 +88,18 @@ pub fn start_token_refresh_thread(db_path: std::path::PathBuf) {
     });
 }
 
+// Async so Tauri dispatches it off the main/UI thread: `perform_sync` makes
+// several blocking `reqwest` calls, each of which opens a real socket — the
+// mechanism Windows uses to inject a broken Winsock LSP into this process
+// (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn force_sync_now() -> Result<String, String> {
+pub async fn force_sync_now() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(force_sync_now_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn force_sync_now_blocking() -> Result<String, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "sync")?;
     match perform_sync(&db_path) {
@@ -608,9 +618,23 @@ fn post_activity_report_with_refresh(
     Ok(())
 }
 
-// Upload individual activity report (for granular tracking)
+// Upload individual activity report (for granular tracking).
+// Async so Tauri dispatches it off the main/UI thread (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn upload_activity_report(
+pub async fn upload_activity_report(
+    description: String,
+    category: String,
+    jira_ticket_id: Option<String>,
+    duration_seconds: i32
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        upload_activity_report_blocking(description, category, jira_ticket_id, duration_seconds)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn upload_activity_report_blocking(
     description: String,
     category: String,
     jira_ticket_id: Option<String>,
@@ -645,9 +669,16 @@ pub fn upload_activity_report(
     Ok(())
 }
 
-// Get all teams the current user belongs to
+// Get all teams the current user belongs to.
+// Async so Tauri dispatches it off the main/UI thread (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn get_user_teams() -> Result<serde_json::Value, String> {
+pub async fn get_user_teams() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(get_user_teams_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn get_user_teams_blocking() -> Result<serde_json::Value, String> {
     let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
     
@@ -742,9 +773,16 @@ pub fn set_active_team(team_id: String) -> Result<(), String> {
     )
 }
 
-// Join a team using an invitation token
+// Join a team using an invitation token.
+// Async so Tauri dispatches it off the main/UI thread (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn join_team(token: String) -> Result<serde_json::Value, String> {
+pub async fn join_team(token: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || join_team_blocking(token))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn join_team_blocking(token: String) -> Result<serde_json::Value, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "sync")?;
     refresh_session_if_expiring(&db_path);

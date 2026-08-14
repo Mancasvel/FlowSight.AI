@@ -1,15 +1,51 @@
 //! Vision output parsing — pure logic, heavily unit-tested. Used by `agent::capture_context_snapshot` path.
 
+pub(crate) const ALLOWED_CATEGORIES: &str = "Coding, Debugging, CodeReview, Testing, Documentation, Design, \
+Planning, Meeting, Communication, Research, Learning, DevOps, Database, Sales, Admin, Browsing, Idle, General";
+
+const CATEGORY_MAP: &[(&str, &str)] = &[
+    ("coding", "Coding"),
+    ("debugging", "Debugging"),
+    ("codereview", "CodeReview"),
+    ("testing", "Testing"),
+    ("documentation", "Documentation"),
+    ("design", "Design"),
+    ("planning", "Planning"),
+    ("meeting", "Meeting"),
+    ("communication", "Communication"),
+    ("research", "Research"),
+    ("learning", "Learning"),
+    ("devops", "DevOps"),
+    ("database", "Database"),
+    ("sales", "Sales"),
+    ("admin", "Admin"),
+    ("browsing", "Browsing"),
+    ("idle", "Idle"),
+    ("general", "General"),
+];
+
 /// Full pipeline: structured description + resolved category label.
+/// Category is never empty/whitespace — unknown or missing always becomes "General".
 pub(crate) fn parse_analysis(raw: &str) -> (String, String) {
     let lower = raw.to_lowercase();
 
     let category = extract_category_from_field(&lower)
         .unwrap_or_else(|| infer_category_from_content(&lower));
+    let category = resolve_persisted_category(&category);
 
     let description = build_structured_description(raw);
 
     (description, category)
+}
+
+/// SQLite / emit gate: never persist a blank category.
+pub(crate) fn resolve_persisted_category(category: &str) -> String {
+    let trimmed = category.trim();
+    if trimmed.is_empty() {
+        "General".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// Strip to a single lowercase alnum token so "Code Review", "code_review", "CodeReview" → `codereview`.
@@ -20,43 +56,49 @@ fn normalize_category_value(s: &str) -> String {
         .collect()
 }
 
-/// Extract category from an explicit "CATEGORY: Xyz" line in the model output.
-/// The value may be multi-word (e.g. "Code Review"); we normalize instead of taking only the first word.
-fn extract_category_from_field(lower: &str) -> Option<String> {
-    const MAP: &[(&str, &str)] = &[
-        ("coding", "Coding"),
-        ("debugging", "Debugging"),
-        ("codereview", "CodeReview"),
-        ("testing", "Testing"),
-        ("documentation", "Documentation"),
-        ("design", "Design"),
-        ("planning", "Planning"),
-        ("meeting", "Meeting"),
-        ("communication", "Communication"),
-        ("research", "Research"),
-        ("learning", "Learning"),
-        ("devops", "DevOps"),
-        ("database", "Database"),
-        ("sales", "Sales"),
-        ("admin", "Admin"),
-        ("browsing", "Browsing"),
-        ("idle", "Idle"),
-        ("general", "General"),
-    ];
+fn lookup_category(norm: &str) -> Option<&'static str> {
+    CATEGORY_MAP
+        .iter()
+        .find(|(key, _)| *key == norm)
+        .map(|(_, label)| *label)
+}
 
-    let idx = lower.rfind("category:")?;
-    let after = lower[idx + "category:".len()..].trim_start();
+/// Match a known category from the start of `s`, preferring longer phrases ("code review" over "code").
+fn match_category_prefix(s: &str) -> Option<&'static str> {
+    let words: Vec<&str> = s.split_whitespace().collect();
+    if words.is_empty() {
+        return None;
+    }
+    if let Some(label) = lookup_category(&normalize_category_value(s)) {
+        return Some(label);
+    }
+    for n in (1..=words.len().min(3)).rev() {
+        let chunk = words[..n].join(" ");
+        if let Some(label) = lookup_category(&normalize_category_value(&chunk)) {
+            return Some(label);
+        }
+    }
+    None
+}
+
+/// Extract category from an explicit "CATEGORY: Xyz" field in the model output.
+/// Handles a dedicated last line, `category :` with spaces, and an inline field
+/// after newline-flattening (e.g. "... CATEGORY: Planning VISIBLE CONTENT: ...").
+fn extract_category_from_field(lower: &str) -> Option<String> {
+    let mut after_colon: Option<&str> = None;
+    for (i, _) in lower.rmatch_indices("category") {
+        let rest = lower[i + "category".len()..].trim_start();
+        if let Some(stripped) = rest.strip_prefix(':') {
+            after_colon = Some(stripped.trim_start());
+            break;
+        }
+    }
+    let after = after_colon?;
     let first_line = after.lines().next()?.trim();
     if first_line.is_empty() {
         return None;
     }
-    let norm = normalize_category_value(first_line);
-    for (key, label) in MAP {
-        if norm == *key {
-            return Some((*label).to_string());
-        }
-    }
-    None
+    match_category_prefix(first_line).map(str::to_string)
 }
 
 /// Fallback: infer category from keywords in the full content.
@@ -142,19 +184,90 @@ fn infer_category_from_content(lower: &str) -> String {
     .to_string()
 }
 
-fn build_structured_description(raw: &str) -> String {
-    let fields = [
-        "APP:",
-        "WINDOW TITLE:",
-        "VISIBLE CONTENT:",
-        "FILES OR URLS:",
-        "CURRENT ACTION:",
-        "PROGRESS:",
-        "NEXT STEP:",
-        "CATEGORY:",
-    ];
+fn strip_markdown(s: &str) -> String {
+    s.replace("####", "")
+        .replace("###", "")
+        .replace("##", "")
+        .replace("**", "")
+        .trim()
+        .to_string()
+}
 
+/// Byte index of a `category` token whose next non-whitespace char is `:`.
+fn find_category_field_index(lower: &str) -> Option<usize> {
+    let mut search_from = 0;
+    while let Some(rel) = lower[search_from..].find("category") {
+        let i = search_from + rel;
+        let rest = lower[i + "category".len()..].trim_start();
+        if rest.starts_with(':') {
+            return Some(i);
+        }
+        search_from = i + "category".len();
+    }
+    None
+}
+
+fn end_of_nth_word(s: &str, n: usize) -> usize {
+    let mut consumed = 0usize;
+    let mut seen = 0usize;
+    for word in s.split_whitespace() {
+        if let Some(rel) = s[consumed..].find(word) {
+            consumed += rel + word.len();
+            seen += 1;
+            if seen == n {
+                return consumed;
+            }
+        }
+    }
+    s.len()
+}
+
+/// Drop `CATEGORY: <value>` (known label, or the next token if unknown) from a line.
+fn remove_category_field(line: &str) -> String {
+    let mut current = line.to_string();
+    loop {
+        let lower = current.to_lowercase();
+        let Some(idx) = find_category_field_index(&lower) else {
+            break;
+        };
+        let before = current[..idx].trim_end();
+        let after_name = &current[idx + "category".len()..];
+        let trimmed = after_name.trim_start();
+        let Some(after_colon) = trimmed.strip_prefix(':') else {
+            break;
+        };
+        let after_colon = after_colon.trim_start();
+        let skip = if match_category_prefix(after_colon).is_some() {
+            let words: Vec<&str> = after_colon.split_whitespace().collect();
+            let mut n = 1usize;
+            for try_n in (1..=words.len().min(3)).rev() {
+                let chunk = words[..try_n].join(" ");
+                if lookup_category(&normalize_category_value(&chunk)).is_some() {
+                    n = try_n;
+                    break;
+                }
+            }
+            end_of_nth_word(after_colon, n)
+        } else if after_colon.split_whitespace().next().is_some() {
+            end_of_nth_word(after_colon, 1)
+        } else {
+            0
+        };
+        let rest = after_colon[skip.min(after_colon.len())..].trim_start();
+        current = if before.is_empty() {
+            rest.to_string()
+        } else if rest.is_empty() {
+            before.to_string()
+        } else {
+            format!("{before} {rest}")
+        };
+    }
+    current
+}
+
+fn build_structured_description(raw: &str) -> String {
     let mut parts: Vec<String> = Vec::new();
+    let mut boilerplate: Vec<String> = Vec::new();
 
     for line in raw.lines() {
         let trimmed = line.trim();
@@ -162,28 +275,22 @@ fn build_structured_description(raw: &str) -> String {
             continue;
         }
 
-        if trimmed.to_uppercase().starts_with("CATEGORY:") {
-            continue;
-        }
-
-        let clean = trimmed
-            .replace("###", "")
-            .replace("##", "")
-            .replace("**", "")
-            .replace("####", "");
-        let clean = clean.trim();
+        let without_category = remove_category_field(trimmed);
+        let clean = strip_markdown(&without_category);
         if clean.is_empty() {
             continue;
         }
 
-        let is_field = fields
-            .iter()
-            .any(|f| clean.to_uppercase().starts_with(f));
-        if is_field {
-            parts.push(clean.to_string());
+        let upper = clean.to_uppercase();
+        if upper.starts_with("APP:") || upper.starts_with("WINDOW TITLE:") {
+            boilerplate.push(clean);
         } else {
-            parts.push(clean.to_string());
+            parts.push(clean);
         }
+    }
+
+    if parts.is_empty() {
+        parts = boilerplate;
     }
 
     if parts.is_empty() {
@@ -255,9 +362,10 @@ mod tests {
     #[test]
     fn structured_description_strips_category_line() {
         let raw = "APP: VS\nCATEGORY: Coding\nVISIBLE: ok";
-        let (d, _) = parse_analysis(raw);
+        let (d, c) = parse_analysis(raw);
         assert!(!d.to_uppercase().contains("CATEGORY:"));
-        assert!(d.contains("APP:"));
+        assert!(d.contains("VISIBLE:"));
+        assert_eq!(c, "Coding");
     }
 
     #[test]
@@ -279,5 +387,66 @@ mod tests {
         let (d, _) = parse_analysis(raw);
         assert!(!d.contains("###"));
         assert!(!d.contains("**"));
+    }
+
+    #[test]
+    fn empty_or_whitespace_category_becomes_general() {
+        assert_eq!(resolve_persisted_category(""), "General");
+        assert_eq!(resolve_persisted_category("   "), "General");
+        assert_eq!(resolve_persisted_category("\n\t"), "General");
+        assert_eq!(resolve_persisted_category("Planning"), "Planning");
+    }
+
+    #[test]
+    fn category_at_end_is_parsed_and_stripped() {
+        let raw = "Reviewing the sprint board and moving tickets.\nCATEGORY: Planning";
+        let (d, c) = parse_analysis(raw);
+        assert_eq!(c, "Planning");
+        assert!(!d.to_uppercase().contains("CATEGORY"));
+        assert!(d.contains("sprint board"));
+    }
+
+    #[test]
+    fn missing_category_infers_then_falls_back_to_general() {
+        let (_, inferred) = parse_analysis("looking at the jira backlog");
+        assert_eq!(inferred, "Planning");
+
+        let (_, unknown) = parse_analysis("moved a couple of windows around");
+        assert_eq!(unknown, "General");
+        assert!(!unknown.trim().is_empty());
+    }
+
+    #[test]
+    fn category_inline_in_flattened_body_is_parsed_and_stripped() {
+        let raw = "APP: VS WINDOW TITLE: foo VISIBLE CONTENT: editing a file CATEGORY: Planning NEXT STEP: commit";
+        let (d, c) = parse_analysis(raw);
+        assert_eq!(c, "Planning");
+        assert!(!d.to_uppercase().contains("CATEGORY:"));
+        assert!(d.to_uppercase().contains("VISIBLE CONTENT:"));
+    }
+
+    #[test]
+    fn blank_category_field_falls_back_to_infer() {
+        let raw = "VISIBLE: using the debugger\nCATEGORY:   \n";
+        let (_, c) = parse_analysis(raw);
+        assert_eq!(c, "Debugging");
+    }
+
+    #[test]
+    fn category_with_space_before_colon() {
+        let raw = "Editing tests.\nCATEGORY : Testing";
+        let (d, c) = parse_analysis(raw);
+        assert_eq!(c, "Testing");
+        assert!(!d.to_uppercase().contains("CATEGORY"));
+    }
+
+    #[test]
+    fn category_codereview_in_body_stripped() {
+        let raw = "APP: GitHub\nWINDOW TITLE: PR\nCURRENT ACTION: reviewing a pull request\nCATEGORY: CodeReview";
+        let (d, c) = parse_analysis(raw);
+        assert_eq!(c, "CodeReview");
+        assert!(!d.to_uppercase().contains("CATEGORY:"));
+        assert!(!d.to_uppercase().starts_with("APP:"));
+        assert!(d.to_uppercase().contains("CURRENT ACTION:"));
     }
 }

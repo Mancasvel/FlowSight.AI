@@ -1,4 +1,4 @@
-use crate::agent_pure::parse_analysis;
+use crate::agent_pure::{parse_analysis, resolve_persisted_category, ALLOWED_CATEGORIES};
 use crate::vision_model::{
     CONFIG_VISION_MODEL_ID, LLAMA_CHAT_MODEL_ID, VISION_GGUF_FILENAME, VISION_MMPROJ_FILENAME,
     VISION_STATUS_LABEL,
@@ -47,12 +47,8 @@ pub struct FlowSightAgent {
     pub db_path: PathBuf,
 }
 
-impl Default for FlowSightAgent {
-    fn default() -> Self { Self::new() }
-}
-
 impl FlowSightAgent {
-    pub fn new() -> Self {
+    pub fn new(app_handle: tauri::AppHandle) -> Self {
         let db_path = crate::paths::db_path().unwrap_or_else(|e| {
             log::error!("[Agent] paths::db_path unavailable ({}); using cwd fallback.", e);
             dirs::data_local_dir()
@@ -88,6 +84,11 @@ impl FlowSightAgent {
         crate::sync::start_token_refresh_thread(agent.db_path.clone());
         // Opt-in anonymous analytics sync (~every 6h when consented)
         crate::anonymous_analytics::start_analytics_sync_thread(agent.db_path.clone());
+        // Level 0/1 privacy-first telemetry pipeline (foreground/UIA event
+        // capture + 60s action-log review + periodic vision snapshot +
+        // action-triggered capture). Data collection itself stays OFF until
+        // `start_monitoring` toggles it on.
+        crate::telemetry::start(app_handle, agent.db_path.clone());
         
         agent
     }
@@ -206,6 +207,7 @@ impl FlowSightAgent {
             log::warn!("[Agent] save_report: cannot open {:?}", self.db_path);
             return None;
         };
+        let activity_type = resolve_persisted_category(activity_type);
         if conn
             .execute(
                 "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds) VALUES (?, ?, ?, ?)",
@@ -336,6 +338,11 @@ pub async fn capture_context_snapshot(
             .or(Some(16)) 
     };
 
+    // Keep the backend-driven telemetry cycle (aggregator/action_capture) in
+    // sync with whatever task/ticket the frontend is currently tracking,
+    // without requiring a separate round-trip from the renderer.
+    crate::telemetry::set_task_context(user_task.clone(), jira_ticket.clone());
+
     // Run ALL heavy work on a background thread to avoid blocking the main/UI thread
     tauri::async_runtime::spawn_blocking(move || {
         use crate::context::get_system_context;
@@ -412,6 +419,7 @@ pub fn save_activity(state: State<'_, AgentState>, description: String, activity
         );
     };
     a.reports_sent += 1;
+    let activity_type = resolve_persisted_category(&activity_type);
     let report_id = a
         .save_report(&description, &activity_type, jira_ticket, 30)
         .ok_or_else(|| "Failed to write activity to local database.".to_string())?;
@@ -448,7 +456,7 @@ fn probe_sqlite_database_rw() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn initialize_agent(state: State<'_, AgentState>) -> Result<bool, String> {
+pub fn initialize_agent(app_handle: tauri::AppHandle, state: State<'_, AgentState>) -> Result<bool, String> {
     let mut g = state.lock().unwrap();
     if g.is_some() {
         return Ok(true);
@@ -471,7 +479,7 @@ pub fn initialize_agent(state: State<'_, AgentState>) -> Result<bool, String> {
         _ => {}
     }
 
-    *g = Some(FlowSightAgent::new());
+    *g = Some(FlowSightAgent::new(app_handle));
     Ok(true)
 }
 
@@ -523,12 +531,24 @@ pub fn get_status(state: State<'_, AgentState>) -> Result<serde_json::Value, Str
 #[tauri::command]
 pub fn start_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
     if let Some(a) = state.lock().unwrap().as_mut() { a.is_running = true; }
+    crate::telemetry::set_running(true);
     Ok(true)
 }
 
 #[tauri::command]
 pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
     if let Some(a) = state.lock().unwrap().as_mut() { a.is_running = false; }
+    crate::telemetry::set_running(false);
+    Ok(true)
+}
+
+/// Lets the frontend tell the backend-driven telemetry cycle (`telemetry::aggregator`
+/// / `telemetry::action_capture`) what the user is currently working on (selected Jira
+/// ticket / manual task label), so the local review model gets the same context the
+/// on-demand `capture_context_snapshot` path already uses.
+#[tauri::command]
+pub fn set_task_context(user_task: Option<String>, jira_ticket: Option<String>) -> Result<bool, String> {
+    crate::telemetry::set_task_context(user_task, jira_ticket);
     Ok(true)
 }
 
@@ -590,10 +610,11 @@ pub fn get_today_history(state: State<'_, AgentState>) -> Result<TodayHistory, S
         .map_err(|e| e.to_string())?;
 
     let entries: Vec<DayHistoryEntry> = stmt.query_map(params![today], |row| {
+        let raw_category: String = row.get::<_, String>(2).unwrap_or_default();
         Ok(DayHistoryEntry {
             time: row.get::<_, String>(0).unwrap_or_default(),
             description: row.get::<_, String>(1).unwrap_or_default(),
-            category: row.get::<_, String>(2).unwrap_or_default(),
+            category: resolve_persisted_category(&raw_category),
             ticket: row.get::<_, Option<String>>(3).unwrap_or(None),
             duration_seconds: row.get::<_, i32>(4).unwrap_or(30),
         })
@@ -741,8 +762,20 @@ fn local_server_health_ok() -> bool {
         .unwrap_or(false)
 }
 
+// Async so Tauri dispatches it off the main/UI thread: the `reqwest::blocking`
+// call below opens a real TCP socket even for localhost, which is exactly what
+// makes Windows inject any registered Winsock LSP (VPN/AV network proxies —
+// see crash_guard.rs) into this process. Keeping that off the main thread
+// means a crash_guard-contained LSP crash here only takes down this
+// background thread, never the window's message loop.
 #[tauri::command]
-pub fn check_local_server() -> Result<serde_json::Value, String> {
+pub async fn check_local_server() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(check_local_server_blocking)
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn check_local_server_blocking() -> Result<serde_json::Value, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(LOCAL_HEALTH_HTTP_TIMEOUT_SECS))
         .build()
@@ -780,8 +813,8 @@ pub fn check_local_server() -> Result<serde_json::Value, String> {
 // mantenemos como thin wrapper para no cambiar el contrato en un solo PR.
 // TODO: migrar los `invoke('check_ollama')` del renderer y borrar este alias.
 #[tauri::command]
-pub fn check_ollama() -> Result<serde_json::Value, String> {
-    check_local_server()
+pub async fn check_ollama() -> Result<serde_json::Value, String> {
+    check_local_server().await
 }
 
 // LLAMA SERVER COMMANDS
@@ -1365,9 +1398,11 @@ pub fn stop_server() -> Result<bool, String> {
     Ok(true)
 }
 
-fn truncate_repetition(text: &str) -> String {
+fn truncate_repetition_words(text: &str) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
-    if words.len() < 10 { return text.to_string(); }
+    if words.len() < 10 {
+        return text.to_string();
+    }
 
     let mut result: Vec<&str> = Vec::with_capacity(words.len());
     let mut repeat_count = 0u32;
@@ -1375,7 +1410,9 @@ fn truncate_repetition(text: &str) -> String {
     for (i, word) in words.iter().enumerate() {
         if i > 0 && *word == words[i - 1] {
             repeat_count += 1;
-            if repeat_count >= 4 { continue; }
+            if repeat_count >= 4 {
+                continue;
+            }
         } else {
             repeat_count = 0;
         }
@@ -1386,6 +1423,18 @@ fn truncate_repetition(text: &str) -> String {
         println!("[Vision] Truncated {} repeated tokens from output", words.len() - result.len());
     }
     result.join(" ")
+}
+
+/// Collapse runaway token repeats without flattening newlines, so a trailing
+/// `CATEGORY: X` line stays parseable and can be stripped from the description.
+fn truncate_repetition(text: &str) -> String {
+    if !text.contains('\n') {
+        return truncate_repetition_words(text);
+    }
+    text.lines()
+        .map(truncate_repetition_words)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // RESTORED AI ANALYSIS (Backend)
@@ -1399,7 +1448,7 @@ fn analyze_image_with_vision(base64_img: &str, current_task: &str, _gpu_layers: 
         .build()
         .map_err(|e| e.to_string())?;
 
-    let system_msg = "You are a screenshot analysis assistant. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. Be accurate and concise: capture the user's primary task, not a full inventory of the UI.";
+    let system_msg = "You are a screenshot analysis assistant. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. Be accurate and concise: capture the user's primary task, not a full inventory of the UI. The last line of every reply MUST be `CATEGORY: <one allowed label>` — never omit it.";
 
     let prompt = format!(
         r#"Study this screenshot and complete EVERY field below. Plain text only (no markdown). If the screen is very dense (spreadsheet, large table, dashboard, long doc), stay high-level — do NOT transcribe cell values, columns, or long lists.
@@ -1415,10 +1464,12 @@ FILES OR URLS: [up to about five of the most relevant file names, paths, or URLs
 CURRENT ACTION: [what the user appears to be doing right now, one sentence]
 PROGRESS: [errors, warnings, build/test status if any, or None visible]
 NEXT STEP: [one short sentence: likely next action]
-CATEGORY: [pick exactly ONE from: Coding, Debugging, CodeReview, Testing, Documentation, Design, Planning, Meeting, Communication, Research, Learning, DevOps, Database, Sales, Admin, Browsing, Idle, General]
+CATEGORY: [pick exactly ONE from: {}]
+
+The LAST line MUST be exactly `CATEGORY: <one label from the list>`. Never omit it. Never leave it blank.
 
 CATEGORY rules: use Coding ONLY for software development (editing code, debugging in an IDE, repo/PR review in a dev tool, programming-focused terminal). Spreadsheets (Excel/Sheets), email, chat, slides, PDFs, CRM, and generic browsing are NOT Coding unless the visible work is clearly programming.]"#,
-        current_task
+        current_task, ALLOWED_CATEGORIES
     );
 
     // Retry up to 2 times on empty/refusal responses
@@ -1500,6 +1551,209 @@ CATEGORY rules: use Coding ONLY for software development (editing code, debuggin
     Err("Model analysis failed after retries".to_string())
 }
 
+// ============== TELEMETRY PIPELINE SUPPORT ==============
+//
+// The functions below back `telemetry::aggregator` (60s action-log review of
+// accumulated UI Automation events, plus a periodic screenshot + vision pass)
+// and `telemetry::action_capture` (screenshot fired on a significant window
+// open/close, debounced). All reuse the exact same `reports` table/schema as
+// `save_activity` — from the sync/reporting side there is no difference
+// between a manually-recorded activity and one the telemetry pipeline produced.
+
+/// Free-function insert into the shared `reports` table, reusing the exact
+/// schema already used by `save_activity`/`FlowSightAgent::save_report`. Used
+/// by the telemetry aggregator/action_capture threads, which have no
+/// `AgentState` handle (they only hold a `db_path`).
+pub(crate) fn insert_report(
+    db_path: &Path,
+    description: &str,
+    activity_type: &str,
+    jira_ticket: Option<String>,
+    duration_seconds: u64,
+) -> Option<i64> {
+    let activity_type = resolve_persisted_category(activity_type);
+    let conn = Connection::open(db_path).ok()?;
+    conn.execute(
+        "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds) VALUES (?, ?, ?, ?)",
+        params![description, activity_type, jira_ticket, duration_seconds],
+    )
+    .ok()?;
+    Some(conn.last_insert_rowid())
+}
+
+/// RAII guard around a screenshot written under the app data dir
+/// (`screenshots_tmp/`, never Desktop): the file is removed as soon as this
+/// value is dropped (Rust guarantees this runs even on an early `?` return),
+/// so a capture triggered by the telemetry pipeline never lingers on disk
+/// longer than the analysis call that consumes it.
+struct TempScreenshot {
+    path: PathBuf,
+    base64: String,
+}
+
+impl Drop for TempScreenshot {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            if let Err(e) = std::fs::remove_file(&self.path) {
+                log::warn!("[Telemetry] Failed to delete transient screenshot {}: {e}", self.path.display());
+            }
+        }
+    }
+}
+
+fn capture_screen_to_tmp() -> Result<TempScreenshot, String> {
+    let (base64, path) = capture_screen()?;
+    Ok(TempScreenshot { path, base64 })
+}
+
+/// Periodic 60s screenshot + local vision analysis, driven by
+/// `telemetry::aggregator`. Same save -> analyze -> delete lifecycle as
+/// `capture_context_snapshot` (full vision template via
+/// `analyze_image_with_vision`), but via `TempScreenshot`'s `Drop` so cleanup
+/// happens even if analysis returns early.
+pub(crate) fn capture_and_analyze_screen(task_context: &str) -> Result<(String, String), String> {
+    let capture = capture_screen_to_tmp()?;
+    let raw_analysis = analyze_image_with_vision(&capture.base64, task_context, None).unwrap_or_else(|e| {
+        log::warn!("[Telemetry][VisionSnapshot] vision analysis failed: {e}");
+        "Screen analysis failed.\nCATEGORY: General".to_string()
+    });
+    Ok(parse_analysis(&raw_analysis))
+}
+
+/// Screenshot capture triggered by a specific, significant UI Automation
+/// action (a window opening/closing — see `telemetry::action_capture`),
+/// combining the frame with the textual context of what triggered it in a
+/// single local-model call so it can fuse visual + semantic signal. Same
+/// save -> analyze -> delete lifecycle as `capture_context_snapshot`, but via
+/// `TempScreenshot`'s `Drop` so cleanup happens even if analysis returns early.
+pub(crate) fn capture_and_analyze_action(task_context: &str, action_context: &str) -> Result<(String, String), String> {
+    let capture = capture_screen_to_tmp()?;
+    let raw_analysis = analyze_action_screenshot_with_vision(&capture.base64, task_context, action_context)
+        .unwrap_or_else(|e| {
+            log::warn!("[Telemetry][ActionCapture] vision analysis failed: {e}");
+            "Screen analysis failed.\nCATEGORY: General".to_string()
+        });
+    Ok(parse_analysis(&raw_analysis))
+}
+
+/// Vision analysis for an action-triggered capture: same privacy stance as
+/// `review_actions_with_local_model` (never echo identifying details
+/// verbatim, generalize or omit sensitive content), but also given the
+/// screenshot so the model can combine what it sees with the UI action that
+/// just fired. Deliberately a short prompt/response (unlike the full
+/// `analyze_image_with_vision` template): this call fires on every
+/// significant window event, so it must stay cheap.
+fn analyze_action_screenshot_with_vision(base64_img: &str, current_task: &str, action_context: &str) -> Result<String, String> {
+    let chat_url = crate::llama_port::managed_chat_completions_url()
+        .ok_or_else(|| "Local vision server URL unknown — start the embedded Local AI server first.".to_string())?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let system_msg = format!(
+        "You are an activity reviewer running 100% on the user's own device. You receive a \
+screenshot plus a short note about the UI action that just triggered it. Strict privacy rules, no exceptions: \
+never reproduce full window titles, full file names, URLs, or field contents verbatim if they \
+could be identifying; always generalize instead (e.g. \"editing a spreadsheet\" rather than the exact file \
+name); if something looks sensitive (financial, medical, personal, credentials), omit it entirely rather than \
+anonymizing it. Combine what you see in the screenshot with the triggering action into 1-2 short generic \
+sentences. The LAST line of your reply MUST be exactly `CATEGORY: X` where X is one of: {}. Never omit that line.",
+        ALLOWED_CATEGORIES
+    );
+
+    let user_prompt = format!(
+        "Current task context: {}\n\nTriggering action: {}\n\nDescribe in 1-2 short, generic sentences what kind \
+of work this looks like, combining the screenshot with the triggering action (never repeat identifying details \
+verbatim).\n\nThe LAST line of your reply MUST be exactly:\nCATEGORY: X\nwhere X is one of: {}\nDo not skip this line. Do not leave it blank.",
+        current_task, action_context, ALLOWED_CATEGORIES
+    );
+
+    let body = serde_json::json!({
+        "model": LLAMA_CHAT_MODEL_ID,
+        "messages": [
+            { "role": "system", "content": system_msg },
+            {
+                "role": "user",
+                "content": [
+                    { "type": "text", "text": user_prompt },
+                    { "type": "image_url", "image_url": { "url": format!("data:image/png;base64,{}", base64_img) } }
+                ]
+            }
+        ],
+        "temperature": 0.3,
+        "max_tokens": 300,
+        "stream": false
+    });
+
+    let resp = client.post(&chat_url).json(&body).send().map_err(|e| format!("Request failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Server Error: {}", resp.status()));
+    }
+    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").trim();
+    if content.is_empty() {
+        return Err("Model returned empty response".to_string());
+    }
+    Ok(truncate_repetition(content))
+}
+
+/// Privacy-first review of raw UI Automation action events (Level 1 of the
+/// telemetry pipeline, see `telemetry::aggregator`). No screenshot involved —
+/// only a short textual log of which controls/windows/apps were interacted
+/// with. The system prompt instructs the local model to never echo back
+/// identifiable details (file names, URLs, window titles) and to
+/// generalize or omit anything sensitive instead of anonymizing it.
+pub(crate) fn review_actions_with_local_model(action_summary: &str, current_task: &str) -> Result<String, String> {
+    let chat_url = crate::llama_port::managed_chat_completions_url()
+        .ok_or_else(|| "Local vision server URL unknown — start the embedded Local AI server first.".to_string())?;
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let system_msg = format!(
+        "You are an activity reviewer running 100% on the user's own device. You receive a short \
+log of UI interaction events (which controls were used, in which apps) — never raw screen content and never \
+any keystroke or last-input signal. Strict privacy rules, no exceptions: never reproduce full window titles, \
+full file names, URLs, or field contents verbatim if they could be identifying; always generalize instead \
+(e.g. \"editing a spreadsheet\" rather than the exact file name); if something looks sensitive (financial, \
+medical, personal, credentials), omit it entirely rather than anonymizing it. Do not infer that the user is \
+away or idle from a short/empty log. Your only allowed output is 1-2 short generic sentences, then a last line \
+that MUST be exactly `CATEGORY: X` where X is one of: {}. Never omit the CATEGORY line. Never leave it blank.",
+        ALLOWED_CATEGORIES
+    );
+
+    let user_prompt = format!(
+        "Current task context: {}\n\nAction log for the last minute:\n{}\n\nSummarize in 1-2 short, generic \
+sentences what kind of work this looks like (never repeat identifying details from the log verbatim).\n\nThe \
+LAST line of your reply MUST be exactly:\nCATEGORY: X\nwhere X is one of: {}\nDo not skip this line. Do not leave it blank.",
+        current_task, action_summary, ALLOWED_CATEGORIES
+    );
+
+    let body = serde_json::json!({
+        "model": LLAMA_CHAT_MODEL_ID,
+        "messages": [
+            { "role": "system", "content": system_msg },
+            { "role": "user", "content": user_prompt }
+        ],
+        "temperature": 0.2,
+        "max_tokens": 200,
+        "stream": false
+    });
+
+    let resp = client.post(&chat_url).json(&body).send().map_err(|e| format!("Request failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Server Error: {}", resp.status()));
+    }
+    let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").trim();
+    if content.is_empty() {
+        return Err("Model returned empty response".to_string());
+    }
+    Ok(content.to_string())
+}
+
 #[cfg(test)]
 mod agent_struct_tests {
     use super::*;
@@ -1562,5 +1816,13 @@ mod repetition_tests {
         let spam: String = std::iter::repeat("spam ").take(25).collect();
         let out = truncate_repetition(spam.trim());
         assert!(out.len() < spam.len());
+    }
+
+    #[test]
+    fn truncate_preserves_category_newline() {
+        let raw = "CURRENT ACTION: editing a file in the editor window now\nCATEGORY: Coding";
+        let out = truncate_repetition(raw);
+        assert!(out.contains('\n'));
+        assert!(out.lines().any(|l| l.to_uppercase().starts_with("CATEGORY:")));
     }
 }

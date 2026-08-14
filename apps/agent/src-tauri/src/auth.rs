@@ -998,8 +998,17 @@ pub(crate) fn parse_tokens_from_oauth_code(code: &str) -> Result<(String, Option
     Ok((at, rt))
 }
 
+// Async so Tauri dispatches it off the main/UI thread: the blocking `reqwest`
+// call below opens a real socket, which is what lets Windows inject a broken
+// Winsock LSP into this process (see crash_guard.rs module docs).
 #[tauri::command]
-pub fn login_with_code(code: String) -> Result<AuthSession, String> {
+pub async fn login_with_code(code: String) -> Result<AuthSession, String> {
+    tauri::async_runtime::spawn_blocking(move || login_with_code_blocking(code))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+fn login_with_code_blocking(code: String) -> Result<AuthSession, String> {
     // Support both raw JWT tokens and full redirect URLs with hash fragments
     // e.g., "https://flowsight.site/#access_token=eyJ...&refresh_token=abc&..."
     let (access_token, refresh_token) = match parse_tokens_from_oauth_code(&code) {
