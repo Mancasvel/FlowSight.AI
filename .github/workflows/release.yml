@@ -127,6 +127,7 @@ jobs:
           '
 
       - name: Upload Windows bundles
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: windows-bundle
@@ -188,12 +189,28 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Download windows-bundle from prior run
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-bundle
-          run-id: ${{ inputs.artifact_run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ inputs.artifact_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          n=1
+          max=8
+          while true; do
+            echo "Download attempt ${n}/${max} from run ${RUN_ID}"
+            if gh run download "$RUN_ID" -n windows-bundle -D artifacts --repo "${{ github.repository }}"; then
+              echo "Downloaded windows-bundle"
+              find artifacts -type f -printf '%p %s\n'
+              exit 0
+            fi
+            if [ "$n" -ge "$max" ]; then
+              echo "::error::Failed to download windows-bundle from run ${RUN_ID} after ${max} attempts"
+              exit 1
+            fi
+            n=$((n + 1))
+            sleep $((n * 20))
+          done
 
       - name: Attach installers to GitHub Release
         env:
