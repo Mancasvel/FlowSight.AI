@@ -3316,21 +3316,21 @@
           <div class="login-preview-card login-preview-summary">
             <div class="login-preview-summary-title">Today's focus</div>
             <div class="login-preview-bar-row">
-              <span class="login-preview-bar-pct">Coding</span>
+              <span class="login-preview-bar-pct">Analysis</span>
               <div class="login-preview-bar-track">
                 <div class="login-preview-bar-fill" style="width:82%;background:hsl(var(--summary-purple))"></div>
               </div>
               <span class="login-preview-bar-time">2h 10m</span>
             </div>
             <div class="login-preview-bar-row">
-              <span class="login-preview-bar-pct">Review</span>
+              <span class="login-preview-bar-pct">Writing</span>
               <div class="login-preview-bar-track">
                 <div class="login-preview-bar-fill" style="width:55%;background:hsl(var(--summary-magenta))"></div>
               </div>
               <span class="login-preview-bar-time">1h 25m</span>
             </div>
             <div class="login-preview-bar-row">
-              <span class="login-preview-bar-pct">Debug</span>
+              <span class="login-preview-bar-pct">Research</span>
               <div class="login-preview-bar-track">
                 <div class="login-preview-bar-fill" style="width:36%;background:hsl(var(--summary-teal))"></div>
               </div>
@@ -3552,7 +3552,7 @@
             <div class="coach-messages" id="coachMessages">
               <div class="coach-empty" id="coachEmptyState">
                 <div class="coach-empty-title">What's next for your work?</div>
-                <div class="coach-empty-sub">Focus, flow, and planning — grounded in your tracked activity.</div>
+                <div class="coach-empty-sub">Sustained work, context, and planning — grounded in your tracked activity.</div>
               </div>
             </div>
             <div class="coach-thinking" id="coachThinking" style="display:none;">Thinking…</div>
@@ -5034,7 +5034,7 @@
         container.innerHTML = `
           <div class="coach-empty" id="coachEmptyState">
             <div class="coach-empty-title">What's next for your work?</div>
-            <div class="coach-empty-sub">Focus, flow, and planning — grounded in your tracked activity.</div>
+            <div class="coach-empty-sub">Sustained work, context, and planning — grounded in your tracked activity.</div>
           </div>`;
         return;
       }
@@ -5613,6 +5613,11 @@
       { id: 'data', label: 'Data & analytics', icon: '📊' },
       { id: 'student', label: 'Learning / student work', icon: '📚' },
       { id: 'other', label: 'Other knowledge work', icon: '✨' },
+      { id: 'writing_content', label: 'Writing & content', icon: '✍️' },
+      { id: 'research_education', label: 'Research & education', icon: '🔬' },
+      { id: 'sales_customer', label: 'Sales & customer work', icon: '🤝' },
+      { id: 'operations_admin', label: 'Operations & administration', icon: '⚙️' },
+      { id: 'finance_legal', label: 'Finance & legal', icon: '🧾' },
     ];
 
     const ONBOARDING_ACTIVITY_OPTIONS = [
@@ -5624,6 +5629,11 @@
       { id: 'research', label: 'Research & learning', icon: '🔍' },
       { id: 'design_work', label: 'Design & prototyping', icon: '🖌️' },
       { id: 'support', label: 'Support & operations', icon: '🛠️' },
+      { id: 'analysis', label: 'Analysis & spreadsheets', icon: '📈' },
+      { id: 'writing', label: 'Writing & presentations', icon: '✍️' },
+      { id: 'communication', label: 'Email & communication', icon: '💬' },
+      { id: 'sales_client', label: 'Sales & client work', icon: '🤝' },
+      { id: 'admin_finance', label: 'Admin & finance', icon: '🧾' },
     ];
 
     const ONBOARDING_GOAL_OPTIONS = [
@@ -6117,7 +6127,7 @@
       checkForUpdates().catch(() => {});
     }
 
-    // Native telemetry (foreground/UIA + 60s aggregator vision+action review +
+    // Native telemetry (foreground/UIA + configured-interval vision/action review +
     // action-triggered capture) persists reviewed reports to SQLite and emits
     // this so the Today view updates without a renderer screenshot loop. Only
     // fires while monitoring is on.
@@ -6229,26 +6239,6 @@
       if (isMonitoring) pushTaskContextToBackend();
     });
 
-    let isSyncing = false;
-    let lastGoodSnapshot = null;
-    let captureRetryTimeout = null;
-    const CAPTURE_RETRY_DELAY_MS = 2500;
-
-    function clearCaptureRetry() {
-      if (captureRetryTimeout) {
-        clearTimeout(captureRetryTimeout);
-        captureRetryTimeout = null;
-      }
-    }
-
-    function isAnalysisFailure(snapshot) {
-      if (!snapshot) return true;
-      if (snapshot.analysis_failed === true) return true;
-      const desc = (snapshot.description || '').trim();
-      return desc.startsWith('Screen analysis failed')
-        || desc === 'No analysis available';
-    }
-
     function getTaskContext() {
       let task = 'General';
       let jiraTicket = null;
@@ -6260,106 +6250,13 @@
         return { task, jiraTicket };
       }
 
-      if (sel.value && sel.value !== 'MANUAL') {
+      if (sel.value && sel.value !== 'MANUAL' && sel.value !== 'General') {
         jiraTicket = sel.value;
         task = sel.options[sel.selectedIndex].text;
       } else if (sel.value === 'MANUAL') {
-        task = manualTask?.value || 'Manual Work';
+        task = manualTask?.value?.trim() || 'General';
       }
       return { task, jiraTicket };
-    }
-
-    async function recordActivity(description, category, jiraTicket, { toast = false } = {}) {
-      const activityType = (category && String(category).trim()) ? String(category).trim() : 'General';
-      await invoke('save_activity', {
-        description,
-        activityType,
-        jiraTicket: jiraTicket
-      });
-
-      const statSent = document.getElementById('statSent');
-      if (statSent) {
-        statSent.textContent = parseInt(statSent.textContent || '0', 10) + 1;
-      }
-
-      refreshTodayView();
-
-      if (toast) {
-        const ticketLabel = jiraTicket ? ` · ${jiraTicket}` : '';
-        showToast(`Saved locally${ticketLabel} (cloud upload runs on a timer when logged in)`, 'success', 2500);
-      }
-    }
-
-    async function recordCarryForwardTime(jiraTicket) {
-      if (lastGoodSnapshot) {
-        await recordActivity(
-          lastGoodSnapshot.description,
-          lastGoodSnapshot.category,
-          jiraTicket
-        );
-        return;
-      }
-      await recordActivity(
-        'Tracking continued (analysis temporarily unavailable)',
-        'General',
-        jiraTicket
-      );
-    }
-
-    function scheduleCaptureRetry() {
-      if (!isMonitoring || captureRetryTimeout) return;
-      captureRetryTimeout = setTimeout(() => {
-        captureRetryTimeout = null;
-        if (isMonitoring) captureAndAnalyze({ isRetry: true });
-      }, CAPTURE_RETRY_DELAY_MS);
-    }
-
-    async function captureAndAnalyze({ isRetry = false } = {}) {
-      if (isSyncing) {
-        console.log('[Sync] Already syncing, skipping this cycle');
-        return;
-      }
-
-      isSyncing = true;
-
-      const { task, jiraTicket } = getTaskContext();
-
-      try {
-        if (!isRetry) log('Taking Context Snapshot (background)...');
-
-        const snapshot = await invoke('capture_context_snapshot', {
-          userTask: task,
-          jiraTicket: jiraTicket
-        });
-
-        if (isAnalysisFailure(snapshot)) {
-          console.warn('[Sync] Analysis failed — counting time from last known state, retrying soon');
-          await recordCarryForwardTime(jiraTicket);
-          scheduleCaptureRetry();
-          return;
-        }
-
-        lastGoodSnapshot = {
-          description: snapshot.description,
-          category: snapshot.category
-        };
-
-        log(`Snapshot ready: ${snapshot.description.substring(0, 50)}...`);
-        await recordActivity(snapshot.description, snapshot.category, jiraTicket, {
-          toast: !isRetry
-        });
-      } catch (e) {
-        console.error('[Sync] Error:', e);
-        log('Sync error: ' + e);
-        try {
-          await recordCarryForwardTime(jiraTicket);
-        } catch (saveErr) {
-          console.error('[Sync] Failed to record carry-forward time:', saveErr);
-        }
-        if (isMonitoring) scheduleCaptureRetry();
-      } finally {
-        isSyncing = false;
-      }
     }
 
     // ===== TAB NAVIGATION =====
@@ -6378,7 +6275,7 @@
       'Section — timeline review',
       'Section — known issues',
       'Section — potential risks',
-      'Section — progress & tasks completed',
+      'Section — progress & observed work',
       'Section — lessons & recommendations',
     ];
 
@@ -6410,8 +6307,6 @@
       'hsl(142 60% 45%)',
       'hsl(45 90% 50%)',
     ];
-    const FOCUS_CATEGORIES = new Set(['Coding', 'Debugging', 'CodeReview', 'Testing', 'Design', 'DevOps', 'Database']);
-    const DISTRACTION_CATEGORIES = new Set(['Browsing', 'Idle']);
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -6476,14 +6371,12 @@
       return items;
     }
 
-    function computeFocusSeconds(data) {
-      return data.category_breakdown
-        .filter(c => FOCUS_CATEGORIES.has(c.category))
-        .reduce((s, c) => s + c.total_seconds, 0);
+    function canonicalDeepFocusSeconds(data) {
+      return data.focus?.deep_focus_seconds || 0;
     }
 
-    function computeDistractionCount(data) {
-      return data.entries.filter(e => DISTRACTION_CATEGORIES.has(e.category)).length;
+    function canonicalDistractionEvents(data) {
+      return data.focus?.distraction_events || 0;
     }
 
     function renderWeekRow(week) {
@@ -6534,29 +6427,30 @@
             <span class="task-bar-pct">${pct}%</span>
             <div class="task-bar-track">
               <div class="task-bar-fill" style="width:${fillWidth}%;background:${color}"></div>
-              <span class="${labelClass}" style="${labelStyle}">${item.label}</span>
+              <span class="${labelClass}" style="${labelStyle}">${escapeHtml(item.label)}</span>
             </div>
             <span class="task-bar-time">${mins}m</span>
           </div>`;
       }).join('');
     }
 
-    function renderFocusChart(entries) {
-      const focusEntries = entries.filter(e => FOCUS_CATEGORIES.has(e.category));
-      if (!focusEntries.length) {
-        return '<div class="focus-chart-empty">No deep focus sessions yet today</div>';
+    function renderFocusChart(data) {
+      const focus = data.focus;
+      if (!focus) {
+        return '<div class="focus-chart-empty">Deep Focus is unavailable until local activity has been analyzed</div>';
+      }
+      const deepMinutes = Math.round(focus.deep_threshold_seconds / 60);
+      if (!focus?.deep_focus_sessions) {
+        return `<div class="focus-chart-empty">No sustained ${deepMinutes}-minute block yet today</div>`;
       }
 
       const byHour = new Array(24).fill(0);
-      focusEntries.forEach(e => {
-        const hour = new Date(e.time).getHours();
-        byHour[hour] += e.duration_seconds || 0;
+      (focus.hourly_deep_focus || []).forEach(bucket => {
+        byHour[bucket.hour] = bucket.seconds || 0;
       });
 
-      const startHour = 8;
-      const endHour = 20;
       const slots = [];
-      for (let h = startHour; h < endHour; h++) {
+      for (let h = 0; h < 24; h++) {
         slots.push({ hour: h, seconds: byHour[h] });
       }
 
@@ -6564,7 +6458,9 @@
       const bars = slots.map(({ hour, seconds }) => {
         const pct = seconds > 0 ? Math.max(Math.round((seconds / maxSec) * 100), 12) : 8;
         const mins = Math.round(seconds / 60);
-        const tip = mins > 0 ? `${hour}:00 — ${mins} min focus` : `${hour}:00 — no focus`;
+        const tip = mins > 0
+          ? `${hour}:00 — ${mins} deep-focus min`
+          : `${hour}:00 — no minutes inside a deep-focus block`;
         const cls = seconds > 0 ? 'focus-bar' : 'focus-bar focus-bar-empty';
         return `<div class="${cls}" style="height:${pct}%" title="${tip}"></div>`;
       }).join('');
@@ -6572,8 +6468,8 @@
       return `
         <div class="focus-chart-wrap">
           <div class="focus-chart">${bars}</div>
-          <div class="focus-chart-axis"><span>8am</span><span>8pm</span></div>
-          <div class="focus-chart-caption">Deep focus minutes per hour · hover a bar for details</div>
+          <div class="focus-chart-axis"><span>12am</span><span>11pm</span></div>
+          <div class="focus-chart-caption" title="${escapeHtml(focus.proxy_disclaimer || '')}">Minutes inside sustained ${deepMinutes}+ minute blocks · hover for details</div>
         </div>`;
     }
 
@@ -6628,17 +6524,18 @@
       const progress = data.total_seconds / goalSeconds;
       const goalMet = data.total_seconds >= goalSeconds;
       const taskItems = buildTaskBreakdown(data);
-      const focusSeconds = computeFocusSeconds(data);
-      const distractionCount = computeDistractionCount(data);
-      const yesterdayTotal = week?.yesterday_seconds || 0;
+      const focusSeconds = canonicalDeepFocusSeconds(data);
+      const distractionCount = canonicalDistractionEvents(data);
+      const distractionDefinition = data.focus
+        ? `At least ${Math.round(data.focus.browsing_distraction_min_seconds / 60)} observed minutes of non-work Browsing in one episode; capture gaps up to ${data.focus.sensor_grace_seconds} seconds may be joined`
+        : 'Canonical sustained non-work browsing episodes';
       let focusInsight = 'Start tracking to see your focus insights.';
-      if (yesterdayTotal > 0) {
-        const diff = Math.round(((data.total_seconds - yesterdayTotal) / yesterdayTotal) * 100);
-        if (diff > 0) focusInsight = `Your tracked time is <strong>${diff}% higher</strong> than yesterday. Keep going!`;
-        else if (diff < 0) focusInsight = `Your tracked time is <strong>${Math.abs(diff)}% lower</strong> than yesterday.`;
-        else focusInsight = 'Your tracked time matches yesterday.';
-      } else if (focusSeconds > 0) {
-        focusInsight = `You've logged <strong>${formatShortDuration(focusSeconds)}</strong> of deep focus today.`;
+      if (focusSeconds > 0) {
+        const count = data.focus?.deep_focus_sessions || 0;
+        focusInsight = `<strong>${formatShortDuration(focusSeconds)}</strong> across ${count} sustained block${count === 1 ? '' : 's'} today.`;
+      } else if (data.focus?.focus_eligible_seconds > 0) {
+        const deepMinutes = Math.round(data.focus.deep_threshold_seconds / 60);
+        focusInsight = `Focused activity is present, but no block has reached the ${deepMinutes}-minute reference yet.`;
       }
 
       summaryBody.innerHTML = `
@@ -6673,13 +6570,13 @@
         <div class="highlight-card highlight-focus">
           <div class="highlight-card-header">${renderIcon('target', 15)} Deep Focus</div>
           <div class="highlight-insight">${focusInsight}</div>
-          ${renderFocusChart(data.entries)}
+          ${renderFocusChart(data)}
         </div>
 
         <div class="highlight-card highlight-distraction">
           <div class="distraction-row">
             <div>
-              <div class="highlight-card-header">${renderIcon('smartphone', 15)} Distractions today</div>
+              <div class="highlight-card-header" title="${escapeHtml(distractionDefinition)}">${renderIcon('smartphone', 15)} Sustained non-work browsing</div>
             </div>
             <div class="distraction-count">${distractionCount}</div>
           </div>
@@ -6795,14 +6692,13 @@
       const report = payload.report || {};
       const meta = report.report_meta || {};
       const local = payload.local_data || {};
-      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Developer';
+      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Knowledge worker';
       const period = meta.period_label || (local.period_start && local.period_end
         ? `${local.period_start} → ${local.period_end}`
         : '');
       const healthClass = healthStatusClass(report.overall_health);
-      const focusPct = local.total_seconds > 0
-        ? Math.round((local.focus_seconds / local.total_seconds) * 100)
-        : 0;
+      const sustainedHours = local.deep_focus_hours ?? 0;
+      const sustainedSessions = local.deep_focus_sessions ?? 0;
       const generatedDate = payload.generated_at || new Date().toLocaleDateString(undefined, {
         month: 'long', day: 'numeric', year: 'numeric',
       });
@@ -6858,7 +6754,7 @@
               </div>
               <div class="sr-tbi-meta-box">
                 <label>Tracked hours</label>
-                <span>${local.total_hours ?? 0}h · ${focusPct}% focus</span>
+                <span>${local.total_hours ?? 0}h tracked · ${sustainedHours}h in ${sustainedSessions} sustained block${sustainedSessions === 1 ? '' : 's'}</span>
               </div>
             </div>
             <div class="sr-tbi-summary-box">
@@ -6906,8 +6802,8 @@
             </div>
             <div class="sr-tbi-progress-block">
               <h4 class="sr-tbi-block-title">Team progress</h4>
-              <p style="font-size:10px;font-weight:700;margin:0 0 6px;">Tasks completed</p>
-              <ul>${listItems(report.tasks_completed) || '<li>No tasks listed</li>'}</ul>
+              <p style="font-size:10px;font-weight:700;margin:0 0 6px;">Observed work</p>
+              <ul>${listItems(report.observed_work) || '<li>No labelled work observed</li>'}</ul>
               <p style="font-size:10px;font-weight:700;margin:12px 0 6px;">Highlights</p>
               <ul>${listItems(report.work_progress) || '<li>No highlights</li>'}</ul>
             </div>
@@ -7261,7 +7157,7 @@
       return y;
     }
 
-    function pdfDrawRisksProgressColumns(doc, y, knownIssues, potentialRisks, tasksCompleted, workProgress) {
+    function pdfDrawRisksProgressColumns(doc, y, knownIssues, potentialRisks, observedWork, workProgress) {
       y = pdfEnsureSpace(doc, y, 50);
       const colW = (PDF_CONTENT_W - 6) / 2;
       const leftX = PDF_MARGIN;
@@ -7301,10 +7197,10 @@
       doc.setFont(undefined, 'bold');
       doc.setFontSize(7);
       doc.setTextColor(40, 90, 130);
-      doc.text('Tasks completed', rightX + 4, y + 12);
+      doc.text('Observed work', rightX + 4, y + 12);
       doc.setFont(undefined, 'normal');
       let ry = y + 17;
-      (tasksCompleted || []).slice(0, 4).forEach((item) => {
+      (observedWork || []).slice(0, 4).forEach((item) => {
         ry = pdfWrapText(doc, `• ${item}`, rightX + 4, ry, colW - 8, 3.6) + 1;
       });
       doc.setFont(undefined, 'bold');
@@ -7324,13 +7220,12 @@
       const meta = report.report_meta || {};
       const local = payload?.local_data || {};
       const en = (t) => extractEnglishText(t ?? '');
-      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Developer';
+      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Knowledge worker';
       const period = meta.period_label || (local.period_start && local.period_end
         ? `${local.period_start} — ${local.period_end}`
         : (todayData?.date || new Date().toISOString().slice(0, 10)));
-      const focusPct = local.total_seconds > 0
-        ? Math.round((local.focus_seconds / local.total_seconds) * 100)
-        : 0;
+      const sustainedHours = local.deep_focus_hours ?? 0;
+      const sustainedSessions = local.deep_focus_sessions ?? 0;
       const generatedAt = payload?.generated_at || new Date().toLocaleDateString(undefined, {
         month: 'long', day: 'numeric', year: 'numeric',
       });
@@ -7341,7 +7236,7 @@
       y = pdfDrawMetaSummaryRow(doc, y, [
         { label: 'Period', value: period },
         { label: 'Focus target', value: en(report.focus_target || meta.focus_target || '—') },
-        { label: 'Tracked hours', value: `${local.total_hours ?? 0}h · ${focusPct}% focus` },
+        { label: 'Tracked hours', value: `${local.total_hours ?? 0}h · ${sustainedHours}h in ${sustainedSessions} sustained blocks` },
       ], en(report.executive_overview || report.work_summary) || '—');
 
       y = pdfDrawOverallHealth(doc, y, en(report.overall_health) || 'Attention', en(report.health_notes) || '—');
@@ -7375,7 +7270,7 @@
         y,
         (report.known_issues || []).map(en),
         (report.potential_risks || []).map(en),
-        (report.tasks_completed || []).map(en),
+        (report.observed_work || []).map(en),
         (report.work_progress || []).map(en),
       );
 

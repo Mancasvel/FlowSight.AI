@@ -9,7 +9,7 @@
 //! off to a fresh thread that captures the screen, sends it to the local
 //! vision model together with the textual action context, and persists the
 //! result as its own `reports` row — independent of, and in addition to, the
-//! 60s aggregator cycle (action-log review + periodic vision snapshot).
+//! configured-interval aggregator cycle (action-log review + periodic vision snapshot).
 
 use super::{SharedFlag, TaskContext};
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ use tauri::Emitter;
 const COOLDOWN: Duration = Duration::from_secs(15);
 
 /// Action-triggered reports mark a point-in-time event rather than an
-/// observed interval, unlike the 60s aggregator's rows.
+/// observed interval, unlike the periodic aggregator's rows.
 const ACTION_REPORT_DURATION_SECS: u64 = 0;
 
 pub struct ActionCaptureTrigger {
@@ -45,7 +45,13 @@ impl ActionCaptureTrigger {
         running: SharedFlag,
         task_ctx: Arc<Mutex<TaskContext>>,
     ) -> Self {
-        Self { app_handle, db_path, running, task_ctx, last_fired: Mutex::new(None) }
+        Self {
+            app_handle,
+            db_path,
+            running,
+            task_ctx,
+            last_fired: Mutex::new(None),
+        }
     }
 
     /// Attempts to fire an action-triggered capture for `action_context`
@@ -62,7 +68,10 @@ impl ActionCaptureTrigger {
         {
             let mut last = self.last_fired.lock().unwrap();
             let now = Instant::now();
-            if last.map(|t| now.duration_since(t) < COOLDOWN).unwrap_or(false) {
+            if last
+                .map(|t| now.duration_since(t) < COOLDOWN)
+                .unwrap_or(false)
+            {
                 return;
             }
             *last = Some(now);
@@ -77,36 +86,49 @@ impl ActionCaptureTrigger {
             let ctx = self.task_ctx.lock().unwrap();
             (ctx.user_task.clone(), ctx.jira_ticket.clone())
         };
-        let task_label = jira_ticket.clone().or_else(|| user_task.clone()).unwrap_or_else(|| "General".to_string());
+        let task_label = jira_ticket
+            .clone()
+            .or_else(|| user_task.clone())
+            .unwrap_or_else(|| "General".to_string());
+        let theme_hint = jira_ticket
+            .clone()
+            .or_else(|| user_task.clone())
+            .filter(|theme| !theme.trim().is_empty() && !theme.eq_ignore_ascii_case("general"));
 
-        let (description, category) = match crate::agent::capture_and_analyze_action(&task_label, &action_context) {
+        let capture = match crate::agent::capture_and_analyze_action(&task_label, &action_context) {
             Ok(result) => result,
             Err(e) => {
                 log::warn!("[Telemetry][ActionCapture] capture/analysis failed: {e}");
                 return;
             }
         };
-        let category = crate::agent_pure::resolve_persisted_category(&category);
+        let category = crate::agent_pure::resolve_persisted_category(&capture.category);
 
         match crate::agent::insert_report(
             &self.db_path,
-            &description,
+            &capture.description,
             &category,
             jira_ticket.clone(),
             ACTION_REPORT_DURATION_SECS,
+            "action_capture",
+            theme_hint,
+            Some(capture.window),
+            Some(capture.observed_at_utc),
         ) {
             Some(id) => {
                 let _ = self.app_handle.emit(
                     "activity-report",
                     serde_json::json!({
                         "id": id,
-                        "description": description,
+                        "description": capture.description,
                         "category": category,
                         "jiraTicket": jira_ticket,
                     }),
                 );
             }
-            None => log::warn!("[Telemetry][ActionCapture] Failed to persist action-triggered report to local DB"),
+            None => log::warn!(
+                "[Telemetry][ActionCapture] Failed to persist action-triggered report to local DB"
+            ),
         }
     }
 }

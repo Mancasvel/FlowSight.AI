@@ -15,6 +15,7 @@ mod linear;
 mod oauth_env;
 mod entitlements;
 mod insights_local;
+mod focus_semantics;
 mod coach_chat;
 mod user_preferences;
 mod anonymous_analytics;
@@ -26,8 +27,8 @@ use tauri::Manager;
 use agent::{
     AgentState, initialize_agent, get_config, update_config,
     get_status, start_monitoring, stop_monitoring,
-    capture_screen_command, save_activity,
-    get_activity_log, get_today_history, get_week_summary,
+    capture_screen_command,
+    get_activity_log, get_focus_summary, get_today_history, get_week_summary,
     check_ollama, check_local_server,
     llama_managed_process_status, llama_server_log_tail, restart_llama_server_cpu_only,
     set_task_context,
@@ -52,7 +53,6 @@ pub fn run() {
             start_monitoring,
             stop_monitoring,
     capture_screen_command,
-    save_activity,
     get_activity_log,
     check_ollama,
     check_local_server,
@@ -100,6 +100,7 @@ pub fn run() {
             linear::fetch_linear_profile,
             // History commands
             get_today_history,
+            get_focus_summary,
             get_week_summary,
             set_task_context,
             paths::get_flowsight_user_paths,

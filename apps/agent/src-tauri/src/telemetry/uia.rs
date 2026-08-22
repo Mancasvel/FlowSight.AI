@@ -131,7 +131,7 @@ impl IUIAutomationEventHandler_Impl for WindowLifecycleHandler_Impl {
             // Steps-Recorder-style screenshot (see `action_capture`).
             // `AutomationFocusChanged` is deliberately excluded as a trigger —
             // it fires far too often to screenshot on every occurrence — and
-            // stays purely textual context for the 60s aggregator instead.
+            // stays textual context for the configured-interval aggregator instead.
             let app_name = lock_or_recover(&self.current_app).clone().unwrap_or_else(|| "an application".to_string());
             let verb = if is_opened { "opened" } else { "closed" };
             let window_desc = name.as_deref().map(|n| format!(" named '{}'", n)).unwrap_or_default();

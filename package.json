@@ -2,7 +2,7 @@
   "name": "flowsight-ai",
   "version": "3.6.1",
   "private": true,
-  "description": "FlowSight AI - Privacy-first developer activity monitor with local AI",
+  "description": "FlowSight AI - Privacy-first work activity monitor with local AI",
   "scripts": {
     "dev": "corepack pnpm --filter @flowsight/agent dev",
     "tauri": "corepack pnpm --filter @flowsight/agent exec tauri",

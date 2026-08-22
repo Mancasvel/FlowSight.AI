@@ -51,18 +51,19 @@ async function callOpenRouterPmReport(payload: {
 
   const model = Deno.env.get("OPENROUTER_MODEL") ?? OPENROUTER_MODEL_DEFAULT;
 
-  const prompt = `You are a productivity analyst for a solo developer (Individual plan). 
+  const prompt = `You are a privacy-first work-pattern analyst for an individual knowledge worker.
 Generate a PM-style work report in JSON only (no markdown fences).
 
 Use ONLY facts from the DATA below. Do not invent tasks or tools.
+If DATA.localReport.focus_semantics exists, it is canonical: Deep Focus means observed sustained focus-eligible work without an observed theme change, not subjective flow. Theme continuity is only known from explicit manual labels or tickets; use explicit_theme_coverage_pct and state that unlabelled task switches may be missed. Never derive Deep Focus by summing Coding or another category. Use only focus_semantics.distraction_events/distraction_seconds for distraction claims; raw Browsing rows can include sub-threshold observations. Its context_category_mix retains meetings, planning, communication, administration and sales as useful evidence about coordination, workload and transitions even though they do not count toward Deep Focus. Never call that contextual work distraction. If focus_semantics is absent, state that canonical Deep Focus is unavailable and do not estimate it from categories or cloud totals; distraction episodes are also unavailable and must not be reconstructed from raw Browsing. Tie every recommendation to a supplied metric or state that the signal is insufficient. Do not prescribe universal recovery times or ultradian cycles; describe focus_semantics.deep_threshold_seconds as a transparent product reference, not a biological threshold.
 
 Return this JSON shape:
 {
   "executive_summary": "2-3 sentences",
-  "focus_analysis": "paragraph about deep work / coding focus",
-  "distraction_patterns": "paragraph about distractions or context switching",
+  "focus_analysis": "paragraph about sustained work across any relevant profession",
+  "distraction_patterns": "paragraph using only canonical distraction episodes and observed theme switches",
   "week_trend": "compare daily totals if available",
-  "productivity_score": 0-100 integer,
+  "measurement_notes": "brief explanation of coverage, uncertainty, and the observable proxy",
   "recommendations": ["action 1", "action 2", "action 3"],
   "highlights": ["bullet 1", "bullet 2", "bullet 3"]
 }
@@ -207,11 +208,12 @@ Deno.serve(async (req) => {
         period_end: periodEndStr,
         total_hours: localReport?.total_hours ?? roundHours(cloudStats.totalSeconds),
         activity_count: localReport?.activity_count ?? cloudStats.activityCount,
-        focus_hours: localReport?.focus_hours ?? null,
+        deep_focus_hours: localReport?.deep_focus_hours ?? null,
+        focus_semantics: localReport?.focus_semantics ?? null,
         distraction_events: localReport?.distraction_events ?? null,
         top_categories: localReport?.category_breakdown ?? cloudStats.topCategories,
         daily_totals: localReport?.daily_totals ?? [],
-        data_sources: ["local_sqlite", cloudRows.length > 0 ? "cloud_sync" : null].filter(Boolean),
+        data_sources: [localReport ? "local_sqlite" : null, cloudRows.length > 0 ? "cloud_sync" : null].filter(Boolean),
         model,
         generated_at: new Date().toISOString(),
       };
@@ -225,6 +227,9 @@ Deno.serve(async (req) => {
         period_days: periodDays,
         total_hours: roundHours(cloudStats.totalSeconds),
         activity_count: cloudStats.activityCount,
+        deep_focus_hours: localReport?.deep_focus_hours ?? null,
+        focus_semantics: localReport?.focus_semantics ?? null,
+        distraction_events: localReport?.distraction_events ?? null,
         top_categories: cloudStats.topCategories,
         generated_at: new Date().toISOString(),
       };

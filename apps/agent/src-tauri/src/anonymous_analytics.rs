@@ -3,9 +3,11 @@
 //! Collects only aggregate usage: daily minutes and weekly primary activity category.
 //! No account, email, or other personally identifiable information is sent.
 
-use chrono::{Datelike, Local, NaiveDate};
+#[cfg(test)]
+use chrono::NaiveDate;
+use chrono::{Datelike, Local};
 use reqwest::blocking::Client;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -67,10 +69,7 @@ pub fn save_analytics_consent(
     Ok(consent)
 }
 
-pub fn compute_daily_usage(
-    conn: &Connection,
-    days: i32,
-) -> Result<Vec<DailyUsageEntry>, String> {
+fn compute_daily_usage(conn: &Connection, days: i32) -> Result<Vec<DailyUsageEntry>, String> {
     if days <= 0 {
         return Ok(Vec::new());
     }
@@ -80,28 +79,7 @@ pub fn compute_daily_usage(
     let start_str = start.format("%Y-%m-%d").to_string();
     let end_str = today.format("%Y-%m-%d").to_string();
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT date(created_at, 'localtime') as d, SUM(duration_seconds) as total
-             FROM reports
-             WHERE date(created_at, 'localtime') >= ?1 AND date(created_at, 'localtime') <= ?2
-             GROUP BY d",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let mut totals: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
-    let rows = stmt
-        .query_map(params![start_str, end_str], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, i32>(1).unwrap_or(0),
-            ))
-        })
-        .map_err(|e| e.to_string())?;
-
-    for row in rows.filter_map(|r| r.ok()) {
-        totals.insert(row.0, row.1);
-    }
+    let totals = crate::agent::load_daily_totals(conn, &start_str, &end_str)?;
 
     let mut entries = Vec::with_capacity(days as usize);
     for offset in 0..days {
@@ -125,27 +103,40 @@ pub fn compute_weekly_primary_activity(conn: &Connection) -> Result<Option<Strin
     let start_str = week_start.format("%Y-%m-%d").to_string();
     let end_str = week_end.format("%Y-%m-%d").to_string();
 
+    let window = crate::focus_semantics::LocalDateWindow::parse(&start_str, &end_str)?;
     let mut stmt = conn
         .prepare(
-            "SELECT activity_type, SUM(duration_seconds) as total
+            "SELECT datetime(created_at, 'localtime'), activity_type, duration_seconds
              FROM reports
-             WHERE date(created_at, 'localtime') >= ?1 AND date(created_at, 'localtime') <= ?2
-             GROUP BY activity_type
-             ORDER BY total DESC
-             LIMIT 1",
+             WHERE date(created_at, 'localtime') >= ?1
+               AND date(created_at, 'localtime') <= date(?2, '+1 day')",
         )
-        .map_err(|e| e.to_string())?;
-
-    let row = stmt
-        .query_row(params![start_str, end_str], |row| {
-            let category: String = row.get(0)?;
-            let total: i32 = row.get(1)?;
-            Ok((category, total))
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map(params![start_str, end_str], |row| {
+            Ok((
+                row.get::<_, String>(0).unwrap_or_default(),
+                row.get::<_, String>(1).unwrap_or_default(),
+                row.get::<_, i64>(2).unwrap_or(0).max(0),
+            ))
         })
-        .optional()
-        .map_err(|e| e.to_string())?;
-
-    Ok(row.filter(|(_, total)| *total > 0).map(|(category, _)| category))
+        .map_err(|error| error.to_string())?;
+    let mut totals = std::collections::BTreeMap::<String, i64>::new();
+    for (timestamp, raw_category, duration) in rows.filter_map(Result::ok) {
+        let observed_seconds = window
+            .slices_for_observation(&timestamp, duration)
+            .iter()
+            .map(|slice| slice.duration_seconds)
+            .sum::<i64>();
+        if observed_seconds > 0 {
+            let category = crate::focus_semantics::canonicalize_category(&raw_category);
+            *totals.entry(category).or_default() += observed_seconds;
+        }
+    }
+    Ok(totals
+        .into_iter()
+        .max_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(&left.0)))
+        .map(|(category, _)| category))
 }
 
 fn upsert_anonymous_analytics_on_supabase(
@@ -220,15 +211,13 @@ pub fn perform_analytics_sync(db_path: &Path) -> Result<bool, String> {
 }
 
 pub fn start_analytics_sync_thread(db_path: PathBuf) {
-    thread::spawn(move || {
-        loop {
-            match perform_analytics_sync(&db_path) {
-                Ok(true) => log::debug!("[Analytics] Background sync completed"),
-                Ok(false) => {}
-                Err(e) => log::debug!("[Analytics] Background sync failed: {e}"),
-            }
-            thread::sleep(Duration::from_secs(ANALYTICS_SYNC_INTERVAL_HOURS * 3600));
+    thread::spawn(move || loop {
+        match perform_analytics_sync(&db_path) {
+            Ok(true) => log::debug!("[Analytics] Background sync completed"),
+            Ok(false) => {}
+            Err(e) => log::debug!("[Analytics] Background sync failed: {e}"),
         }
+        thread::sleep(Duration::from_secs(ANALYTICS_SYNC_INTERVAL_HOURS * 3600));
     });
 }
 
@@ -285,10 +274,7 @@ fn submit_feedback_to_supabase(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!(
-        "{}/rest/v1/rpc/submit_product_feedback",
-        supabase_url()
-    );
+    let url = format!("{}/rest/v1/rpc/submit_product_feedback", supabase_url());
 
     let body = serde_json::json!({
         "p_message": message,
@@ -420,11 +406,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("consent.db");
         let conn = Connection::open(&path).expect("open");
-        conn.execute(
-            "CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)",
-            [],
-        )
-        .expect("schema");
+        conn.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)", [])
+            .expect("schema");
         drop(conn);
 
         let consent = AnalyticsConsent {

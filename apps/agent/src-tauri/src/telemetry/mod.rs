@@ -6,8 +6,8 @@
 //! buffer that only ever lives in process memory. This module itself never
 //! writes raw events to SQLite or to any file. Two independent, complementary
 //! reviews turn that raw signal into persisted `reports` rows:
-//!   - `aggregator`: every 60s, (a) a pure-text review of whatever UIA/foreground
-//!     events accumulated in the ring buffer during that minute (if any), and
+//!   - `aggregator`: at the configured interval, (a) a pure-text review of UIA/foreground
+//!     events accumulated in the ring buffer during that interval (if any), and
 //!     (b) a screenshot + local vision pass (`agent::capture_and_analyze_screen`,
 //!     save -> analyze -> delete). Each becomes its own `reports` row.
 //!   - `action_capture`: fired immediately (debounced ~15s) whenever `uia`
@@ -27,7 +27,7 @@ mod uia;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -56,6 +56,10 @@ impl ActionEvent {
 
 pub type SharedRing = Arc<Mutex<VecDeque<ActionEvent>>>;
 pub type SharedFlag = Arc<AtomicBool>;
+pub type SharedCaptureInterval = Arc<AtomicU64>;
+/// Start of the current monitoring run. This lets the periodic sampler avoid
+/// charging paused time to the first observation after resume.
+pub type SharedMonitoringStart = Arc<Mutex<Option<Instant>>>;
 /// Foreground HWND to watch with UI Automation, stored as a raw pointer value
 /// (`isize`) since `HWND` itself does not implement `Send`.
 pub type SharedTarget = Arc<Mutex<Option<isize>>>;
@@ -72,6 +76,8 @@ pub struct TaskContext {
 
 struct TelemetryController {
     running: SharedFlag,
+    monitoring_started: SharedMonitoringStart,
+    capture_interval_ms: SharedCaptureInterval,
     ring: SharedRing,
     task_ctx: Arc<Mutex<TaskContext>>,
 }
@@ -96,12 +102,14 @@ fn push_event(ring: &SharedRing, event: ActionEvent) {
 /// lifecycle (mirrors `sync::start_sync_thread`'s always-on loop pattern).
 /// Monitoring is OFF by default — actual data collection is gated behind
 /// `set_running(true)`, which `start_monitoring`/`stop_monitoring` toggle.
-pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf) {
+pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf, initial_interval_ms: u64) {
     if CONTROLLER.get().is_some() {
         return;
     }
 
     let running: SharedFlag = Arc::new(AtomicBool::new(false));
+    let monitoring_started: SharedMonitoringStart = Arc::new(Mutex::new(None));
+    let capture_interval_ms: SharedCaptureInterval = Arc::new(AtomicU64::new(initial_interval_ms));
     let ring: SharedRing = Arc::new(Mutex::new(VecDeque::new()));
     let task_ctx = Arc::new(Mutex::new(TaskContext::default()));
     let uia_target: SharedTarget = Arc::new(Mutex::new(None));
@@ -116,14 +124,40 @@ pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf) {
 
     foreground::spawn(ring.clone(), running.clone(), uia_target.clone(), current_app.clone());
     uia::spawn(ring.clone(), running.clone(), uia_target, current_app, action_trigger);
-    aggregator::spawn(app_handle, db_path, ring.clone(), running.clone(), task_ctx.clone());
+    aggregator::spawn(
+        app_handle,
+        db_path,
+        ring.clone(),
+        running.clone(),
+        monitoring_started.clone(),
+        capture_interval_ms.clone(),
+        task_ctx.clone(),
+    );
 
-    let _ = CONTROLLER.set(TelemetryController { running, ring, task_ctx });
+    let _ = CONTROLLER.set(TelemetryController {
+        running,
+        monitoring_started,
+        capture_interval_ms,
+        ring,
+        task_ctx,
+    });
+}
+
+pub fn set_capture_interval(interval_ms: u64) {
+    if let Some(c) = CONTROLLER.get() {
+        c.capture_interval_ms
+            .store(interval_ms.clamp(5_000, 300_000), Ordering::Relaxed);
+    }
 }
 
 pub fn set_running(value: bool) {
     if let Some(c) = CONTROLLER.get() {
-        c.running.store(value, Ordering::Relaxed);
+        let was_running = c.running.swap(value, Ordering::Relaxed);
+        if value && !was_running {
+            *c.monitoring_started.lock().unwrap() = Some(Instant::now());
+        } else if !value {
+            *c.monitoring_started.lock().unwrap() = None;
+        }
         if !value {
             // Drop any partially-collected raw events immediately on stop
             // rather than waiting for the next aggregator tick to discard them.
