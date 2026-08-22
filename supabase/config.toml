@@ -18,3 +18,15 @@ major_version = 15
 [studio]
 enabled = true
 port = 54323
+
+# The OAuth callback is reached directly from Notion and validates a hashed,
+# expiring, single-use state itself. Authenticated actions still verify the
+# Supabase JWT inside the function.
+[functions.notion-oauth]
+verify_jwt = false
+
+[functions.notion-destinations]
+verify_jwt = true
+
+[functions.publish-notion-report]
+verify_jwt = true
