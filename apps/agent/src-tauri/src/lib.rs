@@ -19,6 +19,7 @@ mod focus_semantics;
 mod coach_chat;
 mod user_preferences;
 mod anonymous_analytics;
+mod notion;
 pub mod context;
 pub mod paths;
 
@@ -73,6 +74,12 @@ pub fn run() {
             entitlements::refresh_entitlements,
             entitlements::fetch_cloud_insights,
             entitlements::request_cloud_insights,
+            notion::get_notion_status,
+            notion::start_notion_oauth,
+            notion::search_notion_destinations,
+            notion::save_notion_destination,
+            notion::create_notion_report_destination,
+            notion::publish_notion_report,
             coach_chat::get_coach_chat_messages,
             coach_chat::clear_coach_chat,
             coach_chat::get_coach_chat_usage,

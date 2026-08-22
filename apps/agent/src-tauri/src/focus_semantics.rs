@@ -1300,6 +1300,17 @@ mod tests {
         assert!(insights.contains("DATA.localReport.focus_semantics"));
         assert!(insights.contains("do not estimate it from categories"));
         assert!(insights.contains("Use only focus_semantics.distraction_events"));
+
+        let notion_command = include_str!("notion.rs");
+        let notion_publish =
+            include_str!("../../../../supabase/functions/publish-notion-report/index.ts");
+        let notion_formatter =
+            include_str!("../../../../supabase/functions/_shared/notion_policy.ts");
+        assert!(notion_command.contains("build_local_insights_report"));
+        assert!(notion_publish.contains("formatCanonicalNotionReport(localReport"));
+        assert!(notion_formatter.contains("Canonical local_report.focus_semantics is required"));
+        assert!(!renderer.contains("NOTION_CLIENT_SECRET"));
+        assert!(!renderer.contains("token_ciphertext"));
     }
 
     #[test]
