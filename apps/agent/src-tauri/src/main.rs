@@ -79,41 +79,39 @@ fn harden_process_early() {
                 .chain(std::iter::once(0))
                 .collect();
 
-            unsafe {
-                unsafe fn open_nul(path_ptr: *const u16, inp: bool) -> *mut c_void {
-                    let access = if inp {
-                        GENERIC_READ
-                    } else {
-                        GENERIC_READ | GENERIC_WRITE
-                    };
-                    CreateFileW(
-                        path_ptr,
-                        access,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        std::ptr::null_mut(),
-                        OPEN_EXISTING,
-                        0,
-                        std::ptr::null_mut(),
-                    )
-                }
-
-                let nin = open_nul(nul_wide.as_ptr(), true);
-                let nout = open_nul(nul_wide.as_ptr(), false);
-                let nerr = open_nul(nul_wide.as_ptr(), false);
-                let invalid = !0usize as *mut c_void;
-                let set_or_null = |h: *mut c_void, std_h: u32| {
-                    if h.is_null() || h == invalid {
-                        let _ = SetStdHandle(std_h, std::ptr::null_mut::<c_void>());
-                    } else {
-                        let _ = SetStdHandle(std_h, h);
-                    }
+            unsafe fn open_nul(path_ptr: *const u16, inp: bool) -> *mut c_void {
+                let access = if inp {
+                    GENERIC_READ
+                } else {
+                    GENERIC_READ | GENERIC_WRITE
                 };
-
-                set_or_null(nin, STD_INPUT_HANDLE);
-                set_or_null(nout, STD_OUTPUT_HANDLE);
-                set_or_null(nerr, STD_ERROR_HANDLE);
-                let _ = FreeConsole();
+                CreateFileW(
+                    path_ptr,
+                    access,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    std::ptr::null_mut(),
+                    OPEN_EXISTING,
+                    0,
+                    std::ptr::null_mut(),
+                )
             }
+
+            let nin = open_nul(nul_wide.as_ptr(), true);
+            let nout = open_nul(nul_wide.as_ptr(), false);
+            let nerr = open_nul(nul_wide.as_ptr(), false);
+            let invalid = !0usize as *mut c_void;
+            let set_or_null = |h: *mut c_void, std_h: u32| {
+                if h.is_null() || h == invalid {
+                    let _ = SetStdHandle(std_h, std::ptr::null_mut::<c_void>());
+                } else {
+                    let _ = SetStdHandle(std_h, h);
+                }
+            };
+
+            set_or_null(nin, STD_INPUT_HANDLE);
+            set_or_null(nout, STD_OUTPUT_HANDLE);
+            set_or_null(nerr, STD_ERROR_HANDLE);
+            let _ = FreeConsole();
         }
     }
 }
