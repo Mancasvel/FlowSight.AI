@@ -141,11 +141,15 @@ jobs:
       # Upload from the Windows runner so we do not round-trip ~3GB through
       # artifacts just to attach. gh CLI handles >1GB files better than
       # softprops/action-gh-release, and retries cover GitHub upload 5xx.
+      # --repo is required: gh otherwise needs a git checkout to infer the repo
+      # (attach-from-artifact has no checkout; Windows uploads have also failed
+      # mid-file with GitHub 5xx, leaving latest.json pointing at a 404).
       - name: Attach installers to GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           upload_one() {
@@ -155,7 +159,7 @@ jobs:
             local max=8
             while true; do
               echo "Uploading $(basename "$file") (attempt ${n}/${max}, $(du -h "$file" | cut -f1))"
-              if gh release upload "$TAG" "$file" --clobber; then
+              if gh release upload "$TAG" "$file" --clobber --repo "$REPO"; then
                 echo "OK $(basename "$file")"
                 return 0
               fi
@@ -181,6 +185,30 @@ jobs:
           for f in "${nsis[@]}"; do upload_one "$f" 1; done
           upload_one latest.json 1
           for f in "${msi[@]}"; do upload_one "$f" 0; done
+
+      - name: Verify updater asset is reachable
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          url="$(node -pe "JSON.parse(require('fs').readFileSync('latest.json','utf8')).platforms['windows-x86_64'].url")"
+          echo "Checking updater URL: $url"
+          n=1
+          max=12
+          while [ "$n" -le "$max" ]; do
+            # Range request: confirm HTTP 200/206 without downloading the ~1.5GB installer.
+            code="$(curl -sL -o /dev/null -w '%{http_code}' -r 0-0 "$url")"
+            if [ "$code" = "200" ] || [ "$code" = "206" ]; then
+              echo "Updater asset OK (HTTP $code)"
+              exit 0
+            fi
+            echo "Attempt ${n}/${max}: HTTP $code — waiting for GitHub CDN…"
+            n=$((n + 1))
+            sleep 15
+          done
+          echo "::error::Updater installer not reachable at $url (last HTTP $code). Auto-update will fail until the NSIS *-setup.exe is on release ${TAG}."
+          exit 1
 
   attach-from-artifact:
     # Retry path: reuse a successful windows-bundle instead of rebuilding.
@@ -216,6 +244,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           upload_one() {
@@ -225,7 +254,7 @@ jobs:
             local max=8
             while true; do
               echo "Uploading $(basename "$file") (attempt ${n}/${max}, $(du -h "$file" | cut -f1))"
-              if gh release upload "$TAG" "$file" --clobber; then
+              if gh release upload "$TAG" "$file" --clobber --repo "$REPO"; then
                 echo "OK $(basename "$file")"
                 return 0
               fi
@@ -252,3 +281,27 @@ jobs:
           for f in "${nsis[@]}"; do upload_one "$f" 1; done
           for f in "${json[@]}"; do upload_one "$f" 1; done
           for f in "${msi[@]}"; do upload_one "$f" 0; done
+
+      - name: Verify updater asset is reachable
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          json="$(find artifacts -type f -name 'latest.json' | head -n1)"
+          url="$(node -pe "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).platforms['windows-x86_64'].url" "$json")"
+          echo "Checking updater URL: $url"
+          n=1
+          max=12
+          while [ "$n" -le "$max" ]; do
+            # Range request: confirm HTTP 200/206 without downloading the ~1.5GB installer.
+            code="$(curl -sL -o /dev/null -w '%{http_code}' -r 0-0 "$url")"
+            if [ "$code" = "200" ] || [ "$code" = "206" ]; then
+              echo "Updater asset OK (HTTP $code)"
+              exit 0
+            fi
+            echo "Attempt ${n}/${max}: HTTP $code — waiting for GitHub CDN…"
+            n=$((n + 1))
+            sleep 15
+          done
+          echo "::error::Updater installer not reachable at $url (last HTTP $code). Auto-update will fail until the NSIS *-setup.exe is on release ${TAG}."
+          exit 1

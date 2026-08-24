@@ -4300,6 +4300,16 @@
           </div>
         </div>
 
+        <div class="card" id="appUpdatesCard">
+          <div class="card-header">
+            <div class="card-title">App updates</div>
+          </div>
+          <p class="onboarding-prefs-summary" id="appVersionLabel">Version —</p>
+          <button type="button" class="button button-secondary" id="checkUpdatesBtn" style="width:100%;margin-top:8px;">
+            Check for updates
+          </button>
+        </div>
+
         <div class="card" id="integrationsCard">
           <div class="card-header">
             <div class="card-title">Integrations</div>
@@ -4408,6 +4418,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
+    import { getVersion } from '@tauri-apps/api/app';
     import { check as checkAppUpdate } from '@tauri-apps/plugin-updater';
     import { relaunch } from '@tauri-apps/plugin-process';
     import {
@@ -6263,12 +6274,27 @@
 
     let updateCheckInFlight = false;
 
+    async function loadAppVersionLabel() {
+      const label = document.getElementById('appVersionLabel');
+      if (!label) return;
+      try {
+        label.textContent = `Version ${await getVersion()}`;
+      } catch {
+        label.textContent = 'Version unknown';
+      }
+    }
+
     // Checks GitHub Releases for a newer signed build and asks the user before
     // downloading. `manual = true` surfaces "up to date" / error feedback for an
     // explicit "Check for updates" action; the startup check stays silent on no-op.
     async function checkForUpdates({ manual = false } = {}) {
       if (updateCheckInFlight) return;
       updateCheckInFlight = true;
+      const checkBtn = document.getElementById('checkUpdatesBtn');
+      if (manual && checkBtn) {
+        checkBtn.disabled = true;
+        checkBtn.textContent = 'Checking…';
+      }
       try {
         const update = await checkAppUpdate();
         if (!update) {
@@ -6278,9 +6304,20 @@
         showUpdatePrompt(update);
       } catch (err) {
         console.warn('[Updater] Update check failed:', err);
-        if (manual) showToast('Could not check for updates. Try again later.', 'error');
+        if (manual) {
+          const msg = String(err?.message || err || '');
+          if (/404|not found|failed to fetch|network/i.test(msg)) {
+            showToast('Update server unreachable or installer missing. Try again later or download from GitHub.', 'error', 8000);
+          } else {
+            showToast('Could not check for updates. Try again later.', 'error');
+          }
+        }
       } finally {
         updateCheckInFlight = false;
+        if (manual && checkBtn) {
+          checkBtn.disabled = false;
+          checkBtn.textContent = 'Check for updates';
+        }
       }
     }
 
@@ -6358,7 +6395,12 @@
           console.error('[Updater] Install failed:', err);
           progress.style.display = 'none';
           actions.style.display = 'flex';
-          showToast('Update failed to install. Please try again.', 'error', 6000);
+          const msg = String(err?.message || err || '');
+          if (/404|not found/i.test(msg)) {
+            showToast('Installer not found on the update server. Download the latest build from GitHub Releases.', 'error', 8000);
+          } else {
+            showToast('Update failed to install. Please try again.', 'error', 6000);
+          }
         }
       });
     }
@@ -7321,6 +7363,10 @@
       submitAppFeedback().catch((e) => showToast(String(e), 'error'));
     });
 
+    document.getElementById('checkUpdatesBtn')?.addEventListener('click', () => {
+      checkForUpdates({ manual: true }).catch(() => {});
+    });
+
     async function init() {
       const playBtn = document.getElementById('playTimerBtn');
       try {
@@ -7345,6 +7391,7 @@
       await restoreCloudSession();
       await loadPrivacySettings();
       await initMainApp();
+      loadAppVersionLabel().catch(() => {});
       await loadAnalyticsConsent();
       const waitingForConsent = await promptAnalyticsConsentIfNeeded();
       if (!waitingForConsent) {
