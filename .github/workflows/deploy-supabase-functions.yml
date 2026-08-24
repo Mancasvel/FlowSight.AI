@@ -5,12 +5,21 @@ on:
     branches: [main]
     paths:
       - "supabase/functions/**"
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - "deno.lock"
       - ".github/workflows/deploy-supabase-functions.yml"
   workflow_dispatch:
 
 concurrency:
   group: deploy-supabase-functions
   cancel-in-progress: true
+
+# Required GitHub Actions secrets for migrations and Notion deployment:
+# SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD,
+# NOTION_CLIENT_ID, NOTION_CLIENT_SECRET, NOTION_TOKEN_ENCRYPTION_KEY.
+# Optional repository variable: NOTION_REDIRECT_URI. When omitted, the workflow
+# derives the canonical callback URL from SUPABASE_PROJECT_REF.
 
 # GitHub repo secrets (Settings → Secrets and variables → Actions):
 #   SUPABASE_ACCESS_TOKEN     — Personal access token with Supabase deploy scope
@@ -28,12 +37,47 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      - name: Test Edge Functions
+        run: deno test --allow-env --allow-read supabase/functions
+
+      - name: Validate required deployment secrets
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          NOTION_CLIENT_ID: ${{ secrets.NOTION_CLIENT_ID }}
+          NOTION_CLIENT_SECRET: ${{ secrets.NOTION_CLIENT_SECRET }}
+          NOTION_TOKEN_ENCRYPTION_KEY: ${{ secrets.NOTION_TOKEN_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_PROJECT_REF \
+            SUPABASE_DB_PASSWORD \
+            NOTION_CLIENT_ID \
+            NOTION_CLIENT_SECRET \
+            NOTION_TOKEN_ENCRYPTION_KEY; do
+            [ -n "${!name:-}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf '::error::Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
 
       - name: Link Supabase project
         env:
@@ -49,6 +93,11 @@ jobs:
           AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          NOTION_CLIENT_ID: ${{ secrets.NOTION_CLIENT_ID }}
+          NOTION_CLIENT_SECRET: ${{ secrets.NOTION_CLIENT_SECRET }}
+          NOTION_REDIRECT_URI: ${{ vars.NOTION_REDIRECT_URI }}
+          NOTION_TOKEN_ENCRYPTION_KEY: ${{ secrets.NOTION_TOKEN_ENCRYPTION_KEY }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
           set -euo pipefail
           SECRETS=()
@@ -57,18 +106,29 @@ jobs:
           [ -n "${AZURE_OPENAI_DEPLOYMENT:-}" ] && SECRETS+=("AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}")
           [ -n "${OPENROUTER_API_KEY:-}" ] && SECRETS+=("OPENROUTER_API_KEY=${OPENROUTER_API_KEY}")
           [ -n "${OPENROUTER_MODEL:-}" ] && SECRETS+=("OPENROUTER_MODEL=${OPENROUTER_MODEL}")
-          if [ "${#SECRETS[@]}" -eq 0 ]; then
-            echo "::warning::No function secrets configured in GitHub Actions — set AZURE_OPENAI_API_KEY at minimum."
-          else
-            supabase secrets set "${SECRETS[@]}"
-          fi
+          SECRETS+=("NOTION_CLIENT_ID=${NOTION_CLIENT_ID}")
+          SECRETS+=("NOTION_CLIENT_SECRET=${NOTION_CLIENT_SECRET}")
+          SECRETS+=("NOTION_REDIRECT_URI=${NOTION_REDIRECT_URI:-https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/notion-oauth}")
+          SECRETS+=("NOTION_TOKEN_ENCRYPTION_KEY=${NOTION_TOKEN_ENCRYPTION_KEY}")
+          supabase secrets set "${SECRETS[@]}"
 
-      - name: Deploy coach-chat
+      - name: Apply database migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy coach-chat
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --linked --password "$SUPABASE_DB_PASSWORD"
 
-      - name: Deploy generate-insights
+      - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy generate-insights
+        run: |
+          set -euo pipefail
+          for function_name in \
+            coach-chat \
+            generate-insights \
+            notion-oauth \
+            notion-destinations \
+            publish-notion-report \
+            privacy-rights; do
+            supabase functions deploy "$function_name"
+          done
