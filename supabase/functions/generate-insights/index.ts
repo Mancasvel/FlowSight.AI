@@ -1,8 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { CURRENT_PRIVACY_NOTICE_VERSION } from "../_shared/privacy_policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const OPENROUTER_MODEL_DEFAULT = "xiaomi/mimo-v2.5-pro";
@@ -51,7 +53,8 @@ async function callOpenRouterPmReport(payload: {
 
   const model = Deno.env.get("OPENROUTER_MODEL") ?? OPENROUTER_MODEL_DEFAULT;
 
-  const prompt = `You are a privacy-first work-pattern analyst for an individual knowledge worker.
+  const prompt =
+    `You are a privacy-first work-pattern analyst for an individual knowledge worker.
 Generate a PM-style work report in JSON only (no markdown fences).
 
 Use ONLY facts from the DATA below. Do not invent tasks or tools.
@@ -71,25 +74,27 @@ Return this JSON shape:
 DATA:
 ${JSON.stringify(payload, null, 2)}`;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://flowsight.site",
-      "X-Title": "FlowSight Individual Insights",
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://flowsight.site",
+        "X-Title": "FlowSight Individual Insights",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.35,
+        response_format: { type: "json_object" },
+      }),
     },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.35,
-      response_format: { type: "json_object" },
-    }),
-  });
+  );
 
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenRouter error (${response.status}): ${errText}`);
+    throw new Error(`OpenRouter request failed (${response.status})`);
   }
 
   const json = await response.json();
@@ -116,19 +121,24 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing Authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: userData, error: userError } = await userClient.auth.getUser();
+    const { data: userData, error: userError } = await userClient.auth
+      .getUser();
     if (userError || !userData.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -136,26 +146,83 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: entitlements, error: entError } = await userClient.rpc("get_user_entitlements");
+    const { data: entitlements, error: entError } = await userClient.rpc(
+      "get_user_entitlements",
+    );
     if (entError) {
-      return new Response(JSON.stringify({ error: entError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Could not verify your plan." }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (!entitlements?.features?.cloud_ai) {
-      return new Response(JSON.stringify({ error: "Cloud AI requires an active license" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Cloud AI requires an active license" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const body = await req.json().catch(() => ({}));
     const periodDays = Math.min(Math.max(Number(body.period_days) || 7, 1), 30);
     const teamId = body.team_id as string | undefined;
-    const localReport = body.local_report as Record<string, unknown> | undefined;
-    const plan = (body.plan as string | undefined) ?? entitlements?.plan ?? null;
+    const localReport = body.local_report as
+      | Record<string, unknown>
+      | undefined;
+    const plan = (body.plan as string | undefined) ?? entitlements?.plan ??
+      null;
+
+    if (!serviceRoleKey) {
+      return new Response(
+        JSON.stringify({ error: "Privacy enforcement is unavailable" }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    const { data: privacyPreference, error: privacyError } = await serviceClient
+      .from("privacy_preferences")
+      .select("notice_version,cloud_sync_enabled,cloud_ai_enabled")
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+    if (
+      privacyError ||
+      privacyPreference?.notice_version !== CURRENT_PRIVACY_NOTICE_VERSION ||
+      privacyPreference?.cloud_sync_enabled !== true
+    ) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Enable cloud activity sync in FlowSight's Privacy & data settings first.",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (plan === "individual" && privacyPreference.cloud_ai_enabled !== true) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "Enable cloud AI sharing in FlowSight's Privacy & data settings first.",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
     const periodEnd = new Date();
     const periodStart = new Date();
@@ -178,10 +245,13 @@ Deno.serve(async (req) => {
 
     const { data: cloudReports, error: reportsError } = await reportsQuery;
     if (reportsError) {
-      return new Response(JSON.stringify({ error: reportsError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Could not load activity data." }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const cloudRows = cloudReports ?? [];
@@ -206,21 +276,28 @@ Deno.serve(async (req) => {
         period_days: periodDays,
         period_start: periodStartStr,
         period_end: periodEndStr,
-        total_hours: localReport?.total_hours ?? roundHours(cloudStats.totalSeconds),
+        total_hours: localReport?.total_hours ??
+          roundHours(cloudStats.totalSeconds),
         activity_count: localReport?.activity_count ?? cloudStats.activityCount,
         deep_focus_hours: localReport?.deep_focus_hours ?? null,
         focus_semantics: localReport?.focus_semantics ?? null,
         distraction_events: localReport?.distraction_events ?? null,
-        top_categories: localReport?.category_breakdown ?? cloudStats.topCategories,
+        top_categories: localReport?.category_breakdown ??
+          cloudStats.topCategories,
         daily_totals: localReport?.daily_totals ?? [],
-        data_sources: [localReport ? "local_sqlite" : null, cloudRows.length > 0 ? "cloud_sync" : null].filter(Boolean),
+        data_sources: [
+          localReport ? "local_sqlite" : null,
+          cloudRows.length > 0 ? "cloud_sync" : null,
+        ].filter(Boolean),
         model,
         generated_at: new Date().toISOString(),
       };
     } else {
       const summary = cloudRows.length === 0 && !localReport
         ? `No synced activity found in the last ${periodDays} days.`
-        : `Over the last ${periodDays} days: ${roundHours(cloudStats.totalSeconds)}h logged across ${cloudStats.activityCount} synced activities.`;
+        : `Over the last ${periodDays} days: ${
+          roundHours(cloudStats.totalSeconds)
+        }h logged across ${cloudStats.activityCount} synced activities.`;
 
       content = {
         summary,
@@ -235,8 +312,7 @@ Deno.serve(async (req) => {
       };
     }
 
-    const resolvedTeamId =
-      teamId ??
+    const resolvedTeamId = teamId ??
       (Array.isArray(entitlements.team_ids) && entitlements.team_ids.length > 0
         ? entitlements.team_ids[0]
         : null);
@@ -255,19 +331,25 @@ Deno.serve(async (req) => {
       .single();
 
     if (insertError) {
-      return new Response(JSON.stringify({ error: insertError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Could not save the generated insight." }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(JSON.stringify({ insight: inserted }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
-    return new Response(JSON.stringify({ error: String(error) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch {
+    return new Response(
+      JSON.stringify({ error: "Insight generation failed." }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

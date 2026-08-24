@@ -20,10 +20,12 @@ fn require_notion_pro(conn: &Connection) -> Result<(), String> {
     }
 }
 
-fn call_edge_function(function: &str, body: &Value) -> Result<Value, String> {
+fn call_edge_function(function: &str, body: &Value, requires_pro: bool) -> Result<Value, String> {
     let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|error| error.to_string())?;
-    require_notion_pro(&conn)?;
+    if requires_pro {
+        require_notion_pro(&conn)?;
+    }
     let session = get_user_session_from_conn(&conn).ok_or("Sign in before using Notion.")?;
 
     let response = Client::new()
@@ -49,12 +51,12 @@ fn call_edge_function(function: &str, body: &Value) -> Result<Value, String> {
 
 #[tauri::command]
 pub fn get_notion_status() -> Result<Value, String> {
-    call_edge_function("notion-oauth", &json!({ "action": "status" }))
+    call_edge_function("notion-oauth", &json!({ "action": "status" }), false)
 }
 
 #[tauri::command]
 pub fn start_notion_oauth() -> Result<Value, String> {
-    let result = call_edge_function("notion-oauth", &json!({ "action": "start" }))?;
+    let result = call_edge_function("notion-oauth", &json!({ "action": "start" }), true)?;
     let authorization_url = result["authorization_url"]
         .as_str()
         .ok_or("Notion authorization URL was missing.")?;
@@ -69,10 +71,16 @@ pub fn start_notion_oauth() -> Result<Value, String> {
 }
 
 #[tauri::command]
+pub fn disconnect_notion() -> Result<Value, String> {
+    call_edge_function("notion-oauth", &json!({ "action": "disconnect" }), false)
+}
+
+#[tauri::command]
 pub fn search_notion_destinations(query: Option<String>) -> Result<Value, String> {
     call_edge_function(
         "notion-destinations",
         &json!({ "action": "search", "query": query.unwrap_or_default() }),
+        true,
     )
 }
 
@@ -90,6 +98,7 @@ pub fn save_notion_destination(
             "destination_type": destination_type,
             "report_mode": report_mode,
         }),
+        true,
     )
 }
 
@@ -105,6 +114,7 @@ pub fn create_notion_report_destination(
             "parent_page_id": parent_page_id,
             "report_mode": report_mode,
         }),
+        true,
     )
 }
 
@@ -133,6 +143,7 @@ pub fn publish_notion_report(
     call_edge_function(
         "publish-notion-report",
         &publish_payload(local_report, destination_id),
+        true,
     )
 }
 

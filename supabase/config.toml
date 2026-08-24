@@ -30,3 +30,6 @@ verify_jwt = true
 
 [functions.publish-notion-report]
 verify_jwt = true
+
+[functions.privacy-rights]
+verify_jwt = true

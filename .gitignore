@@ -5,6 +5,12 @@ node_modules/
 .pnpm-store/
 credentials.txt
 seed_supabase.sql
+supabase_triggers.sql
+scripts/seed_supabase.js
+
+# Mobile is maintained in the separate FlowSight.Mobile repository.
+/apps/mobile/
+/docs/mobile/
 
 # ================================
 # Rust / Tauri
@@ -68,9 +74,16 @@ desktop.ini
 # ================================
 .env
 .env.local
-.env.*.local
+.env.*
+!.env.example
+!**/.env.example
 *.pem
 *.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
 
 # ================================
 # Logs
@@ -122,6 +135,7 @@ local_llm/llama.cpp/
 # ================================
 # Diagnostic / debug artifacts (one-off scripts output)
 # ================================
+**/TEST_REPORT.txt
 inspect_output*.txt
 safetensors_keys.txt
 vision_keys.txt
@@ -172,6 +186,9 @@ out/
 # ================================
 # Misc
 # ================================
+/latest.json
+/supabase/.branches/
+/supabase/.temp/
 *.pid
 *.seed
 *.pid.lock

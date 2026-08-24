@@ -37,10 +37,24 @@ const RING_BUFFER_TTL: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone)]
 pub enum ActionEvent {
-    ForegroundChanged { app_name: String, window_title: String, at: Instant },
-    UiaFocusChanged { control_name: Option<String>, control_type: Option<String>, at: Instant },
-    UiaWindowOpened { name: Option<String>, at: Instant },
-    UiaWindowClosed { name: Option<String>, at: Instant },
+    ForegroundChanged {
+        app_name: String,
+        window_title: String,
+        at: Instant,
+    },
+    UiaFocusChanged {
+        control_name: Option<String>,
+        control_type: Option<String>,
+        at: Instant,
+    },
+    UiaWindowOpened {
+        name: Option<String>,
+        at: Instant,
+    },
+    UiaWindowClosed {
+        name: Option<String>,
+        at: Instant,
+    },
 }
 
 impl ActionEvent {
@@ -76,10 +90,12 @@ pub struct TaskContext {
 
 struct TelemetryController {
     running: SharedFlag,
+    privacy_blocked: SharedFlag,
     monitoring_started: SharedMonitoringStart,
     capture_interval_ms: SharedCaptureInterval,
     ring: SharedRing,
     task_ctx: Arc<Mutex<TaskContext>>,
+    db_path: PathBuf,
 }
 
 static CONTROLLER: OnceLock<TelemetryController> = OnceLock::new();
@@ -108,6 +124,7 @@ pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf, initial_interval_ms
     }
 
     let running: SharedFlag = Arc::new(AtomicBool::new(false));
+    let privacy_blocked: SharedFlag = Arc::new(AtomicBool::new(true));
     let monitoring_started: SharedMonitoringStart = Arc::new(Mutex::new(None));
     let capture_interval_ms: SharedCaptureInterval = Arc::new(AtomicU64::new(initial_interval_ms));
     let ring: SharedRing = Arc::new(Mutex::new(VecDeque::new()));
@@ -122,11 +139,25 @@ pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf, initial_interval_ms
         task_ctx.clone(),
     ));
 
-    foreground::spawn(ring.clone(), running.clone(), uia_target.clone(), current_app.clone());
-    uia::spawn(ring.clone(), running.clone(), uia_target, current_app, action_trigger);
+    foreground::spawn(
+        ring.clone(),
+        running.clone(),
+        privacy_blocked.clone(),
+        uia_target.clone(),
+        current_app.clone(),
+        db_path.clone(),
+    );
+    uia::spawn(
+        ring.clone(),
+        running.clone(),
+        privacy_blocked.clone(),
+        uia_target,
+        current_app,
+        action_trigger,
+    );
     aggregator::spawn(
         app_handle,
-        db_path,
+        db_path.clone(),
         ring.clone(),
         running.clone(),
         monitoring_started.clone(),
@@ -136,10 +167,12 @@ pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf, initial_interval_ms
 
     let _ = CONTROLLER.set(TelemetryController {
         running,
+        privacy_blocked,
         monitoring_started,
         capture_interval_ms,
         ring,
         task_ctx,
+        db_path,
     });
 }
 
@@ -152,6 +185,9 @@ pub fn set_capture_interval(interval_ms: u64) {
 
 pub fn set_running(value: bool) {
     if let Some(c) = CONTROLLER.get() {
+        if value {
+            refresh_privacy_filter_for(c);
+        }
         let was_running = c.running.swap(value, Ordering::Relaxed);
         if value && !was_running {
             *c.monitoring_started.lock().unwrap() = Some(Instant::now());
@@ -163,6 +199,24 @@ pub fn set_running(value: bool) {
             // rather than waiting for the next aggregator tick to discard them.
             c.ring.lock().unwrap().clear();
         }
+    }
+}
+
+fn refresh_privacy_filter_for(controller: &TelemetryController) {
+    let foreground = crate::context::get_system_context();
+    let blocked = crate::privacy::application_is_excluded(
+        &controller.db_path,
+        foreground.app_name.as_deref(),
+    );
+    controller.privacy_blocked.store(blocked, Ordering::Relaxed);
+    if blocked {
+        controller.ring.lock().unwrap().clear();
+    }
+}
+
+pub fn refresh_privacy_filter() {
+    if let Some(controller) = CONTROLLER.get() {
+        refresh_privacy_filter_for(controller);
     }
 }
 

@@ -82,6 +82,15 @@ impl ActionCaptureTrigger {
     }
 
     fn run_capture(&self, action_context: String) {
+        let foreground = crate::context::get_system_context();
+        if crate::privacy::application_is_excluded(&self.db_path, foreground.app_name.as_deref()) {
+            return;
+        }
+        let action_context = if crate::privacy::store_window_titles(&self.db_path) {
+            action_context
+        } else {
+            "The user opened or closed a window in the foreground application.".to_string()
+        };
         let (user_task, jira_ticket) = {
             let ctx = self.task_ctx.lock().unwrap();
             (ctx.user_task.clone(), ctx.jira_ticket.clone())
@@ -95,7 +104,11 @@ impl ActionCaptureTrigger {
             .or_else(|| user_task.clone())
             .filter(|theme| !theme.trim().is_empty() && !theme.eq_ignore_ascii_case("general"));
 
-        let capture = match crate::agent::capture_and_analyze_action(&task_label, &action_context) {
+        let capture = match crate::agent::capture_and_analyze_action(
+            &self.db_path,
+            &task_label,
+            &action_context,
+        ) {
             Ok(result) => result,
             Err(e) => {
                 log::warn!("[Telemetry][ActionCapture] capture/analysis failed: {e}");

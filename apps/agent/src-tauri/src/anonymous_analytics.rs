@@ -1,7 +1,8 @@
-//! Opt-in anonymous product analytics (local-first; Supabase only after explicit consent).
+//! Opt-in pseudonymous product analytics (local-first; Supabase only after explicit consent).
 //!
 //! Collects only aggregate usage: daily minutes and weekly primary activity category.
-//! No account, email, or other personally identifiable information is sent.
+//! No account or email is sent. The random installation identifier is
+//! pseudonymous personal data under GDPR, not anonymous data.
 
 #[cfg(test)]
 use chrono::NaiveDate;
@@ -17,6 +18,7 @@ use uuid::Uuid;
 use crate::sync_env::{supabase_anon_key, supabase_url};
 
 const CONSENT_KEY: &str = "anonymous_analytics_consent";
+const ANALYTICS_SECRET_KEY: &str = "anonymous_analytics_secret";
 const ANALYTICS_SYNC_INTERVAL_HOURS: u64 = 6;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -29,6 +31,8 @@ pub struct AnalyticsConsent {
     pub anonymous_id: Option<String>,
     #[serde(rename = "decidedAt", default)]
     pub decided_at: Option<String>,
+    #[serde(rename = "withdrawalPending", default)]
+    pub withdrawal_pending: bool,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
@@ -67,6 +71,32 @@ pub fn save_analytics_consent(
     )
     .map_err(|e| e.to_string())?;
     Ok(consent)
+}
+
+fn load_or_create_analytics_secret(db_path: &Path) -> Result<String, String> {
+    let conn = Connection::open(db_path).map_err(|error| error.to_string())?;
+    if let Some(secret) = crate::secure_config::load_secret(&conn, ANALYTICS_SECRET_KEY)? {
+        return Ok(secret);
+    }
+    // Two random UUIDs provide a device-held bearer credential for the
+    // pseudonymous analytics row without linking it to the signed-in account.
+    let secret = format!("{}{}", Uuid::new_v4(), Uuid::new_v4());
+    crate::secure_config::save_secret(&conn, ANALYTICS_SECRET_KEY, &secret)?;
+    Ok(secret)
+}
+
+fn delete_analytics_secret(db_path: &Path) -> Result<(), String> {
+    let conn = Connection::open(db_path).map_err(|error| error.to_string())?;
+    crate::secure_config::delete_secret(&conn, ANALYTICS_SECRET_KEY)
+}
+
+pub fn analytics_export_credentials(db_path: &Path) -> Result<Option<(String, String)>, String> {
+    let consent = load_analytics_consent(db_path)?;
+    let Some(anonymous_id) = consent.anonymous_id else {
+        return Ok(None);
+    };
+    let secret = load_or_create_analytics_secret(db_path)?;
+    Ok(Some((anonymous_id, secret)))
 }
 
 fn compute_daily_usage(conn: &Connection, days: i32) -> Result<Vec<DailyUsageEntry>, String> {
@@ -141,6 +171,7 @@ pub fn compute_weekly_primary_activity(conn: &Connection) -> Result<Option<Strin
 
 fn upsert_anonymous_analytics_on_supabase(
     anonymous_id: &str,
+    anonymous_secret: &str,
     consented: bool,
     daily_usage: &[DailyUsageEntry],
     weekly_primary_activity: Option<&str>,
@@ -157,6 +188,7 @@ fn upsert_anonymous_analytics_on_supabase(
 
     let body = serde_json::json!({
         "p_anonymous_id": anonymous_id,
+        "p_anonymous_secret": anonymous_secret,
         "p_consented": consented,
         "p_daily_usage": daily_usage,
         "p_weekly_primary_activity": weekly_primary_activity,
@@ -173,8 +205,7 @@ fn upsert_anonymous_analytics_on_supabase(
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().unwrap_or_default();
-        return Err(format!("Analytics sync failed ({status}): {body}"));
+        return Err(format!("Analytics sync failed ({status})."));
     }
 
     Ok(())
@@ -188,6 +219,7 @@ pub fn sync_anonymous_analytics_to_supabase(
         .anonymous_id
         .as_deref()
         .ok_or_else(|| "Missing anonymous analytics ID".to_string())?;
+    let anonymous_secret = load_or_create_analytics_secret(db_path)?;
 
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
     let daily_usage = compute_daily_usage(&conn, 7)?;
@@ -195,6 +227,7 @@ pub fn sync_anonymous_analytics_to_supabase(
 
     upsert_anonymous_analytics_on_supabase(
         anonymous_id,
+        &anonymous_secret,
         consent.consented,
         &daily_usage,
         weekly_primary_activity.as_deref(),
@@ -202,8 +235,19 @@ pub fn sync_anonymous_analytics_to_supabase(
 }
 
 pub fn perform_analytics_sync(db_path: &Path) -> Result<bool, String> {
-    let consent = load_analytics_consent(db_path)?;
+    let mut consent = load_analytics_consent(db_path)?;
     if !consent.consented {
+        if consent.withdrawal_pending {
+            if let Some(id) = consent.anonymous_id.as_deref() {
+                let secret = load_or_create_analytics_secret(db_path)?;
+                upsert_anonymous_analytics_on_supabase(id, &secret, false, &[], None)?;
+            }
+            consent.withdrawal_pending = false;
+            consent.anonymous_id = None;
+            save_analytics_consent(db_path, consent)?;
+            delete_analytics_secret(db_path)?;
+            return Ok(true);
+        }
         return Ok(false);
     }
     sync_anonymous_analytics_to_supabase(db_path, &consent)?;
@@ -238,18 +282,31 @@ pub fn set_analytics_consent(consented: bool) -> Result<AnalyticsConsent, String
     if consented && consent.anonymous_id.is_none() {
         consent.anonymous_id = Some(Uuid::new_v4().to_string());
     }
+    if consented || consent.anonymous_id.is_some() {
+        load_or_create_analytics_secret(&db_path)?;
+    }
+    consent.withdrawal_pending = !consented && consent.anonymous_id.is_some();
 
-    let saved = save_analytics_consent(&db_path, consent)?;
+    let mut saved = save_analytics_consent(&db_path, consent)?;
 
     if saved.consented {
-        sync_anonymous_analytics_to_supabase(&db_path, &saved)?;
-    } else if saved.anonymous_id.is_some() {
-        upsert_anonymous_analytics_on_supabase(
+        if let Err(error) = sync_anonymous_analytics_to_supabase(&db_path, &saved) {
+            log::debug!("[Analytics] Initial consent sync deferred: {error}");
+        }
+    } else if saved.anonymous_id.is_some()
+        && upsert_anonymous_analytics_on_supabase(
             saved.anonymous_id.as_deref().unwrap_or_default(),
+            &load_or_create_analytics_secret(&db_path)?,
             false,
             &[],
             None,
-        )?;
+        )
+        .is_ok()
+    {
+        saved.withdrawal_pending = false;
+        saved.anonymous_id = None;
+        saved = save_analytics_consent(&db_path, saved)?;
+        delete_analytics_secret(&db_path)?;
     }
 
     Ok(saved)
@@ -267,6 +324,7 @@ const FEEDBACK_MAX_CHARS: usize = 2000;
 fn submit_feedback_to_supabase(
     message: &str,
     anonymous_id: Option<&str>,
+    anonymous_secret: Option<&str>,
     app_version: &str,
 ) -> Result<(), String> {
     let client = Client::builder()
@@ -279,6 +337,7 @@ fn submit_feedback_to_supabase(
     let body = serde_json::json!({
         "p_message": message,
         "p_anonymous_id": anonymous_id,
+        "p_anonymous_secret": anonymous_secret,
         "p_app_version": app_version,
     });
 
@@ -293,8 +352,7 @@ fn submit_feedback_to_supabase(
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().unwrap_or_default();
-        return Err(format!("Feedback submit failed ({status}): {body}"));
+        return Err(format!("Feedback submit failed ({status})."));
     }
 
     Ok(())
@@ -316,9 +374,15 @@ pub fn submit_product_feedback(message: String) -> Result<(), String> {
 
     let db_path = crate::paths::db_path()?;
     let consent = load_analytics_consent(&db_path).unwrap_or_default();
+    let secret = if consent.anonymous_id.is_some() {
+        Some(load_or_create_analytics_secret(&db_path)?)
+    } else {
+        None
+    };
     submit_feedback_to_supabase(
         trimmed,
         consent.anonymous_id.as_deref(),
+        secret.as_deref(),
         env!("CARGO_PKG_VERSION"),
     )
 }
@@ -415,10 +479,35 @@ mod tests {
             consented: true,
             anonymous_id: Some("00000000-0000-4000-8000-000000000001".to_string()),
             decided_at: Some("2026-06-24 10:00".to_string()),
+            withdrawal_pending: false,
         };
         save_analytics_consent(&path, consent.clone()).expect("save");
         let loaded = load_analytics_consent(&path).expect("load");
         assert_eq!(loaded, consent);
         fs::remove_dir_all(dir.path()).ok();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn analytics_credential_is_dpapi_protected_at_rest() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("consent.db");
+        let conn = Connection::open(&path).expect("open");
+        conn.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)", [])
+            .expect("schema");
+        drop(conn);
+
+        let secret = load_or_create_analytics_secret(&path).expect("secret");
+        let conn = Connection::open(&path).expect("open");
+        let raw: String = conn
+            .query_row(
+                "SELECT value FROM config WHERE key = ?1",
+                params![ANALYTICS_SECRET_KEY],
+                |row| row.get(0),
+            )
+            .expect("stored secret");
+
+        assert!(raw.starts_with("dpapi:v1:"));
+        assert!(!raw.contains(&secret));
     }
 }

@@ -5,6 +5,7 @@
   "description": "FlowSight AI - Privacy-first work activity monitor with local AI",
   "scripts": {
     "dev": "corepack pnpm --filter @flowsight/agent dev",
+    "dev:stable": "corepack pnpm --filter @flowsight/agent dev:stable",
     "tauri": "corepack pnpm --filter @flowsight/agent exec tauri",
     "build": "corepack pnpm --filter @flowsight/agent build",
     "catalog:apps": "cargo run --manifest-path tools/popular-apps-catalog/Cargo.toml"
@@ -14,10 +15,11 @@
   ],
   "packageManager": "pnpm@8.15.0",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.9.0",
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.2"
+    "@tauri-apps/cli": "2.11.2",
+    "@types/node": "20.19.0"
   }
 }

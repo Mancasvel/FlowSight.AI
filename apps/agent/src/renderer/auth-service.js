@@ -16,7 +16,10 @@ export function getSupabaseClient() {
   if (!supabaseClient) {
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: true,
+        // The native layer stores the session encrypted with Windows DPAPI.
+        // Keeping a second plaintext token copy in WebView localStorage would
+        // increase exposure without providing a product benefit.
+        persistSession: false,
         autoRefreshToken: true,
         detectSessionInUrl: false,
       },
@@ -74,10 +77,10 @@ function parseEntitlements(raw) {
   };
 }
 
-export async function fetchUserEntitlements(supabase) {
+async function fetchUserEntitlements(supabase) {
   const { data, error } = await supabase.rpc('get_user_entitlements');
   if (error) {
-    throw new Error(error.message || 'Could not load license entitlements.');
+    throw new Error('Could not load license entitlements.');
   }
   return parseEntitlements(data);
 }
@@ -85,7 +88,7 @@ export async function fetchUserEntitlements(supabase) {
 export async function ensurePersonalTeam(supabase) {
   const { data, error } = await supabase.rpc('ensure_personal_team');
   if (error) {
-    throw new Error(error.message || 'Could not create your personal team.');
+    throw new Error('Could not create your personal team.');
   }
   return data?.team_id ? String(data.team_id) : null;
 }
@@ -96,7 +99,7 @@ export async function claimLicenseCode(supabase, code) {
 
   const { data, error } = await supabase.rpc('claim_license', { p_code: normalized });
   if (error) {
-    throw new Error(error.message || 'Could not claim license code.');
+    throw new Error('Could not claim license code.');
   }
   return data;
 }
@@ -194,12 +197,7 @@ export async function signInForCloudFeatures(email, password) {
   };
 }
 
-/** @deprecated Use signInForCloudFeatures */
-export const signInWorker = signInForCloudFeatures;
-
 export async function signOutWorker() {
   const supabase = getSupabaseClient();
   await supabase.auth.signOut();
 }
-
-export { parseEntitlements, fetchUserEntitlements as getUserEntitlements };

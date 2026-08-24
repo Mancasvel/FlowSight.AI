@@ -57,6 +57,13 @@ pub fn spawn(
                 continue;
             }
 
+            let foreground = crate::context::get_system_context();
+            if crate::privacy::application_is_excluded(&db_path, foreground.app_name.as_deref()) {
+                ring.lock().unwrap().clear();
+                last_snapshot_started = Some(std::time::Instant::now());
+                continue;
+            }
+
             let events: Vec<ActionEvent> = {
                 let mut buf = ring.lock().unwrap();
                 buf.drain(..).collect()
@@ -78,7 +85,8 @@ pub fn spawn(
             // (a) Text review of accumulated UIA/foreground actions, if any.
             // Skip empty intervals rather than inventing an idle/no-activity signal.
             if !events.is_empty() {
-                let (description, category) = review_cycle(&events, &task_label);
+                let include_titles = crate::privacy::store_window_titles(&db_path);
+                let (description, category) = review_cycle(&events, &task_label, include_titles);
                 persist_and_emit(
                     &app_handle,
                     &db_path,
@@ -107,7 +115,7 @@ pub fn spawn(
                 (interval_ms / 1_000).saturating_mul(2).max(1),
             );
             last_snapshot_started = Some(capture_started);
-            match crate::agent::capture_and_analyze_screen(&task_label) {
+            match crate::agent::capture_and_analyze_screen(&db_path, &task_label) {
                 Ok(capture) => persist_and_emit(
                     &app_handle,
                     &db_path,
@@ -183,8 +191,12 @@ fn persist_and_emit(
     }
 }
 
-fn review_cycle(events: &[ActionEvent], task_label: &str) -> (String, String) {
-    let summary = summarize_events(events);
+fn review_cycle(
+    events: &[ActionEvent],
+    task_label: &str,
+    include_titles: bool,
+) -> (String, String) {
+    let summary = summarize_events(events, include_titles);
     match crate::agent::review_actions_with_local_model(&summary, task_label) {
         Ok(raw) => crate::agent_pure::parse_analysis(&raw),
         Err(e) => {
@@ -197,7 +209,7 @@ fn review_cycle(events: &[ActionEvent], task_label: &str) -> (String, String) {
     }
 }
 
-fn summarize_events(events: &[ActionEvent]) -> String {
+fn summarize_events(events: &[ActionEvent], include_titles: bool) -> String {
     events
         .iter()
         .take(MAX_EVENTS_IN_SUMMARY)
@@ -207,11 +219,15 @@ fn summarize_events(events: &[ActionEvent]) -> String {
                 window_title,
                 ..
             } => {
-                format!(
-                    "- switched focus to app '{}' (window: '{}')",
-                    app_name,
-                    truncate(window_title, 80)
-                )
+                if include_titles {
+                    format!(
+                        "- switched focus to app '{}' (window: '{}')",
+                        app_name,
+                        truncate(window_title, 80)
+                    )
+                } else {
+                    format!("- switched focus to app '{}'", app_name)
+                }
             }
             ActionEvent::UiaFocusChanged {
                 control_name,
@@ -220,25 +236,36 @@ fn summarize_events(events: &[ActionEvent]) -> String {
             } => format!(
                 "- focused a {} control{}",
                 control_type.as_deref().unwrap_or("UI"),
-                control_name
-                    .as_deref()
-                    .map(|n| format!(" named '{}'", truncate(n, 60)))
-                    .unwrap_or_default()
+                if include_titles {
+                    control_name.as_deref()
+                } else {
+                    None
+                }
+                .map(|n| format!(" named '{}'", truncate(n, 60)))
+                .unwrap_or_default()
             ),
             ActionEvent::UiaWindowOpened { name, .. } => {
                 format!(
                     "- opened a window{}",
-                    name.as_deref()
-                        .map(|n| format!(" '{}'", truncate(n, 60)))
-                        .unwrap_or_default()
+                    if include_titles {
+                        name.as_deref()
+                    } else {
+                        None
+                    }
+                    .map(|n| format!(" '{}'", truncate(n, 60)))
+                    .unwrap_or_default()
                 )
             }
             ActionEvent::UiaWindowClosed { name, .. } => {
                 format!(
                     "- closed a window{}",
-                    name.as_deref()
-                        .map(|n| format!(" '{}'", truncate(n, 60)))
-                        .unwrap_or_default()
+                    if include_titles {
+                        name.as_deref()
+                    } else {
+                        None
+                    }
+                    .map(|n| format!(" '{}'", truncate(n, 60)))
+                    .unwrap_or_default()
                 )
             }
         })

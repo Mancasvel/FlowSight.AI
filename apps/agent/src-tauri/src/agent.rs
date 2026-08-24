@@ -8,22 +8,12 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::{Datelike, Local};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::State;
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ActivityReport {
-    pub id: Option<i64>,
-    pub timestamp: String,
-    pub description: String,
-    pub activity_type: String,
-    pub synced: bool,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AgentConfig {
@@ -67,7 +57,7 @@ impl FlowSightAgent {
 
         let mut agent = Self {
             config: AgentConfig {
-                dev_name: Some(whoami::realname()),
+                dev_name: None,
                 capture_interval: Some(60000),
                 vision_model: Some(CONFIG_VISION_MODEL_ID.to_string()),
                 // -1 = automatic tier probing (maximum compatibility + strongest profile that survives).
@@ -81,6 +71,10 @@ impl FlowSightAgent {
 
         agent.init_db();
         agent.load_config();
+        if let Err(error) = crate::privacy::enforce_local_retention(&agent.db_path) {
+            log::warn!("[Privacy] Local retention enforcement failed: {error}");
+        }
+        crate::privacy::start_local_retention_thread(agent.db_path.clone());
         let capture_interval = agent
             .config
             .capture_interval
@@ -92,7 +86,7 @@ impl FlowSightAgent {
         crate::sync::start_sync_thread(agent.db_path.clone());
         // Proactive Supabase JWT refresh (~every 2m when near expiry)
         crate::sync::start_token_refresh_thread(agent.db_path.clone());
-        // Opt-in anonymous analytics sync (~every 6h when consented)
+        // Opt-in pseudonymous analytics sync (~every 6h when consented)
         crate::anonymous_analytics::start_analytics_sync_thread(agent.db_path.clone());
         // Level 0/1 privacy-first telemetry pipeline (foreground/UIA event
         // capture + configured-interval action-log review + periodic vision snapshot +
@@ -133,6 +127,9 @@ impl FlowSightAgent {
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN window_title TEXT", []);
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN capture_source TEXT", []);
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN theme_hint TEXT", []);
+                if let Err(error) = crate::privacy::ensure_schema(&conn) {
+                    log::error!("[Privacy] SQLite privacy schema failed: {error}");
+                }
             }
             Err(e) => log::error!(
                 "[Agent] SQLite open failed {:?} (init_db): {}",
@@ -217,48 +214,53 @@ impl FlowSightAgent {
             );
         }
     }
-
-    #[allow(dead_code)]
-    fn mark_synced(&self, id: i64) {
-        if let Ok(conn) = Connection::open(&self.db_path) {
-            let _ = conn.execute("UPDATE reports SET synced = 1 WHERE id = ?", [id]);
-        }
-    }
-
-    fn get_recent(&self, limit: u32) -> Vec<ActivityReport> {
-        let mut reports = Vec::new();
-        if let Ok(conn) = Connection::open(&self.db_path) {
-            if let Ok(mut stmt) = conn.prepare(
-                "SELECT id, description, activity_type, synced, created_at FROM reports ORDER BY id DESC LIMIT ?"
-            ) {
-                if let Ok(rows) = stmt.query_map([limit], |row| {
-                    Ok(ActivityReport {
-                        id: row.get(0).ok(),
-                        description: row.get(1)?,
-                        activity_type: row.get(2)?,
-                        synced: row.get::<_, i32>(3).unwrap_or(0) == 1,
-                        timestamp: row.get(4)?,
-                    })
-                }) {
-                    for report in rows.flatten() {
-                        reports.push(report);
-                    }
-                }
-            }
-        }
-        reports
-    }
 }
 
 // Capture and analyze screen
 // (Logic moved to Frontend for cross-platform support)
 
-fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
+fn capture_screen(db_path: &Path) -> Result<(String, crate::context::SystemContext), String> {
     use screenshots::Screen;
 
-    let screens = Screen::all().map_err(|e| e.to_string())?;
-    let screen = screens.first().ok_or("No screen")?;
-    let captured = screen.capture().map_err(|e| e.to_string())?;
+    let active = active_win_pos_rs::get_active_window().map_err(|_| {
+        "The active window could not be identified; capture was skipped.".to_string()
+    })?;
+    if crate::privacy::application_is_excluded(db_path, Some(&active.app_name)) {
+        return Err("Capture skipped for an excluded application".to_string());
+    }
+
+    let x = active.position.x.round() as i32;
+    let y = active.position.y.round() as i32;
+    let width = active.position.width.round().max(1.0) as u32;
+    let height = active.position.height.round().max(1.0) as u32;
+    let center_x = x.saturating_add((width / 2) as i32);
+    let center_y = y.saturating_add((height / 2) as i32);
+    let screen = Screen::from_point(center_x, center_y).map_err(|e| e.to_string())?;
+    let display_right = screen
+        .display_info
+        .x
+        .saturating_add(screen.display_info.width as i32);
+    let display_bottom = screen
+        .display_info
+        .y
+        .saturating_add(screen.display_info.height as i32);
+    let left = x.max(screen.display_info.x);
+    let top = y.max(screen.display_info.y);
+    let right = x.saturating_add(width as i32).min(display_right);
+    let bottom = y.saturating_add(height as i32).min(display_bottom);
+    if right <= left || bottom <= top {
+        return Err("The active window is outside the captured display.".to_string());
+    }
+    let relative_x = left - screen.display_info.x;
+    let relative_y = top - screen.display_info.y;
+    let captured = screen
+        .capture_area(
+            relative_x,
+            relative_y,
+            (right - left) as u32,
+            (bottom - top) as u32,
+        )
+        .map_err(|e| e.to_string())?;
 
     // Convert to DynamicImage
     let (width, height) = captured.dimensions();
@@ -275,152 +277,16 @@ fn capture_screen() -> Result<(String, std::path::PathBuf), String> {
 
     // println!("[Agent] Captured screenshot size: {} bytes", png.len());
 
-    // Persist to tmp for debug (optional): junto a datos de la app, no en Escritorio
-    let debug_dir = crate::paths::screenshots_tmp_dir()?;
-
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let stem = format!("capture_{}", timestamp);
-    let debug_path = crate::screenshot_disk::write_debug_capture_image(&png, &stem, &debug_dir)
-        .unwrap_or_else(|| debug_dir.join("_flowsight_no_disk_debug"));
-
-    Ok((BASE64.encode(&png), debug_path))
-}
-
-#[derive(Serialize, Clone)]
-pub struct CaptureResult {
-    path: String,
-    base64: String,
-}
-
-#[tauri::command]
-pub fn capture_screen_command() -> Result<CaptureResult, String> {
-    let (base64, path) = capture_screen()?;
-    Ok(CaptureResult {
-        path: path.to_string_lossy().to_string(),
-        base64,
-    })
-}
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ContextSnapshot {
-    pub vector: Vec<f32>,
-    pub dimension: usize,
-    pub description: String,
-    pub category: String, // NEW
-    pub analysis_failed: bool,
-    pub metadata: SnapshotMetadata,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SnapshotMetadata {
-    pub task: Option<String>,
-    pub file: Option<String>,
-    pub app: Option<String>,
-    pub branch: Option<String>,
-    pub language: Option<String>,
-}
-
-#[tauri::command]
-pub async fn capture_context_snapshot(
-    state: State<'_, AgentState>,
-    user_task: Option<String>,
-    jira_ticket: Option<String>,
-) -> Result<ContextSnapshot, String> {
-    // Extract config (default to 16 if not set to ensure balanced load)
-    let gpu_layers = {
-        let guard = state.lock().unwrap();
-        guard
-            .as_ref()
-            .and_then(|a| a.config.gpu_layers)
-            .or(Some(16))
+    // The screenshot is deliberately kept in memory only. Persisting even an
+    // encrypted debug copy would collect more data than the product needs.
+    let file_name = crate::context::file_hint_from_window_title(&active.title);
+    let context = crate::context::SystemContext {
+        app_name: Some(active.app_name),
+        window_title: Some(active.title),
+        file_name,
+        file_path: None,
     };
-
-    // Keep the backend-driven telemetry cycle (aggregator/action_capture) in
-    // sync with whatever task/ticket the frontend is currently tracking,
-    // without requiring a separate round-trip from the renderer.
-    crate::telemetry::set_task_context(user_task.clone(), jira_ticket.clone());
-
-    // Run ALL heavy work on a background thread to avoid blocking the main/UI thread
-    tauri::async_runtime::spawn_blocking(move || {
-        use crate::context::get_system_context;
-        use std::path::PathBuf;
-
-        // 1. Capture Screen
-        let (base64, path_str) = capture_screen()?;
-        let path = PathBuf::from(&path_str);
-
-        // 2. Local vision analysis (visual description + category)
-        let task_context = jira_ticket
-            .clone()
-            .or(user_task.clone())
-            .unwrap_or_else(|| "General".to_string());
-
-        let raw_analysis = match analyze_image_with_vision(&base64, &task_context, gpu_layers) {
-            Ok(res) => (res, false),
-            Err(e) => {
-                let err_msg = format!("[Agent] AI Analysis Failed: {}", e);
-                println!("{}", err_msg);
-
-                // Log a archivo en el app data dir (antes era "agent_error.log"
-                // con path relativo: en release cwd puede ser Program Files y
-                // el write fallaba silencioso por UAC).
-                if let Ok(log_path) = crate::paths::agent_error_log_path() {
-                    if let Ok(mut file) = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(&log_path)
-                    {
-                        let _ = writeln!(file, "{}", err_msg);
-                    }
-                }
-
-                (
-                    "Screen analysis failed. Category: General".to_string(),
-                    true,
-                )
-            }
-        };
-
-        // Parse model output, then apply cost-sensitive OS metadata priors.
-        let (description, model_category) = parse_analysis(&raw_analysis.0);
-        let analysis_failed =
-            raw_analysis.1 || description.eq_ignore_ascii_case("No analysis available");
-
-        // 3. System Context (Window/App)
-        let sys = get_system_context();
-        let category = crate::agent_pure::correct_category_with_window(
-            &model_category,
-            sys.app_name.as_deref(),
-            sys.window_title.as_deref(),
-        );
-
-        // 4. Git Context (Project)
-        // Antes: hardcodeaba ~/Desktop/FlowSight.AI (solo exist\u00eda en la m\u00e1quina
-        // del dev) y ca\u00eda a CWD=="." en release, que en una instalaci\u00f3n a
-        // Program Files es in\u00fatil y puede filtrar metadata ajena.
-        // Hoy devolvemos `None` hasta tener una estrategia real para resolver
-        // el repo del usuario desde la ventana activa (ver SystemContext).
-        let git: Option<crate::context::GitContext> = None;
-
-        // Cleanup temp file
-        let _ = std::fs::remove_file(&path);
-
-        Ok(ContextSnapshot {
-            vector: vec![],
-            dimension: 0,
-            description,
-            category,
-            analysis_failed,
-            metadata: SnapshotMetadata {
-                task: jira_ticket.or(user_task),
-                file: sys.file_name,
-                app: sys.app_name,
-                branch: git.and_then(|g| g.branch),
-                language: None,
-            },
-        })
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))?
+    Ok((BASE64.encode(&png), context))
 }
 
 // ============== TAURI COMMANDS ==============
@@ -458,15 +324,11 @@ pub fn initialize_agent(
     crate::paths::verify_app_dir_filesystem_writable()?;
     probe_sqlite_database_rw()?;
 
-    let max_h: u64 = std::env::var("FLOWSIGHT_SCREENSHOT_TMP_MAX_HOURS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(72);
-    match crate::paths::prune_screenshots_tmp_older_than(Duration::from_secs(max_h * 3600)) {
+    // Remove legacy transient screenshots from older releases. New captures
+    // are memory-only, so no new files are created in this directory.
+    match crate::paths::prune_screenshots_tmp_older_than(Duration::ZERO) {
         Ok(n) if n > 0 => {
-            log::info!(
-                "[FlowSight] removed {n} screenshot(s) older than {max_h}h from screenshots_tmp"
-            );
+            log::info!("[Privacy] removed {n} legacy temporary screenshot(s)");
         }
         Err(e) => log::warn!("[FlowSight] screenshots_tmp retention prune: {e}"),
         _ => {}
@@ -528,6 +390,8 @@ pub fn get_status(state: State<'_, AgentState>) -> Result<serde_json::Value, Str
 
 #[tauri::command]
 pub fn start_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
+    let db_path = crate::paths::db_path()?;
+    crate::privacy::require_monitoring_acknowledgement(&db_path)?;
     if let Some(a) = state.lock().unwrap().as_mut() {
         a.is_running = true;
     }
@@ -546,8 +410,7 @@ pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
 
 /// Lets the frontend tell the backend-driven telemetry cycle (`telemetry::aggregator`
 /// / `telemetry::action_capture`) what the user is currently working on (selected Jira
-/// ticket / manual task label), so the local review model gets the same context the
-/// on-demand `capture_context_snapshot` path already uses.
+/// ticket / manual task label).
 #[tauri::command]
 pub fn set_task_context(
     user_task: Option<String>,
@@ -555,19 +418,6 @@ pub fn set_task_context(
 ) -> Result<bool, String> {
     crate::telemetry::set_task_context(user_task, jira_ticket);
     Ok(true)
-}
-
-#[tauri::command]
-pub fn get_activity_log(
-    state: State<'_, AgentState>,
-    limit: Option<u32>,
-) -> Result<Vec<ActivityReport>, String> {
-    Ok(state
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|a| a.get_recent(limit.unwrap_or(20)))
-        .unwrap_or_default())
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -922,14 +772,6 @@ fn check_local_server_blocking() -> Result<serde_json::Value, String> {
             "installed": true
         })),
     }
-}
-
-// Legacy alias: el frontend todav\u00eda llama `check_ollama` en dos sitios. Lo
-// mantenemos como thin wrapper para no cambiar el contrato en un solo PR.
-// TODO: migrar los `invoke('check_ollama')` del renderer y borrar este alias.
-#[tauri::command]
-pub async fn check_ollama() -> Result<serde_json::Value, String> {
-    check_local_server().await
 }
 
 // LLAMA SERVER COMMANDS
@@ -1751,8 +1593,11 @@ pub(crate) fn insert_report(
     let activity_type = resolve_persisted_category(activity_type);
     let jira_ticket = canonical_ticket_value(jira_ticket.as_deref());
     let conn = Connection::open(db_path).ok()?;
-    let system = captured_context
+    let mut system = captured_context
         .unwrap_or_else(|| CapturedWindowContext::from(crate::context::get_system_context()));
+    if !crate::privacy::store_window_titles(db_path) {
+        system.window_title = None;
+    }
     conn.execute(
         "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds, active_app, window_title, capture_source, theme_hint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))",
         params![description, activity_type, jira_ticket, duration_seconds, system.app_name, system.window_title, capture_source, theme_hint, observed_at_utc],
@@ -1785,45 +1630,17 @@ pub(crate) struct AnalyzedCapture {
     pub observed_at_utc: String,
 }
 
-/// RAII guard around a screenshot written under the app data dir
-/// (`screenshots_tmp/`, never Desktop): the file is removed as soon as this
-/// value is dropped (Rust guarantees this runs even on an early `?` return),
-/// so a capture triggered by the telemetry pipeline never lingers on disk
-/// longer than the analysis call that consumes it.
-struct TempScreenshot {
-    path: PathBuf,
-    base64: String,
-}
-
-impl Drop for TempScreenshot {
-    fn drop(&mut self) {
-        if self.path.exists() {
-            if let Err(e) = std::fs::remove_file(&self.path) {
-                log::warn!(
-                    "[Telemetry] Failed to delete transient screenshot {}: {e}",
-                    self.path.display()
-                );
-            }
-        }
-    }
-}
-
-fn capture_screen_to_tmp() -> Result<TempScreenshot, String> {
-    let (base64, path) = capture_screen()?;
-    Ok(TempScreenshot { path, base64 })
-}
-
 /// Configured-interval screenshot + local vision analysis, driven by
-/// `telemetry::aggregator`. Same save -> analyze -> delete lifecycle as
-/// `capture_context_snapshot` (full vision template via
-/// `analyze_image_with_vision`), but via `TempScreenshot`'s `Drop` so cleanup
-/// happens even if analysis returns early.
-pub(crate) fn capture_and_analyze_screen(task_context: &str) -> Result<AnalyzedCapture, String> {
+/// `telemetry::aggregator`. Uses the full `analyze_image_with_vision` template
+/// and keeps the frame in memory only.
+pub(crate) fn capture_and_analyze_screen(
+    db_path: &Path,
+    task_context: &str,
+) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let sys = crate::context::get_system_context();
-    let capture = capture_screen_to_tmp()?;
-    let raw_analysis = analyze_image_with_vision(&capture.base64, task_context, None)
-        .unwrap_or_else(|e| {
+    let (capture, sys) = capture_screen(db_path)?;
+    let raw_analysis =
+        analyze_image_with_vision(&capture, task_context, None).unwrap_or_else(|e| {
             log::warn!("[Telemetry][VisionSnapshot] vision analysis failed: {e}");
             "Screen analysis failed.\nCATEGORY: General".to_string()
         });
@@ -1844,18 +1661,17 @@ pub(crate) fn capture_and_analyze_screen(task_context: &str) -> Result<AnalyzedC
 /// Screenshot capture triggered by a specific, significant UI Automation
 /// action (a window opening/closing — see `telemetry::action_capture`),
 /// combining the frame with the textual context of what triggered it in a
-/// single local-model call so it can fuse visual + semantic signal. Same
-/// save -> analyze -> delete lifecycle as `capture_context_snapshot`, but via
-/// `TempScreenshot`'s `Drop` so cleanup happens even if analysis returns early.
+/// single local-model call so it can fuse visual + semantic signal. Uses
+/// The frame remains in memory and is dropped immediately after analysis.
 pub(crate) fn capture_and_analyze_action(
+    db_path: &Path,
     task_context: &str,
     action_context: &str,
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let sys = crate::context::get_system_context();
-    let capture = capture_screen_to_tmp()?;
+    let (capture, sys) = capture_screen(db_path)?;
     let raw_analysis =
-        analyze_action_screenshot_with_vision(&capture.base64, task_context, action_context)
+        analyze_action_screenshot_with_vision(&capture, task_context, action_context)
             .unwrap_or_else(|e| {
                 log::warn!("[Telemetry][ActionCapture] vision analysis failed: {e}");
                 "Screen analysis failed.\nCATEGORY: General".to_string()
@@ -1872,24 +1688,6 @@ pub(crate) fn capture_and_analyze_action(
         window: sys.into(),
         observed_at_utc,
     })
-}
-
-#[tauri::command]
-pub fn get_focus_summary(
-    state: State<'_, AgentState>,
-    period_days: Option<i32>,
-) -> Result<crate::focus_semantics::FocusSummary, String> {
-    let agent = state.lock().unwrap();
-    let agent = agent.as_ref().ok_or("Agent not initialized")?;
-    let conn = Connection::open(&agent.db_path).map_err(|e| e.to_string())?;
-    let days = period_days.unwrap_or(1).clamp(1, 30);
-    let end = Local::now().date_naive();
-    let start = end - chrono::Duration::days(i64::from(days - 1));
-    crate::focus_semantics::summarize_from_db(
-        &conn,
-        &start.format("%Y-%m-%d").to_string(),
-        &end.format("%Y-%m-%d").to_string(),
-    )
 }
 
 /// Vision analysis for an action-triggered capture: same privacy stance as
@@ -2078,25 +1876,17 @@ mod agent_struct_tests {
     }
 
     #[test]
-    fn activity_report_serializes() {
-        let r = ActivityReport {
-            id: Some(1),
-            timestamp: "t".into(),
-            description: "d".into(),
-            activity_type: "coding".into(),
-            synced: false,
-        };
-        let v = serde_json::to_value(&r).unwrap();
-        assert_eq!(v["activity_type"], "coding");
-    }
-
-    #[test]
     fn insert_report_persists_time_and_context_from_the_captured_frame() {
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("capture-context.sqlite");
         let conn = Connection::open(&db_path).unwrap();
         conn.execute_batch(
-            "CREATE TABLE reports (
+            "CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT);
+             INSERT INTO config (key, value) VALUES (
+                'privacy_settings',
+                '{\"noticeVersion\":\"2026-08-23\",\"storeWindowTitles\":true}'
+             );
+             CREATE TABLE reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 description TEXT,
                 activity_type TEXT,

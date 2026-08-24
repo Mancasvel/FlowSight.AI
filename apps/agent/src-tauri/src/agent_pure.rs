@@ -1,4 +1,4 @@
-//! Vision output parsing — pure logic, heavily unit-tested. Used by `agent::capture_context_snapshot` path.
+//! Vision output parsing — pure logic shared by the background capture paths.
 
 use crate::focus_semantics::{canonical_category_label, canonicalize_category};
 

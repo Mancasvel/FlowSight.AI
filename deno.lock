@@ -1,0 +1,30 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.49.1": "947c71e163ca8bb5b538eccb5ee86fbc8da6bcb916a861586db5fad1af4701bb"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@tauri-apps/cli@2.11.2",
+        "npm:@types/node@20.19.0"
+      ]
+    },
+    "members": {
+      "apps/agent": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@supabase/supabase-js@^2.112.4",
+            "npm:@tauri-apps/api@2.11.0",
+            "npm:@tauri-apps/cli@2.11.2",
+            "npm:@tauri-apps/plugin-process@^2.3.1",
+            "npm:@tauri-apps/plugin-updater@^2.10.1",
+            "npm:dotenv@^17.4.2",
+            "npm:jspdf@^4.2.1",
+            "npm:vite@^7.3.6"
+          ]
+        }
+      }
+    }
+  }
+}

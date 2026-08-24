@@ -8,8 +8,6 @@
   <meta name="description" content="Understand your own Workflows">
   <link rel="icon" href="/flowsight_sinfondo.png" type="image/png" />
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-
     * {
       margin: 0;
       padding: 0;
@@ -36,10 +34,10 @@
       --ring: 262 83% 58%;
       --radius: 0.75rem;
       --summary-purple: 262 83% 58%;
-      --summary-magenta: 320 70% 55%;
-      --summary-blue: 221 83% 53%;
-      --summary-teal: 174 60% 45%;
-      --summary-orange: 25 95% 53%;
+      --summary-magenta: 320 70% 43%;
+      --summary-blue: 221 83% 50%;
+      --summary-teal: 174 70% 29%;
+      --summary-orange: 25 90% 40%;
       --scrollbar-size: 7px;
       --scrollbar-track: #ede9fe;
       --scrollbar-thumb: #8b5cf6;
@@ -2225,6 +2223,41 @@
       accent-color: hsl(var(--primary));
     }
 
+    .privacy-detail {
+      margin: 5px 0 0 26px;
+      color: hsl(var(--muted-foreground));
+      font-size: 10px;
+      line-height: 1.45;
+    }
+
+    .privacy-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .privacy-notice-card {
+      max-height: min(82vh, 720px);
+      overflow-y: auto;
+    }
+
+    .privacy-notice-card h3 {
+      margin: 16px 0 5px;
+      font-size: 13px;
+    }
+
+    .privacy-notice-card p,
+    .privacy-notice-card li {
+      font-size: 12px;
+      line-height: 1.55;
+      color: hsl(var(--muted-foreground));
+    }
+
+    .privacy-notice-card ul {
+      margin: 6px 0 0 18px;
+    }
+
     .plan-badge-free {
       background: hsl(var(--muted));
       color: hsl(var(--muted-foreground));
@@ -3267,6 +3300,431 @@
       margin-bottom: 4px;
       word-break: break-all;
     }
+
+    /* ===== Liquid Glass — restrained functional layer =====
+       Glass is limited to navigation and transient controls. Content remains
+       opaque for readability and to avoid stacking expensive backdrop filters. */
+    :root {
+      color-scheme: light dark;
+      --background: 225 24% 97%;
+      --foreground: 225 24% 11%;
+      --card: 0 0% 100%;
+      --card-foreground: 225 24% 11%;
+      --primary: 263 84% 58%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 222 22% 95%;
+      --secondary-foreground: 225 20% 18%;
+      --muted: 222 22% 94%;
+      --muted-foreground: 220 11% 43%;
+      --accent: 263 82% 95%;
+      --accent-foreground: 263 72% 42%;
+      --border: 220 18% 87%;
+      --input: 220 18% 84%;
+      --ring: 263 84% 58%;
+      --radius: 1rem;
+      --scrollbar-track: transparent;
+      --scrollbar-thumb: rgb(100 116 139 / 0.42);
+      --scrollbar-thumb-hover: hsl(var(--primary) / 0.62);
+      --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 12px rgb(15 23 42 / 0.045);
+      --glass-shadow: 0 10px 34px rgb(15 23 42 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.72);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif;
+      background: hsl(var(--background));
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .app-titlebar {
+      height: 44px;
+      background: hsl(var(--card) / 0.96);
+      border-bottom-color: hsl(var(--border) / 0.72);
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65);
+      isolation: isolate;
+    }
+
+    .titlebar-brand {
+      gap: 9px;
+      padding-inline: 12px;
+    }
+
+    .titlebar-name {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .titlebar-tagline {
+      display: none;
+    }
+
+    .titlebar-btn {
+      transition: background-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+    }
+
+    .titlebar-btn:active {
+      transform: none;
+    }
+
+    .app-shell,
+    .cloud-activation-overlay,
+    .onboarding-overlay {
+      background: hsl(var(--background));
+    }
+
+    .tab-content {
+      padding: 18px 16px 90px;
+      scroll-padding-bottom: 90px;
+    }
+
+    .bottom-nav {
+      bottom: 10px;
+      width: calc(100% - 24px);
+      max-width: 376px;
+      gap: 4px;
+      justify-content: stretch;
+      padding: 6px;
+      background: hsl(var(--card) / 0.96);
+      border: 1px solid hsl(var(--border) / 0.78);
+      border-radius: 22px;
+      box-shadow: var(--glass-shadow);
+      isolation: isolate;
+    }
+
+    .nav-item {
+      flex: 1;
+      min-width: 0;
+      min-height: 48px;
+      gap: 2px;
+      padding: 5px 4px;
+      border-radius: 16px;
+      transition: color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .nav-item svg {
+      width: 20px;
+      height: 20px;
+      transition: none;
+    }
+
+    .nav-item:hover,
+    .nav-item.active:hover {
+      color: hsl(var(--primary));
+      background: hsl(var(--primary) / 0.08);
+    }
+
+    .nav-item:hover svg,
+    .nav-item:active svg,
+    .nav-item:active {
+      transform: none;
+    }
+
+    .nav-item.active {
+      color: hsl(var(--primary));
+      background: hsl(var(--primary) / 0.12);
+      box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.1);
+    }
+
+    .nav-label,
+    .nav-item.active .nav-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .card,
+    .card-flat,
+    .summary-main-card,
+    .highlight-card,
+    .today-goal-row,
+    .today-task-card,
+    .cloud-insights-card,
+    .sr-card,
+    .sr-metric,
+    .sr-generating,
+    .sr-tbi-timeline,
+    .login-splash-auth,
+    .login-preview-card {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border) / 0.78);
+      box-shadow: var(--surface-shadow);
+    }
+
+    .card,
+    .card-flat,
+    .today-goal-row,
+    .today-task-card {
+      border-radius: 18px;
+    }
+
+    .summary-main-card {
+      border-radius: 22px;
+      box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 20px rgb(15 23 42 / 0.055);
+    }
+
+    .card-header {
+      border-bottom-color: hsl(var(--border) / 0.72);
+    }
+
+    .label {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .button {
+      min-height: 32px;
+      border-radius: 10px;
+      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .button-primary {
+      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22), 0 1px 2px hsl(var(--primary) / 0.2);
+    }
+
+    .button-secondary,
+    .sr-download-btn,
+    .summary-download-btn,
+    .stop-timer-btn,
+    .report-modal-close {
+      border-color: hsl(var(--border));
+      background: hsl(var(--card));
+    }
+
+    .input,
+    .select,
+    .onboarding-name-input,
+    .coach-composer {
+      border-color: hsl(var(--input));
+      background: hsl(var(--card));
+      box-shadow: inset 0 1px 1px rgb(15 23 42 / 0.025);
+    }
+
+    .input,
+    .select {
+      min-height: 34px;
+    }
+
+    :where(button, a, input, select, textarea):focus-visible {
+      outline: 3px solid hsl(var(--ring) / 0.36);
+      outline-offset: 2px;
+    }
+
+    .summary-download-btn {
+      background: hsl(var(--primary) / 0.1);
+      border: 1px solid hsl(var(--primary) / 0.12);
+    }
+
+    .today-timer-ring {
+      max-width: 300px;
+    }
+
+    .timer-track,
+    .timer-progress {
+      stroke-width: 10;
+    }
+
+    .timer-display {
+      font-size: 46px;
+      letter-spacing: -0.04em;
+    }
+
+    .play-timer-btn {
+      border: 1px solid hsl(var(--border) / 0.84);
+      box-shadow: 0 6px 16px rgb(15 23 42 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.72);
+      transition: background-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .play-timer-btn:hover:not(:disabled) {
+      transform: none;
+      background: hsl(var(--accent));
+      box-shadow: 0 8px 18px rgb(15 23 42 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.72);
+    }
+
+    .tab-content,
+    .app-container,
+    .modal-body,
+    .report-modal-body {
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+
+    .tab-content::-webkit-scrollbar-track,
+    .app-container::-webkit-scrollbar-track,
+    .modal-body::-webkit-scrollbar-track,
+    .report-modal-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .tab-content::-webkit-scrollbar-thumb,
+    .app-container::-webkit-scrollbar-thumb,
+    .modal-body::-webkit-scrollbar-thumb,
+    .report-modal-body::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+      box-shadow: none;
+    }
+
+    .tab-content::-webkit-scrollbar-thumb:hover,
+    .app-container::-webkit-scrollbar-thumb:hover,
+    .modal-body::-webkit-scrollbar-thumb:hover,
+    .report-modal-body::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+      background-clip: padding-box;
+    }
+
+    .modal-overlay,
+    .report-modal-overlay {
+      background: hsl(var(--foreground) / 0.34);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    .setup-overlay {
+      background: hsl(var(--background) / 0.97);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    .consent-overlay {
+      background: hsl(var(--foreground) / 0.28);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    .consent-card,
+    .modal-content,
+    .report-modal,
+    .coach-lock-card {
+      background: hsl(var(--card));
+      border-color: hsl(var(--border) / 0.82);
+      box-shadow: 0 24px 64px rgb(15 23 42 / 0.18);
+    }
+
+    .coach-chat-shell.is-locked .coach-chat-inner {
+      filter: none;
+      opacity: 0.24;
+    }
+
+    .coach-lock-overlay {
+      background: hsl(var(--background) / 0.76);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    .coach-lock-card {
+      border-radius: 20px;
+    }
+
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .app-titlebar,
+      .bottom-nav {
+        background: hsl(var(--card) / 0.74);
+        -webkit-backdrop-filter: saturate(1.12) blur(12px);
+        backdrop-filter: saturate(1.12) blur(12px);
+      }
+
+      .coach-lock-card {
+        background: hsl(var(--card) / 0.82);
+        -webkit-backdrop-filter: saturate(1.08) blur(10px);
+        backdrop-filter: saturate(1.08) blur(10px);
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: 225 18% 8%;
+        --foreground: 210 20% 96%;
+        --card: 225 16% 12%;
+        --card-foreground: 210 20% 96%;
+        --primary: 264 90% 70%;
+        --primary-foreground: 226 28% 10%;
+        --secondary: 224 14% 17%;
+        --secondary-foreground: 214 18% 92%;
+        --muted: 224 14% 17%;
+        --muted-foreground: 218 12% 70%;
+        --accent: 263 38% 21%;
+        --accent-foreground: 264 100% 84%;
+        --destructive: 0 72% 62%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 224 12% 24%;
+        --input: 224 12% 29%;
+        --ring: 264 90% 72%;
+        --scrollbar-thumb: rgb(148 163 184 / 0.38);
+        --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 10px 26px rgb(0 0 0 / 0.16);
+        --glass-shadow: 0 12px 36px rgb(0 0 0 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.1);
+      }
+
+      .app-titlebar,
+      .bottom-nav,
+      .play-timer-btn {
+        box-shadow: var(--glass-shadow);
+      }
+
+      .sr-tbi-table-head {
+        background: hsl(224 16% 18%);
+      }
+
+      .highlight-focus .highlight-card-header {
+        color: hsl(25 100% 72%);
+      }
+
+      .highlight-distraction .highlight-card-header {
+        color: hsl(215 90% 72%);
+      }
+    }
+
+    @media (prefers-contrast: more) {
+      :root {
+        --muted-foreground: 220 16% 30%;
+        --border: 220 16% 64%;
+      }
+
+      .bottom-nav,
+      .card,
+      .card-flat,
+      .summary-main-card,
+      .highlight-card,
+      .today-goal-row,
+      .today-task-card {
+        border-color: hsl(var(--border));
+      }
+
+    }
+
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --muted-foreground: 216 18% 84%;
+        --border: 216 16% 48%;
+      }
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+      .app-titlebar,
+      .bottom-nav,
+      .coach-lock-card {
+        background: hsl(var(--card));
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 
@@ -3327,19 +3785,64 @@
     <div class="consent-card">
       <h2 class="consent-title" id="analyticsConsentTitle">Would you like to help improve FlowSight?</h2>
       <p class="consent-copy">
-        If you agree, FlowSight will store anonymized usage data including:
+        If you agree, FlowSight will send pseudonymous usage data including:
       </p>
       <ul class="consent-list">
         <li>Daily time of use</li>
         <li>The main core activity you perform during the week</li>
       </ul>
       <p class="consent-note">
-        This helps the FlowSight team improve the app. You can send additional feedback from Profile,
-        and change this preference there at any time. FlowSight works fully without sharing data.
+        This uses a random installation ID, not your account or email. It is still treated as personal data,
+        retained for up to 35 days, and deleted when you withdraw. FlowSight works fully without sharing it.
       </p>
       <div class="consent-actions">
         <button type="button" class="button button-secondary" id="analyticsConsentDeclineBtn">No thanks</button>
         <button type="button" class="button button-primary" id="analyticsConsentAcceptBtn">Yes, help improve</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCAL MONITORING NOTICE (shown before the first tracking session) -->
+  <div class="consent-overlay" id="monitoringNoticeOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="monitoringNoticeTitle">
+    <div class="consent-card">
+      <h2 class="consent-title" id="monitoringNoticeTitle">Before tracking starts</h2>
+      <p class="consent-copy">FlowSight will observe the active application, selected interface elements, and periodic images of the active window while tracking is on.</p>
+      <ul class="consent-list">
+        <li>Screenshots are analyzed by AI on this device and are never saved.</li>
+        <li>Only short activity summaries, categories, app names, and durations are kept locally.</li>
+        <li>Window titles are not stored by default. Local history is deleted after 30 days by default.</li>
+        <li>Common password managers are excluded by default; add other sensitive apps in Privacy &amp; data.</li>
+        <li>Nothing is synced to FlowSight or an AI provider unless you separately enable it.</li>
+      </ul>
+      <p class="consent-note">Pause or stop tracking at any time. Do not use FlowSight to monitor another person without a valid lawful basis and the required workplace notice.</p>
+      <div class="consent-actions">
+        <button type="button" class="button button-secondary" id="monitoringNoticeCancelBtn">Cancel</button>
+        <button type="button" class="button button-primary" id="monitoringNoticeAcceptBtn">I understand — start</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LAYERED PRIVACY NOTICE -->
+  <div class="consent-overlay" id="privacyNoticeOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="privacyNoticeTitle">
+    <div class="consent-card privacy-notice-card">
+      <h2 class="consent-title" id="privacyNoticeTitle">Privacy notice</h2>
+      <p>Effective 23 August 2026 · Controller legal identity and address: must be completed in the published notice before production · Privacy contact: manuel@flowsight.site.</p>
+      <h3>Local tracking</h3>
+      <p>When you start tracking, the app processes images of the active window, active app and interface context on your device to create activity summaries. Images and raw interaction events stay in volatile memory and are discarded after local analysis. Excluded applications are skipped. This processing provides the feature you request. Summaries remain on your device for your selected retention period.</p>
+      <h3>Optional cloud purposes</h3>
+      <ul>
+        <li><strong>Activity sync:</strong> sends locally generated aggregate summaries, categories, durations, ticket references and team/account IDs to FlowSight's Supabase service.</li>
+        <li><strong>Cloud AI:</strong> sends your message, recent conversation and a seven-day local activity summary through FlowSight to Azure OpenAI for coaching. Cloud-generated individual reports use OpenRouter and its selected model provider.</li>
+        <li><strong>Product analytics:</strong> sends a random installation ID, seven daily usage totals and the week's primary category. No account ID or email is included.</li>
+        <li><strong>Integrations:</strong> Jira, Linear and Notion receive only data needed for actions you request under their own privacy terms.</li>
+      </ul>
+      <h3>Your choices and rights</h3>
+      <p>Optional sharing is off by default and can be withdrawn here without affecting local tracking. You can export your data, erase local data, or delete your cloud account. You may also request access, correction, restriction, objection, portability, or complain to your supervisory authority by contacting manuel@flowsight.site.</p>
+      <h3>Retention and transfers</h3>
+      <p>Local summaries use your selected period (30 days by default). Cloud activity and insight data is configured for 90 days, pseudonymous analytics for 35 days, and voluntary feedback for 12 months. Vendors may process data outside the EEA under an adequacy decision or Standard Contractual Clauses. Account and statutory billing records may be retained only where legally required.</p>
+      <p style="margin-top:14px;">Before production, the controller must publish the completed Article 13 notice at a stable, accessible location. The current technical draft and implementation checklist are maintained in <code>PRIVACY.md</code> and <code>docs/GDPR-COMPLIANCE.md</code>.</p>
+      <div class="consent-actions">
+        <button type="button" class="button button-primary" id="privacyNoticeCloseBtn">Close</button>
       </div>
     </div>
   </div>
@@ -3448,8 +3951,8 @@
           <div id="manualLoginParams" style="display: none; margin-top: 8px;">
             <div class="form-group">
               <label class="label">Access Token (JWT)</label>
-              <input type="text" id="manualCodeInput" class="input" placeholder="Paste Supabase access token…"
-                style="font-family: monospace; font-size: 11px;">
+              <input type="password" id="manualCodeInput" class="input" placeholder="Paste Supabase access token…"
+                autocomplete="off" autocapitalize="off" spellcheck="false" style="font-family: monospace; font-size: 11px;">
             </div>
             <button class="button button-primary" id="manualLoginBtn" style="width: 100%;">Login with code</button>
             <button class="button button-ghost" id="cancelManualLoginBtn" style="width: 100%; margin-top: 6px;">Back</button>
@@ -3457,7 +3960,8 @@
         </div>
 
         <p class="login-splash-footer">
-          By signing in, you agree to FlowSight's Terms of Service and Privacy Policy.
+          Signing in creates a cloud account and sends your account details to Supabase. Activity sharing remains off until you enable it.
+          <button type="button" id="loginPrivacyNoticeBtn" style="border:0;background:none;color:inherit;text-decoration:underline;cursor:pointer;padding:0;">Read the Privacy Notice</button>.
         </p>
         <button class="button button-ghost login-splash-skip" id="closeCloudActivationBtn" type="button">
           Continue in Free (Local) mode
@@ -3498,6 +4002,7 @@
             <strong id="notionWorkspaceName">Notion connected</strong>
             <div id="notionLastPublication" class="notion-status-copy">No report published yet.</div>
             <button type="button" class="button button-ghost" id="refreshNotionStatusBtn">Refresh connection</button>
+            <button type="button" class="button button-ghost" id="disconnectNotionBtn" style="color:hsl(var(--destructive));">Disconnect and erase Notion connection</button>
           </div>
 
           <div class="notion-panel-section">
@@ -3695,7 +4200,7 @@
 
           <div id="userProfile">
             <div class="user-profile">
-              <img id="userAvatar" class="user-avatar" src="" alt="" style="display: none;">
+              <img id="userAvatar" class="user-avatar" src="" alt="" referrerpolicy="no-referrer" style="display: none;">
               <div class="user-info">
                 <div class="user-name" id="userName">Guest</div>
                 <div class="user-email" id="userEmail">Free local mode</div>
@@ -3740,23 +4245,58 @@
 
         <div class="card" id="privacyAnalyticsCard">
           <div class="card-header">
-            <div class="card-title">Privacy &amp; analytics</div>
+            <div class="card-title">Privacy &amp; data</div>
           </div>
-          <p class="upgrade-hint" style="margin-bottom: 0;">
-            Help improve FlowSight with anonymized usage data. No account or personal information is collected.
-          </p>
+          <p class="upgrade-hint" style="margin-bottom: 0;">Optional sharing is off by default. Each purpose can be changed independently.</p>
+          <label class="consent-toggle-row" for="cloudSyncToggle">
+            <input type="checkbox" id="cloudSyncToggle">
+            <span>Sync aggregate activity to FlowSight Cloud</span>
+          </label>
+          <p class="privacy-detail" id="cloudSyncStatus">Off — activity stays on this device.</p>
+          <label class="consent-toggle-row" for="cloudAiToggle">
+            <input type="checkbox" id="cloudAiToggle">
+            <span>Share context with the cloud AI coach</span>
+          </label>
+          <p class="privacy-detail" id="cloudAiStatus">Off — the AI coach cannot receive activity or messages.</p>
           <label class="consent-toggle-row" for="analyticsConsentToggle">
             <input type="checkbox" id="analyticsConsentToggle">
-            <span>Share anonymized usage data</span>
+            <span>Share pseudonymous product analytics</span>
           </label>
           <p class="onboarding-prefs-summary" id="analyticsConsentStatus">Not set yet.</p>
+          <label class="consent-toggle-row" for="windowTitlesToggle">
+            <input type="checkbox" id="windowTitlesToggle">
+            <span>Store full window titles in local history</span>
+          </label>
+          <p class="privacy-detail">Off by default. Turning it off also removes titles already stored.</p>
           <div class="form-group" style="margin-top:12px;margin-bottom:0;">
-            <label class="label" for="appFeedbackInput">Send feedback</label>
+            <label class="label" for="excludedAppsInput">Never monitor these applications</label>
+            <textarea id="excludedAppsInput" class="input" rows="2" maxlength="2000"
+              placeholder="One application name per line"></textarea>
+            <p class="privacy-detail" style="margin-left:0;">Exact application names, one per line. Matching apps are skipped entirely.</p>
+          </div>
+          <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+            <label class="label" for="retentionDaysSelect">Delete local activity automatically after</label>
+            <select id="retentionDaysSelect" class="select">
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="365">1 year</option>
+            </select>
+          </div>
+          <button type="button" class="button button-ghost" id="viewPrivacyNoticeBtn" style="width:100%;margin-top:10px;">Read privacy notice</button>
+          <div class="privacy-actions">
+            <button type="button" class="button button-secondary" id="exportPersonalDataBtn">Export my data</button>
+            <button type="button" class="button button-secondary" id="deleteLocalDataBtn">Erase local data</button>
+          </div>
+          <button type="button" class="button button-ghost" id="deleteCloudAccountBtn" style="width:100%;margin-top:8px;color:hsl(var(--destructive));display:none;">Delete cloud account</button>
+          <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+            <label class="label" for="appFeedbackInput">Send voluntary feedback to FlowSight</label>
             <textarea id="appFeedbackInput" class="input" rows="3" maxlength="2000"
               placeholder="Tell us what you think about FlowSight…"></textarea>
             <button type="button" class="button button-secondary" id="sendFeedbackBtn" style="width:100%;margin-top:8px;">
               Send feedback
             </button>
+            <p class="privacy-detail" style="margin-left:0;">Do not include confidential or sensitive personal data. Your message and app version are retained for up to 12 months.</p>
           </div>
         </div>
 
@@ -3792,8 +4332,8 @@
           <div class="form-group" id="teamCodeGroup">
             <label class="label">Team Code (from PM)</label>
             <div style="display: flex; gap: 6px;">
-              <input type="text" id="teamCodeInput" class="select" placeholder="Enter team code..."
-                style="flex: 1; font-family: monospace;">
+              <input type="password" id="teamCodeInput" class="select" placeholder="Enter team code..."
+                autocomplete="off" autocapitalize="off" spellcheck="false" style="flex: 1; font-family: monospace;">
               <button class="button button-primary" id="joinTeamBtn" style="padding: 8px 12px;">Join</button>
             </div>
             <div id="teamStatus" style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 4px;"></div>
@@ -3811,8 +4351,8 @@
     </div>
 
     <!-- Bottom Navigation -->
-    <nav class="bottom-nav">
-      <button class="nav-item active" data-tab="tabToday" id="navToday">
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <button class="nav-item active" data-tab="tabToday" id="navToday" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
         </svg>
@@ -3870,7 +4410,6 @@
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { check as checkAppUpdate } from '@tauri-apps/plugin-updater';
     import { relaunch } from '@tauri-apps/plugin-process';
-    import { jsPDF } from 'jspdf';
     import {
       claimLicenseCode,
       ensurePersonalTeam,
@@ -3879,6 +4418,12 @@
       signInForCloudFeatures,
       signOutWorker,
     } from './auth-service.js';
+    import {
+      clearTrackingCheckpoint,
+      loadTrackingCheckpoint,
+      resolveTrackingRestore,
+      saveTrackingCheckpoint,
+    } from './tracking-session.mjs';
 
     console.log('[FlowSight] Imports loaded successfully');
 
@@ -4100,6 +4645,23 @@
       }
     }
 
+    async function disconnectNotion() {
+      if (!window.confirm('Disconnect Notion and erase the stored OAuth token, destinations, and publication history?')) return;
+      const button = document.getElementById('disconnectNotionBtn');
+      if (button) button.disabled = true;
+      try {
+        await invoke('disconnect_notion');
+        notionIntegrationState = null;
+        notionSearchResults = [];
+        await loadNotionIntegrationStatus({ quiet: true });
+        showToast('Notion disconnected and its FlowSight connection data erased', 'success');
+      } catch (error) {
+        setNotionIntegrationMessage(String(error), true);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
     async function searchNotionDestinations() {
       const button = document.getElementById('searchNotionDestinationsBtn');
       const select = document.getElementById('notionDestinationSelect');
@@ -4210,6 +4772,7 @@
     });
     document.getElementById('connectNotionBtn')?.addEventListener('click', startNotionConnection);
     document.getElementById('refreshNotionStatusBtn')?.addEventListener('click', () => loadNotionIntegrationStatus());
+    document.getElementById('disconnectNotionBtn')?.addEventListener('click', disconnectNotion);
     document.getElementById('searchNotionDestinationsBtn')?.addEventListener('click', searchNotionDestinations);
     document.getElementById('notionDestinationSelect')?.addEventListener('change', updateNotionDestinationActions);
     document.getElementById('saveNotionDestinationBtn')?.addEventListener('click', saveNotionDestination);
@@ -4396,6 +4959,7 @@
         },
       }).catch((e) => console.warn('[Entitlements] save failed:', e));
       updatePlanBadge();
+      renderPrivacySettings();
     }
 
     async function loadEntitlementsFromBackend() {
@@ -4448,6 +5012,7 @@
         avatar.src = '';
       }
       updatePlanBadge();
+      renderPrivacySettings();
     }
 
     function reportRuntimeError(error) {
@@ -4487,8 +5052,6 @@
         const workerSession = await invoke('get_current_user');
         if (workerSession) {
           authSession = {
-            access_token: workerSession.access_token,
-            refresh_token: workerSession.refresh_token,
             provider: 'cloud',
             user: {
               id: workerSession.user_id,
@@ -4527,6 +5090,7 @@
         avatar.src = '';
       }
       updatePlanBadge();
+      renderPrivacySettings();
     }
 
     function showMainApp() {
@@ -4561,6 +5125,7 @@
       }
 
       setWorkerLoginError('');
+      document.getElementById('workerPassword').value = '';
       btn.disabled = true;
       btn.innerHTML = '<span class="loading"></span> Signing in...';
 
@@ -4571,8 +5136,6 @@
         const displayName = result.profile.display_name || result.user.email || 'User';
         const teamId = result.membership?.team_id || result.entitlements.active_team_id || null;
         const workerAuthSession = {
-          access_token: result.session.access_token,
-          refresh_token: result.session.refresh_token,
           provider: 'cloud',
           user: {
             id: result.user.id,
@@ -4694,7 +5257,9 @@
     let sessionSeconds = 0;
     let sessionTimerInterval = null;
     let todayRefreshInterval = null;
+    let trackingStateHydrated = false;
     const TIMER_RING_CIRC = 2 * Math.PI * 82;
+    const TRACKING_CHECKPOINT_INTERVAL_SECONDS = 15;
 
     function updateGoalUI() {
       const hours = getDailyGoalHours();
@@ -4738,6 +5303,42 @@
       updateTimerControlsVisibility();
     }
 
+    function renderTrackingStatus() {
+      const status = document.getElementById('statStatus');
+      const badge = document.getElementById('monitoringBadge');
+
+      if (isMonitoring) {
+        if (status) {
+          status.textContent = 'On';
+          status.style.color = 'hsl(142.1 76.2% 36.3%)';
+        }
+        if (badge) {
+          badge.textContent = 'On';
+          badge.className = 'badge badge-success';
+        }
+      } else if (isPaused) {
+        if (status) {
+          status.textContent = 'Paused';
+          status.style.color = 'hsl(var(--summary-orange))';
+        }
+        if (badge) {
+          badge.textContent = 'Paused';
+          badge.className = 'badge badge-default';
+        }
+      } else {
+        if (status) {
+          status.textContent = 'Off';
+          status.style.color = '';
+        }
+        if (badge) {
+          badge.textContent = 'Off';
+          badge.className = 'badge badge-default';
+        }
+      }
+
+      updatePlayButtonState();
+    }
+
     function updateTimerDisplay() {
       const display = document.getElementById('timerDisplay');
       if (!display) return;
@@ -4745,6 +5346,16 @@
       display.textContent = formatTimerDisplay(total);
       const goalSec = getDailyGoalHours() * 3600;
       updateTimerRing(goalSec > 0 ? total / goalSec : 0);
+    }
+
+    function persistTrackingState() {
+      if (isMonitoring) {
+        saveTrackingCheckpoint(localStorage, 'running', getDisplayTotalSeconds());
+      } else if (isPaused) {
+        saveTrackingCheckpoint(localStorage, 'paused', getDisplayTotalSeconds());
+      } else {
+        clearTrackingCheckpoint(localStorage);
+      }
     }
 
     function commitSessionTime() {
@@ -4762,6 +5373,9 @@
       sessionTimerInterval = setInterval(() => {
         sessionSeconds++;
         updateTimerDisplay();
+        if (sessionSeconds % TRACKING_CHECKPOINT_INTERVAL_SECONDS === 0) {
+          persistTrackingState();
+        }
       }, 1000);
     }
 
@@ -4769,6 +5383,10 @@
       sessionSeconds = 0;
       resumeSessionTimer();
     }
+
+    window.addEventListener('pagehide', () => {
+      if (isMonitoring || isPaused) persistTrackingState();
+    });
 
     async function pushTaskContextToBackend() {
       const { task, jiraTicket } = getTaskContext();
@@ -4795,17 +5413,68 @@
       }
     }
 
+    async function restoreTrackingSession() {
+      if (trackingStateHydrated) return;
+
+      try {
+        const [nativeStatus, history] = await Promise.all([
+          invoke('get_status'),
+          invoke('get_today_history'),
+        ]);
+        const checkpoint = loadTrackingCheckpoint(localStorage);
+        let serverOnline = false;
+
+        if (!nativeStatus?.isRunning && checkpoint?.mode === 'running') {
+          const serverStatus = await invoke('check_local_server').catch(() => null);
+          serverOnline = Boolean(serverStatus?.online);
+        }
+
+        let restored = resolveTrackingRestore({
+          nativeRunning: Boolean(nativeStatus?.isRunning),
+          serverOnline,
+          historySeconds: history?.total_seconds,
+          checkpoint,
+        });
+
+        if (restored.shouldResumeNative) {
+          try {
+            await startNativeMonitoring();
+          } catch (error) {
+            console.warn('[Tracking] Could not resume after native restart:', error);
+            restored = { ...restored, mode: 'paused', shouldResumeNative: false };
+          }
+        }
+
+        todayTotalSeconds = restored.totalSeconds;
+        sessionSeconds = 0;
+        isMonitoring = restored.mode === 'running';
+        isPaused = restored.mode === 'paused';
+
+        if (isMonitoring) {
+          resumeSessionTimer();
+        } else if (sessionTimerInterval) {
+          clearInterval(sessionTimerInterval);
+          sessionTimerInterval = null;
+        }
+
+        renderTrackingStatus();
+        updateTimerDisplay();
+        persistTrackingState();
+      } catch (error) {
+        console.warn('[Tracking] State restoration unavailable:', error);
+      } finally {
+        trackingStateHydrated = true;
+      }
+    }
+
     async function pauseMonitoring() {
       isMonitoring = false;
       isPaused = true;
       clearCaptureRetry();
       commitSessionTime();
       await stopNativeMonitoring();
-      document.getElementById('statStatus').textContent = 'Paused';
-      document.getElementById('statStatus').style.color = 'hsl(var(--summary-orange))';
-      const badge = document.getElementById('monitoringBadge');
-      if (badge) { badge.textContent = 'Paused'; badge.className = 'badge badge-default'; }
-      updatePlayButtonState();
+      renderTrackingStatus();
+      persistTrackingState();
       showToast('Tracking paused — time kept for today', 'success');
     }
 
@@ -4815,11 +5484,8 @@
       clearCaptureRetry();
       commitSessionTime();
       await stopNativeMonitoring();
-      document.getElementById('statStatus').textContent = 'Off';
-      document.getElementById('statStatus').style.color = '';
-      const badge = document.getElementById('monitoringBadge');
-      if (badge) { badge.textContent = 'Off'; badge.className = 'badge badge-default'; }
-      updatePlayButtonState();
+      renderTrackingStatus();
+      persistTrackingState();
       try {
         await invoke('stop_server');
         showToast('Tracking stopped', 'success');
@@ -4834,21 +5500,17 @@
       btn.disabled = true;
       btn.classList.add('loading-state');
       try {
-        const status = await invoke('check_ollama');
+        const status = await invoke('check_local_server');
         if (!status.online) {
-          isPaused = false;
           await startMonitoringFull();
           return;
         }
         await startNativeMonitoring();
         isMonitoring = true;
         isPaused = false;
-        document.getElementById('statStatus').textContent = 'On';
-        document.getElementById('statStatus').style.color = 'hsl(142.1 76.2% 36.3%)';
-        const badge = document.getElementById('monitoringBadge');
-        if (badge) { badge.textContent = 'On'; badge.className = 'badge badge-success'; }
         resumeSessionTimer();
-        updatePlayButtonState();
+        renderTrackingStatus();
+        persistTrackingState();
         showToast('Tracking resumed', 'success');
       } catch (e) {
         console.error('Resume failed:', e);
@@ -4909,16 +5571,16 @@
       // Jira
       if (localStorage.getItem('flowsight_jira_linked') === 'true') {
         try {
-          const profile = await invoke('fetch_jira_profile');
+          await invoke('fetch_jira_profile');
           linkedProviders.jira = true;
           const statusEl = document.getElementById('jiraLinkStatus');
           const btn = document.getElementById('linkJiraBtn');
           if (statusEl) statusEl.textContent = 'Linked';
           if (btn) btn.classList.add('button-success');
-          console.log('[Jira] Restored linked session for:', profile.display_name);
+          console.log('[Jira] Restored linked session');
           loadJiraTasks();
         } catch (e) {
-          console.log('[Jira] Saved link expired or invalid, clearing:', e);
+          console.log('[Jira] Saved link expired or invalid; clearing local status');
           localStorage.removeItem('flowsight_jira_linked');
           linkedProviders.jira = false;
         }
@@ -4936,7 +5598,7 @@
           console.log('[Linear] Restored linked session');
           loadLinearTasks();
         } catch (e) {
-          console.log('[Linear] Saved link expired or invalid, clearing:', e);
+          console.log('[Linear] Saved link expired or invalid; clearing local status');
           localStorage.removeItem('flowsight_linear_linked');
           linkedProviders.linear = false;
         }
@@ -4944,6 +5606,14 @@
     }
 
     // ===== TEAM FUNCTIONS =====
+    function setTeamStatus(label, value) {
+      const status = document.getElementById('teamStatus');
+      if (!status) return;
+      const strong = document.createElement('strong');
+      strong.textContent = String(value ?? '');
+      status.replaceChildren(document.createTextNode(`${label}: `), strong);
+    }
+
     async function loadUserTeams() {
       const select = document.getElementById('teamSelect');
       const group = document.getElementById('teamSelectorGroup');
@@ -4971,7 +5641,7 @@
           activeId = teams[0].team_id;
           try {
             await invoke('set_active_team', { teamId: activeId });
-            console.log('[Team] Auto-selected first team:', activeId);
+            console.log('[Team] Auto-selected the first available team');
           } catch (err) {
             console.error('[Team] Failed auto-select:', err);
           }
@@ -4989,12 +5659,11 @@
         group.style.display = 'block';
 
         // Update status
-        const statusEl = document.getElementById('teamStatus');
-        statusEl.innerHTML = `Active team: <strong>${activeId ? activeId.substring(0, 8) + '...' : 'none'}</strong>`;
+        setTeamStatus('Active team', activeId ? activeId.substring(0, 8) + '...' : 'none');
 
-        console.log('[Team] Loaded', teams.length, 'teams, active:', activeId);
+        console.log('[Team] Loaded', teams.length, 'team membership(s)');
       } catch (e) {
-        console.log('[Team] Could not load teams:', e);
+        console.log('[Team] Could not load team memberships');
         group.style.display = 'none';
       }
     }
@@ -5005,8 +5674,8 @@
       if (!teamId) return;
       try {
         await invoke('set_active_team', { teamId });
-        document.getElementById('teamStatus').innerHTML = `Active team: <strong>${teamId.substring(0, 8)}...</strong>`;
-        console.log('[Team] Switched active team to:', teamId);
+        setTeamStatus('Active team', teamId.substring(0, 8) + '...');
+        console.log('[Team] Switched the active team');
       } catch (err) {
         console.error('[Team] Failed to set active team:', err);
       }
@@ -5114,7 +5783,10 @@
 
     // ===== INTEGRATION LINK HANDLERS =====
     let linkedProviders = { jira: false, linear: false };
-    let currentTeamCode = localStorage.getItem('flowsight_team_code') || '';
+    // Invitation codes are bearer credentials. Remove the legacy plaintext
+    // browser-storage copy and keep any newly entered code in memory only.
+    localStorage.removeItem('flowsight_team_code');
+    let currentTeamCode = '';
 
     async function linkProvider(provider) {
       if (!requirePaidFeature('integrations', 'Jira and Linear require an Individual or Team license.')) {
@@ -5200,11 +5872,12 @@
       btn.disabled = true;
       btn.textContent = 'Joining...';
       statusEl.textContent = 'Validating code...';
+      document.getElementById('teamCodeInput').value = '';
 
       try {
         const result = await invoke('join_team', { token: code });
 
-        statusEl.innerHTML = `Joined team. ID: <strong>${result.team_id}</strong>`;
+        setTeamStatus('Joined team. ID', result.team_id);
         showToast('Successfully joined the team!', 'success');
 
         // Refresh teams dropdown
@@ -5221,7 +5894,7 @@
     // Load saved team code on init
     if (currentTeamCode) {
       document.getElementById('teamCodeInput').value = currentTeamCode;
-      document.getElementById('teamStatus').innerHTML = `Team code: <strong>${currentTeamCode}</strong>`;
+      setTeamStatus('Team code', currentTeamCode);
     }
 
     // ===== TASK LOADING FUNCTIONS =====
@@ -5230,7 +5903,7 @@
 
       try {
         const tasks = await invoke('fetch_jira_tasks');
-        console.log('[UI] Jira tasks:', tasks);
+        console.log('[UI] Loaded', tasks?.length || 0, 'Jira task(s)');
 
         // Clear existing options except first two
         while (select.options.length > 2) {
@@ -5253,7 +5926,7 @@
           localStorage.setItem('flowsight_jira_linked', 'true');
         }
       } catch (e) {
-        console.error('[UI] Failed to load Jira tasks:', e);
+        console.error('[UI] Failed to load Jira tasks');
         // Don't show error toast if just not linked
       }
     }
@@ -5263,7 +5936,7 @@
 
       try {
         const tasks = await invoke('fetch_linear_tasks');
-        console.log('[UI] Linear tasks:', tasks);
+        console.log('[UI] Loaded', tasks?.length || 0, 'Linear task(s)');
 
         if (tasks && tasks.length > 0) {
           tasks.forEach(task => {
@@ -5280,7 +5953,7 @@
           localStorage.setItem('flowsight_linear_linked', 'true');
         }
       } catch (e) {
-        console.error('[UI] Failed to load Linear tasks:', e);
+        console.error('[UI] Failed to load Linear tasks');
       }
     }
 
@@ -5304,6 +5977,7 @@
         authSession &&
         currentEntitlements &&
         currentEntitlements.can_cloud_ai &&
+        privacySettings?.cloudAiEnabled &&
         isPaidActive()
       );
     }
@@ -5328,6 +6002,10 @@
           title.textContent = 'Upgrade to Pro';
           text.textContent = 'Activate your Individual or Team license to chat with your AI coach.';
           btn.textContent = 'Activate license';
+        } else if (!privacySettings?.cloudAiEnabled) {
+          title.textContent = 'Cloud AI sharing is off';
+          text.textContent = 'Enable cloud AI in Profile > Privacy & data before sending messages or activity context.';
+          btn.textContent = 'Review privacy settings';
         } else {
           title.textContent = 'Pro feature';
           text.textContent = 'Your plan does not include the AI coach yet. Upgrade to Pro to continue.';
@@ -5369,11 +6047,12 @@
       }
 
       container.innerHTML = coachMessages.map((msg) => {
-        const body = msg.role === 'assistant'
+        const role = msg.role === 'assistant' ? 'assistant' : 'user';
+        const body = role === 'assistant'
           ? renderCoachMarkdown(msg.content)
           : escapeHtml(msg.content);
         return `
-          <div class="coach-msg ${msg.role}">
+          <div class="coach-msg ${role}">
             <div class="coach-msg-bubble">${body}</div>
           </div>`;
       }).join('');
@@ -5557,16 +6236,6 @@
       return escapeHtml(extractEnglishText(text));
     }
 
-    // ===== ORIGINAL FUNCTIONS =====
-    function getDeviceId() {
-      let id = localStorage.getItem('fsk_device_id');
-      if (!id) {
-        id = 'dev-' + Math.random().toString(36).substr(2, 9);
-        localStorage.setItem('fsk_device_id', id);
-      }
-      return id;
-    }
-
     function log(msg) {
       console.log("[Agent]", msg);
     }
@@ -5577,7 +6246,12 @@
       toast.className = `toast ${type}`;
 
       const icon = type === 'success' ? renderIcon('check', 14) : renderIcon('x', 14);
-      toast.innerHTML = `<span class="toast-icon">${icon}</span><span>${message}</span>`;
+      const iconElement = document.createElement('span');
+      iconElement.className = 'toast-icon';
+      iconElement.innerHTML = icon;
+      const messageElement = document.createElement('span');
+      messageElement.textContent = String(message ?? '');
+      toast.append(iconElement, messageElement);
 
       container.appendChild(toast);
 
@@ -5710,17 +6384,6 @@
       updateGoalUI();
     }
 
-    async function saveConfig() {
-      await invoke('update_config', {
-        config: {
-          devName: currentUser?.name || currentUser?.display_name || 'Guest',
-          captureInterval: 60000,
-          visionModel: 'FlowSight/local-vision'
-        }
-      });
-      console.log("[Config] vision model:", "FlowSight/local-vision");
-    }
-
     /** Rutas absolutas desde el backend (dirs / Known Folders); no usar placeholders tipo %LOCALAPPDATA%. */
     async function getFlowsightResolvedPaths() {
       try {
@@ -5809,7 +6472,7 @@
                 proc.managed &&
                 proc.alive
               ) {
-                const sniff = await invoke("check_ollama");
+                const sniff = await invoke("check_local_server");
                 if (!sniff.online) {
                   cpuFallbackDone = true;
                   showStep(
@@ -5822,7 +6485,7 @@
               }
             }
 
-            const status = await invoke("check_ollama");
+            const status = await invoke("check_local_server");
             if (status.online) {
               online = true;
               break;
@@ -5859,15 +6522,12 @@
 
         isMonitoring = true;
         isPaused = false;
-        document.getElementById('statStatus').textContent = 'On';
-        document.getElementById('statStatus').style.color = 'hsl(142.1 76.2% 36.3%)';
-        const badge = document.getElementById('monitoringBadge');
-        if (badge) { badge.textContent = 'On'; badge.className = 'badge badge-success'; }
 
         startSessionTimer();
-        updatePlayButtonState();
-        ollamaConfirmedOnline = true;
-        await checkOllama();
+        renderTrackingStatus();
+        persistTrackingState();
+        localServerConfirmedOnline = true;
+        await checkLocalServerHealth();
       } catch (e) {
         overlay.style.display = 'none';
         console.error("Start Failed:", e);
@@ -5884,7 +6544,7 @@
         await resumeMonitoring();
         return;
       }
-      await startMonitoringFull();
+      await startMonitoringWithNotice();
     };
 
     document.getElementById('pauseBtn').onclick = async () => {
@@ -5895,33 +6555,47 @@
       if (isMonitoring || isPaused) await stopMonitoring();
     };
 
-    let ollamaConfirmedOnline = false;
+    let localServerConfirmedOnline = false;
+    let localServerHealthInterval = null;
 
-    async function checkOllama() {
+    function stopLocalServerHealthPolling() {
+      if (!localServerHealthInterval) return;
+      clearInterval(localServerHealthInterval);
+      localServerHealthInterval = null;
+    }
+
+    function pollLocalServerUntilReady() {
+      if (localServerConfirmedOnline || localServerHealthInterval) return;
+      localServerHealthInterval = setInterval(checkLocalServerHealth, 30000);
+    }
+
+    async function checkLocalServerHealth() {
       try {
-        const status = await invoke('check_ollama'); // dynamic 127.0.0.1:<port>/health
+        const status = await invoke('check_local_server'); // dynamic 127.0.0.1:<port>/health
         const dot = document.getElementById('ollamaDot');
         const txt = document.getElementById('ollamaStatus');
         if (status.online) {
           dot.className = 'status-dot active';
           txt.textContent = 'Local Server Ready';
-          ollamaConfirmedOnline = true; // Stop polling once confirmed
+          localServerConfirmedOnline = true;
+          stopLocalServerHealthPolling();
         } else {
           dot.className = 'status-dot';
           txt.textContent = 'Server Offline';
-          ollamaConfirmedOnline = false;
+          localServerConfirmedOnline = false;
+          pollLocalServerUntilReady();
         }
       } catch (e) {
         console.error(e);
-        ollamaConfirmedOnline = false;
+        localServerConfirmedOnline = false;
+        pollLocalServerUntilReady();
       }
     }
-    // Check every 30s instead of 5s, and stop once confirmed online
-    setInterval(checkOllama, 30000);
 
     async function initMainApp() {
       await loadConfig();
-      await checkOllama();
+      await restoreTrackingSession();
+      await checkLocalServerHealth();
       updateGoalUI();
       refreshTodayView();
       if (todayRefreshInterval) clearInterval(todayRefreshInterval);
@@ -6295,6 +6969,233 @@
       showOnboardingWizard(true);
     });
 
+    const PRIVACY_NOTICE_VERSION = '2026-08-23';
+    let privacySettings = null;
+    let pendingMonitoringStart = false;
+
+    function renderPrivacySettings() {
+      const settings = privacySettings || {};
+      const syncToggle = document.getElementById('cloudSyncToggle');
+      const aiToggle = document.getElementById('cloudAiToggle');
+      const titlesToggle = document.getElementById('windowTitlesToggle');
+      const excludedApps = document.getElementById('excludedAppsInput');
+      const retention = document.getElementById('retentionDaysSelect');
+      const deleteAccount = document.getElementById('deleteCloudAccountBtn');
+      if (syncToggle) {
+        syncToggle.checked = Boolean(settings.cloudSyncEnabled);
+        syncToggle.disabled = !authSession || !currentEntitlements?.can_sync;
+      }
+      if (aiToggle) {
+        aiToggle.checked = Boolean(settings.cloudAiEnabled);
+        aiToggle.disabled = !authSession || !currentEntitlements?.can_cloud_ai;
+      }
+      if (titlesToggle) titlesToggle.checked = Boolean(settings.storeWindowTitles);
+      if (excludedApps) excludedApps.value = (settings.excludedApplications || []).join('\n');
+      if (retention) retention.value = String(settings.retentionDays || 30);
+      if (deleteAccount) deleteAccount.style.display = authSession ? '' : 'none';
+
+      const syncStatus = document.getElementById('cloudSyncStatus');
+      const aiStatus = document.getElementById('cloudAiStatus');
+      if (syncStatus) {
+        syncStatus.textContent = settings.cloudSyncEnabled
+          ? 'On — aggregate summaries are sent to your FlowSight Cloud account.'
+          : 'Off — activity stays on this device.';
+      }
+      if (aiStatus) {
+        aiStatus.textContent = settings.cloudAiEnabled
+          ? 'On — coach data is processed by FlowSight and Azure OpenAI; cloud-generated individual reports may use OpenRouter and its selected model provider.'
+          : 'Off — the AI coach cannot receive activity or messages.';
+      }
+      updateCoachLockState();
+    }
+
+    async function loadPrivacySettings() {
+      try {
+        privacySettings = await invoke('get_privacy_settings');
+      } catch (_) {
+        privacySettings = {
+          monitoringNoticeAcknowledged: false,
+          cloudSyncEnabled: false,
+          cloudAiEnabled: false,
+          storeWindowTitles: false,
+          excludedApplications: ['1Password', 'Bitwarden', 'KeePass', 'KeePassXC', 'CredentialUIBroker'],
+          retentionDays: 30,
+        };
+      }
+      renderPrivacySettings();
+      return privacySettings;
+    }
+
+    async function applyPrivacyPatch(patch) {
+      privacySettings = await invoke('update_privacy_settings', { patch });
+      renderPrivacySettings();
+      return privacySettings;
+    }
+
+    function showPrivacyNotice() {
+      const overlay = document.getElementById('privacyNoticeOverlay');
+      overlay?.classList.add('visible');
+      overlay?.setAttribute('aria-hidden', 'false');
+    }
+
+    function hidePrivacyNotice() {
+      const overlay = document.getElementById('privacyNoticeOverlay');
+      overlay?.classList.remove('visible');
+      overlay?.setAttribute('aria-hidden', 'true');
+    }
+
+    function showMonitoringNotice() {
+      const overlay = document.getElementById('monitoringNoticeOverlay');
+      overlay?.classList.add('visible');
+      overlay?.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideMonitoringNotice() {
+      const overlay = document.getElementById('monitoringNoticeOverlay');
+      overlay?.classList.remove('visible');
+      overlay?.setAttribute('aria-hidden', 'true');
+    }
+
+    async function startMonitoringWithNotice() {
+      if (!privacySettings) await loadPrivacySettings();
+      if (privacySettings?.monitoringNoticeAcknowledged && privacySettings?.noticeVersion === PRIVACY_NOTICE_VERSION) {
+        await startMonitoringFull();
+        return;
+      }
+      pendingMonitoringStart = true;
+      showMonitoringNotice();
+    }
+
+    document.getElementById('monitoringNoticeCancelBtn')?.addEventListener('click', () => {
+      pendingMonitoringStart = false;
+      hideMonitoringNotice();
+    });
+    document.getElementById('monitoringNoticeAcceptBtn')?.addEventListener('click', async () => {
+      const button = document.getElementById('monitoringNoticeAcceptBtn');
+      if (button) button.disabled = true;
+      try {
+        await applyPrivacyPatch({ monitoringNoticeAcknowledged: true });
+        hideMonitoringNotice();
+        if (pendingMonitoringStart) await startMonitoringFull();
+      } catch (error) {
+        showToast('Could not save the privacy acknowledgement: ' + error, 'error');
+      } finally {
+        pendingMonitoringStart = false;
+        if (button) button.disabled = false;
+      }
+    });
+
+    document.getElementById('viewPrivacyNoticeBtn')?.addEventListener('click', showPrivacyNotice);
+    document.getElementById('loginPrivacyNoticeBtn')?.addEventListener('click', showPrivacyNotice);
+    document.getElementById('privacyNoticeCloseBtn')?.addEventListener('click', hidePrivacyNotice);
+    document.getElementById('privacyNoticeOverlay')?.addEventListener('click', (event) => {
+      if (event.target.id === 'privacyNoticeOverlay') hidePrivacyNotice();
+    });
+
+    document.getElementById('cloudSyncToggle')?.addEventListener('change', async (event) => {
+      const enabled = event.target.checked;
+      try {
+        if (enabled && (!authSession || !currentEntitlements?.can_sync)) {
+          throw new Error('Sign in with a plan that includes cloud sync first.');
+        }
+        await applyPrivacyPatch({ cloudSyncEnabled: enabled });
+        showToast(enabled ? 'Cloud activity sync enabled' : 'Cloud activity sync disabled', 'success');
+      } catch (error) {
+        renderPrivacySettings();
+        showToast(String(error), 'error');
+      }
+    });
+
+    document.getElementById('cloudAiToggle')?.addEventListener('change', async (event) => {
+      const enabled = event.target.checked;
+      try {
+        if (enabled && (!authSession || !currentEntitlements?.can_cloud_ai)) {
+          throw new Error('Sign in with a plan that includes the cloud AI coach first.');
+        }
+        await applyPrivacyPatch({ cloudAiEnabled: enabled });
+        showToast(enabled ? 'Cloud AI sharing enabled' : 'Cloud AI sharing disabled', 'success');
+      } catch (error) {
+        renderPrivacySettings();
+        showToast(String(error), 'error');
+      }
+    });
+
+    document.getElementById('windowTitlesToggle')?.addEventListener('change', async (event) => {
+      try {
+        await applyPrivacyPatch({ storeWindowTitles: event.target.checked });
+        showToast(event.target.checked ? 'Window titles will be stored locally' : 'Stored window titles removed', 'success');
+      } catch (error) {
+        renderPrivacySettings();
+        showToast(String(error), 'error');
+      }
+    });
+
+    document.getElementById('excludedAppsInput')?.addEventListener('change', async (event) => {
+      const excludedApplications = event.target.value
+        .split(/[\n,]+/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+      try {
+        await applyPrivacyPatch({ excludedApplications });
+        showToast('Excluded applications updated', 'success');
+      } catch (error) {
+        renderPrivacySettings();
+        showToast(String(error), 'error');
+      }
+    });
+
+    document.getElementById('retentionDaysSelect')?.addEventListener('change', async (event) => {
+      try {
+        await applyPrivacyPatch({ retentionDays: Number(event.target.value) });
+        showToast('Local retention updated and enforced', 'success');
+        await refreshTodayView();
+      } catch (error) {
+        renderPrivacySettings();
+        showToast(String(error), 'error');
+      }
+    });
+
+    document.getElementById('exportPersonalDataBtn')?.addEventListener('click', async () => {
+      const button = document.getElementById('exportPersonalDataBtn');
+      if (button) button.disabled = true;
+      try {
+        const path = await invoke('export_personal_data', { includeCloud: Boolean(authSession) });
+        showToast('Data export saved to Downloads', 'success', 5000);
+        await invoke('open_path_in_file_manager', { path }).catch(() => {});
+      } catch (error) {
+        showToast('Data export failed: ' + error, 'error', 7000);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+
+    document.getElementById('deleteLocalDataBtn')?.addEventListener('click', async () => {
+      const confirmation = window.prompt('This permanently erases local activity, preferences, chat history, credentials, and logs. Type DELETE to continue.');
+      if (confirmation !== 'DELETE') return;
+      try {
+        await stopNativeMonitoring();
+        await signOutWorker().catch(() => {});
+        await invoke('delete_local_data', { confirmation });
+        localStorage.clear();
+        window.location.reload();
+      } catch (error) {
+        showToast('Local erasure failed: ' + error, 'error', 7000);
+      }
+    });
+
+    document.getElementById('deleteCloudAccountBtn')?.addEventListener('click', async () => {
+      const confirmation = window.prompt('This permanently deletes your FlowSight cloud account and its personal data, then erases this device. Type DELETE to continue.');
+      if (confirmation !== 'DELETE') return;
+      try {
+        await invoke('delete_cloud_account', { confirmation });
+        await signOutWorker().catch(() => {});
+        localStorage.clear();
+        window.location.reload();
+      } catch (error) {
+        showToast('Account deletion failed: ' + error, 'error', 8000);
+      }
+    });
+
     let analyticsConsent = null;
     let analyticsConsentBusy = false;
 
@@ -6313,8 +7214,8 @@
       toggle.checked = Boolean(analyticsConsent.consented);
       toggle.indeterminate = false;
       status.textContent = analyticsConsent.consented
-        ? 'Anonymous usage data is shared to help improve FlowSight. You can turn this off anytime.'
-        : 'Anonymous usage data is not shared. FlowSight remains fully local.';
+        ? 'Pseudonymous usage data is shared to improve FlowSight. You can withdraw at any time.'
+        : 'Product analytics is not shared.';
     }
 
     async function loadAnalyticsConsent() {
@@ -6361,7 +7262,7 @@
             showToast('Thanks for helping improve FlowSight', 'success');
           }
         } else if (!fromFirstLaunch) {
-          showToast('Anonymous analytics turned off', 'success');
+          showToast('Pseudonymous analytics turned off', 'success');
         }
         if (fromFirstLaunch) {
           await promptOnboardingIfNeeded();
@@ -6442,6 +7343,7 @@
       await loadUserPreferences();
       showMainApp();
       await restoreCloudSession();
+      await loadPrivacySettings();
       await initMainApp();
       await loadAnalyticsConsent();
       const waitingForConsent = await promptAnalyticsConsentIfNeeded();
@@ -6633,15 +7535,20 @@
       'hsl(var(--summary-magenta))',
       'hsl(var(--summary-blue))',
       'hsl(var(--summary-teal))',
-      'hsl(142 60% 45%)',
-      'hsl(45 90% 50%)',
+      'hsl(142 65% 30%)',
+      'hsl(35 95% 32%)',
     ];
 
     function switchTab(tabId) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => {
+        n.classList.remove('active');
+        n.removeAttribute('aria-current');
+      });
       document.getElementById(tabId)?.classList.add('active');
-      document.querySelector(`.nav-item[data-tab="${tabId}"]`)?.classList.add('active');
+      const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+      activeNavItem?.classList.add('active');
+      activeNavItem?.setAttribute('aria-current', 'page');
       if (tabId === 'tabSummary') loadHistory();
       if (tabId === 'tabCloudInsights') loadCoachChat();
       if (tabId === 'tabToday') refreshTodayView();
@@ -7289,33 +8196,10 @@
         showToast('Generate a report first', 'error');
         return;
       }
-      const { doc, filename } = buildStatusReportPdf(payload, currentHistoryData, currentWeekData);
+      const { doc, filename } = await buildStatusReportPdf(payload, currentHistoryData, currentWeekData);
       const bytes = Array.from(new Uint8Array(doc.output('arraybuffer')));
       const savedPath = await invoke('save_pdf_to_downloads', { filename, bytes });
       showPdfDownloadModal(savedPath, filename);
-    }
-
-    function renderBreakdown(items, typeKey) {
-      if (!items || items.length === 0) return '';
-      items.sort((a, b) => b.total_seconds - a.total_seconds);
-      const max = items[0].total_seconds;
-      return items.map(item => {
-        const label = typeKey === 'category' ? item.category : item.ticket;
-        const percent = Math.round((item.total_seconds / max) * 100);
-        const mins = Math.round(item.total_seconds / 60);
-        return `
-          <div class="breakdown-item">
-            <div style="flex: 1;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                <span>${label}</span>
-                <span>${mins} min</span>
-              </div>
-              <div class="breakdown-bar">
-                <div class="breakdown-fill" style="width: ${percent}%"></div>
-              </div>
-            </div>
-          </div>`;
-      }).join('');
     }
 
     async function loadHistory() {
@@ -7329,7 +8213,11 @@
         currentWeekData = week;
         renderHistory(history, week);
       } catch (e) {
-        summaryBody.innerHTML = `<div class="empty-state" style="color:hsl(var(--destructive))">Failed to load summary: ${e}</div>`;
+        const errorState = document.createElement('div');
+        errorState.className = 'empty-state';
+        errorState.style.color = 'hsl(var(--destructive))';
+        errorState.textContent = `Failed to load summary: ${String(e)}`;
+        summaryBody.replaceChildren(errorState);
       }
     }
 
@@ -7559,7 +8447,8 @@
       return y + blockH + 8;
     }
 
-    function buildStatusReportPdf(payload, todayData, weekData) {
+    async function buildStatusReportPdf(payload, todayData, weekData) {
+      const { jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       const report = payload?.report || {};
       const meta = report.report_meta || {};
@@ -7750,11 +8639,13 @@
     };
 
     manualLoginBtn.onclick = async () => {
-      const code = document.getElementById('manualCodeInput').value.trim();
+      const codeInput = document.getElementById('manualCodeInput');
+      const code = codeInput.value.trim();
       if (!code) {
         showToast("Please enter a valid code", "error");
         return;
       }
+      codeInput.value = '';
 
       manualLoginBtn.disabled = true;
       manualLoginBtn.textContent = "Verifying...";
