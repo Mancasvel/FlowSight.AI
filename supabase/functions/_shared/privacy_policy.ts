@@ -18,6 +18,8 @@ export const PRIVACY_EXPORT_SOURCES: PrivacyExportSource[] = [
   { table: "team_members", column: "user_id" },
   { table: "work_sessions", column: "user_id" },
   { table: "activity_reports", column: "user_id" },
+  { table: "mobile_activity_events", column: "user_id" },
+  { table: "devices", column: "user_id" },
   { table: "cloud_insights", column: "user_id" },
   { table: "prompt_usage", column: "user_id" },
   { table: "privacy_preferences", column: "user_id" },
