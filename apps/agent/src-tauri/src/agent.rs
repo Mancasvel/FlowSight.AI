@@ -71,6 +71,7 @@ impl FlowSightAgent {
 
         agent.init_db();
         agent.load_config();
+        crate::focus_alerts::set_enabled(crate::desktop_presence::focus_alerts_enabled());
         if let Err(error) = crate::privacy::enforce_local_retention(&agent.db_path) {
             log::warn!("[Privacy] Local retention enforcement failed: {error}");
         }
@@ -392,6 +393,7 @@ pub fn get_status(state: State<'_, AgentState>) -> Result<serde_json::Value, Str
 pub fn start_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
     let db_path = crate::paths::db_path()?;
     crate::privacy::require_monitoring_acknowledgement(&db_path)?;
+    crate::focus_alerts::start_monitoring(&db_path);
     if let Some(a) = state.lock().unwrap().as_mut() {
         a.is_running = true;
     }
@@ -401,6 +403,7 @@ pub fn start_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn stop_monitoring(state: State<'_, AgentState>) -> Result<bool, String> {
+    crate::focus_alerts::stop_monitoring();
     if let Some(a) = state.lock().unwrap().as_mut() {
         a.is_running = false;
     }

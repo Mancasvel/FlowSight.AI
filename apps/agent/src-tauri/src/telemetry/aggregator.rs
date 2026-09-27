@@ -177,6 +177,12 @@ fn persist_and_emit(
         observed_at_utc,
     ) {
         Some(id) => {
+            crate::focus_alerts::review_browsing_report(
+                app_handle,
+                db_path,
+                &category,
+                duration_seconds,
+            );
             let _ = app_handle.emit(
                 "activity-report",
                 serde_json::json!({

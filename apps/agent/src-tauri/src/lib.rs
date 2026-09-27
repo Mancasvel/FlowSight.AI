@@ -5,7 +5,9 @@ mod auth;
 mod coach_chat;
 pub mod context;
 mod crash_guard;
+mod desktop_presence;
 mod entitlements;
+mod focus_alerts;
 mod focus_semantics;
 mod insights_local;
 mod jira;
@@ -42,7 +44,17 @@ pub fn run() {
     // never the whole process. See `crash_guard` module docs.
     crash_guard::install();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }));
+
+    builder
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![
             initialize_agent,
@@ -104,6 +116,11 @@ pub fn run() {
             paths::get_flowsight_user_paths,
             paths::save_pdf_to_downloads,
             paths::open_path_in_file_manager,
+            desktop_presence::get_desktop_preferences,
+            desktop_presence::set_launch_at_login,
+            desktop_presence::set_start_monitoring_at_login,
+            desktop_presence::set_focus_alerts_enabled,
+            desktop_presence::dismiss_desktop_prompt,
         ])
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
@@ -117,6 +134,13 @@ pub fn run() {
                 app.handle().plugin(tauri_plugin_process::init())?;
                 app.handle()
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
+                app.handle().plugin(
+                    tauri_plugin_autostart::Builder::new()
+                        .arg("--flowsight-autostart")
+                        .build(),
+                )?;
+                app.handle().plugin(tauri_plugin_notification::init())?;
+                desktop_presence::setup_tray(app)?;
             }
 
             // Log a archivo en TODOS los builds. En release el usuario no ve stderr,
@@ -137,6 +161,17 @@ pub fn run() {
                     .build(),
             )?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if window.label() == "main" && desktop_presence::should_hide_on_close() {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+            #[cfg(not(desktop))]
+            let _ = (window, event);
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

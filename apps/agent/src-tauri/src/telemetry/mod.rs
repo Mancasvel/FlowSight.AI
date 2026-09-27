@@ -140,6 +140,7 @@ pub fn start(app_handle: tauri::AppHandle, db_path: PathBuf, initial_interval_ms
     ));
 
     foreground::spawn(
+        app_handle.clone(),
         ring.clone(),
         running.clone(),
         privacy_blocked.clone(),

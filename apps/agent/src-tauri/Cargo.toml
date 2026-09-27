@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "3.7.0"
+version = "4.0.0"
 description = "FlowSight Agent — Understand your own Workflows"
 authors = ["you"]
 license = ""
@@ -15,7 +15,7 @@ name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6", features = [] }
+tauri-build = { version = "=2.6.3", features = [] }
 
 [dev-dependencies]
 temp-env = "0.3"
@@ -25,7 +25,7 @@ tempfile = "3"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11", features = [] }
+tauri = { version = "=2.11.5", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 screenshots = "0.8"
 base64 = "0.22"
@@ -48,6 +48,9 @@ uuid = { version = "1", features = ["v4"] }
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-autostart = "=2.5.1"
+tauri-plugin-notification = "=2.3.3"
+tauri-plugin-single-instance = "=2.3.5"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
