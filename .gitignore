@@ -27,6 +27,7 @@ Cargo.lock
 # Build outputs
 # ================================
 dist/
+.impeccable/review/
 dist-electron/
 **/dist/
 *.exe

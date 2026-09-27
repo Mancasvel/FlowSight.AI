@@ -1,0 +1,447 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-27T22:41:45Z",
+  "title": "Design System: FlowSight Desktop Renderer",
+  "extensions": {
+    "colorMeta": {
+      "canvas-light": {
+        "role": "neutral",
+        "displayName": "Light Gridded Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.008 215)",
+          "oklch(27% 0.008 215)",
+          "oklch(39% 0.008 215)",
+          "oklch(51% 0.008 215)",
+          "oklch(63% 0.008 215)",
+          "oklch(75% 0.008 215)",
+          "oklch(86% 0.008 215)",
+          "oklch(95% 0.008 215)"
+        ]
+      },
+      "canvas-dark": {
+        "role": "neutral",
+        "displayName": "Dark Gridded Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.025 215)",
+          "oklch(27% 0.025 215)",
+          "oklch(39% 0.025 215)",
+          "oklch(51% 0.025 215)",
+          "oklch(63% 0.025 215)",
+          "oklch(75% 0.025 215)",
+          "oklch(86% 0.025 215)",
+          "oklch(95% 0.025 215)"
+        ]
+      },
+      "surface-light": {
+        "role": "neutral",
+        "displayName": "White Surface",
+        "tonalRamp": [
+          "oklch(15% 0.004 215)",
+          "oklch(27% 0.004 215)",
+          "oklch(39% 0.004 215)",
+          "oklch(51% 0.004 215)",
+          "oklch(63% 0.004 215)",
+          "oklch(75% 0.004 215)",
+          "oklch(86% 0.004 215)",
+          "oklch(95% 0.004 215)"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Deep Slate Surface",
+        "tonalRamp": [
+          "oklch(15% 0.026 215)",
+          "oklch(27% 0.026 215)",
+          "oklch(39% 0.026 215)",
+          "oklch(51% 0.026 215)",
+          "oklch(63% 0.026 215)",
+          "oklch(75% 0.026 215)",
+          "oklch(86% 0.026 215)",
+          "oklch(95% 0.026 215)"
+        ]
+      },
+      "slate-ink-light": {
+        "role": "neutral",
+        "displayName": "Slate Reading Ink",
+        "tonalRamp": [
+          "oklch(15% 0.035 225)",
+          "oklch(27% 0.035 225)",
+          "oklch(39% 0.035 225)",
+          "oklch(51% 0.035 225)",
+          "oklch(63% 0.035 225)",
+          "oklch(75% 0.035 225)",
+          "oklch(86% 0.035 225)",
+          "oklch(95% 0.035 225)"
+        ]
+      },
+      "slate-ink-dark": {
+        "role": "neutral",
+        "displayName": "Inverted Slate Ink",
+        "tonalRamp": [
+          "oklch(15% 0.026 205)",
+          "oklch(27% 0.026 205)",
+          "oklch(39% 0.026 205)",
+          "oklch(51% 0.026 205)",
+          "oklch(63% 0.026 205)",
+          "oklch(75% 0.026 205)",
+          "oklch(86% 0.026 205)",
+          "oklch(95% 0.026 205)"
+        ]
+      },
+      "muted-text-light": {
+        "role": "neutral",
+        "displayName": "Supporting Slate Text",
+        "tonalRamp": [
+          "oklch(15% 0.028 220)",
+          "oklch(27% 0.028 220)",
+          "oklch(39% 0.028 220)",
+          "oklch(51% 0.028 220)",
+          "oklch(63% 0.028 220)",
+          "oklch(75% 0.028 220)",
+          "oklch(86% 0.028 220)",
+          "oklch(95% 0.028 220)"
+        ]
+      },
+      "muted-text-dark": {
+        "role": "neutral",
+        "displayName": "Supporting Dark Text",
+        "tonalRamp": [
+          "oklch(15% 0.026 205)",
+          "oklch(27% 0.026 205)",
+          "oklch(39% 0.026 205)",
+          "oklch(51% 0.026 205)",
+          "oklch(63% 0.026 205)",
+          "oklch(75% 0.026 205)",
+          "oklch(86% 0.026 205)",
+          "oklch(95% 0.026 205)"
+        ]
+      },
+      "border-light": {
+        "role": "neutral",
+        "displayName": "Light Panel Border",
+        "tonalRamp": [
+          "oklch(15% 0.018 210)",
+          "oklch(27% 0.018 210)",
+          "oklch(39% 0.018 210)",
+          "oklch(51% 0.018 210)",
+          "oklch(63% 0.018 210)",
+          "oklch(75% 0.018 210)",
+          "oklch(86% 0.018 210)",
+          "oklch(95% 0.018 210)"
+        ]
+      },
+      "border-dark": {
+        "role": "neutral",
+        "displayName": "Dark Panel Border",
+        "tonalRamp": [
+          "oklch(15% 0.025 205)",
+          "oklch(27% 0.025 205)",
+          "oklch(39% 0.025 205)",
+          "oklch(51% 0.025 205)",
+          "oklch(63% 0.025 205)",
+          "oklch(75% 0.025 205)",
+          "oklch(86% 0.025 205)",
+          "oklch(95% 0.025 205)"
+        ]
+      },
+      "grid-line-light": {
+        "role": "neutral",
+        "displayName": "Light Grid Line",
+        "tonalRamp": [
+          "oklch(15% 0.018 215)",
+          "oklch(27% 0.018 215)",
+          "oklch(39% 0.018 215)",
+          "oklch(51% 0.018 215)",
+          "oklch(63% 0.018 215)",
+          "oklch(75% 0.018 215)",
+          "oklch(86% 0.018 215)",
+          "oklch(95% 0.018 215)"
+        ]
+      },
+      "grid-line-dark": {
+        "role": "neutral",
+        "displayName": "Dark Grid Line",
+        "tonalRamp": [
+          "oklch(15% 0.018 205)",
+          "oklch(27% 0.018 205)",
+          "oklch(39% 0.018 205)",
+          "oklch(51% 0.018 205)",
+          "oklch(63% 0.018 205)",
+          "oklch(75% 0.018 205)",
+          "oklch(86% 0.018 205)",
+          "oklch(95% 0.018 205)"
+        ]
+      },
+      "teal-primary": {
+        "role": "primary",
+        "displayName": "Signal Teal",
+        "tonalRamp": [
+          "oklch(15% 0.130 178)",
+          "oklch(27% 0.130 178)",
+          "oklch(39% 0.130 178)",
+          "oklch(51% 0.130 178)",
+          "oklch(63% 0.130 178)",
+          "oklch(75% 0.130 178)",
+          "oklch(86% 0.130 178)",
+          "oklch(95% 0.130 178)"
+        ]
+      },
+      "teal-progress": {
+        "role": "primary",
+        "displayName": "Progress Teal",
+        "tonalRamp": [
+          "oklch(15% 0.130 178)",
+          "oklch(27% 0.130 178)",
+          "oklch(39% 0.130 178)",
+          "oklch(51% 0.130 178)",
+          "oklch(63% 0.130 178)",
+          "oklch(75% 0.130 178)",
+          "oklch(86% 0.130 178)",
+          "oklch(95% 0.130 178)"
+        ]
+      },
+      "teal-soft": {
+        "role": "primary",
+        "displayName": "Soft Teal",
+        "tonalRamp": [
+          "oklch(15% 0.045 178)",
+          "oklch(27% 0.045 178)",
+          "oklch(39% 0.045 178)",
+          "oklch(51% 0.045 178)",
+          "oklch(63% 0.045 178)",
+          "oklch(75% 0.045 178)",
+          "oklch(86% 0.045 178)",
+          "oklch(95% 0.045 178)"
+        ]
+      },
+      "teal-active-dark": {
+        "role": "primary",
+        "displayName": "Dark Active Teal",
+        "tonalRamp": [
+          "oklch(15% 0.130 178)",
+          "oklch(27% 0.130 178)",
+          "oklch(39% 0.130 178)",
+          "oklch(51% 0.130 178)",
+          "oklch(63% 0.130 178)",
+          "oklch(75% 0.130 178)",
+          "oklch(86% 0.130 178)",
+          "oklch(95% 0.130 178)"
+        ]
+      },
+      "action-indigo": {
+        "role": "secondary",
+        "displayName": "Action Indigo",
+        "tonalRamp": [
+          "oklch(15% 0.160 275)",
+          "oklch(27% 0.160 275)",
+          "oklch(39% 0.160 275)",
+          "oklch(51% 0.160 275)",
+          "oklch(63% 0.160 275)",
+          "oklch(75% 0.160 275)",
+          "oklch(86% 0.160 275)",
+          "oklch(95% 0.160 275)"
+        ]
+      },
+      "action-teal": {
+        "role": "secondary",
+        "displayName": "Action Teal",
+        "tonalRamp": [
+          "oklch(15% 0.130 182)",
+          "oklch(27% 0.130 182)",
+          "oklch(39% 0.130 182)",
+          "oklch(51% 0.130 182)",
+          "oklch(63% 0.130 182)",
+          "oklch(75% 0.130 182)",
+          "oklch(86% 0.130 182)",
+          "oklch(95% 0.130 182)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Measured Display",
+        "purpose": "Centered elapsed time in the Today surface."
+      },
+      "headline": {
+        "displayName": "Screen Headline",
+        "purpose": "Today, Insights, and You headings."
+      },
+      "title": {
+        "displayName": "Card Title",
+        "purpose": "Card and section headings."
+      },
+      "body": {
+        "displayName": "Reading Text",
+        "purpose": "Explanations, controls, and dense settings."
+      },
+      "label": {
+        "displayName": "Teal Kicker",
+        "purpose": "Short uppercase section cues."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-lift",
+        "value": "0 8px 28px rgb(30 53 68 / 0.045)",
+        "purpose": "Low ambient lift for ordinary surfaces."
+      },
+      {
+        "name": "dock-lift",
+        "value": "0 18px 36px rgb(40 67 86 / 0.13), 0 3px 9px rgb(40 67 86 / 0.06)",
+        "purpose": "Keeps the four-tab dock above scrolling content."
+      },
+      {
+        "name": "consent-lift",
+        "value": "0 20px 56px rgb(23 50 64 / 0.2)",
+        "purpose": "Defines a blocking privacy decision above its dimmed background."
+      }
+    ],
+    "motion": [
+      {
+        "name": "tracking-feedback",
+        "value": "0.16s ease",
+        "purpose": "Brightness, shadow, and one-pixel lift on the main tracking control; reduced motion removes this transition."
+      },
+      {
+        "name": "progress-fill",
+        "value": "0.3s ease-out",
+        "purpose": "Linear goal rail fill; reduced motion removes this transition."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-window",
+        "value": "380px"
+      },
+      {
+        "name": "wide-window",
+        "value": "600px"
+      },
+      {
+        "name": "short-window-height",
+        "value": "520px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid teal confirmation for routine affirmative actions.",
+      "html": "<button class=\"ds-primary-button\" type=\"button\">Activate</button>",
+      "css": ".ds-primary-button{min-height:38px;display:inline-flex;align-items:center;justify-content:center;padding:8px 13px;border:1px solid #17ada3;border-radius:11px;background:#1ab5aa;color:#fff;font:700 11px/1.3 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;transition:background-color .16s ease}.ds-primary-button:hover:not(:disabled){background:#0a978d}.ds-primary-button:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}.ds-primary-button:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Pale bordered companion to a primary decision.",
+      "html": "<button class=\"ds-secondary-button\" type=\"button\">Cancel</button>",
+      "css": ".ds-secondary-button{min-height:38px;display:inline-flex;align-items:center;justify-content:center;padding:8px 13px;border:1px solid #d9e6e9;border-radius:11px;background:#f7fbfa;color:#2b5961;font:700 11px/1.3 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;transition:background-color .16s ease}.ds-secondary-button:hover:not(:disabled){background:#e9f8f5}.ds-secondary-button:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(prefers-color-scheme:dark){.ds-secondary-button{border-color:#3c625f;background:#204341;color:#b2efe4}.ds-secondary-button:hover:not(:disabled){background:#244c48}}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Teal text action for a lower-priority control.",
+      "html": "<button class=\"ds-ghost-button\" type=\"button\">Read privacy notice</button>",
+      "css": ".ds-ghost-button{min-height:38px;display:inline-flex;align-items:center;justify-content:center;padding:8px 13px;border:0;border-radius:11px;background:transparent;color:#147d76;font:700 11px/1.3 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;transition:background-color .16s ease}.ds-ghost-button:hover:not(:disabled){background:#eaf8f6}.ds-ghost-button:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(prefers-color-scheme:dark){.ds-ghost-button{color:#9ce6db}.ds-ghost-button:hover:not(:disabled){background:#244c48}}"
+    },
+    {
+      "name": "Tracking Action",
+      "kind": "button",
+      "refersTo": "button-tracking",
+      "description": "The prominent indigo-to-teal action inside the Today timer; selected first-run controls reuse it.",
+      "html": "<button class=\"ds-tracking-button\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 5v14l11-7z\"/></svg>Start tracking</button>",
+      "css": ".ds-tracking-button{width:100%;height:52px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:0 16px;border:1px solid rgb(255 255 255 / .6);border-radius:16px;background:var(--fs-action,linear-gradient(104deg,#7a7cf1 0%,#529ccc 56%,#2cbdb4 100%));color:#fff;box-shadow:0 9px 22px rgb(49 168 182 / .17),inset 0 1px 0 rgb(255 255 255 / .2);font:800 14px/1.2 \"Plus Jakarta Sans\", sans-serif;letter-spacing:-.015em;cursor:pointer;transition:filter .16s ease,box-shadow .16s ease,transform .16s ease}.ds-tracking-button svg{width:18px;height:18px}.ds-tracking-button:hover:not(:disabled){filter:brightness(1.04);transform:translateY(-1px);box-shadow:0 12px 24px rgb(49 168 182 / .22)}.ds-tracking-button:active:not(:disabled){transform:translateY(0)}.ds-tracking-button:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}.ds-tracking-button:disabled{opacity:.56;box-shadow:none}@media(prefers-reduced-motion:reduce){.ds-tracking-button{transition:none}}"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Cool bordered field with a teal focus ring.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-current-task\">Current task</label><input class=\"ds-input\" id=\"ds-current-task\" placeholder=\"What are you working on?\">",
+      "css": ".ds-field-label{display:block;margin-bottom:7px;color:#425267;font:700 11px/1.3 \"Plus Jakarta Sans\", sans-serif}.ds-input{width:100%;min-height:39px;padding:8px 11px;border:1px solid #d9e4e9;border-radius:11px;background:#fff;color:#34445a;box-shadow:none;font:400 12px/1.5 \"Plus Jakarta Sans\", sans-serif;caret-color:#28b9ad}.ds-input::placeholder{color:#8393a4}.ds-input:focus{border-color:#28b9ad;box-shadow:0 0 0 3px rgb(0 184 169 / .13)}.ds-input:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(prefers-color-scheme:dark){.ds-field-label{color:#d5e5e8}.ds-input{border-color:#39545e;background:#213742;color:#ecf4f3}.ds-input::placeholder{color:#aebfc8}}"
+    },
+    {
+      "name": "Standard Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Softly lifted white surface for settings and supporting evidence.",
+      "html": "<section class=\"ds-card\"><h3 class=\"ds-card-title\">Work preferences</h3><p class=\"ds-card-copy\">Choose how FlowSight fits the way you work.</p></section>",
+      "css": ".ds-card{padding:20px;border:1px solid rgb(227 236 240 / .9);border-radius:20px;background:rgb(255 255 255 / .97);color:#303c50;box-shadow:0 8px 26px rgb(44 76 94 / .045);font-family:\"Plus Jakarta Sans\", sans-serif}.ds-card-title{margin:0 0 14px;padding:0 0 12px;border-bottom:1px solid #edf2f4;color:#334256;font:800 15px/1.25 Manrope, sans-serif;letter-spacing:-.025em}.ds-card-copy{margin:0;color:#6c7d91;font-size:12px;line-height:1.55}@media(prefers-color-scheme:dark){.ds-card{border-color:#2a414b;background:#1a2c36;color:#e5f0f1;box-shadow:0 10px 26px rgb(0 0 0 / .12)}.ds-card-title{border-color:#314953;color:#e5f0f1}.ds-card-copy{color:#adbec8}}"
+    },
+    {
+      "name": "Success Badge",
+      "kind": "chip",
+      "refersTo": "badge-success",
+      "description": "Small rounded teal indicator for a positive status.",
+      "html": "<span class=\"ds-success-badge\">Ready</span>",
+      "css": ".ds-success-badge{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:#def7f0;color:#0a766c;font:700 10px/1.1 \"Plus Jakarta Sans\", sans-serif;white-space:nowrap}"
+    },
+    {
+      "name": "Floating Four-Tab Dock",
+      "kind": "nav",
+      "refersTo": "bottom-nav",
+      "description": "Mobile-family navigation adapted to the compact desktop window.",
+      "html": "<nav class=\"ds-dock\" aria-label=\"Primary navigation\"><button class=\"ds-dock-item ds-active\" type=\"button\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/></svg><span>Today</span></button><button class=\"ds-dock-item\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><path d=\"M4 18V9m6 9V5m6 13v-7m4 7V3\"/></svg><span>Insights</span></button><button class=\"ds-dock-item\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><path d=\"m12 2 2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z\"/></svg><span>Coach</span></button><button class=\"ds-dock-item\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"8\" r=\"3\"/><path d=\"M5 21v-2a7 7 0 0 1 14 0v2\"/></svg><span>Settings</span></button></nav>",
+      "css": ".ds-dock{width:min(100%,540px);display:flex;gap:3px;padding:7px;border:1px solid rgb(211 223 228 / .7);border-radius:24px;background:rgb(255 255 255 / .96);box-shadow:0 18px 36px rgb(40 67 86 / .13),0 3px 9px rgb(40 67 86 / .06);font-family:\"Plus Jakarta Sans\", sans-serif}.ds-dock-item{flex:1;min-width:0;min-height:51px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 3px;border:0;border-radius:17px;background:transparent;color:#8191a3;font:700 10px/1.1 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;transition:background-color .16s ease,color .16s ease}.ds-dock-item svg{width:21px;height:21px}.ds-dock-item:hover:not(.ds-active){background:#f2f7f8;color:#526d7b}.ds-dock-item.ds-active{background:#e8f8f5;color:#0ca99c}.ds-dock-item:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(prefers-color-scheme:dark){.ds-dock{border-color:#2a414b;background:#1a2c36;box-shadow:0 10px 26px rgb(0 0 0 / .12)}.ds-dock-item{color:#a4b6c2}.ds-dock-item:hover:not(.ds-active){background:#243b44;color:#d5e5e8}.ds-dock-item.ds-active{background:#204441;color:#6cdfd0}}@media(max-width:380px){.ds-dock{padding:5px;border-radius:20px}.ds-dock-item{min-height:49px}}"
+    },
+    {
+      "name": "Today Timer Surface",
+      "kind": "custom",
+      "refersTo": "timer-surface",
+      "description": "Centered time, state, progress, goal and streak, followed by the primary tracking control.",
+      "html": "<section class=\"ds-timer\"><div class=\"ds-timer-top\"><span>Tracking session</span><span class=\"ds-timer-status\">● READY</span></div><strong class=\"ds-timer-time\">00:17:24</strong><div class=\"ds-timer-track\"><span></span></div><div class=\"ds-timer-meta\"><span><small>DAILY GOAL</small><b>6 hours</b></span><span><small>STREAK</small><b>1 day</b></span></div><button class=\"ds-timer-action\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 5v14l11-7z\"/></svg>Start tracking</button></section>",
+      "css": ".ds-timer{padding:22px 22px 20px;border:1px solid rgb(232 238 242 / .92);border-radius:27px;background:linear-gradient(153deg,#fff 0%,#fff 64%,#f6fbff 87%,#effcfa 100%);color:#303c50;box-shadow:0 14px 35px rgb(70 100 120 / .06);font-family:\"Plus Jakarta Sans\", sans-serif}.ds-timer-top{display:flex;justify-content:space-between;align-items:center;gap:12px;color:#7c8c9b;font-size:11px;font-weight:700}.ds-timer-status{padding:5px 9px;border:1px solid #e5edf3;border-radius:999px;background:#f9fbfd;color:#748396;font-size:10px;font-weight:800;letter-spacing:.07em}.ds-timer-time{display:block;padding:22px 0 20px;text-align:center;color:#3e4759;font:800 46px/1.12 Manrope, sans-serif;letter-spacing:-.035em;font-variant-numeric:tabular-nums;white-space:nowrap}.ds-timer-track{height:7px;overflow:hidden;border-radius:999px;background:#e2f8f6}.ds-timer-track span{display:block;width:8%;height:100%;border-radius:inherit;background:#30bdb4}.ds-timer-meta{display:flex;justify-content:space-between;gap:16px;padding:18px 0 16px}.ds-timer-meta span:last-child{text-align:right}.ds-timer-meta small,.ds-timer-meta b{display:block}.ds-timer-meta small{margin-bottom:3px;color:#91a0b1;font-size:10px;font-weight:800;letter-spacing:.11em}.ds-timer-meta b{color:#37475a;font-size:13px}.ds-timer-action{width:100%;height:52px;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid rgb(255 255 255 / .6);border-radius:16px;background:var(--fs-action,linear-gradient(104deg,#7a7cf1 0%,#529ccc 56%,#2cbdb4 100%));color:#fff;font:800 14px/1.2 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;transition:filter .16s ease,transform .16s ease}.ds-timer-action svg{width:18px;height:18px}.ds-timer-action:hover{filter:brightness(1.04);transform:translateY(-1px)}.ds-timer-action:active{transform:translateY(0)}.ds-timer-action:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(prefers-color-scheme:dark){.ds-timer{border-color:#2b444d;background:linear-gradient(147deg,#1b3039,#182a34 74%,#18383a);color:#e5f0f1;box-shadow:0 16px 36px rgb(0 0 0 / .12)}.ds-timer-time,.ds-timer-meta b{color:#e5f0f1}.ds-timer-track{background:#265450}.ds-timer-status{border-color:#3b5560;background:#263a43;color:#c2cfd5}}@media(max-width:380px){.ds-timer{padding:17px 18px 18px;border-radius:23px}.ds-timer-time{font-size:40px}.ds-timer-action{height:48px}}@media(prefers-reduced-motion:reduce){.ds-timer-action{transition:none}}"
+    },
+    {
+      "name": "Monitoring Consent Dialog",
+      "kind": "custom",
+      "refersTo": "consent-dialog",
+      "description": "Short-window privacy decision with scrolling details, a visible reading cue, and anchored actions.",
+      "html": "<section class=\"ds-consent\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"ds-consent-title\"><h2 id=\"ds-consent-title\">Before tracking starts</h2><div class=\"ds-consent-body\" tabindex=\"0\" role=\"region\" aria-label=\"Tracking and privacy details\"><p>FlowSight observes the active application while tracking is on.</p><ul><li>Screenshots are analyzed on this device and are never saved.</li><li>Only short activity summaries are kept locally.</li><li>Window titles are not stored by default.</li></ul></div><button class=\"ds-consent-cue\" type=\"button\">Read remaining details <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M12 5v14\"/><path d=\"m5 12 7 7 7-7\"/></svg></button><div class=\"ds-consent-actions\"><button class=\"ds-consent-cancel\" type=\"button\">Cancel</button><button class=\"ds-consent-accept\" type=\"button\">I understand — start</button></div></section>",
+      "css": ".ds-consent{width:min(100%,470px);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;padding:24px;border:1px solid #e0eaec;border-radius:22px;background:#fff;color:#354458;box-shadow:0 20px 56px rgb(23 50 64 / .2);font-family:\"Plus Jakarta Sans\", sans-serif}.ds-consent h2{flex:none;margin:0 0 7px;color:#354458;font:800 20px/1.2 Manrope, sans-serif}.ds-consent-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:6px;scrollbar-color:#8bbfbd #ecf5f5}.ds-consent-body p,.ds-consent-body li{font-size:11px;line-height:1.6}.ds-consent-body p{margin:0 0 10px;color:#63788a}.ds-consent-body ul{margin:0;padding-left:18px;color:#485e70}.ds-consent-cue{flex:none;min-height:30px;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-top:5px;padding:3px 0;border:0;background:transparent;color:#087e77;font:800 10px/1.2 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;text-align:left}.ds-consent-cue svg{width:15px;height:15px}.ds-consent-cue:hover{color:#04665f}.ds-consent-cue:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}.ds-consent-actions{flex:none;display:flex;gap:9px;margin-top:16px}.ds-consent-actions button{flex:1;min-height:42px;padding:9px 11px;border-radius:11px;font:700 11px/1.2 \"Plus Jakarta Sans\", sans-serif;cursor:pointer}.ds-consent-cancel{border:1px solid #d9e6e9;background:#f7fbfa;color:#2b5961}.ds-consent-accept{border:1px solid #17ada3;background:#1ab5aa;color:#fff}.ds-consent-cancel:hover{background:#e9f8f5}.ds-consent-accept:hover{background:#0a978d}.ds-consent-actions button:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(max-height:520px){.ds-consent{max-height:calc(100dvh - 20px);padding:17px}.ds-consent h2{font-size:18px}.ds-consent-actions{margin-top:10px}.ds-consent-actions button{min-height:38px}}@media(prefers-color-scheme:dark){.ds-consent{border-color:#2a414b;background:#1a2c36;color:#e5f0f1;box-shadow:0 10px 26px rgb(0 0 0 / .12)}.ds-consent h2{color:#e5f0f1}.ds-consent-body{scrollbar-color:#558d88 #25413e}.ds-consent-body p,.ds-consent-body ul{color:#d5e5e8}.ds-consent-cue{color:#8ce1d5}.ds-consent-cancel{border-color:#3c625f;background:#204341;color:#b2efe4}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Gridded Work Companion",
+    "overview": "The desktop renderer belongs to the FlowSight mobile family. A pale technical grid, slate reading text, teal signals, softly raised white panels, and one indigo-to-teal tracking action make the compact Tauri window feel related to the Android app without stretching a phone screen into desktop proportions.\n\nThe visual language carries through Today, Insights, Coach, Settings, first run, and consent. It puts a clear tracking decision beside measured time, then uses quieter cards and rails for supporting evidence. This contract describes the desktop WebView and its shared interface patterns.",
+    "keyCharacteristics": [
+      "A 56px pale grid behind centered, softly layered work surfaces.",
+      "Manrope for headings and measured display figures; Plus Jakarta Sans for reading and controls.",
+      "Teal for state and progress, with an indigo-to-teal gradient concentrated in tracking and first-run actions.",
+      "A floating four-tab dock that stays available in the narrow work window."
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rule",
+        "body": "Use teal to show state, progress, selection, or a real action. Concentrate the indigo-to-teal gradient on tracking and first-run decisions.",
+        "section": "colors"
+      },
+      {
+        "name": "The Measurement Rule",
+        "body": "Keep numbers aligned with tabular numerals while preserving the same Manrope display voice as the rest of the interface.",
+        "section": "typography"
+      },
+      {
+        "name": "The Layer Rule",
+        "body": "Give ordinary content a quiet lift; reserve the stronger shadow for persistent navigation and blocking overlays.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the 56px grid as a quiet background behind readable surfaces.",
+      "Do keep Manrope display type and Plus Jakarta Sans reading type together across tabs.",
+      "Do use the indigo-to-teal gradient for tracking and first-run primary actions, with solid teal for routine confirmations.",
+      "Do keep the dock and consent actions reachable in narrow, short windows."
+    ],
+    "donts": [
+      "Don't stretch the phone layout or its spacing directly into a wide desktop window.",
+      "Don't use teal on every card or turn observed activity into a score-like visual.",
+      "Don't let the floating dock cover the last controls in a scrolled pane.",
+      "Don't hide remaining consent details behind a fixed action row without a visible way to reach them."
+    ]
+  }
+}

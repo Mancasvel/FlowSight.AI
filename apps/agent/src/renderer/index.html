@@ -50,7 +50,7 @@
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', sans-serif;
       background: hsl(var(--background));
       color: hsl(var(--foreground));
       font-size: 14px;
@@ -710,11 +710,11 @@
     }
 
     .toast.success {
-      border-left: 3px solid hsl(142.1 76.2% 36.3%);
+      border-left: 1px solid hsl(142.1 76.2% 36.3%);
     }
 
     .toast.error {
-      border-left: 3px solid hsl(var(--destructive));
+      border-left: 1px solid hsl(var(--destructive));
     }
 
     @keyframes slideIn {
@@ -879,7 +879,6 @@
       height: 100%;
       background: hsl(var(--primary));
       width: 0%;
-      transition: width 0.3s ease;
     }
 
     .setup-status {
@@ -1216,7 +1215,6 @@
       height: 100%;
       border-radius: 8px;
       min-width: 4px;
-      transition: width 0.4s ease;
     }
 
     .task-bar-label {
@@ -1301,7 +1299,6 @@
       background: hsl(var(--summary-teal));
       border-radius: 3px 3px 0 0;
       min-height: 4px;
-      transition: height 0.3s ease;
     }
 
     .focus-bar-empty {
@@ -2010,7 +2007,6 @@
       height: 100%;
       background: hsl(var(--primary));
       border-radius: 999px;
-      transition: width 0.25s ease;
     }
 
     .onboarding-body {
@@ -3395,9 +3391,18 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="./mobile-theme.css">
 </head>
 
 <body>
+  <!--
+    THESIS: FlowSight desktop is the focused companion to the mobile app, not a dark Ratio-style instrument or a stretched phone screenshot.
+    OWN-WORLD: The mobile family's pale 56px grid, slate typography, Manrope and Plus Jakarta Sans, teal signals, softly layered white surfaces, and one indigo-to-teal tracking action adapt to a compact desktop window.
+    STORY: See the tracking state, start or pause a block, review observed time and focus, then reach coach and settings with the same visual vocabulary and privacy controls.
+    FIRST VIEWPORT: Light branded titlebar; a concise Today heading; a rounded timer surface with centered status and time, linear progress, goal and streak, then a full-width tracking action; a floating four-tab dock stays accessible.
+    FORM: User-pinned FlowSight mobile design system adapted for desktop; concept seed 6628a6fb is overridden by that explicit reference.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+  -->
   <header class="app-titlebar">
     <div class="titlebar-brand" data-tauri-drag-region>
       <img src="/flowsight_sinfondo.png" alt="" class="titlebar-logo" width="18" height="18" />
@@ -3494,18 +3499,24 @@
   </div>
 
   <div class="consent-overlay" id="monitoringNoticeOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="monitoringNoticeTitle">
-    <div class="consent-card">
+    <div class="consent-card monitoring-consent-card">
       <h2 class="consent-title" id="monitoringNoticeTitle">Before tracking starts</h2>
-      <p class="consent-copy">FlowSight will observe the active application, selected interface elements, and periodic images of the active window while tracking is on.</p>
-      <ul class="consent-list">
-        <li>Screenshots are analyzed by AI on this device and are never saved.</li>
-        <li>Only short activity summaries, categories, app names, and durations are kept locally.</li>
-        <li>Window titles are not stored by default. Local history is deleted after 30 days by default.</li>
-        <li>Common password managers are excluded by default; add other sensitive apps in Privacy &amp; data.</li>
-        <li>Nothing is synced to FlowSight or an AI provider unless you separately enable it.</li>
-        <li>Opening at sign-in, automatic tracking, and focus reminders are separate choices in your profile.</li>
-      </ul>
-      <p class="consent-note">Pause or stop tracking at any time. Do not use FlowSight to monitor another person without a valid lawful basis and the required workplace notice.</p>
+      <div class="consent-scroll-content" id="monitoringConsentContent" tabindex="0" role="region" aria-label="Tracking and privacy details">
+        <p class="consent-copy">FlowSight will observe the active application, selected interface elements, and periodic images of the active window while tracking is on.</p>
+        <ul class="consent-list">
+          <li>Screenshots are analyzed by AI on this device and are never saved.</li>
+          <li>Only short activity summaries, categories, app names, and durations are kept locally.</li>
+          <li>Window titles are not stored by default. Local history is deleted after 30 days by default.</li>
+          <li>Common password managers are excluded by default; add other sensitive apps in Privacy &amp; data.</li>
+          <li>Nothing is synced to FlowSight or an AI provider unless you separately enable it.</li>
+          <li>Opening at sign-in, automatic tracking, and focus reminders are separate choices in your profile.</li>
+        </ul>
+        <p class="consent-note">Pause or stop tracking at any time. Do not use FlowSight to monitor another person without a valid lawful basis and the required workplace notice.</p>
+      </div>
+      <button type="button" class="consent-scroll-cue" id="monitoringConsentScrollCue" aria-controls="monitoringConsentContent">
+        Read remaining details
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m5 12 7 7 7-7"/></svg>
+      </button>
       <div class="consent-actions">
         <button type="button" class="button button-secondary" id="monitoringNoticeCancelBtn">Cancel</button>
         <button type="button" class="button button-primary" id="monitoringNoticeAcceptBtn">I understand — start</button>
@@ -3542,9 +3553,9 @@
   <div class="cloud-activation-overlay" id="loginScreen">
     <div class="login-splash">
       <div class="login-splash-hero">
-        <div class="login-preview-stage">
+        <div class="login-preview-stage" role="img" aria-label="Illustrative local activity preview using sample data">
           <div class="login-preview-card login-preview-summary">
-            <div class="login-preview-summary-title">Today's focus</div>
+            <div class="login-preview-summary-title">Sample activity · stored locally</div>
             <div class="login-preview-bar-row">
               <span class="login-preview-bar-pct">Analysis</span>
               <div class="login-preview-bar-track">
@@ -3734,20 +3745,34 @@
       <!-- TAB: Today -->
       <div id="tabToday" class="tab-panel active">
         <div class="today-header">
-          <div class="today-greeting" id="todayGreeting">Good morning!</div>
+          <div class="today-heading-meta"><span class="today-kicker">Today</span><time id="todayDate"></time></div>
+          <h1 class="today-greeting" id="todayGreeting">What's next?</h1>
+          <p class="today-intro" id="todayIntro">Start a block. Activity is measured only while tracking runs.</p>
         </div>
 
         <div class="today-timer-section">
           <div class="today-timer-ring">
-            <svg viewBox="0 0 200 200">
+            <div class="today-timer-meta">
+              <span>Tracking session</span>
+              <span class="today-tracking-state" id="todayTrackingState">Ready</span>
+            </div>
+            <svg viewBox="0 0 200 200" aria-hidden="true">
               <circle class="timer-track" cx="100" cy="100" r="82"/>
               <circle class="timer-progress" id="timerProgressRing" cx="100" cy="100" r="82"
                 stroke-dasharray="515.22" stroke-dashoffset="515.22"/>
             </svg>
             <div class="timer-inner">
-              <div class="timer-goal-label" id="timerGoalLabel">No goal target</div>
-              <div class="timer-display" id="timerDisplay">0:00</div>
-              <button class="play-timer-btn" id="playTimerBtn" disabled title="Start tracking">
+              <div class="timer-display" id="timerDisplay">00:00:00</div>
+            </div>
+            <div class="today-goal-progress" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="todayGoalProgressTrack">
+              <span id="todayGoalProgress"></span>
+            </div>
+            <div class="timer-meta-row">
+              <div class="timer-meta-item"><span class="timer-meta-label">Daily goal</span><span class="timer-goal-label" id="timerGoalLabel">No goal</span></div>
+              <div class="timer-meta-item timer-streak" id="timerStreak"><span class="timer-meta-label">Streak</span><span id="streakText">0 days</span></div>
+            </div>
+            <div class="timer-actions">
+              <button type="button" class="play-timer-btn" id="playTimerBtn" disabled title="Start tracking" aria-label="Start tracking">
                 <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor">
                   <polygon points="8,5 19,12 8,19"/>
                 </svg>
@@ -3755,24 +3780,21 @@
                   <rect x="6" y="5" width="4" height="14" rx="1"/>
                   <rect x="14" y="5" width="4" height="14" rx="1"/>
                 </svg>
+                <span id="playTimerLabel">Start tracking</span>
               </button>
+              <div class="timer-controls">
+                <button class="stop-timer-btn" id="stopTimerBtn" title="Stop tracking and shut down server">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="6" width="12" height="12" rx="1"/>
+                  </svg>
+                  Stop
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div class="timer-streak" id="timerStreak">
-            <span id="streakText">0 days Streak</span>
-          </div>
-
-          <div class="timer-controls">
-            <button class="stop-timer-btn" id="stopTimerBtn" title="Stop tracking and shut down server">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="1"/>
-              </svg>
-              Stop
-            </button>
           </div>
         </div>
 
+        <div class="today-preferences">
         <div class="today-goal-row">
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="dailyGoalSelect">Daily goal</label>
@@ -3796,7 +3818,7 @@
 
         <div class="today-task-card">
           <div class="form-group" style="margin-bottom: 8px;">
-            <label class="label">Current Task</label>
+            <label class="label">Current task</label>
             <div id="todayIntegrationControls">
               <select id="jiraSelect" class="select" style="width: 100%;">
                 <option value="">Select Task...</option>
@@ -3810,6 +3832,7 @@
             <input type="checkbox" id="syncToJira" class="checkbox" checked>
             <span class="checkbox-label">Sync time to Jira</span>
           </label>
+        </div>
         </div>
 
         <div class="sr-only" aria-hidden="true">
@@ -3875,6 +3898,11 @@
 
       <!-- TAB: Profile -->
       <div id="tabProfile" class="tab-panel">
+        <div class="profile-heading">
+          <span class="profile-kicker">Your space</span>
+          <h1>You</h1>
+          <p>Make FlowSight work the way you do.</p>
+        </div>
         <div class="card">
           <div class="card-header">
             <div class="card-header-title-row">
@@ -3891,7 +3919,7 @@
 
           <div id="userProfile">
             <div class="user-profile">
-              <img id="userAvatar" class="user-avatar" src="" alt="" referrerpolicy="no-referrer" style="display: none;">
+              <img id="userAvatar" class="user-avatar" src="/flowsight_sinfondo.png" alt="" referrerpolicy="no-referrer" style="display: none;">
               <div class="user-info">
                 <div class="user-name" id="userName">Guest</div>
                 <div class="user-email" id="userEmail">Free local mode</div>
@@ -3909,7 +3937,7 @@
             <div class="card-title">Activate license</div>
           </div>
           <p class="upgrade-hint" style="margin-bottom: 12px;">
-            Enter your Individual license code to unlock sync, cloud AI insights, and integrations.
+            Enter your license code to activate the features included in your plan.
           </p>
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="profileLicenseCode">License code</label>
@@ -4049,7 +4077,7 @@
           </div>
 
           <p class="upgrade-hint" id="integrationsUpgradeHint" style="display: none;">
-            Jira and Linear linking require an Individual or Team license.
+            Jira and Linear linking require an eligible paid plan.
           </p>
 
           <div class="form-group" id="teamCodeGroup">
@@ -4085,20 +4113,20 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
         </svg>
-        <span class="nav-label">Summary</span>
+        <span class="nav-label">Insights</span>
       </button>
       <button class="nav-item nav-pro nav-pro-locked" data-tab="tabCloudInsights" id="navCloudInsights">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
           <path d="M5 19h14"/><path d="M8 19v-3"/><path d="M16 19v-3"/>
         </svg>
-        <span class="nav-label" id="navCloudInsightsLabel">Pro</span>
+        <span class="nav-label" id="navCloudInsightsLabel">Coach</span>
       </button>
       <button class="nav-item" data-tab="tabProfile" id="navProfile">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
         </svg>
-        <span class="nav-label">Profile</span>
+        <span class="nav-label">Settings</span>
       </button>
     </nav>
   </div>
@@ -4954,22 +4982,22 @@
     function updateTodayGreeting() {
       const el = document.getElementById('todayGreeting');
       if (!el) return;
-      const h = new Date().getHours();
-      let period;
-      if (h < 12) period = 'morning';
-      else if (h < 18) period = 'afternoon';
-      else period = 'night';
-      const name = currentUser?.display_name || currentUser?.name || userPreferences?.displayName || 'there';
-      const first = String(name).split(' ')[0];
-      el.textContent = `Good ${period}, ${first}!`;
+      el.textContent = isMonitoring ? 'In flow.' : isPaused ? 'On hold.' : "What's next?";
+      const intro = document.getElementById('todayIntro');
+      if (intro) intro.textContent = isMonitoring
+        ? 'Your work is being recorded locally. Pause or stop whenever you need.'
+        : isPaused
+          ? 'The clock is paused. Resume when you are ready.'
+          : 'Start a block. Activity is measured only while tracking runs.';
+      const date = document.getElementById('todayDate');
+      if (date) date.textContent = new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date());
     }
 
     function formatTimerDisplay(totalSeconds) {
       const h = Math.floor(totalSeconds / 3600);
       const m = Math.floor((totalSeconds % 3600) / 60);
       const s = totalSeconds % 60;
-      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-      return `${m}:${String(s).padStart(2, '0')}`;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
 
     function computeStreak(week) {
@@ -4994,15 +5022,20 @@
     function updateGoalUI() {
       const hours = getDailyGoalHours();
       const label = document.getElementById('timerGoalLabel');
-      if (label) label.textContent = hours > 0 ? `Daily goal ${hours}h` : 'No goal target';
+      if (label) label.textContent = hours > 0 ? `${hours} hours` : 'No goal';
+      const track = document.getElementById('todayGoalProgressTrack');
+      if (track) track.hidden = hours <= 0;
       syncDailyGoalSelect();
     }
 
     function updateTimerRing(progress) {
       const ring = document.getElementById('timerProgressRing');
-      if (!ring) return;
       const p = Math.min(Math.max(progress, 0), 1);
-      ring.setAttribute('stroke-dashoffset', String(TIMER_RING_CIRC * (1 - p)));
+      if (ring) ring.setAttribute('stroke-dashoffset', String(TIMER_RING_CIRC * (1 - p)));
+      const rail = document.getElementById('todayGoalProgress');
+      if (rail) rail.style.transform = `scaleX(${p})`;
+      const track = document.getElementById('todayGoalProgressTrack');
+      if (track) track.setAttribute('aria-valuenow', String(Math.round(p * 100)));
     }
 
     function getDisplayTotalSeconds() {
@@ -5018,15 +5051,20 @@
       const btn = document.getElementById('playTimerBtn');
       const playIcon = document.getElementById('playIcon');
       const pauseIcon = document.getElementById('pauseIcon');
+      const label = document.getElementById('playTimerLabel');
       if (!btn) return;
       if (isMonitoring) {
         btn.classList.add('active');
         btn.title = 'Pause tracking';
+        btn.setAttribute('aria-label', 'Pause tracking');
+        if (label) label.textContent = 'Pause tracking';
         if (playIcon) playIcon.style.display = 'none';
         if (pauseIcon) pauseIcon.style.display = 'block';
       } else {
         btn.classList.remove('active');
         btn.title = isPaused ? 'Resume tracking' : 'Start tracking';
+        btn.setAttribute('aria-label', btn.title);
+        if (label) label.textContent = btn.title;
         if (playIcon) playIcon.style.display = 'block';
         if (pauseIcon) pauseIcon.style.display = 'none';
       }
@@ -5036,6 +5074,12 @@
     function renderTrackingStatus() {
       const status = document.getElementById('statStatus');
       const badge = document.getElementById('monitoringBadge');
+      const visibleState = document.getElementById('todayTrackingState');
+      if (visibleState) {
+        visibleState.textContent = isMonitoring ? 'Live' : isPaused ? 'Paused' : 'Ready';
+        visibleState.className = `today-tracking-state${isMonitoring ? ' is-recording' : isPaused ? ' is-paused' : ''}`;
+      }
+      updateTodayGreeting();
 
       if (isMonitoring) {
         if (status) {
@@ -5259,7 +5303,7 @@
         const week = await invoke('get_week_summary').catch(() => null);
         const streak = computeStreak(week);
         const streakEl = document.getElementById('streakText');
-        if (streakEl) streakEl.textContent = `${streak} day${streak === 1 ? '' : 's'} Streak`;
+        if (streakEl) streakEl.textContent = `${streak} day${streak === 1 ? '' : 's'}`;
         if (!isMonitoring && !isPaused) {
           const history = await invoke('get_today_history');
           todayTotalSeconds = history.total_seconds || 0;
@@ -6043,7 +6087,7 @@
             ${notesHtml}
             <div id="updateProgress" style="display:none;margin-top:14px;">
               <div style="height:6px;background:hsl(var(--muted));border-radius:999px;overflow:hidden;">
-                <div id="updateProgressBar" style="height:100%;width:0%;background:hsl(var(--primary));transition:width 0.2s ease;"></div>
+                <div id="updateProgressBar" style="height:100%;width:0%;background:hsl(var(--primary));"></div>
               </div>
               <p id="updateProgressLabel" style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">Starting download…</p>
             </div>
@@ -6962,6 +7006,7 @@
       const overlay = document.getElementById('monitoringNoticeOverlay');
       overlay?.classList.add('visible');
       overlay?.setAttribute('aria-hidden', 'false');
+      requestAnimationFrame(syncMonitoringConsentScrollCue);
     }
 
     function hideMonitoringNotice() {
@@ -6969,6 +7014,19 @@
       overlay?.classList.remove('visible');
       overlay?.setAttribute('aria-hidden', 'true');
     }
+
+    function syncMonitoringConsentScrollCue() {
+      const details = document.getElementById('monitoringConsentContent');
+      const cue = document.getElementById('monitoringConsentScrollCue');
+      if (!details || !cue) return;
+      cue.hidden = details.scrollHeight - details.clientHeight - details.scrollTop <= 4;
+    }
+
+    document.getElementById('monitoringConsentContent')?.addEventListener('scroll', syncMonitoringConsentScrollCue);
+    document.getElementById('monitoringConsentScrollCue')?.addEventListener('click', () => {
+      const details = document.getElementById('monitoringConsentContent');
+      details?.scrollBy({ top: Math.max(details.clientHeight * 0.8, 120), behavior: 'smooth' });
+    });
 
     async function startMonitoringWithNotice() {
       if (!privacySettings) await loadPrivacySettings();
@@ -7461,15 +7519,6 @@
     document.getElementById('statusReportModal')?.addEventListener('click', (e) => {
       if (e.target.id === 'statusReportModal') closeStatusReportModal();
     });
-    const TASK_BAR_COLORS = [
-      'hsl(var(--summary-purple))',
-      'hsl(var(--summary-magenta))',
-      'hsl(var(--summary-blue))',
-      'hsl(var(--summary-teal))',
-      'hsl(142 65% 30%)',
-      'hsl(35 95% 32%)',
-    ];
-
     function switchTab(tabId) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(n => {
@@ -7577,26 +7626,18 @@
     function renderTaskBars(items, totalSeconds) {
       if (!items.length) return '<div class="empty-state" style="padding:12px;">No task time recorded yet</div>';
       const maxBar = Math.max(...items.map(i => i.seconds));
-      return items.slice(0, 6).map((item, idx) => {
+      return items.slice(0, 6).map((item) => {
         const pct = totalSeconds > 0 ? Math.round((item.seconds / totalSeconds) * 100) : 0;
         const barWidth = maxBar > 0 ? Math.round((item.seconds / maxBar) * 100) : 0;
         const fillWidth = item.seconds > 0 ? Math.max(barWidth, 4) : 0;
-        const minInsidePct = Math.min(32, 10 + item.label.length * 3.5);
-        const labelOutside = fillWidth < minInsidePct;
-        const color = TASK_BAR_COLORS[idx % TASK_BAR_COLORS.length];
         const mins = Math.round(item.seconds / 60);
-        const labelClass = labelOutside ? 'task-bar-label task-bar-label-outside' : 'task-bar-label task-bar-label-inside';
-        const labelStyle = labelOutside
-          ? `left:calc(${fillWidth}% + 6px);max-width:calc(${100 - fillWidth}% - 10px);`
-          : `max-width:calc(${fillWidth}% - 16px);`;
         return `
           <div class="task-bar-row">
-            <span class="task-bar-pct">${pct}%</span>
-            <div class="task-bar-track">
-              <div class="task-bar-fill" style="width:${fillWidth}%;background:${color}"></div>
-              <span class="${labelClass}" style="${labelStyle}">${escapeHtml(item.label)}</span>
+            <span class="task-bar-name" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
+            <span class="task-bar-meta"><span class="task-bar-pct">${pct}%</span><span class="task-bar-time">${mins}m</span></span>
+            <div class="task-bar-track" role="img" aria-label="${escapeHtml(item.label)}: ${pct}% of tracked time, ${mins} minutes">
+              <div class="task-bar-fill" style="width:${fillWidth}%"></div>
             </div>
-            <span class="task-bar-time">${mins}m</span>
           </div>`;
       }).join('');
     }
@@ -7667,10 +7708,12 @@
     }
 
     function renderHistory(data, week) {
+      const activeDays = week?.days?.filter(day => day.has_activity).length || 0;
+      const weekActivityLabel = `${activeDays} active day${activeDays === 1 ? '' : 's'}`;
       if (data.entries.length === 0) {
         summaryBody.innerHTML = `
           <div class="summary-header">
-            <h1 class="summary-title">Summary</h1>
+            <h1 class="summary-title">Insights</h1>
             <div class="summary-header-actions">
               <button class="summary-download-btn" id="notionReportBtn" style="display:none;width:96px;" title="Configure Notion publishing" aria-label="Configure Notion publishing">
                 <span class="summary-download-label">Notion</span>
@@ -7685,8 +7728,11 @@
             </div>
           </div>
           <div class="summary-date">${formatDisplayDate(data.date)}</div>
-          <div class="week-row">${renderWeekRow(week)}</div>
-          <div class="empty-state">No activity recorded today</div>`;
+          <section class="week-card" aria-label="Activity this week">
+            <div class="week-card-heading"><span>This week</span><span>${weekActivityLabel}</span></div>
+            <div class="week-row">${renderWeekRow(week)}</div>
+          </section>
+          <div class="empty-state">No activity recorded today. Start a tracking block to see your work patterns here.</div>`;
         document.getElementById('generateReportBtn').onclick = () => {
           generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
         };
@@ -7696,10 +7742,12 @@
       }
 
       const goalSeconds = getDailyGoalHours() * 3600;
-      const progress = data.total_seconds / goalSeconds;
-      const goalMet = data.total_seconds >= goalSeconds;
+      const progress = goalSeconds > 0 ? data.total_seconds / goalSeconds : 0;
+      const goalMet = goalSeconds > 0 && data.total_seconds >= goalSeconds;
       const taskItems = buildTaskBreakdown(data);
       const focusSeconds = canonicalDeepFocusSeconds(data);
+      const focusShare = data.total_seconds > 0
+        ? Math.min(100, Math.round(focusSeconds / data.total_seconds * 100)) : 0;
       const distractionCount = canonicalDistractionEvents(data);
       const distractionDefinition = data.focus
         ? `At least ${Math.round(data.focus.browsing_distraction_min_seconds / 60)} observed minutes of non-work Browsing in one episode; capture gaps up to ${data.focus.sensor_grace_seconds} seconds may be joined`
@@ -7715,7 +7763,7 @@
 
       summaryBody.innerHTML = `
         <div class="summary-header">
-          <h1 class="summary-title">Summary</h1>
+          <h1 class="summary-title">Insights</h1>
           <div class="summary-header-actions">
             <button class="summary-download-btn" id="notionReportBtn" style="display:none;width:96px;" title="Configure Notion publishing" aria-label="Configure Notion publishing">
               <span class="summary-download-label">Notion</span>
@@ -7730,7 +7778,10 @@
           </div>
         </div>
         <div class="summary-date">${formatDisplayDate(data.date)}</div>
-        <div class="week-row">${renderWeekRow(week)}</div>
+        <section class="week-card" aria-label="Activity this week">
+          <div class="week-card-heading"><span>This week</span><span>${weekActivityLabel}</span></div>
+          <div class="week-row">${renderWeekRow(week)}</div>
+        </section>
 
         <div class="summary-main-card">
           <div class="summary-time-row">
@@ -7739,9 +7790,15 @@
               <div class="summary-total-time">${formatDuration(data.total_seconds)}</div>
               <div class="summary-goal">
                 <span class="goal-dot ${goalMet ? '' : 'behind'}"></span>
-                Daily goal ${getDailyGoalHours()} hours
+                ${goalSeconds > 0 ? `Daily goal ${getDailyGoalHours()} hours` : 'No daily goal set'}
               </div>
             </div>
+            ${goalSeconds > 0 ? `<div class="summary-goal-track" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(progress, 1) * 100)}"><span style="width:${Math.round(Math.min(progress, 1) * 100)}%"></span></div>` : ''}
+          </div>
+          <div class="summary-focus-ratio">
+            <div class="summary-focus-head"><span>Sustained focus share</span><strong>${focusShare}%</strong></div>
+            <div class="summary-focus-track" role="img" aria-label="${focusShare}% of tracked time in sustained focus"><span style="width:${focusShare}%"></span></div>
+            <p>${formatShortDuration(focusSeconds)} in sustained blocks · ${formatShortDuration(data.total_seconds)} tracked</p>
           </div>
           ${renderTaskBars(taskItems, data.total_seconds)}
         </div>

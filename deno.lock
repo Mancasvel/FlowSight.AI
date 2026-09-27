@@ -29,6 +29,8 @@
       "apps/agent": {
         "packageJson": {
           "dependencies": [
+            "npm:@fontsource/manrope@5",
+            "npm:@fontsource/plus-jakarta-sans@5",
             "npm:@supabase/supabase-js@^2.112.4",
             "npm:@tauri-apps/api@2.11.0",
             "npm:@tauri-apps/cli@2.11.2",
