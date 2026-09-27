@@ -9,7 +9,7 @@
     "dev:stable": "tauri dev --no-watch",
     "fetch-models": "pnpm exec node ../../scripts/fetch-models.mjs",
     "build": "tauri build",
-    "test:renderer": "node --test src/renderer/*.test.mjs",
+    "test:renderer": "node --test",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml --lib",
     "test:coverage": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml --lib --summary-only"
   },
