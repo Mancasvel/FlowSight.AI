@@ -861,6 +861,10 @@
       text-align: center;
     }
 
+    .setup-overlay[hidden] {
+      display: none !important;
+    }
+
     .progress-container {
       width: 100%;
       max-width: 280px;
@@ -4439,7 +4443,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- SETUP OVERLAY -->
-  <div id="setupOverlay" class="setup-overlay" style="display: none;">
+  <div id="setupOverlay" class="setup-overlay" hidden role="status" aria-live="polite">
     <div class="setup-status" id="setupStatus">Configurando entorno de IA...</div>
     <div class="progress-container">
       <div class="progress-bar" id="setupProgress"></div>
@@ -6480,7 +6484,11 @@
       }
     }
 
+    let setupInProgress = false;
+
     async function startMonitoringFull() {
+      if (setupInProgress) return;
+      setupInProgress = true;
       const btn = document.getElementById('playTimerBtn');
       btn.disabled = true;
       btn.classList.add('loading-state');
@@ -6489,18 +6497,43 @@
       const progress = document.getElementById('setupProgress');
       const statusText = document.getElementById('setupStatus');
       const subtext = document.getElementById('setupSubtext');
+      let unlistenAiProgress = null;
+      let aiWaitTimer = null;
+      let aiAttemptLabel = 'Preparing the local model';
+      let aiAttemptPercent = 20;
 
       const showStep = (status, sub = "Initializing...", pct = 0) => {
-        overlay.style.display = 'flex';
         statusText.textContent = status;
         subtext.textContent = sub;
         progress.style.width = pct + '%';
+        overlay.hidden = false;
       };
 
       try {
-        showStep("Starting local vision…", "Preparing local server (first run may download model weights)…", 20);
+        const startedAt = Date.now();
+        const updateAiWait = () => {
+          const seconds = Math.floor((Date.now() - startedAt) / 1000);
+          showStep('Starting local AI…', `${aiAttemptLabel} · ${seconds}s elapsed`, aiAttemptPercent);
+        };
+        updateAiWait();
+        unlistenAiProgress = await listen('local-ai-startup-progress', ({ payload }) => {
+          const attempt = Number(payload?.attempt) || 1;
+          const total = Number(payload?.total) || 1;
+          const backend = String(payload?.backend || 'local AI');
+          aiAttemptLabel = `Trying ${backend} (${attempt}/${total})`;
+          aiAttemptPercent = Math.min(52, 20 + Math.round((attempt - 1) / total * 32));
+          updateAiWait();
+        }).catch((error) => {
+          console.warn('[Local AI] Startup progress unavailable:', error);
+          return null;
+        });
+        aiWaitTimer = setInterval(updateAiWait, 1000);
 
         const res = await invoke('start_server');
+        clearInterval(aiWaitTimer);
+        aiWaitTimer = null;
+        unlistenAiProgress?.();
+        unlistenAiProgress = null;
         console.log("Server Start Result:", res);
 
         if (res.status === 'started' || res.status === 'already_running') {
@@ -6592,7 +6625,7 @@
           throw new Error("Unexpected server status: " + JSON.stringify(res));
         }
 
-        overlay.style.display = 'none';
+        overlay.hidden = true;
         const layerSuffix =
           typeof res.gpuLayers === 'number'
             ? ` (${res.gpuLayers} GPU layers${res.gpuAuto ? ', auto-selected' : ''})`
@@ -6615,10 +6648,14 @@
         localServerConfirmedOnline = true;
         await checkLocalServerHealth();
       } catch (e) {
-        overlay.style.display = 'none';
+        overlay.hidden = true;
         console.error("Start Failed:", e);
         showToast("Error: " + e, "error");
       } finally {
+        if (aiWaitTimer) clearInterval(aiWaitTimer);
+        unlistenAiProgress?.();
+        overlay.hidden = true;
+        setupInProgress = false;
         btn.disabled = false;
         btn.classList.remove('loading-state');
         updatePlayButtonState();
@@ -7558,6 +7595,8 @@
     });
 
     async function init() {
+      // Only an explicit local AI start may reveal the setup panel.
+      document.getElementById('setupOverlay').hidden = true;
       const playBtn = document.getElementById('playTimerBtn');
       try {
         console.log("[Agent] Initializing backend...");

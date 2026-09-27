@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::State;
+use tauri::{Emitter, State};
 
 pub type AgentState = Mutex<Option<FlowSightAgent>>;
 
@@ -788,15 +788,17 @@ fn clamp_llama_gpu_layers(n: i32) -> i32 {
     n.clamp(0, 16_384)
 }
 
-/// Descending CUDA/Vulkan offload steps for vision GGUF (+ mmproj): try the highest that
-/// survives startup + `/health`, then fall back toward CPU-only (`0`).
-const AUTO_GPU_LAYER_TIERS: &[i32] = &[56, 40, 24, 12, 0];
-/// Per-tier budget while the weights load (slow disks / AV can dominate here).
+/// Probe a bounded set of GPU options, then CPU. The old nested ladder tried 25
+/// combinations and could leave the setup screen waiting for over 20 minutes.
+const AUTO_START_CANDIDATES: &[(Option<&str>, i32)] = &[
+    (None, 56),
+    (Some("0"), 56),
+    (Some("1"), 56),
+    (None, 24),
+    (None, 0),
+];
+/// Per-attempt budget while the weights load (slow disks / AV can dominate here).
 const AUTO_TIER_HEALTH_WAIT_SECS: u64 = 56;
-/// Tras la ronda con descubrimiento Vulkan por defecto, probar cada índice físico por
-/// separado (`GGML_VK_VISIBLE_DEVICES` en ggml-vulkan). Útil cuando el primer dispositivo
-/// Vulkan de la lista es inválido para cómputo (GPU dual, drivers híbridos, `vkCreateFence`).
-const AUTO_VULKAN_VISIBLE_DEVICE_TRIES: &[&str] = &["0", "1", "2", "3"];
 
 #[derive(Clone, Copy, Debug)]
 enum GpuServeMode {
@@ -1250,77 +1252,85 @@ pub fn start_server(
         }
         GpuServeMode::Automatic => {
             let mut last_err = String::from("unknown auto-start error");
-
-            let vk_rounds: Vec<Option<&str>> = std::iter::once(None)
-                .chain(AUTO_VULKAN_VISIBLE_DEVICE_TRIES.iter().copied().map(Some))
-                .collect();
-
-            for vk_vis in vk_rounds {
+            for (index, &(vk_vis, layers)) in AUTO_START_CANDIDATES.iter().enumerate() {
                 let vk_label = vk_vis.unwrap_or("default");
-                for &layers in AUTO_GPU_LAYER_TIERS {
-                    let _ = stop_server();
-                    std::thread::sleep(std::time::Duration::from_millis(450));
+                let backend = if layers == 0 {
+                    "CPU".to_string()
+                } else if let Some(device) = vk_vis {
+                    format!("GPU device {device}")
+                } else {
+                    "GPU".to_string()
+                };
+                let _ = app.emit(
+                    "local-ai-startup-progress",
+                    serde_json::json!({
+                        "attempt": index + 1,
+                        "total": AUTO_START_CANDIDATES.len(),
+                        "backend": backend,
+                    }),
+                );
+                let _ = stop_server();
+                std::thread::sleep(std::time::Duration::from_millis(450));
 
-                    let child = match spawn_llama_managed_child(&app, layers, vk_vis) {
-                        Ok(c) => c,
-                        Err(e) => {
-                            log::warn!(
-                                "[FlowSight llama-server] Auto tier GGML_VK_VISIBLE_DEVICES={} gpu_layers={} spawn failed: {}",
-                                vk_label,
-                                layers,
-                                e
-                            );
-                            last_err = e;
-                            continue;
-                        }
-                    };
-
-                    {
-                        let mut guard = SERVER_PROCESS.lock().unwrap();
-                        *guard = Some(child);
+                let child = match spawn_llama_managed_child(&app, layers, vk_vis) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        log::warn!(
+                            "[FlowSight llama-server] Auto tier GGML_VK_VISIBLE_DEVICES={} gpu_layers={} spawn failed: {}",
+                            vk_label,
+                            layers,
+                            e
+                        );
+                        last_err = e;
+                        continue;
                     }
+                };
 
-                    log::info!(
-                        "[FlowSight llama-server] Auto tier GGML_VK_VISIBLE_DEVICES={} gpu_layers={}, waiting health up to {}s",
-                        vk_label,
-                        layers,
-                        AUTO_TIER_HEALTH_WAIT_SECS
-                    );
-
-                    if wait_for_managed_health_secs(AUTO_TIER_HEALTH_WAIT_SECS) {
-                        return Ok(serde_json::json!({
-                            "status": "started",
-                            "pid": "managed",
-                            "model": VISION_STATUS_LABEL,
-                            "gpuLayers": layers,
-                            "gpuAuto": true,
-                            "vulkanVisibleDevice": vk_label,
-                            "localServerPort": crate::llama_port::current_managed_listen_port(),
-                        }));
-                    }
-
-                    last_err = format!(
-                        "GGML_VK_VISIBLE_DEVICES={} gpu_layers={} did not reach /health within {}s{}",
-                        vk_label,
-                        layers,
-                        AUTO_TIER_HEALTH_WAIT_SECS,
-                        {
-                            let t = read_server_log_tail_chars(800);
-                            if t.is_empty() {
-                                String::new()
-                            } else {
-                                format!(". Last log excerpt: {}", t)
-                            }
-                        }
-                    );
-                    log::warn!("[FlowSight llama-server] {}", last_err);
-                    let _ = stop_server();
-                    std::thread::sleep(std::time::Duration::from_millis(350));
+                {
+                    let mut guard = SERVER_PROCESS.lock().unwrap();
+                    *guard = Some(child);
                 }
+
+                log::info!(
+                    "[FlowSight llama-server] Auto tier GGML_VK_VISIBLE_DEVICES={} gpu_layers={}, waiting health up to {}s",
+                    vk_label,
+                    layers,
+                    AUTO_TIER_HEALTH_WAIT_SECS
+                );
+
+                if wait_for_managed_health_secs(AUTO_TIER_HEALTH_WAIT_SECS) {
+                    return Ok(serde_json::json!({
+                        "status": "started",
+                        "pid": "managed",
+                        "model": VISION_STATUS_LABEL,
+                        "gpuLayers": layers,
+                        "gpuAuto": true,
+                        "vulkanVisibleDevice": vk_label,
+                        "localServerPort": crate::llama_port::current_managed_listen_port(),
+                    }));
+                }
+
+                last_err = format!(
+                    "GGML_VK_VISIBLE_DEVICES={} gpu_layers={} did not reach /health within {}s{}",
+                    vk_label,
+                    layers,
+                    AUTO_TIER_HEALTH_WAIT_SECS,
+                    {
+                        let t = read_server_log_tail_chars(800);
+                        if t.is_empty() {
+                            String::new()
+                        } else {
+                            format!(". Last log excerpt: {}", t)
+                        }
+                    }
+                );
+                log::warn!("[FlowSight llama-server] {}", last_err);
+                let _ = stop_server();
+                std::thread::sleep(std::time::Duration::from_millis(350));
             }
 
             Err(format!(
-                "Automatic GPU tier startup failed on all steps. {}",
+                "Local AI startup failed after GPU and CPU attempts. {}",
                 last_err
             ))
         }
