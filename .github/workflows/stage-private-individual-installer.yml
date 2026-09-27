@@ -1,0 +1,110 @@
+name: Stage private Individual installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Official installer to copy into private R2 storage"
+        required: true
+        type: choice
+        options:
+          - windows
+          - mac-arm
+          - mac-intel
+          - linux-deb
+          - linux-appimage
+      tag:
+        description: "Existing public release tag containing the installer"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_INDIVIDUAL_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_INDIVIDUAL_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_INDIVIDUAL_BUCKET }}
+      PLATFORM: ${{ inputs.platform }}
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Validate private storage configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing ${name}; no installer was uploaded."
+              exit 1
+            fi
+          done
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must be a version such as v4.0.1."
+            exit 1
+          fi
+
+      - name: Choose source release
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PLATFORM" in
+            windows) repo="Mancasvel/FlowSight.AI"; pattern='*x64-setup.exe' ;;
+            mac-arm) repo="Mancasvel/FlowSight_Mac"; pattern='*aarch64.dmg' ;;
+            mac-intel) repo="Mancasvel/FlowSight_Mac"; pattern='*x64.dmg' ;;
+            linux-deb) repo="Mancasvel/FlowSight_linux"; pattern='*.deb' ;;
+            linux-appimage) repo="Mancasvel/FlowSight_linux"; pattern='*.AppImage' ;;
+            *) echo "::error::Unknown platform"; exit 1 ;;
+          esac
+          echo "SOURCE_REPO=$repo" >> "$GITHUB_ENV"
+          echo "ASSET_PATTERN=$pattern" >> "$GITHUB_ENV"
+
+      - name: Download existing release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staged
+          gh release download "$RELEASE_TAG" --repo "$SOURCE_REPO" --pattern "$ASSET_PATTERN" --dir staged
+          mapfile -t files < <(find staged -maxdepth 1 -type f -print)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one installer, found ${#files[@]}."
+            exit 1
+          fi
+          echo "INSTALLER_PATH=${files[0]}" >> "$GITHUB_ENV"
+          echo "INSTALLER_NAME=$(basename "${files[0]}")" >> "$GITHUB_ENV"
+
+      - name: Upload and verify private object
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          key="individual/${RELEASE_TAG}/${INSTALLER_NAME}"
+          size="$(stat -c %s "$INSTALLER_PATH")"
+          sha256="$(sha256sum "$INSTALLER_PATH" | cut -d ' ' -f1)"
+          case "$PLATFORM" in
+            windows) content_type='application/vnd.microsoft.portable-executable' ;;
+            mac-arm|mac-intel) content_type='application/x-apple-diskimage' ;;
+            linux-deb) content_type='application/vnd.debian.binary-package' ;;
+            linux-appimage) content_type='application/octet-stream' ;;
+          esac
+          aws s3 cp "$INSTALLER_PATH" "s3://${R2_BUCKET}/${key}" \
+            --endpoint-url "$endpoint" --no-progress \
+            --content-type "$content_type" \
+            --content-disposition "attachment; filename=\"${INSTALLER_NAME}\"" \
+            --metadata "sha256=${sha256}"
+          stored_size="$(aws s3api head-object --bucket "$R2_BUCKET" --key "$key" \
+            --endpoint-url "$endpoint" --query ContentLength --output text)"
+          stored_sha256="$(aws s3api head-object --bucket "$R2_BUCKET" --key "$key" \
+            --endpoint-url "$endpoint" --query 'Metadata.sha256' --output text)"
+          if [ "$stored_size" != "$size" ] || [ "$stored_sha256" != "$sha256" ]; then
+            echo "::error::Uploaded object metadata does not match the release asset."
+            exit 1
+          fi
+          echo "Private object verified: ${key} (${size} bytes)" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256: ${sha256}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Set the corresponding INDIVIDUAL_*_OBJECT_KEY to ${key} in the Individual landing deployment." >> "$GITHUB_STEP_SUMMARY"

@@ -165,13 +165,16 @@ FlowSight is distributed under a **dual licensing model**:
 
 | Edition | License | Intended for |
 |---|---|---|
-| **Community** | [GNU AGPL-3.0](./LICENSE) | Individuals, OSS projects, academic use, internal non-commercial deployments |
-| **Enterprise / Commercial** | [Proprietary, per contract](./COMMERCIAL-LICENSE.md) | Closed-source redistribution, SaaS offerings, OEM, customers whose policies forbid AGPL |
+| **Community** | [GNU AGPL-3.0](./LICENSE) | Anyone, including commercial users, who follows the AGPL |
+| **Enterprise / Commercial** | [Proprietary, per contract](./COMMERCIAL-LICENSE.md) | Different license terms for closed-source distribution, SaaS, OEM, or policies that forbid AGPL |
 
-> **TL;DR:** you can use, modify and self-host the Community Edition as
-> long as you respect the AGPL — which, crucially, requires you to publish
-> your modifications if you expose them over a network. If you can't live
-> with that, buy a commercial license: **manuel@flowsight.site**.
+> **TL;DR:** commercial use is allowed under the AGPL. You can use, modify,
+> redistribute, and self-host the Community Edition while following its terms,
+> including applicable source-sharing obligations for distributed or modified
+> network-served versions. If you need different terms, ask about a separate
+> proprietary license: **manuel@flowsight.site**. A planned €10 one-time
+> Individual purchase is for the official local distribution, not a proprietary
+> source-code license; monthly cloud plans are separate.
 
 ### Contributing
 
@@ -196,7 +199,7 @@ GitHub's private Security Advisory feature on this repository, or email
 
 ## Support FlowSight
 
-FlowSight is free and open source. If it's useful to you, consider supporting the project:
+FlowSight's source code is open source under the AGPL. If it's useful to you, consider supporting the project:
 
 ### 💜 [Support on Ko-fi](https://ko-fi.com/flowsight)
 
