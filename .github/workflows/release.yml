@@ -116,6 +116,13 @@ jobs:
           console.log(`Release ${tag} matches every application manifest.`);
           NODE
 
+      # Tauri's build script validates configured bundle resources even during
+      # `cargo test`, so model assets must exist before the Rust test gate.
+      - name: Fetch local model assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm --filter @flowsight/agent fetch-models
+
       - name: Renderer tests
         run: pnpm --filter @flowsight/agent test:renderer
 
