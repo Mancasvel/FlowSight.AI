@@ -136,7 +136,7 @@ jobs:
         run: cargo clippy --manifest-path apps/agent/src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 
       - name: Supabase function tests
-        run: deno test --allow-env --allow-read supabase/functions
+        run: deno test --node-modules-dir=none --allow-env --allow-read supabase/functions
 
       - name: JavaScript dependency audit
         run: pnpm audit
