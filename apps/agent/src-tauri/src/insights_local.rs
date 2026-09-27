@@ -284,7 +284,7 @@ pub fn build_local_insights_report(
             count,
         })
         .collect();
-    category_breakdown.sort_by(|a, b| b.total_seconds.cmp(&a.total_seconds));
+    category_breakdown.sort_by_key(|row| std::cmp::Reverse(row.total_seconds));
 
     let mut ticket_breakdown: Vec<TicketRow> = ticket_map
         .into_iter()
@@ -294,7 +294,7 @@ pub fn build_local_insights_report(
             count,
         })
         .collect();
-    ticket_breakdown.sort_by(|a, b| b.total_seconds.cmp(&a.total_seconds));
+    ticket_breakdown.sort_by_key(|row| std::cmp::Reverse(row.total_seconds));
     ticket_breakdown.truncate(20);
 
     let mut daily_totals: Vec<DailyRow> = daily_map
@@ -333,7 +333,7 @@ pub fn build_local_insights_report(
             activity_count,
         })
         .collect();
-    work_themes.sort_by(|a, b| b.total_seconds.cmp(&a.total_seconds));
+    work_themes.sort_by_key(|row| std::cmp::Reverse(row.total_seconds));
     work_themes.truncate(12);
 
     let mut longest_activity_rows: Vec<ActivityCandidateRow> = all_samples
@@ -346,7 +346,7 @@ pub fn build_local_insights_report(
             ticket: s.ticket.clone(),
         })
         .collect();
-    longest_activity_rows.sort_by(|a, b| b.duration_seconds.cmp(&a.duration_seconds));
+    longest_activity_rows.sort_by_key(|row| std::cmp::Reverse(row.duration_seconds));
     longest_activity_rows.truncate(12);
 
     let peak_day = daily_totals
