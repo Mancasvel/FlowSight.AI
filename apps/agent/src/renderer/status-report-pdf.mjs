@@ -454,7 +454,7 @@ export function renderStatusReportPdf(doc, model) {
   y = ensureSpace(doc, y, Math.min(lessonHeight, 190));
   y = drawSection(doc, 'What this period taught us', y, '', 15);
   if (!model.lessons.length) {
-    y = drawParagraph(doc, 'No lessons were generated for this period.', y, { color: MUTED }) + 3;
+    y = drawParagraph(doc, model.lessonEmptyMessage, y, { color: MUTED }) + 3;
   } else {
     for (const lesson of model.lessons) {
       y = ensureSpace(doc, y, 12);

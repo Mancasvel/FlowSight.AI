@@ -78,7 +78,35 @@ test('an empty period does not invent positive signals or actions', () => {
   assert.equal(model.statusTone, 'neutral');
   assert.equal(model.days.length, 7);
   assert.equal(model.actions.length, 0);
+  assert.equal(model.lessons.length, 0);
   assert.ok(renderStatusReportHtml(model).includes('No specific next move is supported'));
+  assert.ok(renderStatusReportHtml(model).includes('not enough evidence to draw a lesson'));
+});
+
+test('missing AI lessons recover from recorded evidence in the review and PDF', () => {
+  const payload = syntheticReport();
+  payload.report.lessons_learned = [{ title: '', body: 'Incomplete AI item' }];
+  const model = createStatusReportViewModel(payload);
+
+  assert.ok(model.lessons.some((lesson) => lesson.body.includes('6.0h (60% of tracked time)')));
+  assert.ok(model.lessons.some((lesson) => lesson.body.includes('2 of 7 days')));
+  const html = renderStatusReportHtml(model);
+  assert.ok(html.includes('The work mix had a clear centre'));
+  assert.ok(!html.includes('No lessons were generated'));
+
+  const doc = new jsPDF();
+  const drawn = [];
+  const originalText = doc.text.bind(doc);
+  doc.text = (value, ...args) => {
+    drawn.push(String(value));
+    return originalText(value, ...args);
+  };
+  renderStatusReportPdf(doc, model);
+  assert.ok(drawn.some((line) => line.includes('The work mix had a clear centre')));
+  assert.ok(!drawn.some((line) => line.includes('No lessons were generated')));
+
+  delete payload.report.lessons_learned;
+  assert.ok(createStatusReportViewModel(payload).lessons.length > 0);
 });
 
 test('a concise review keeps its charts and findings within two PDF pages', () => {

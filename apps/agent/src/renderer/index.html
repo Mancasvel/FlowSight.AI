@@ -8335,43 +8335,64 @@
     function showPdfDownloadModal(savedPath, filename) {
       if (document.getElementById('pdfDownloadOverlay')) return;
 
+      const previousFocus = document.activeElement;
       const overlay = document.createElement('div');
       overlay.className = 'modal-overlay';
       overlay.id = 'pdfDownloadOverlay';
       overlay.style.zIndex = '2100';
 
       const folderPath = savedPath.replace(/[/\\][^/\\]+$/, '') || savedPath;
-      const displayName = filename || savedPath.split(/[/\\]/).pop() || 'report.pdf';
+      const displayName = savedPath.split(/[/\\]/).pop() || filename || 'report.pdf';
 
       overlay.innerHTML = `
-        <div class="modal-content" style="max-width:420px;">
-          <div class="modal-header">
-            <span class="modal-title">Report downloaded</span>
+        <div class="modal-content pdf-download-dialog" role="dialog" aria-modal="true" aria-labelledby="pdfDownloadTitle" aria-describedby="pdfDownloadDescription">
+          <div class="modal-header pdf-download-dialog__header">
+            <span class="pdf-download-dialog__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span>
+            <span class="modal-title" id="pdfDownloadTitle">Report downloaded</span>
           </div>
-          <div class="modal-body">
-            <p style="font-size:13px;margin:0 0 4px;">Your PDF is ready in your Downloads folder.</p>
+          <div class="modal-body pdf-download-dialog__body">
+            <p class="pdf-download-dialog__description" id="pdfDownloadDescription">Your PDF is ready in your Downloads folder.</p>
             <div class="pdf-download-path">
               <div class="pdf-download-filename">${escapeHtml(displayName)}</div>
-              <div style="color:hsl(var(--muted-foreground));">${escapeHtml(folderPath)}</div>
+              <div class="pdf-download-dialog__location">${escapeHtml(folderPath)}</div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">
-              <button type="button" id="pdfDownloadOpenFolderBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:1px solid hsl(var(--border));background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));">Open folder</button>
-              <button type="button" id="pdfDownloadOkBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:none;background:hsl(var(--primary));color:hsl(var(--primary-foreground));">OK</button>
+            <div class="pdf-download-dialog__actions">
+              <button type="button" class="button button-secondary" id="pdfDownloadOpenFolderBtn">Open folder</button>
+              <button type="button" class="button button-primary" id="pdfDownloadOkBtn">Done</button>
             </div>
           </div>
         </div>`;
 
       document.body.appendChild(overlay);
-      const close = () => overlay.remove();
+      const openFolderBtn = overlay.querySelector('#pdfDownloadOpenFolderBtn');
+      const doneBtn = overlay.querySelector('#pdfDownloadOkBtn');
+      const close = () => {
+        overlay.remove();
+        if (previousFocus?.isConnected) previousFocus.focus();
+      };
+      doneBtn?.focus();
       overlay.querySelector('#pdfDownloadOkBtn')?.addEventListener('click', close);
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) close();
       });
-      overlay.querySelector('#pdfDownloadOpenFolderBtn')?.addEventListener('click', async () => {
+      overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          close();
+        } else if (e.key === 'Tab' && (e.shiftKey ? document.activeElement === openFolderBtn : document.activeElement === doneBtn)) {
+          e.preventDefault();
+          (e.shiftKey ? doneBtn : openFolderBtn)?.focus();
+        }
+      });
+      openFolderBtn?.addEventListener('click', async () => {
+        openFolderBtn.disabled = true;
         try {
-          await invoke('open_path_in_file_manager', { path: savedPath });
+          await invoke('open_path_in_file_manager', { path: folderPath });
+          close();
         } catch (err) {
           showToast('Could not open folder: ' + err, 'error');
+          openFolderBtn.disabled = false;
+          openFolderBtn.focus();
         }
       });
     }

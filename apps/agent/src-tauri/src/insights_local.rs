@@ -511,6 +511,7 @@ pub fn generate_local_status_report(
 
     let mut report = report;
     sanitize_report_english(&mut report);
+    repair_learning_fields(&mut report, &local_data);
 
     let ai_powered = generation_passes
         .iter()
@@ -1404,8 +1405,22 @@ fn extract_english_text(s: &str) -> String {
         .map(|c| if is_cjk_char(c) { ' ' } else { c })
         .collect();
 
-    let segments: Vec<String> = cleaned
-        .split(['.', '!', '?', '\n'])
+    let mut raw_segments = Vec::new();
+    let mut start = 0;
+    for (index, character) in cleaned.char_indices() {
+        let next_is_space = match cleaned[index + character.len_utf8()..].chars().next() {
+            None => true,
+            Some(next) => next.is_whitespace(),
+        };
+        if character == '\n' || (matches!(character, '.' | '!' | '?') && next_is_space) {
+            raw_segments.push(&cleaned[start..index]);
+            start = index + character.len_utf8();
+        }
+    }
+    raw_segments.push(&cleaned[start..]);
+
+    let segments: Vec<String> = raw_segments
+        .into_iter()
         .map(str::trim)
         .filter(|seg| !seg.is_empty() && latin_ratio(seg) >= 0.55)
         .map(|seg| seg.split_whitespace().collect::<Vec<_>>().join(" "))
@@ -1416,7 +1431,7 @@ fn extract_english_text(s: &str) -> String {
     }
 
     let mut out = segments.join(". ");
-    if !out.ends_with('.') && s.contains('.') {
+    if !out.ends_with('.') && s.trim_end().ends_with('.') {
         out.push('.');
     }
     out
@@ -1439,6 +1454,47 @@ fn sanitize_report_english(value: &mut serde_json::Value) {
         }
         _ => {}
     }
+}
+
+fn repair_learning_fields(report: &mut serde_json::Value, local_data: &serde_json::Value) {
+    let mut lessons: Vec<serde_json::Value> = report["lessons_learned"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|lesson| {
+            lesson["title"]
+                .as_str()
+                .is_some_and(|s| !s.trim().is_empty())
+                && lesson["body"]
+                    .as_str()
+                    .is_some_and(|s| !s.trim().is_empty())
+        })
+        .cloned()
+        .collect();
+
+    // A syntactically valid AI response can still omit the required section.
+    // Keep genuine AI lessons, but recover missing content from observed data.
+    if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
+        lessons.clear();
+    } else if lessons.is_empty() {
+        let mut fallback = serde_json::json!(build_lessons_learned(local_data));
+        sanitize_report_english(&mut fallback);
+        lessons = fallback.as_array().cloned().unwrap_or_default();
+    }
+    report["lessons_learned"] = serde_json::json!(lessons);
+
+    let mut recommendations: Vec<String> = report["recommendations"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.as_str().map(str::trim))
+        .filter(|item| !item.is_empty())
+        .map(str::to_string)
+        .collect();
+    if recommendations.is_empty() {
+        recommendations = default_recommendations(local_data);
+    }
+    report["recommendations"] = serde_json::json!(recommendations);
 }
 
 fn build_rule_based_report(local_data: &serde_json::Value) -> serde_json::Value {
@@ -1799,6 +1855,10 @@ fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
 fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Value> {
     let mut lessons = Vec::new();
 
+    if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
+        return lessons;
+    }
+
     let eligible_seconds = local_data["focus_eligible_seconds"].as_i64().unwrap_or(0);
     if eligible_seconds > 0 {
         let fragmentation = local_data["focus_semantics"]["fragmentation_pct"]
@@ -1828,25 +1888,41 @@ fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Valu
         .as_array()
         .and_then(|a| a.first())
     {
-        let cat = top["category"].as_str().unwrap_or("Work");
-        lessons.push(serde_json::json!({
-            "title": format!("Review the role of {}", cat),
-            "body": format!(
-                "{} dominated your tracked hours. Check whether that mix matches your intended work; the category is descriptive, not a productivity score.",
-                cat
-            ),
-        }));
+        let category_seconds = top["total_seconds"].as_i64().unwrap_or(0);
+        if category_seconds > 0 {
+            let cat = top["category"].as_str().unwrap_or("Work");
+            let total_seconds = local_data["total_seconds"].as_i64().unwrap_or(0);
+            lessons.push(serde_json::json!({
+                "title": format!("Review the role of {}", cat),
+                "body": format!(
+                    "{} accounted for {:.1}h ({:.0}% of tracked time). Check whether that mix matches your intended work; the category is descriptive, not a productivity score.",
+                    cat,
+                    category_seconds as f64 / 3600.0,
+                    category_seconds as f64 / total_seconds as f64 * 100.0
+                ),
+            }));
+        }
     }
 
-    let consistency = local_data["tracking_consistency_pct"]
-        .as_f64()
-        .unwrap_or(0.0);
-    if consistency < 100.0 {
+    if let Some(consistency) = local_data["tracking_consistency_pct"].as_f64() {
+        if consistency < 100.0 {
+            lessons.push(serde_json::json!({
+                "title": "Coverage limits the conclusion",
+                "body": format!(
+                    "Activity was observed on {:.0}% of days in the selected period. Treat untracked days as missing data, not as days without work.",
+                    consistency
+                ),
+            }));
+        }
+    }
+
+    if lessons.is_empty() {
+        let hours = local_data["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
         lessons.push(serde_json::json!({
-            "title": "Coverage limits the conclusion",
+            "title": "Recorded time is a starting point",
             "body": format!(
-                "Activity was observed on {:.0}% of days in the selected period. Treat untracked days as missing data, not as days without work.",
-                consistency
+                "{:.1}h was recorded, but category and focus signals are too limited for a specific workflow conclusion. Add task context or compare another period before changing plans.",
+                hours
             ),
         }));
     }
@@ -2281,5 +2357,74 @@ mod tests {
             .unwrap()
             .iter()
             .any(|lesson| lesson["title"] == "Sustained-work pattern"));
+    }
+
+    #[test]
+    fn missing_ai_learning_fields_recover_from_recorded_activity() {
+        let local_data = serde_json::json!({
+            "total_seconds": 7200,
+            "focus_eligible_seconds": 3600,
+            "tracking_consistency_pct": 50.0,
+            "category_breakdown": [{"category": "Analysis", "total_seconds": 7200}],
+            "focus_semantics": {"fragmentation_pct": 25.0, "focus_eligible_seconds": 3600},
+        });
+        let mut report = serde_json::json!({
+            "lessons_learned": [{"title": "", "body": "Missing title"}],
+            "recommendations": [],
+        });
+
+        repair_learning_fields(&mut report, &local_data);
+
+        assert!(report["lessons_learned"].as_array().unwrap().len() >= 2);
+        assert!(report["lessons_learned"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|lesson| lesson["title"] == "Inspect fragmentation"));
+        assert!(report["lessons_learned"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|lesson| lesson["body"]
+                .as_str()
+                .is_some_and(|body| body.contains("2.0h (100% of tracked time)"))));
+        assert!(!report["recommendations"].as_array().unwrap().is_empty());
+
+        let mut missing_section = serde_json::json!({});
+        repair_learning_fields(&mut missing_section, &local_data);
+        assert!(!missing_section["lessons_learned"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn learning_repair_preserves_valid_ai_copy_but_rejects_empty_period_claims() {
+        let local_data = serde_json::json!({"total_seconds": 3600});
+        let mut report = serde_json::json!({
+            "lessons_learned": [{"title": "Observed pattern", "body": "One hour was recorded."}],
+            "recommendations": ["Keep the next session labelled."],
+        });
+        repair_learning_fields(&mut report, &local_data);
+        assert_eq!(report["lessons_learned"][0]["title"], "Observed pattern");
+        assert_eq!(
+            report["recommendations"][0],
+            "Keep the next session labelled."
+        );
+
+        let mut empty_report = report;
+        repair_learning_fields(&mut empty_report, &serde_json::json!({"total_seconds": 0}));
+        assert!(empty_report["lessons_learned"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(build_lessons_learned(&serde_json::json!({"total_seconds": 0})).is_empty());
+    }
+
+    #[test]
+    fn english_report_cleanup_preserves_decimal_metrics_and_domain_names() {
+        let copy = "FlowSight.ai recorded 2.0h (100% of tracked time). Review the mix.";
+        assert_eq!(extract_english_text(copy), copy);
+        assert_eq!(extract_english_text("2.5h tracked"), "2.5h tracked");
     }
 }

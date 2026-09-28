@@ -514,6 +514,19 @@ input[type="checkbox"] { accent-color: #14b5a9; }
 .modal-title,
 .report-modal-header h2 { color: #34465a; font-family: Manrope, sans-serif; font-weight: 800; }
 .report-modal-close { background: #f3faf8; color: #627989; }
+.pdf-download-dialog { max-width: 420px; }
+.pdf-download-dialog__header { justify-content: flex-start; gap: 11px; padding: 19px 20px 16px; }
+.pdf-download-dialog__icon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 10px; background: hsl(var(--primary) / 0.11); color: hsl(var(--accent-foreground)); }
+.pdf-download-dialog__icon svg { width: 17px; height: 17px; }
+.pdf-download-dialog .modal-title { font-size: 15px; letter-spacing: -0.02em; }
+.pdf-download-dialog__body { padding: 16px 20px 20px; }
+.pdf-download-dialog__description { margin: 0; color: hsl(var(--foreground)); font-size: 13px; line-height: 1.5; }
+.pdf-download-dialog .pdf-download-path { margin-top: 13px; padding: 12px 13px; border-radius: 12px; word-break: normal; }
+.pdf-download-dialog__location { color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
+.pdf-download-dialog__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.pdf-download-dialog__actions .button { min-height: 44px; padding: 10px 12px; font-size: 12px; font-weight: 700; }
+.pdf-download-dialog__actions .button-primary { border-color: #087f78; background: #087f78; color: #fff; }
+.pdf-download-dialog__actions .button-primary:hover:not(:disabled) { border-color: #066b65; background: #066b65; }
 .sr-review-hero { background: #254451; }
 .sr-review-heading p,
 .sr-review-meta { color: #d4e7e7; }

@@ -64,6 +64,48 @@ function reportTone(status) {
   return 'neutral';
 }
 
+function reportLessons(report, { categories, days, totalSeconds, focusSeconds, focusSessions, activeDays }) {
+  const supplied = asItems(report.lessons_learned)
+    .map((lesson) => ({
+      title: cleanReportText(lesson?.title),
+      body: cleanReportText(lesson?.body),
+    }))
+    .filter((lesson) => lesson.title && lesson.body);
+  if (!totalSeconds) return [];
+  if (supplied.length) return supplied;
+
+  // Older or incomplete local-AI payloads still need evidence-backed lessons
+  // in both the on-screen review and the PDF exported from that same model.
+  const lessons = [];
+  const top = categories[0];
+  if (top) {
+    lessons.push({
+      title: 'The work mix had a clear centre',
+      body: `${top.hours}h (${top.percent}% of tracked time) was categorised as ${top.label}. Compare that mix with your intended priorities; time distribution alone is not an outcome measure.`,
+    });
+  }
+  if (focusSeconds > 0) {
+    const blocks = focusSessions > 0 ? ` across ${focusSessions} sustained ${focusSessions === 1 ? 'block' : 'blocks'}` : '';
+    lessons.push({
+      title: 'Sustained work was visible',
+      body: `${(focusSeconds / 3600).toFixed(1)}h of sustained focus was recorded${blocks}. Use the recorded block boundaries to identify conditions worth repeating, without treating duration as a productivity score.`,
+    });
+  }
+  if (days.length > 0 && activeDays > 0 && activeDays < days.length) {
+    lessons.push({
+      title: 'Coverage limits the conclusion',
+      body: `Activity was recorded on ${activeDays} of ${days.length} days. Days without recorded activity do not prove that no work happened.`,
+    });
+  }
+  if (!lessons.length) {
+    lessons.push({
+      title: 'Recorded time is a starting point',
+      body: `${(totalSeconds / 3600).toFixed(1)}h was recorded, but category and focus signals are too limited for a specific workflow conclusion. Add task context or compare another period before changing plans.`,
+    });
+  }
+  return lessons;
+}
+
 export function createStatusReportViewModel(payload, { userName = 'Knowledge worker', todayDate = '' } = {}) {
   const report = payload?.report || {};
   const local = payload?.local_data || {};
@@ -72,7 +114,9 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
   const list = (value) => asItems(value).map(text).filter(Boolean);
   const totalSeconds = asSeconds(local.total_seconds);
   const focusSeconds = asSeconds(local.deep_focus_seconds);
+  const focusSessions = Math.max(0, Number(local.deep_focus_sessions) || 0);
   const days = reportDays(local);
+  const activeDays = Math.max(0, Number(local.active_days) || days.filter((day) => day.seconds > 0).length);
   const period = text(meta.period_label)
     || [isoDay(local.period_start), isoDay(local.period_end)].filter(Boolean).join(' – ')
     || todayDate;
@@ -101,8 +145,8 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
     timelineCaption: text(report.timeline_caption || report.work_summary),
     totalHours: (totalSeconds / 3600).toFixed(1),
     focusHours: (focusSeconds / 3600).toFixed(1),
-    focusSessions: Math.max(0, Number(local.deep_focus_sessions) || 0),
-    activeDays: Math.max(0, Number(local.active_days) || days.filter((day) => day.seconds > 0).length),
+    focusSessions,
+    activeDays,
     periodDays: days.length || Math.max(0, Number(local.period_days) || 0),
     empty: totalSeconds === 0,
     days,
@@ -118,10 +162,8 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
     potentialRisks: list(report.potential_risks),
     observedWork: list(report.observed_work),
     highlights: list(report.work_progress),
-    lessons: asItems(report.lessons_learned).map((lesson) => ({
-      title: text(lesson.title) || 'Learning',
-      body: text(lesson.body),
-    })),
+    lessons: reportLessons(report, { categories, days, totalSeconds, focusSeconds, focusSessions, activeDays }),
+    lessonEmptyMessage: 'No activity was recorded, so there is not enough evidence to draw a lesson for this period.',
     aiPowered: Boolean(payload?.ai_powered),
   };
 }
@@ -169,7 +211,7 @@ export function renderStatusReportHtml(model) {
     : '<p class="sr-muted">No work-area detail was generated.</p>';
   const lessons = model.lessons.length
     ? `<div class="sr-lessons">${model.lessons.map((lesson) => `<div><strong>${escapeHtml(lesson.title)}</strong><p>${escapeHtml(lesson.body)}</p></div>`).join('')}</div>`
-    : '<p class="sr-muted">No lessons were generated for this period.</p>';
+    : `<p class="sr-muted">${escapeHtml(model.lessonEmptyMessage)}</p>`;
 
   return `
     <article class="status-report sr-review">
