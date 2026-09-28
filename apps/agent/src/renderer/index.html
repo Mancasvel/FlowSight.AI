@@ -3057,6 +3057,171 @@
       box-shadow: 0 24px 64px rgb(15 23 42 / 0.18);
     }
 
+    .update-dialog-overlay {
+      padding: 12px;
+    }
+
+    .update-dialog {
+      max-width: 388px;
+      max-height: calc(100vh - 24px);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .update-dialog__header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 20px 14px;
+      flex: none;
+    }
+
+    .update-dialog__icon {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      flex: none;
+      border-radius: 12px;
+      background: hsl(var(--primary) / 0.1);
+      color: hsl(var(--primary));
+    }
+
+    .update-dialog__icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .update-dialog__title {
+      margin: 0;
+      color: hsl(var(--foreground));
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+    }
+
+    .update-dialog__version {
+      margin: 3px 0 0;
+      color: hsl(var(--primary));
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .update-dialog__body {
+      min-height: 0;
+      padding: 0 20px 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .update-dialog__body:focus-visible {
+      outline: 3px solid hsl(var(--ring) / 0.36);
+      outline-offset: -3px;
+    }
+
+    .update-dialog__description {
+      margin: 0;
+      color: hsl(var(--muted-foreground));
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .update-dialog__notes {
+      margin: 14px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid hsl(var(--border));
+      color: hsl(var(--foreground));
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .update-dialog__footer {
+      padding: 14px 20px 20px;
+      flex: none;
+      border-top: 1px solid hsl(var(--border) / 0.8);
+      background: hsl(var(--card));
+    }
+
+    .update-dialog__hint {
+      margin: 0 0 11px;
+      color: hsl(var(--muted-foreground));
+      font-size: 11px;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .update-dialog__actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .update-dialog__actions .button {
+      min-width: 0;
+      min-height: 44px;
+      flex: 1;
+      padding: 10px 12px;
+      border-radius: 11px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .update-dialog__actions .button-secondary {
+      color: hsl(var(--foreground));
+    }
+
+    .update-dialog__progress-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: hsl(var(--muted));
+    }
+
+    .update-dialog__progress-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: hsl(var(--primary));
+      transform: scaleX(0);
+      transform-origin: left center;
+      transition: transform 0.16s ease;
+    }
+
+    .update-dialog__progress-label {
+      margin: 9px 0 0;
+      color: hsl(var(--foreground));
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .update-dialog__error {
+      margin: 0 0 12px;
+      padding: 10px 11px;
+      border: 1px solid hsl(var(--destructive) / 0.3);
+      border-radius: 10px;
+      background: hsl(var(--destructive) / 0.08);
+      color: hsl(var(--foreground));
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .update-dialog__actions[hidden],
+    .update-dialog__actions .button[hidden],
+    .update-dialog__progress[hidden],
+    .update-dialog__error[hidden] {
+      display: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .update-dialog__progress-fill {
+        transition: none;
+      }
+    }
+
     .coach-chat-shell.is-locked .coach-chat-inner {
       filter: none;
       opacity: 0.24;
@@ -6107,7 +6272,33 @@
       }, duration);
     }
 
+    const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+    const UPDATE_FOCUS_CHECK_MIN_MS = 5 * 60 * 1000;
+    const UPDATE_CHECK_TIMEOUT_MS = 20 * 1000;
+    const UPDATE_SNOOZE_MS = 24 * 60 * 60 * 1000;
+    const UPDATE_SNOOZE_KEY = 'flowsight_update_snooze';
     let updateCheckInFlight = false;
+    let lastUpdateCheckAt = 0;
+    let snoozedUpdate = null;
+
+    function isUpdateSnoozed(version) {
+      if (snoozedUpdate?.version === version && snoozedUpdate.until > Date.now()) return true;
+      try {
+        const saved = JSON.parse(localStorage.getItem(UPDATE_SNOOZE_KEY));
+        return saved?.version === version && Number(saved.until) > Date.now();
+      } catch {
+        return false;
+      }
+    }
+
+    function snoozeUpdate(version) {
+      snoozedUpdate = { version, until: Date.now() + UPDATE_SNOOZE_MS };
+      try {
+        localStorage.setItem(UPDATE_SNOOZE_KEY, JSON.stringify(snoozedUpdate));
+      } catch {
+        // Updates still work when WebView storage is unavailable.
+      }
+    }
 
     async function loadAppVersionLabel() {
       const label = document.getElementById('appVersionLabel');
@@ -6119,21 +6310,25 @@
       }
     }
 
-    // Checks GitHub Releases for a newer signed build and asks the user before
-    // downloading. `manual = true` surfaces "up to date" / error feedback for an
-    // explicit "Check for updates" action; the startup check stays silent on no-op.
+    // Checks GitHub Releases for a newer signed build and asks before downloading.
+    // Manual checks ignore a previous "Later" choice and report no-op/errors.
     async function checkForUpdates({ manual = false } = {}) {
-      if (updateCheckInFlight) return;
+      if (updateCheckInFlight || document.getElementById('updateOverlay')) return;
       updateCheckInFlight = true;
+      lastUpdateCheckAt = Date.now();
       const checkBtn = document.getElementById('checkUpdatesBtn');
-      if (manual && checkBtn) {
+      if (checkBtn) {
         checkBtn.disabled = true;
         checkBtn.textContent = 'Checking…';
       }
       try {
-        const update = await checkAppUpdate();
+        const update = await checkAppUpdate({ timeout: UPDATE_CHECK_TIMEOUT_MS });
         if (!update) {
           if (manual) showToast('You are on the latest version.', 'success');
+          return;
+        }
+        if (!manual && isUpdateSnoozed(update.version)) {
+          await update.close().catch(() => {});
           return;
         }
         showUpdatePrompt(update);
@@ -6149,58 +6344,133 @@
         }
       } finally {
         updateCheckInFlight = false;
-        if (manual && checkBtn) {
+        if (checkBtn) {
           checkBtn.disabled = false;
           checkBtn.textContent = 'Check for updates';
         }
       }
     }
 
+    function startAutomaticUpdateChecks() {
+      // Run independently of login, consent and local-AI startup work.
+      checkForUpdates().catch(() => {});
+      setInterval(() => checkForUpdates().catch(() => {}), UPDATE_CHECK_INTERVAL_MS);
+
+      const checkWhenReturning = () => {
+        if (Date.now() - lastUpdateCheckAt >= UPDATE_FOCUS_CHECK_MIN_MS) {
+          checkForUpdates().catch(() => {});
+        }
+      };
+      window.addEventListener('focus', checkWhenReturning);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) checkWhenReturning();
+      });
+    }
+
     function showUpdatePrompt(update) {
-      if (document.getElementById('updateOverlay')) return;
+      if (document.getElementById('updateOverlay')) {
+        update.close().catch(() => {});
+        return;
+      }
 
       const overlay = document.createElement('div');
-      overlay.className = 'modal-overlay';
+      overlay.className = 'modal-overlay update-dialog-overlay';
       overlay.id = 'updateOverlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'updateDialogTitle');
+      overlay.setAttribute('aria-describedby', 'updateDialogDescription');
+      const previousFocus = document.activeElement;
 
       const notes = (update.body || '').trim();
       const notesHtml = notes
-        ? `<p style="margin-top:10px;font-size:12px;color:hsl(var(--muted-foreground));white-space:pre-wrap;max-height:120px;overflow-y:auto;">${escapeHtml(notes)}</p>`
+        ? `<p class="update-dialog__notes">${escapeHtml(notes)}</p>`
         : '';
 
       overlay.innerHTML = `
-        <div class="modal-content" style="max-width:340px;">
-          <div class="modal-header">
-            <span class="modal-title">Update available</span>
-          </div>
-          <div class="modal-body">
-            <p style="font-size:13px;">FlowSight <strong>${escapeHtml(update.version)}</strong> is available.</p>
-            ${notesHtml}
-            <div id="updateProgress" style="display:none;margin-top:14px;">
-              <div style="height:6px;background:hsl(var(--muted));border-radius:999px;overflow:hidden;">
-                <div id="updateProgressBar" style="height:100%;width:0%;background:hsl(var(--primary));"></div>
-              </div>
-              <p id="updateProgressLabel" style="margin-top:6px;font-size:11px;color:hsl(var(--muted-foreground));">Starting download…</p>
+        <div class="modal-content update-dialog">
+          <div class="update-dialog__header">
+            <span class="update-dialog__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+              </svg>
+            </span>
+            <div>
+              <h2 class="update-dialog__title" id="updateDialogTitle">Update available</h2>
+              <p class="update-dialog__version">FlowSight ${escapeHtml(update.version)}</p>
             </div>
-            <div id="updateActions" style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
-              <button id="updateLaterBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:1px solid hsl(var(--border));background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));">Later</button>
-              <button id="updateNowBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border-radius:var(--radius);cursor:pointer;border:none;background:hsl(var(--primary));color:hsl(var(--primary-foreground));">Update now</button>
+          </div>
+          <div class="modal-body update-dialog__body" tabindex="0" role="region" aria-label="Update details">
+            <p class="update-dialog__description" id="updateDialogDescription">Install the new version now, or keep working and do it later.</p>
+            ${notesHtml}
+          </div>
+          <div class="update-dialog__footer">
+            <p class="update-dialog__hint">FlowSight will restart after installation.</p>
+            <p class="update-dialog__error" id="updateError" role="alert" hidden></p>
+            <div class="update-dialog__progress" id="updateProgress" tabindex="-1" hidden>
+              <div class="update-dialog__progress-track" id="updateProgressTrack" role="progressbar" aria-label="Update download" aria-valuemin="0" aria-valuemax="100">
+                <div class="update-dialog__progress-fill" id="updateProgressBar"></div>
+              </div>
+              <p class="update-dialog__progress-label" id="updateProgressLabel" role="status">Starting download…</p>
+            </div>
+            <div class="update-dialog__actions" id="updateActions">
+              <button type="button" class="button button-secondary" id="updateLaterBtn">Later</button>
+              <button type="button" class="button button-primary" id="updateNowBtn">Update now</button>
             </div>
           </div>
         </div>`;
 
       document.body.appendChild(overlay);
 
-      const close = () => overlay.remove();
-      overlay.querySelector('#updateLaterBtn').addEventListener('click', close);
+      const laterBtn = overlay.querySelector('#updateLaterBtn');
+      const nowBtn = overlay.querySelector('#updateNowBtn');
+      const actions = overlay.querySelector('#updateActions');
+      const details = overlay.querySelector('.update-dialog__body');
+      const progress = overlay.querySelector('#updateProgress');
+      const progressTrack = overlay.querySelector('#updateProgressTrack');
+      const bar = overlay.querySelector('#updateProgressBar');
+      const label = overlay.querySelector('#updateProgressLabel');
+      const errorMessage = overlay.querySelector('#updateError');
+      const hint = overlay.querySelector('.update-dialog__hint');
+      let installing = false;
+      let installed = false;
 
-      overlay.querySelector('#updateNowBtn').addEventListener('click', async () => {
-        const actions = overlay.querySelector('#updateActions');
-        const progress = overlay.querySelector('#updateProgress');
-        const bar = overlay.querySelector('#updateProgressBar');
-        const label = overlay.querySelector('#updateProgressLabel');
-        actions.style.display = 'none';
-        progress.style.display = 'block';
+      const close = () => {
+        if (!installed) snoozeUpdate(update.version);
+        overlay.remove();
+        update.close().catch(() => {});
+        previousFocus?.focus?.();
+      };
+      laterBtn.addEventListener('click', close);
+
+      overlay.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !installing) {
+          event.preventDefault();
+          close();
+        } else if (event.key === 'Tab' && installing) {
+          event.preventDefault();
+          progress.focus();
+        } else if (event.key === 'Tab') {
+          const first = details;
+          const last = nowBtn.hidden ? laterBtn : nowBtn;
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+      });
+      laterBtn.focus();
+
+      nowBtn.addEventListener('click', async () => {
+        if (installing) return;
+        installing = true;
+        errorMessage.hidden = true;
+        actions.hidden = true;
+        progress.hidden = false;
+        progress.focus();
 
         let downloaded = 0;
         let total = 0;
@@ -6210,32 +6480,52 @@
               case 'Started':
                 total = event.data.contentLength || 0;
                 label.textContent = 'Downloading…';
+                if (total > 0) progressTrack.setAttribute('aria-valuenow', '0');
                 break;
               case 'Progress':
                 downloaded += event.data.chunkLength || 0;
                 if (total > 0) {
                   const pct = Math.min(100, Math.round((downloaded / total) * 100));
-                  bar.style.width = pct + '%';
+                  bar.style.transform = `scaleX(${pct / 100})`;
+                  progressTrack.setAttribute('aria-valuenow', String(pct));
                   label.textContent = `Downloading… ${pct}%`;
                 }
                 break;
               case 'Finished':
-                bar.style.width = '100%';
+                bar.style.transform = 'scaleX(1)';
+                progressTrack.setAttribute('aria-valuenow', '100');
                 label.textContent = 'Installing… the app will restart.';
                 break;
             }
           });
-          await relaunch();
         } catch (err) {
           console.error('[Updater] Install failed:', err);
-          progress.style.display = 'none';
-          actions.style.display = 'flex';
+          installing = false;
+          progress.hidden = true;
+          actions.hidden = false;
           const msg = String(err?.message || err || '');
-          if (/404|not found/i.test(msg)) {
-            showToast('Installer not found on the update server. Download the latest build from GitHub Releases.', 'error', 8000);
-          } else {
-            showToast('Update failed to install. Please try again.', 'error', 6000);
-          }
+          errorMessage.textContent = /404|not found/i.test(msg)
+            ? 'Installer not found. Try again later or download it from GitHub Releases.'
+            : 'The update could not be installed. Try again or use the official GitHub release.';
+          errorMessage.hidden = false;
+          nowBtn.focus();
+          return;
+        }
+
+        installed = true;
+        try {
+          await relaunch();
+        } catch (err) {
+          console.error('[Updater] Relaunch failed:', err);
+          installing = false;
+          errorMessage.textContent = 'The update is installed, but FlowSight could not restart. Quit it from the tray, then open it again.';
+          errorMessage.hidden = false;
+          progress.hidden = true;
+          actions.hidden = false;
+          nowBtn.hidden = true;
+          laterBtn.textContent = 'Close';
+          hint.textContent = 'Restart FlowSight to finish the update.';
+          laterBtn.focus();
         }
       });
     }
@@ -7433,9 +7723,6 @@
         const waitingForOnboarding = await promptOnboardingIfNeeded();
         if (!waitingForOnboarding) maybeShowDesktopPresencePrompt();
       }
-
-      // Background self-update check; never blocks startup and stays silent on no-op.
-      checkForUpdates().catch(() => {});
     }
 
     // Native telemetry (foreground/UIA + configured-interval vision/action review +
@@ -7449,6 +7736,7 @@
       }
     });
 
+    startAutomaticUpdateChecks();
     init();
 
     async function refreshTasks() {
