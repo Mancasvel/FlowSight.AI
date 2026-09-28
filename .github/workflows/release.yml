@@ -144,6 +144,9 @@ jobs:
       - name: Build app
         run: pnpm build
 
+      - name: Smoke test MCP in the packaged executable
+        run: node scripts/check-mcp-stdio.mjs apps/agent/src-tauri/target/release/app.exe
+
       # Generate the updater manifest the app polls at
       # releases/latest/download/latest.json. We point it at the NSIS installer
       # because it self-updates per-user without a UAC prompt. GitHub renames
@@ -246,9 +249,15 @@ jobs:
       - name: Verify updater asset is reachable
         shell: bash
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [[ "$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq .isDraft)" == "true" ]]; then
+            echo "Release is still a draft; public updater URL will be checked after publication."
+            exit 0
+          fi
           url="$(node -pe "JSON.parse(require('fs').readFileSync('latest.json','utf8')).platforms['windows-x86_64'].url")"
           echo "Checking updater URL: $url"
           n=1
@@ -341,9 +350,15 @@ jobs:
 
       - name: Verify updater asset is reachable
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          if [[ "$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq .isDraft)" == "true" ]]; then
+            echo "Release is still a draft; public updater URL will be checked after publication."
+            exit 0
+          fi
           json="$(find artifacts -type f -name 'latest.json' | head -n1)"
           url="$(node -pe "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).platforms['windows-x86_64'].url" "$json")"
           echo "Checking updater URL: $url"
