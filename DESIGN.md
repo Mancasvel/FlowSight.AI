@@ -221,11 +221,11 @@ Standard cards use 20px corners, 20px internal padding, a fine border, and ambie
 
 ### Navigation
 
-The four-tab dock holds Today, Insights, Coach, and Settings, with icon and text visible together. Each item is at least 51px tall in the default layout; the selected item has a pale teal fill and teal icon and label. The dock remains floating while content scrolls.
+The four-tab dock holds Today, Insights, Coach, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls.
 
 ### Timer and evidence
 
-The Today surface centers status and tabular time above a linear goal rail, goal and streak labels, and the tracking action. Insights uses a weekly day strip, a measured-time card, focus ratio rail, and task bars. These visuals show observed time and focus without turning the screen into a score.
+The Today surface centers status and tabular time above a linear goal rail, goal and streak labels, and the tracking action. Insights uses a weekly day strip, a measured-time card, focus ratio rail, and task bars. Task bars have stable colors by activity category and fill according to their displayed share of tracked time. The hourly Deep Focus chart includes all recorded local hours and uses a fixed 60-minute scale. These visuals show observed time and focus without turning the screen into a score.
 
 ### Monitoring consent
 

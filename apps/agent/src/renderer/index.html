@@ -4208,6 +4208,13 @@
       renderStatusReportHtml,
     } from './status-report.mjs';
     import { renderStatusReportPdf } from './status-report-pdf.mjs';
+    import {
+      buildTaskBreakdown,
+      focusChartSlots,
+      formatChartHour,
+      taskColorForCategory,
+      taskSharePercent,
+    } from './insights-charts.mjs';
 
     console.log('[FlowSight] Imports loaded successfully');
 
@@ -5070,6 +5077,7 @@
     let sessionTimerInterval = null;
     let todayRefreshInterval = null;
     let trackingStateHydrated = false;
+    let trackingTransitionInProgress = false;
     const TIMER_RING_CIRC = 2 * Math.PI * 82;
     const TRACKING_CHECKPOINT_INTERVAL_SECONDS = 15;
 
@@ -5233,12 +5241,20 @@
       await invoke('start_monitoring');
     }
 
-    async function stopNativeMonitoring() {
+    async function stopNativeMonitoring({ requireSuccess = false } = {}) {
       try {
         await invoke('stop_monitoring');
-      } catch (e) {
-        console.warn('[Telemetry] stop_monitoring failed:', e);
+      } catch (error) {
+        if (requireSuccess) throw error;
+        console.warn('[Telemetry] stop_monitoring failed:', error);
       }
+    }
+
+    function setTrackingControlsBusy(busy) {
+      const playBtn = document.getElementById('playTimerBtn');
+      const stopBtn = document.getElementById('stopTimerBtn');
+      if (playBtn) playBtn.disabled = busy;
+      if (stopBtn) stopBtn.disabled = busy;
     }
 
     async function restoreTrackingSession() {
@@ -5296,31 +5312,52 @@
     }
 
     async function pauseMonitoring() {
-      isMonitoring = false;
-      isPaused = true;
-      clearCaptureRetry();
-      commitSessionTime();
-      await stopNativeMonitoring();
-      renderTrackingStatus();
-      persistTrackingState();
-      showToast('Tracking paused — time kept for today', 'success');
+      if (!isMonitoring || trackingTransitionInProgress) return;
+      trackingTransitionInProgress = true;
+      setTrackingControlsBusy(true);
+      try {
+        await stopNativeMonitoring({ requireSuccess: true });
+        isMonitoring = false;
+        isPaused = true;
+        commitSessionTime();
+        renderTrackingStatus();
+        persistTrackingState();
+        showToast('Tracking paused — time kept for today', 'success');
+      } catch (error) {
+        console.error('[Tracking] Pause failed:', error);
+        showToast('Could not pause tracking: ' + error, 'error');
+      } finally {
+        trackingTransitionInProgress = false;
+        setTrackingControlsBusy(false);
+      }
     }
 
     async function stopMonitoring() {
-      isMonitoring = false;
-      isPaused = false;
-      clearCaptureRetry();
-      commitSessionTime();
-      await stopNativeMonitoring();
-      renderTrackingStatus();
-      persistTrackingState();
+      if ((!isMonitoring && !isPaused) || trackingTransitionInProgress) return;
+      trackingTransitionInProgress = true;
+      setTrackingControlsBusy(true);
       try {
-        await invoke('stop_server');
-        showToast('Tracking stopped', 'success');
-      } catch (e) {
-        console.error('Failed to stop server:', e);
+        await stopNativeMonitoring({ requireSuccess: isMonitoring });
+        isMonitoring = false;
+        isPaused = false;
+        commitSessionTime();
+        renderTrackingStatus();
+        persistTrackingState();
+        try {
+          await invoke('stop_server');
+          showToast('Tracking stopped', 'success');
+        } catch (error) {
+          console.error('[Tracking] Local server shutdown failed:', error);
+          showToast('Tracking stopped, but the local AI server could not shut down: ' + error, 'error');
+        }
+        await refreshTodayView();
+      } catch (error) {
+        console.error('[Tracking] Stop failed:', error);
+        showToast('Could not stop tracking: ' + error, 'error');
+      } finally {
+        trackingTransitionInProgress = false;
+        setTrackingControlsBusy(false);
       }
-      await refreshTodayView();
     }
 
     async function resumeMonitoring() {
@@ -7615,32 +7652,6 @@
       return formatted;
     }
 
-    function buildTaskBreakdown(data) {
-      const items = [];
-      if (data.ticket_breakdown?.length) {
-        data.ticket_breakdown.forEach(t => {
-          items.push({ label: t.ticket, seconds: t.total_seconds });
-        });
-      }
-      const unticketedMap = {};
-      data.entries.forEach(e => {
-        if (!e.ticket) {
-          const label = e.category || 'General';
-          unticketedMap[label] = (unticketedMap[label] || 0) + e.duration_seconds;
-        }
-      });
-      Object.entries(unticketedMap).forEach(([label, seconds]) => {
-        items.push({ label, seconds });
-      });
-      if (items.length === 0 && data.category_breakdown?.length) {
-        data.category_breakdown.forEach(c => {
-          items.push({ label: c.category, seconds: c.total_seconds });
-        });
-      }
-      items.sort((a, b) => b.seconds - a.seconds);
-      return items;
-    }
-
     function canonicalDeepFocusSeconds(data) {
       return data.focus?.deep_focus_seconds || 0;
     }
@@ -7679,18 +7690,17 @@
 
     function renderTaskBars(items, totalSeconds) {
       if (!items.length) return '<div class="empty-state" style="padding:12px;">No task time recorded yet</div>';
-      const maxBar = Math.max(...items.map(i => i.seconds));
       return items.slice(0, 6).map((item) => {
-        const pct = totalSeconds > 0 ? Math.round((item.seconds / totalSeconds) * 100) : 0;
-        const barWidth = maxBar > 0 ? Math.round((item.seconds / maxBar) * 100) : 0;
-        const fillWidth = item.seconds > 0 ? Math.max(barWidth, 4) : 0;
+        const share = taskSharePercent(item.seconds, totalSeconds);
+        const pct = Math.round(share);
+        const fillWidth = share.toFixed(1);
         const mins = Math.round(item.seconds / 60);
         return `
           <div class="task-bar-row">
             <span class="task-bar-name" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
             <span class="task-bar-meta"><span class="task-bar-pct">${pct}%</span><span class="task-bar-time">${mins}m</span></span>
             <div class="task-bar-track" role="img" aria-label="${escapeHtml(item.label)}: ${pct}% of tracked time, ${mins} minutes">
-              <div class="task-bar-fill" style="width:${fillWidth}%"></div>
+              <div class="task-bar-fill" style="width:${fillWidth}%;background:${taskColorForCategory(item.category)}"></div>
             </div>
           </div>`;
       }).join('');
@@ -7708,30 +7718,31 @@
 
       const byHour = new Array(24).fill(0);
       (focus.hourly_deep_focus || []).forEach(bucket => {
-        byHour[bucket.hour] = bucket.seconds || 0;
+        const hour = Number(bucket.hour);
+        if (Number.isInteger(hour) && hour >= 0 && hour < 24) {
+          byHour[hour] = Math.max(0, Number(bucket.seconds) || 0);
+        }
       });
 
-      const slots = [];
-      for (let h = 0; h < 24; h++) {
-        slots.push({ hour: h, seconds: byHour[h] });
+      const slots = focusChartSlots(byHour);
+      if (!slots.length) {
+        return '<div class="focus-chart-empty">No hourly deep-focus data available yet</div>';
       }
-
-      const maxSec = Math.max(...slots.map(s => s.seconds), 1);
       const bars = slots.map(({ hour, seconds }) => {
-        const pct = seconds > 0 ? Math.max(Math.round((seconds / maxSec) * 100), 12) : 8;
-        const mins = Math.round(seconds / 60);
-        const tip = mins > 0
-          ? `${hour}:00 — ${mins} deep-focus min`
-          : `${hour}:00 — no minutes inside a deep-focus block`;
+        const pct = Math.min(100, Math.round((seconds / 3600) * 100));
+        const minutes = seconds < 60 ? 'under 1 minute' : `${Math.round(seconds / 60)} minutes`;
+        const tip = seconds > 0
+          ? `${formatChartHour(hour)} — ${minutes} of deep focus`
+          : `${formatChartHour(hour)} — no deep focus`;
         const cls = seconds > 0 ? 'focus-bar' : 'focus-bar focus-bar-empty';
-        return `<div class="${cls}" style="height:${pct}%" title="${tip}"></div>`;
+        return `<div class="${cls}" style="height:${pct}%" role="img" aria-label="${tip}" title="${tip}"></div>`;
       }).join('');
 
       return `
         <div class="focus-chart-wrap">
           <div class="focus-chart">${bars}</div>
-          <div class="focus-chart-axis"><span>12am</span><span>11pm</span></div>
-          <div class="focus-chart-caption" title="${escapeHtml(focus.proxy_disclaimer || '')}">Minutes inside sustained ${deepMinutes}+ minute blocks · hover for details</div>
+          <div class="focus-chart-axis"><span>${formatChartHour(slots[0].hour)}</span><span>${formatChartHour(slots.at(-1).hour)}</span></div>
+          <div class="focus-chart-caption" title="${escapeHtml(focus.proxy_disclaimer || '')}">Minutes in sustained ${deepMinutes}+ minute blocks · each bar is one hour</div>
         </div>`;
     }
 

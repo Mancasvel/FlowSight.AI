@@ -1278,7 +1278,9 @@ mod tests {
         assert!(renderer.contains("focus.browsing_distraction_min_seconds"));
         assert!(renderer.contains("sel.value !== 'General'"));
         assert!(renderer.contains("Sustained non-work browsing"));
-        assert!(renderer.contains("no minutes inside a deep-focus block"));
+        assert!(renderer.contains("no deep focus"));
+        assert!(renderer.contains("each bar is one hour"));
+        assert!(renderer.contains("(seconds / 3600) * 100"));
         assert!(!renderer.contains("Focus, flow, and planning"));
         for forbidden in [
             "FOCUS_CATEGORIES",
