@@ -1208,14 +1208,7 @@
       position: relative;
     }
 
-    .task-bar-fill {
-      position: absolute;
-      left: 0;
-      top: 0;
-      height: 100%;
-      border-radius: 8px;
-      min-width: 4px;
-    }
+    .task-bar-meter { display: block; width: 100%; height: 100%; }
 
     .task-bar-label {
       position: absolute;
@@ -1295,16 +1288,14 @@
     }
 
     .focus-bar {
-      flex: 1;
-      background: hsl(var(--summary-teal));
-      border-radius: 3px 3px 0 0;
-      min-height: 4px;
+      display: block;
+      flex: 1 1 0;
+      width: 0;
+      height: 100%;
+      min-width: 0;
     }
 
-    .focus-bar-empty {
-      background: hsl(var(--muted));
-      opacity: 0.55;
-    }
+    .focus-bar rect { fill: hsl(var(--summary-teal)); }
 
     .focus-chart-wrap {
       margin-bottom: 4px;
@@ -4378,7 +4369,7 @@
       focusBarPercent,
       focusChartSlots,
       formatChartHour,
-      taskColorForCategory,
+      taskColorKeyForCategory,
       taskSharePercent,
     } from './insights-charts.mjs';
 
@@ -7984,12 +7975,13 @@
         const pct = Math.round(share);
         const fillWidth = share.toFixed(1);
         const mins = Math.round(item.seconds / 60);
+        const colorKey = taskColorKeyForCategory(item.category);
         return `
-          <div class="task-bar-row" style="--task-accent:${taskColorForCategory(item.category)}">
-            <span class="task-bar-name" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
+          <div class="task-bar-row">
+            <span class="task-bar-name" title="${escapeHtml(item.label)}"><span class="task-bar-dot task-color-${colorKey}" aria-hidden="true"></span>${escapeHtml(item.label)}</span>
             <span class="task-bar-meta"><span class="task-bar-pct">${pct}%</span><span class="task-bar-time">${mins}m</span></span>
             <div class="task-bar-track" role="img" aria-label="${escapeHtml(item.label)}: ${pct}% of tracked time, ${mins} minutes">
-              <div class="task-bar-fill" style="width:${fillWidth}%"></div>
+              <svg class="task-bar-meter task-color-${colorKey}" viewBox="0 0 100 9" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="${fillWidth}" height="9" rx="1.5" ry="4.5"/></svg>
             </div>
           </div>`;
       }).join('');
@@ -8024,7 +8016,7 @@
           ? `${formatChartHour(hour)} — ${minutes} of deep focus`
           : `${formatChartHour(hour)} — no deep focus`;
         const cls = seconds > 0 ? 'focus-bar' : 'focus-bar focus-bar-empty';
-        return `<div class="${cls}" style="height:${pct}%" role="img" aria-label="${tip}" title="${tip}"></div>`;
+        return `<svg class="${cls}" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${tip}" title="${tip}"><rect x="0" y="${100 - pct}" width="100" height="${pct}" rx="20" ry="3"/></svg>`;
       }).join('');
 
       return `
@@ -8034,6 +8026,11 @@
           <div class="focus-chart-axis"><span>${formatChartHour(slots[0].hour)}</span><span>${formatChartHour(slots.at(-1).hour)}</span></div>
           <div class="focus-chart-caption" title="${escapeHtml(focus.proxy_disclaimer || '')}">Minutes in sustained ${deepMinutes}+ minute blocks · each bar is one hour</div>
         </div>`;
+    }
+
+    function renderSummaryRail(percent) {
+      const width = Math.max(0, Math.min(100, Number(percent) || 0));
+      return `<svg class="summary-meter" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="${width}" height="6" rx="1" ry="3"/></svg>`;
     }
 
     function renderTimeline(entries) {
@@ -8148,11 +8145,11 @@
                 ${goalSeconds > 0 ? `Daily goal ${getDailyGoalHours()} hours` : 'No daily goal set'}
               </div>
             </div>
-            ${goalSeconds > 0 ? `<div class="summary-goal-track" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(progress, 1) * 100)}"><span style="width:${Math.round(Math.min(progress, 1) * 100)}%"></span></div>` : ''}
+            ${goalSeconds > 0 ? `<div class="summary-goal-track" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(progress, 1) * 100)}">${renderSummaryRail(Math.round(Math.min(progress, 1) * 100))}</div>` : ''}
           </div>
           <div class="summary-focus-ratio">
             <div class="summary-focus-head"><span>Sustained focus share</span><strong>${focusShare}%</strong></div>
-            <div class="summary-focus-track" role="img" aria-label="${focusShare}% of tracked time in sustained focus"><span style="width:${focusShare}%"></span></div>
+            <div class="summary-focus-track" role="img" aria-label="${focusShare}% of tracked time in sustained focus">${renderSummaryRail(focusShare)}</div>
             <p>${formatShortDuration(focusSeconds)} in sustained blocks · ${formatShortDuration(data.total_seconds)} tracked</p>
           </div>
           ${renderTaskBars(taskItems, data.total_seconds)}

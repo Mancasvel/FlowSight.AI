@@ -18,9 +18,9 @@ const TASK_COLOR_KEYS = Object.freeze({
   general: 'general',
 });
 
-export function taskColorForCategory(category) {
+export function taskColorKeyForCategory(category) {
   const key = String(category ?? '').toLowerCase().replace(/[^a-z]/g, '');
-  return `var(--task-color-${TASK_COLOR_KEYS[key] || 'other'})`;
+  return TASK_COLOR_KEYS[key] || 'other';
 }
 
 export function taskSharePercent(seconds, totalSeconds) {

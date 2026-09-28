@@ -8,7 +8,7 @@ import {
   focusBarPercent,
   focusChartSlots,
   formatChartHour,
-  taskColorForCategory,
+  taskColorKeyForCategory,
   taskSharePercent,
 } from './insights-charts.mjs';
 
@@ -16,18 +16,18 @@ process.env.TZ = 'Europe/Madrid';
 
 test('task colors follow the activity type, not the ranking', () => {
   const actualCategories = ['Analysis', 'Research', 'General', 'Communication', 'Browsing', 'Coding'];
-  const actualColors = actualCategories.map(taskColorForCategory);
+  const actualColors = actualCategories.map(taskColorKeyForCategory);
   assert.equal(new Set(actualColors).size, actualCategories.length);
   const theme = readFileSync(new URL('./mobile-theme.css', import.meta.url), 'utf8');
-  for (const color of actualColors) {
-    const token = color.match(/^var\((--task-color-[a-z]+)\)$/)?.[1];
-    assert.ok(token, `${color} should use a semantic theme token`);
+  for (const key of actualColors) {
+    const token = `--task-color-${key}`;
     assert.equal(theme.split(`${token}:`).length - 1, 2, `${token} must exist in light and dark themes`);
+    assert.ok(theme.includes(`.task-color-${key} { color: var(${token}); }`), `${key} must bind its theme token without inline CSS`);
   }
-  assert.equal(taskColorForCategory('Coding'), 'var(--task-color-coding)');
-  assert.equal(taskColorForCategory('Code Review'), 'var(--task-color-review)');
-  assert.equal(taskColorForCategory('Design'), 'var(--task-color-design)');
-  assert.notEqual(taskColorForCategory('Coding'), taskColorForCategory('Design'));
+  assert.equal(taskColorKeyForCategory('Coding'), 'coding');
+  assert.equal(taskColorKeyForCategory('Code Review'), 'review');
+  assert.equal(taskColorKeyForCategory('Design'), 'design');
+  assert.notEqual(taskColorKeyForCategory('Coding'), taskColorKeyForCategory('Design'));
 
   const data = {
     ticket_breakdown: [
@@ -45,10 +45,24 @@ test('task colors follow the activity type, not the ranking', () => {
   assert.equal(items.find(item => item.label === 'FS-1').category, 'Coding');
   assert.equal(items.find(item => item.label === 'FS-2').category, 'Design');
   assert.equal(items.find(item => item.label === 'Planning').category, 'Planning');
-  assert.equal(taskColorForCategory(items.find(item => item.label === 'FS-1').category), 'var(--task-color-coding)');
+  assert.equal(taskColorKeyForCategory(items.find(item => item.label === 'FS-1').category), 'coding');
   assert.equal(taskSharePercent(48, 100), 48);
   assert.equal(taskSharePercent(150, 100), 100);
   assert.equal(taskSharePercent(10, 0), 0);
+});
+
+test('Insights chart markup uses SVG geometry rather than runtime inline styles', () => {
+  const renderer = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+  assert.ok(renderer.includes('const colorKey = taskColorKeyForCategory(item.category)'));
+  assert.ok(renderer.includes('task-bar-dot task-color-${colorKey}'));
+  assert.ok(renderer.includes('task-bar-meter task-color-${colorKey}'));
+  assert.ok(renderer.includes('viewBox="0 0 100 9"'));
+  assert.ok(renderer.includes('viewBox="0 0 100 100"'));
+  assert.ok(renderer.includes('width="${fillWidth}"'));
+  assert.ok(renderer.includes('height="${pct}"'));
+  assert.ok(renderer.includes('renderSummaryRail(focusShare)'));
+  assert.ok(!renderer.includes('style="height:${pct}%"'));
+  assert.ok(!renderer.includes('style="width:${fillWidth}%"'));
 });
 
 test('focus durations span the real local hours, including outside office hours', () => {

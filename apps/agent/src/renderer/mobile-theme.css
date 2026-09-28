@@ -329,29 +329,45 @@ input[type="checkbox"] { accent-color: #14b5a9; }
 .goal-dot { background: #1bb8a9; }
 .goal-dot.behind { background: #dfa846; }
 .summary-goal-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 999px; background: #e5f7f4; }
-.summary-goal-track span { display: block; height: 100%; background: #25b9ad; border-radius: inherit; }
+.summary-meter { display: block; width: 100%; height: 100%; }
+.summary-goal-track .summary-meter rect { fill: #25b9ad; }
 .summary-focus-ratio { padding: 14px 0 16px; margin-bottom: 15px; border-top: 1px solid #edf2f3; border-bottom: 1px solid #edf2f3; }
 .summary-focus-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: #586a7b; font-size: 11px; font-weight: 700; }
 .summary-focus-head strong { color: #1aaea4; font-family: Manrope, sans-serif; font-size: 17px; }
 .summary-focus-track { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #e6f5f3; }
-.summary-focus-track span { display: block; height: 100%; border-radius: inherit; background: #1bb9aa; }
+.summary-focus-track .summary-meter rect { fill: #1bb9aa; }
 .summary-focus-ratio p { margin: 7px 0 0; color: #788b9c; font-size: 10px; }
 .task-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 9px; margin: 0 0 13px; }
 .task-bar-row:last-child { margin-bottom: 0; }
+.task-color-analysis { color: var(--task-color-analysis); }
+.task-color-coding { color: var(--task-color-coding); }
+.task-color-debugging { color: var(--task-color-debugging); }
+.task-color-review { color: var(--task-color-review); }
+.task-color-testing { color: var(--task-color-testing); }
+.task-color-design { color: var(--task-color-design); }
+.task-color-devops { color: var(--task-color-devops); }
+.task-color-database { color: var(--task-color-database); }
+.task-color-research { color: var(--task-color-research); }
+.task-color-documentation { color: var(--task-color-documentation); }
+.task-color-planning { color: var(--task-color-planning); }
+.task-color-communication { color: var(--task-color-communication); }
+.task-color-browsing { color: var(--task-color-browsing); }
+.task-color-general { color: var(--task-color-general); }
+.task-color-other { color: var(--task-color-other); }
 .task-bar-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #4b5e71; font-size: 11px; font-weight: 700; }
-.task-bar-name::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--task-accent, var(--task-color-other)); vertical-align: 1px; }
+.task-bar-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
 .task-bar-meta { display: flex; align-items: baseline; gap: 7px; }
 .task-bar-pct,
 .task-bar-time { width: auto; color: #65798c; font-size: 10px; }
 .task-bar-time { color: #33485a; }
 .task-bar-track { grid-column: 1 / -1; height: 9px; border-radius: 999px; background: #edf3f5; }
-.task-bar-fill { min-width: 0; border-radius: inherit; background: var(--task-accent, var(--task-color-other)); }
+.task-bar-meter rect { fill: currentColor; }
 .highlights-title { margin: 20px 0 11px; color: #344155; font-family: Manrope, sans-serif; font-size: 17px; font-weight: 800; letter-spacing: -0.025em; }
 .highlight-card { margin-bottom: 10px; padding: 17px 19px; }
 .highlight-card-header { color: #198d85 !important; font-size: 11px; font-weight: 800; }
 .highlight-insight { color: #46586d; font-size: 12px; }
-.focus-bar { min-width: 0; background: #20b7a9; border-radius: 4px 4px 1px 1px; }
-.focus-bar-empty { background: #dfe9ee; opacity: 1; }
+.focus-bar { min-width: 0; }
+.focus-bar rect { fill: #20b7a9; }
 .focus-chart { height: 104px; gap: 4px; padding-bottom: 2px; border-bottom: 1px solid #dfe9ee; }
 .focus-chart-scale { display: flex; justify-content: space-between; margin: 0 0 5px; color: #708296; font-size: 10px; font-weight: 700; }
 .focus-chart-axis,
@@ -696,8 +712,7 @@ input[type="checkbox"] { accent-color: #14b5a9; }
   .stop-timer-btn { border-color: #7b4947; background: #412d31; color: #ffc4bf; }
   .week-day-ring { border-color: #50646f; }
   .summary-focus-ratio { border-color: #30464f; }
-  .task-bar-track,
-  .focus-bar-empty { background: #354954; }
+  .task-bar-track { background: #354954; }
   .focus-chart { border-bottom-color: #354954; }
   .focus-chart-scale { color: #afc0cc; }
   .coach-composer-wrap { border-color: #314953; background: #1a2c36; }
