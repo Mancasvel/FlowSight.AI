@@ -1271,6 +1271,7 @@ mod tests {
     #[test]
     fn renderer_and_cloud_prompts_depend_on_the_canonical_payload() {
         let renderer = include_str!("../../src/renderer/index.html");
+        let charts = include_str!("../../src/renderer/insights-charts.mjs");
         assert!(renderer.contains("data.focus?.deep_focus_seconds"));
         assert!(renderer.contains("focus.hourly_deep_focus"));
         assert!(renderer.contains("focus.deep_threshold_seconds"));
@@ -1280,7 +1281,8 @@ mod tests {
         assert!(renderer.contains("Sustained non-work browsing"));
         assert!(renderer.contains("no deep focus"));
         assert!(renderer.contains("each bar is one hour"));
-        assert!(renderer.contains("(seconds / 3600) * 100"));
+        assert!(renderer.contains("focusBarPercent(seconds)"));
+        assert!(charts.contains("value / 3600 * 100"));
         assert!(!renderer.contains("Focus, flow, and planning"));
         for forbidden in [
             "FOCUS_CATEGORIES",

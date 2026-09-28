@@ -1,4 +1,5 @@
 const TASK_COLOR_KEYS = Object.freeze({
+  analysis: 'analysis',
   coding: 'coding',
   debugging: 'debugging',
   codereview: 'review',
@@ -12,9 +13,9 @@ const TASK_COLOR_KEYS = Object.freeze({
   communication: 'communication',
   meeting: 'communication',
   admin: 'other',
-  browsing: 'other',
+  browsing: 'browsing',
   idle: 'other',
-  general: 'other',
+  general: 'general',
 });
 
 export function taskColorForCategory(category) {
@@ -107,4 +108,11 @@ export function focusChartSlots(byHour) {
 
 export function formatChartHour(hour) {
   return `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`;
+}
+
+// Each column is one clock hour, so a full column always means 60 minutes.
+export function focusBarPercent(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(100, Math.round(value / 3600 * 100));
 }

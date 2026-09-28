@@ -4375,6 +4375,7 @@
     import { renderStatusReportPdf } from './status-report-pdf.mjs';
     import {
       buildTaskBreakdown,
+      focusBarPercent,
       focusChartSlots,
       formatChartHour,
       taskColorForCategory,
@@ -7984,11 +7985,11 @@
         const fillWidth = share.toFixed(1);
         const mins = Math.round(item.seconds / 60);
         return `
-          <div class="task-bar-row">
+          <div class="task-bar-row" style="--task-accent:${taskColorForCategory(item.category)}">
             <span class="task-bar-name" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
             <span class="task-bar-meta"><span class="task-bar-pct">${pct}%</span><span class="task-bar-time">${mins}m</span></span>
             <div class="task-bar-track" role="img" aria-label="${escapeHtml(item.label)}: ${pct}% of tracked time, ${mins} minutes">
-              <div class="task-bar-fill" style="width:${fillWidth}%;background:${taskColorForCategory(item.category)}"></div>
+              <div class="task-bar-fill" style="width:${fillWidth}%"></div>
             </div>
           </div>`;
       }).join('');
@@ -8017,7 +8018,7 @@
         return '<div class="focus-chart-empty">No hourly deep-focus data available yet</div>';
       }
       const bars = slots.map(({ hour, seconds }) => {
-        const pct = Math.min(100, Math.round((seconds / 3600) * 100));
+        const pct = focusBarPercent(seconds);
         const minutes = seconds < 60 ? 'under 1 minute' : `${Math.round(seconds / 60)} minutes`;
         const tip = seconds > 0
           ? `${formatChartHour(hour)} — ${minutes} of deep focus`
@@ -8028,6 +8029,7 @@
 
       return `
         <div class="focus-chart-wrap">
+          <div class="focus-chart-scale"><span>Hourly focus</span><span>60m max</span></div>
           <div class="focus-chart">${bars}</div>
           <div class="focus-chart-axis"><span>${formatChartHour(slots[0].hour)}</span><span>${formatChartHour(slots.at(-1).hour)}</span></div>
           <div class="focus-chart-caption" title="${escapeHtml(focus.proxy_disclaimer || '')}">Minutes in sustained ${deepMinutes}+ minute blocks · each bar is one hour</div>
