@@ -180,6 +180,8 @@ Manrope gives headings and measured time a strong, friendly shape. Plus Jakarta 
 
 ## Layout
 
+The Windows title bar includes a moon/sun control. It follows the system appearance until the user makes a choice, then persists that choice locally.
+
 The default Tauri window is 370 × 700px and remains usable at 340 × 400px. A 48px branded title bar sits above a scrollable content pane. The base pane uses 24px top and 20px side padding and reserves 112px below content so the floating dock does not cover controls. The grid repeats every 56px in both appearances.
 
 Today centers within 640px; Insights and Settings center within 760px. At 520px, these surfaces retain their single-column reading order. At 600px and wider, content padding grows to 30px vertically and 28px horizontally, goal and task cards can sit in two columns, and Settings gains a two-column arrangement. At 380px and narrower, padding contracts to 18px top and 15px sides, while the timer, dock, and actions reduce their dimensions.

@@ -19,9 +19,11 @@ test('task colors follow the activity type, not the ranking', () => {
   const actualColors = actualCategories.map(taskColorKeyForCategory);
   assert.equal(new Set(actualColors).size, actualCategories.length);
   const theme = readFileSync(new URL('./mobile-theme.css', import.meta.url), 'utf8');
+  const darkTheme = readFileSync(new URL('./public/theme-dark-mobile.css', import.meta.url), 'utf8');
   for (const key of actualColors) {
     const token = `--task-color-${key}`;
-    assert.equal(theme.split(`${token}:`).length - 1, 2, `${token} must exist in light and dark themes`);
+    assert.ok(theme.includes(`${token}:`), `${token} must exist in the light theme`);
+    assert.ok(darkTheme.includes(`${token}:`), `${token} must exist in the dark theme`);
     assert.ok(theme.includes(`.task-color-${key} { color: var(${token}); }`), `${key} must bind its theme token without inline CSS`);
   }
   assert.equal(taskColorKeyForCategory('Coding'), 'coding');
