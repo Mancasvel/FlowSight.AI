@@ -13,6 +13,7 @@ use tauri_plugin_notification::{NotificationExt, PermissionState};
 const PROMPT_DECIDED_KEY: &str = "desktop_presence_prompt_decided";
 const AUTO_MONITOR_KEY: &str = "start_monitoring_at_login";
 const FOCUS_ALERTS_KEY: &str = "focus_alerts_enabled";
+const CONTEXTUAL_FOCUS_ALERTS_KEY: &str = "contextual_focus_alerts_enabled";
 static QUITTING: AtomicBool = AtomicBool::new(false);
 
 fn read_bool(key: &str) -> Result<bool, String> {
@@ -41,12 +42,17 @@ pub fn focus_alerts_enabled() -> bool {
     read_bool(FOCUS_ALERTS_KEY).unwrap_or(false)
 }
 
+pub fn contextual_focus_alerts_enabled() -> bool {
+    read_bool(CONTEXTUAL_FOCUS_ALERTS_KEY).unwrap_or(false)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopPreferences {
     launch_at_login: bool,
     start_monitoring_at_login: bool,
     focus_alerts_enabled: bool,
+    contextual_focus_alerts_enabled: bool,
     prompt_decided: bool,
     autostart_launch: bool,
     development_build: bool,
@@ -65,6 +71,7 @@ pub fn get_desktop_preferences(app: tauri::AppHandle) -> Result<DesktopPreferenc
         launch_at_login,
         start_monitoring_at_login: launch_at_login && read_bool(AUTO_MONITOR_KEY)?,
         focus_alerts_enabled: read_bool(FOCUS_ALERTS_KEY)?,
+        contextual_focus_alerts_enabled: read_bool(CONTEXTUAL_FOCUS_ALERTS_KEY)?,
         prompt_decided: read_bool(PROMPT_DECIDED_KEY)?,
         autostart_launch: std::env::args().any(|arg| arg == "--flowsight-autostart"),
         development_build: tauri::is_dev(),
@@ -141,6 +148,15 @@ pub fn set_focus_alerts_enabled(
     {
         crate::focus_alerts::start_monitoring(&crate::paths::db_path()?);
     }
+    Ok(enabled)
+}
+
+#[tauri::command]
+pub fn set_contextual_focus_alerts_enabled(enabled: bool) -> Result<bool, String> {
+    if enabled && !focus_alerts_enabled() {
+        return Err("Enable focus reminders first.".into());
+    }
+    write_bool(CONTEXTUAL_FOCUS_ALERTS_KEY, enabled)?;
     Ok(enabled)
 }
 

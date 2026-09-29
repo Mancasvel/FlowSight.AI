@@ -165,6 +165,7 @@ fn persist_and_emit(
     observed_at_utc: Option<String>,
 ) {
     let category = crate::agent_pure::resolve_persisted_category(category);
+    let alert_context = captured_context.clone();
     match crate::agent::insert_report(
         db_path,
         description,
@@ -182,6 +183,10 @@ fn persist_and_emit(
                 db_path,
                 &category,
                 duration_seconds,
+                description,
+                alert_context
+                    .as_ref()
+                    .and_then(|context| context.app_name.as_deref()),
             );
             let _ = app_handle.emit(
                 "activity-report",

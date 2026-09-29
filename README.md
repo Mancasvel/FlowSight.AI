@@ -31,8 +31,11 @@ external AI through MCP can also send the requested report data to that AI.
   counts.
 - **Opt-in local focus reminders** — on Windows, Qwen can propose a reminder
   through an internal tool using only aggregate signals. FlowSight checks
-  tracking state, consent, observed evidence and cooldown before showing fixed
-  notification text; external MCP clients cannot call this tool.
+  tracking state, consent, observed evidence and cooldown before showing it.
+  Reminders use generic text by default. A separate Profile setting can add a
+  verified public app or site label and the selected task to the local system
+  notification; names are never sent to Qwen for the reminder decision.
+  External MCP clients cannot call this tool.
 - **Team analytics, with consent** — opt-in aggregation into a Supabase
   backend only for users who join a team.
 - **Self-hostable backend** — the Community Edition can run against your own
