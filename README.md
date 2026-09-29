@@ -7,7 +7,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
 [![Commercial License available](https://img.shields.io/badge/Commercial%20License-available-green.svg)](./COMMERCIAL-LICENSE.md)
 [![CLA required](https://img.shields.io/badge/CLA-required-orange.svg)](./CLA.md)
-[![Support on Ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/flowsight)
+[![Buy me a coffee on Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20coffee-Ko--fi-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/mancasvel)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Mancasvel/FlowSight.AI)
 
 FlowSight is a desktop application that helps distributed engineering
@@ -220,7 +220,7 @@ GitHub's private Security Advisory feature on this repository, or email
 
 FlowSight's source code is open source under the AGPL. If it's useful to you, consider supporting the project:
 
-### 💜 [Support on Ko-fi](https://ko-fi.com/flowsight)
+### 💜 [Buy me a coffee on Ko-fi](https://ko-fi.com/mancasvel)
 
 Every coffee helps keep development going. All funds go directly to:
 
