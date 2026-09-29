@@ -3274,45 +3274,6 @@
       }
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --background: 225 18% 8%;
-        --foreground: 210 20% 96%;
-        --card: 225 16% 12%;
-        --card-foreground: 210 20% 96%;
-        --primary: 264 90% 70%;
-        --primary-foreground: 226 28% 10%;
-        --secondary: 224 14% 17%;
-        --secondary-foreground: 214 18% 92%;
-        --muted: 224 14% 17%;
-        --muted-foreground: 218 12% 70%;
-        --accent: 263 38% 21%;
-        --accent-foreground: 264 100% 84%;
-        --destructive: 0 72% 62%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 224 12% 24%;
-        --input: 224 12% 29%;
-        --ring: 264 90% 72%;
-        --scrollbar-thumb: rgb(148 163 184 / 0.38);
-        --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 10px 26px rgb(0 0 0 / 0.16);
-        --glass-shadow: 0 12px 36px rgb(0 0 0 / 0.38), inset 0 1px 0 rgb(255 255 255 / 0.1);
-      }
-
-      .app-titlebar,
-      .bottom-nav,
-      .play-timer-btn {
-        box-shadow: var(--glass-shadow);
-      }
-
-      .highlight-focus .highlight-card-header {
-        color: hsl(25 100% 72%);
-      }
-
-      .highlight-distraction .highlight-card-header {
-        color: hsl(215 90% 72%);
-      }
-    }
-
     @media (prefers-contrast: more) {
       :root {
         --muted-foreground: 220 16% 30%;
@@ -3329,13 +3290,6 @@
         border-color: hsl(var(--border));
       }
 
-    }
-
-    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
-      :root {
-        --muted-foreground: 216 18% 84%;
-        --border: 216 16% 48%;
-      }
     }
 
     @media (prefers-reduced-transparency: reduce) {
@@ -3594,10 +3548,14 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="/theme-dark-base.css" id="themeDarkBase" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="./mobile-theme.css">
+  <link rel="stylesheet" href="/theme-dark-mobile.css" id="themeDarkMobile" media="(prefers-color-scheme: dark)">
+  <link rel="stylesheet" href="./profile-redesign.css">
 </head>
 
 <body>
+  <script src="/theme-preference.js"></script>
   <!--
     THESIS: FlowSight desktop is the focused companion to the mobile app, not a dark Ratio-style instrument or a stretched phone screenshot.
     OWN-WORLD: The mobile family's pale 56px grid, slate typography, Manrope and Plus Jakarta Sans, teal signals, softly layered white surfaces, and one indigo-to-teal tracking action adapt to a compact desktop window.
@@ -3616,6 +3574,15 @@
     </div>
     <div class="titlebar-spacer" data-tauri-drag-region></div>
     <div class="titlebar-controls">
+      <button type="button" class="titlebar-btn theme-toggle" id="themeToggleBtn" title="Switch to dark mode" aria-label="Dark mode" aria-pressed="false">
+        <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20.9 13.1A9 9 0 0 1 10.9 3.1 9 9 0 1 0 20.9 13.1Z"/>
+        </svg>
+        <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>
+        </svg>
+      </button>
       <button type="button" class="titlebar-btn" id="winMinimizeBtn" title="Minimize" aria-label="Minimize">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
           <line x1="5" y1="12" x2="19" y2="12"/>
@@ -4106,7 +4073,7 @@
           <h1>You</h1>
           <p>Make FlowSight work the way you do.</p>
         </div>
-        <div class="card">
+        <div class="card" id="profileAccountCard">
           <div class="card-header">
             <div class="card-header-title-row">
               <img src="/flowsight_sinfondo.png" alt="" class="header-logo" width="26" height="26" />
@@ -4130,7 +4097,7 @@
               <button class="button button-primary" id="activateCloudBtn" style="padding: 6px 10px; font-size: 11px;">
                 Activate cloud
               </button>
-              <button class="button button-ghost" id="logoutBtn" title="Sign out of cloud features" style="padding: 4px 8px; display: none;"><svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+              <button class="button button-ghost" id="logoutBtn" title="Sign out of cloud features" aria-label="Sign out of cloud features" style="padding: 4px 8px; display: none;"><svg class="icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
             </div>
           </div>
         </div>
@@ -4144,10 +4111,10 @@
           </p>
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="profileLicenseCode">License code</label>
-            <div style="display: flex; gap: 6px;">
+            <div class="profile-inline-entry">
               <input type="text" id="profileLicenseCode" class="input" placeholder="FS-XXXX-XXXX"
-                autocomplete="off" style="flex: 1; font-family: monospace;">
-              <button type="button" class="button button-primary" id="claimLicenseBtn" style="padding: 8px 12px;">
+                autocomplete="off" style="font-family: monospace;">
+              <button type="button" class="button button-primary" id="claimLicenseBtn">
                 Activate
               </button>
             </div>
@@ -4160,7 +4127,7 @@
             <div class="card-title">Work preferences</div>
           </div>
           <p class="onboarding-prefs-summary" id="workPreferencesSummary">Not set yet.</p>
-          <button type="button" class="button button-secondary" id="editWorkPreferencesBtn" style="width:100%;margin-top:8px;">
+          <button type="button" class="button button-secondary profile-full-button" id="editWorkPreferencesBtn">
             Edit work preferences
           </button>
         </div>
@@ -4169,7 +4136,7 @@
           <div class="card-header">
             <div class="card-title">Startup &amp; focus reminders</div>
           </div>
-          <p class="upgrade-hint" style="margin-bottom:0;">Choose what FlowSight does when you sign in. Closing the window keeps it in the system tray; use Quit in the tray menu to exit.</p>
+          <p class="upgrade-hint profile-card-intro">Choose what FlowSight does when you sign in. Closing the window keeps it in the system tray; use Quit in the tray menu to exit.</p>
           <label class="consent-toggle-row" for="launchAtLoginToggle">
             <input type="checkbox" id="launchAtLoginToggle">
             <span>Open FlowSight at computer sign-in</span>
@@ -4184,14 +4151,15 @@
             <span>Notify me about sustained distractions and frequent app switching</span>
           </label>
           <p class="privacy-detail">Local reminders only while tracking is on. At least 2 minutes of non-work browsing, or 12 app changes across 3 apps within 10 minutes. Reminders have a 30-minute cooldown.</p>
-          <p class="privacy-detail" id="desktopPresenceStatus" aria-live="polite"></p>
+          <p class="privacy-detail profile-form-status" id="desktopPresenceStatus" aria-live="polite"></p>
         </div>
 
         <div class="card" id="privacyAnalyticsCard">
           <div class="card-header">
             <div class="card-title">Privacy &amp; data</div>
           </div>
-          <p class="upgrade-hint" style="margin-bottom: 0;">Optional sharing is off by default. Each purpose can be changed independently.</p>
+          <p class="upgrade-hint profile-card-intro">Optional sharing is off by default. Each purpose can be changed independently.</p>
+          <div class="profile-settings-group">
           <label class="consent-toggle-row" for="cloudSyncToggle">
             <input type="checkbox" id="cloudSyncToggle">
             <span>Sync aggregate activity to FlowSight Cloud</span>
@@ -4207,18 +4175,21 @@
             <span>Share pseudonymous product analytics</span>
           </label>
           <p class="onboarding-prefs-summary" id="analyticsConsentStatus">Not set yet.</p>
+          </div>
+          <div class="profile-settings-group">
+            <h3>Local history</h3>
           <label class="consent-toggle-row" for="windowTitlesToggle">
             <input type="checkbox" id="windowTitlesToggle">
             <span>Store full window titles in local history</span>
           </label>
           <p class="privacy-detail">Off by default. Turning it off also removes titles already stored.</p>
-          <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+          <div class="form-group">
             <label class="label" for="excludedAppsInput">Never monitor these applications</label>
-            <textarea id="excludedAppsInput" class="input" rows="2" maxlength="2000"
+            <textarea id="excludedAppsInput" class="input" rows="3" maxlength="2000"
               placeholder="One application name per line"></textarea>
-            <p class="privacy-detail" style="margin-left:0;">Exact application names, one per line. Matching apps are skipped entirely.</p>
+            <p class="privacy-detail profile-field-note">Exact application names, one per line. Matching apps are skipped entirely.</p>
           </div>
-          <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+          <div class="form-group">
             <label class="label" for="retentionDaysSelect">Delete local activity automatically after</label>
             <select id="retentionDaysSelect" class="select">
               <option value="7">7 days</option>
@@ -4227,20 +4198,27 @@
               <option value="365">1 year</option>
             </select>
           </div>
-          <button type="button" class="button button-ghost" id="viewPrivacyNoticeBtn" style="width:100%;margin-top:10px;">Read privacy notice</button>
+          </div>
+          <div class="profile-settings-group">
+            <h3>Your data</h3>
+          <button type="button" class="button button-ghost profile-full-button" id="viewPrivacyNoticeBtn">Read privacy notice</button>
           <div class="privacy-actions">
             <button type="button" class="button button-secondary" id="exportPersonalDataBtn">Export my data</button>
             <button type="button" class="button button-secondary" id="deleteLocalDataBtn">Erase local data</button>
           </div>
-          <button type="button" class="button button-ghost" id="deleteCloudAccountBtn" style="width:100%;margin-top:8px;color:hsl(var(--destructive));display:none;">Delete cloud account</button>
-          <div class="form-group" style="margin-top:12px;margin-bottom:0;">
+          <button type="button" class="button button-ghost profile-full-button" id="deleteCloudAccountBtn" style="color:hsl(var(--destructive));display:none;">Delete cloud account</button>
+          </div>
+          <div class="profile-settings-group">
+            <h3>Feedback</h3>
+          <div class="form-group">
             <label class="label" for="appFeedbackInput">Send voluntary feedback to FlowSight</label>
             <textarea id="appFeedbackInput" class="input" rows="3" maxlength="2000"
               placeholder="Tell us what you think about FlowSight…"></textarea>
-            <button type="button" class="button button-secondary" id="sendFeedbackBtn" style="width:100%;margin-top:8px;">
+            <button type="button" class="button button-secondary profile-full-button" id="sendFeedbackBtn">
               Send feedback
             </button>
-            <p class="privacy-detail" style="margin-left:0;">Do not include confidential or sensitive personal data. Your message and app version are retained for up to 12 months.</p>
+            <p class="privacy-detail profile-field-note">Do not include confidential or sensitive personal data. Your message and app version are retained for up to 12 months.</p>
+          </div>
           </div>
         </div>
 
@@ -4249,7 +4227,7 @@
             <div class="card-title">App updates</div>
           </div>
           <p class="onboarding-prefs-summary" id="appVersionLabel">Version —</p>
-          <button type="button" class="button button-secondary" id="checkUpdatesBtn" style="width:100%;margin-top:8px;">
+          <button type="button" class="button button-secondary profile-full-button" id="checkUpdatesBtn">
             Check for updates
           </button>
         </div>
@@ -4262,7 +4240,7 @@
             Generate a FlowSight work report in any desktop AI client that supports local MCP (STDIO).
             No extra runtime or FlowSight cloud account is needed.
           </p>
-          <button type="button" class="button button-secondary" id="showMcpConnectionBtn" style="width:100%;margin-top:8px;">
+          <button type="button" class="button button-secondary profile-full-button" id="showMcpConnectionBtn">
             Show connection details
           </button>
           <div id="mcpConnectionDetails" hidden style="margin-top:12px;">
@@ -4270,7 +4248,7 @@
             <input id="mcpCommandPath" class="input" type="text" readonly spellcheck="false"
               aria-label="MCP executable path" style="width:100%;font-family:monospace;font-size:11px;">
             <p class="onboarding-prefs-summary" style="margin-top:8px;">Transport: STDIO. Argument: <code>--mcp</code>.</p>
-            <button type="button" class="button button-ghost" id="copyMcpCommandBtn" style="width:100%;margin-top:6px;">
+            <button type="button" class="button button-ghost profile-full-button" id="copyMcpCommandBtn">
               Copy command path
             </button>
             <p class="onboarding-prefs-summary" style="margin-top:8px;">
@@ -4285,17 +4263,17 @@
             <div class="card-title">Integrations</div>
           </div>
 
-          <div style="margin-bottom: 12px;" id="integrationsProviderRow">
-            <div class="label" style="margin-bottom: 6px;">Task Provider (paid plans)</div>
-            <div style="display: flex; gap: 6px;">
-              <button class="button button-secondary" id="linkJiraBtn" style="flex: 1; padding: 8px; font-size: 11px;">
+          <div id="integrationsProviderRow">
+            <div class="label">Task Provider (paid plans)</div>
+            <div class="profile-provider-actions">
+              <button class="button button-secondary" id="linkJiraBtn">
                 <svg width="12" height="12" viewBox="0 0 24 24" style="margin-right: 4px;">
                   <path fill="#2684FF"
                     d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" />
                 </svg>
                 <span id="jiraLinkStatus">Link Jira</span>
               </button>
-              <button class="button button-secondary" id="linkLinearBtn" style="flex: 1; padding: 8px; font-size: 11px;">
+              <button class="button button-secondary" id="linkLinearBtn">
                 <svg width="12" height="12" viewBox="0 0 24 24" style="margin-right: 4px;">
                   <path fill="#5E6AD2"
                     d="M3.357 3.357a12.19 12.19 0 0 1 17.286 0 12.19 12.19 0 0 1 0 17.286 12.19 12.19 0 0 1-17.286 0 12.19 12.19 0 0 1 0-17.286z" />
@@ -4311,10 +4289,10 @@
 
           <div class="form-group" id="teamCodeGroup">
             <label class="label">Team Code (from PM)</label>
-            <div style="display: flex; gap: 6px;">
+            <div class="profile-inline-entry">
               <input type="password" id="teamCodeInput" class="select" placeholder="Enter team code..."
-                autocomplete="off" autocapitalize="off" spellcheck="false" style="flex: 1; font-family: monospace;">
-              <button class="button button-primary" id="joinTeamBtn" style="padding: 8px 12px;">Join</button>
+                autocomplete="off" autocapitalize="off" spellcheck="false" style="font-family: monospace;">
+              <button class="button button-primary" id="joinTeamBtn">Join</button>
             </div>
             <div id="teamStatus" style="font-size: 10px; color: hsl(var(--muted-foreground)); margin-top: 4px;"></div>
           </div>
@@ -4480,7 +4458,7 @@
         e.stopPropagation();
       };
 
-      ['winMinimizeBtn', 'winMaximizeBtn', 'winCloseBtn'].forEach((id) => {
+      ['themeToggleBtn', 'winMinimizeBtn', 'winMaximizeBtn', 'winCloseBtn'].forEach((id) => {
         const btn = document.getElementById(id);
         btn?.addEventListener('mousedown', stopDrag);
         btn?.addEventListener('pointerdown', stopDrag);
