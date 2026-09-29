@@ -5,6 +5,9 @@
     document.getElementById('themeDarkBase'),
     document.getElementById('themeDarkMobile'),
   ].filter(Boolean);
+  // Vite puts its bundled light stylesheet at the end of <head> in production.
+  // Keep the dark overrides after it so changing `media` changes the visible UI.
+  for (const sheet of darkSheets) document.head.appendChild(sheet);
   const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
 
   function savedPreference() {
