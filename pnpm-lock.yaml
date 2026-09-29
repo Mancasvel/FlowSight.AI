@@ -30,8 +30,8 @@ importers:
         specifier: 2.11.0
         version: 2.11.0
       '@tauri-apps/plugin-dialog':
-        specifier: '2'
-        version: 2.8.0
+        specifier: 2.7.3
+        version: 2.7.3
       '@tauri-apps/plugin-process':
         specifier: ^2.3.1
         version: 2.3.1
@@ -571,10 +571,6 @@ packages:
     resolution: {integrity: sha512-7CinYODhky9lmO23xHnUFv0Xt43fbtWMyxZcLcRBlFkcgXKuEirBvHpmtJ89YMhyeGcq20Wuc47Fa4XjyniywA==}
     dev: false
 
-  /@tauri-apps/api@2.12.0:
-    resolution: {integrity: sha512-fUSxFX8VABYe9W9K5ROdEaKVkNUFRcMSRofjruvaxztXA+I0XnQHcYHF8m/a6iExRUxsUf0HsFWhPBuH9IgzJw==}
-    dev: false
-
   /@tauri-apps/cli-darwin-arm64@2.11.2:
     resolution: {integrity: sha512-+4UZzLt+eOAEQCwgd+TqKgyUJMrvx+BgdXLLaqJYmPqzP+nE6YZr/hY6CWLYGQb8jFn99jEkmC6uA3tNvamA1w==}
     engines: {node: '>= 10'}
@@ -692,10 +688,10 @@ packages:
       '@tauri-apps/cli-win32-x64-msvc': 2.11.2
     dev: true
 
-  /@tauri-apps/plugin-dialog@2.8.0:
-    resolution: {integrity: sha512-HSSD5C8UFE9ijD1wue84F7jjaIReFmj8AAPtS+xyjYRltJafIc4BiWHY7SJ6vbbew6u+YljEJHfyNfy5VwywXg==}
+  /@tauri-apps/plugin-dialog@2.7.3:
+    resolution: {integrity: sha512-CRgE+7TP4tvq9MjBU6f04NLTFIqVMLKHk3hAqlhil00ngK9ACTrXPH3oHpKMProxILodd3YjBoKbMwSI4IEcfA==}
     dependencies:
-      '@tauri-apps/api': 2.12.0
+      '@tauri-apps/api': 2.11.0
     dev: false
 
   /@tauri-apps/plugin-process@2.3.1:

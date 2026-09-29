@@ -52,6 +52,62 @@ Open Settings > Connect your AI for the exact command to use in a compatible
 desktop AI client. No extra runtime is required, and activity descriptions
 and ticket IDs are excluded by default.
 
+## Local action agent
+
+The **Local agent** tab lets the on-device Qwen3-VL model suggest one action at a
+time. FlowSight validates the tool name and arguments before executing it. A
+change is shown with its concrete target and waits for confirmation for five
+minutes; cancelled and expired proposals do nothing. Local tasks, events,
+drafts, preferences and an action audit stay encrypted for the current Windows
+user and are included in the local data export (access tokens are excluded).
+
+Available tools are `focus.start`, `focus.pause`, `focus.resume`, `focus.end`,
+`system.set_dnd`, `browser.list_tabs`, `browser.block`, `browser.unblock`,
+`browser.close_tab`, `browser.restore_tab`, `tasks.create`, `tasks.list`,
+`tasks.update`, `tasks.complete`, `tasks.reprioritize`,
+`calendar.get_availability`, `calendar.list_events`, `calendar.create_event`,
+`calendar.move_event`, `notifications.digest`, `messages.draft`,
+`messages.list_drafts`, `messages.send`, `project.get_current_work`,
+`project.update_status`, `project.create_subtask`,
+`project.prepare_pr_description`, `desktop.open_resource`, `automation.run_playbook`,
+`memory.save_preference`, `memory.forget_preference`, and
+`memory.list_preferences`.
+
+- **Focus:** Gentle starts tracking; standard also silences Windows app
+  notification banners; strict additionally blocks the browser patterns you
+  approve. Blocks and banner settings are restored on pause/end or when the
+  timed block expires. Windows' separate Focus Assist contact/app allowlists
+  are not changed. The digest contains FlowSight reminders held while banners
+  were silenced; it cannot read other apps' private notifications.
+- **Browser:** In Chrome or Edge, open Extensions, enable Developer mode, then
+  choose “Load unpacked” and select the folder opened by **Local agent → Tools
+  and saved preferences → Open extension folder**. Open the extension's options
+  and copy the port and pairing key from FlowSight. The extension communicates
+  only over `127.0.0.1` and requires the pairing key. Temporary blocks expire
+  in the extension and are released if FlowSight disconnects. Closing a tab
+  saves its URL so it can be restored.
+- **Calendar:** Without an external connection, availability and focus events
+  use FlowSight's local calendar. Google Calendar and Microsoft Calendar can be
+  selected after saving an access token with calendar read/write permission.
+  FlowSight moves only events it created and recorded locally. A missing or
+  expired token produces an error instead of claiming the time is free.
+- **Messages:** Drafts are local. Email uses a selected Gmail or Microsoft Mail
+  connection; Slack uses a channel/user ID; Teams uses a chat ID. `messages.send`
+  always shows the recipient and full body for confirmation. A draft is marked
+  uncertain if delivery times out, so it cannot be sent again silently.
+- **Projects and playbooks:** Jira and Linear use FlowSight's existing account
+  connections (reconnect to grant write scope); GitHub and Notion use tokens
+  saved in Local agent. GitHub status changes support open/closed issues;
+  Notion pages need a Status property. Status updates can include a handoff note.
+  Creating a subtask uses the chosen provider's child issue or child page API
+  and requires confirmation. A PR description is returned as local text for
+  review; FlowSight does not publish it. Deep work, end of day and recover
+  focus playbooks return their individual steps and results for review.
+
+The optional Google, Microsoft, Slack, Teams, GitHub and Notion tokens are saved
+with Windows DPAPI. Grant only the scopes needed for the tools you select.
+Provider access tokens may expire and then need to be replaced in Local agent.
+
 ## Status
 
 FlowSight is in **active development**. Expect breaking changes until

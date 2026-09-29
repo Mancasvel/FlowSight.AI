@@ -232,6 +232,7 @@ const JIRA: ProviderConfig = ProviderConfig {
     token_url: "https://auth.atlassian.com/oauth/token",
     scopes: &[
         "read:jira-work",
+        "write:jira-work",
         "read:jira-user",
         "offline_access",
         "read:me",
@@ -243,7 +244,7 @@ const LINEAR: ProviderConfig = ProviderConfig {
     name: "linear",
     auth_url: "https://linear.app/oauth/authorize",
     token_url: "https://api.linear.app/oauth/token",
-    scopes: &["read", "issues:create"],
+    scopes: &["read", "write", "issues:create"],
     userinfo_url: "https://api.linear.app/graphql",
 };
 

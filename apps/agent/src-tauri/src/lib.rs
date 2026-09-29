@@ -14,6 +14,7 @@ mod jira;
 mod linear;
 mod llama_port;
 mod llama_windows_job;
+mod local_agent;
 pub mod mcp;
 mod model_assets;
 mod notion;
@@ -92,6 +93,19 @@ pub fn run() {
             insights_local::generate_local_status_report,
             model_assets::local_model_status,
             model_assets::download_local_model,
+            local_agent::get_local_agent_tools,
+            local_agent::propose_local_agent_tool,
+            local_agent::ask_local_agent,
+            local_agent::confirm_local_agent_action,
+            local_agent::cancel_local_agent_action,
+            local_agent::get_local_agent_data,
+            local_agent::control_local_focus_block,
+            local_agent::browser_bridge::get_browser_pairing,
+            local_agent::browser_bridge::open_browser_extension_folder,
+            local_agent::connectors::get_local_agent_connections,
+            local_agent::connectors::save_local_agent_connection,
+            local_agent::connectors::remove_local_agent_connection,
+            local_agent::connectors::set_local_agent_providers,
             mcp::get_mcp_connection_info,
             user_preferences::get_user_preferences,
             user_preferences::save_user_preferences_command,
@@ -172,6 +186,10 @@ pub fn run() {
                     .build(),
             )?;
             report_schedule::start_check_loop(app.handle().clone());
+            if let Err(error) = local_agent::browser_bridge::start() {
+                log::warn!("Browser bridge unavailable: {error}");
+            }
+            local_agent::start_maintenance(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {

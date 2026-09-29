@@ -1,6 +1,7 @@
 use reqwest::blocking::Client;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LinearIssue {
@@ -15,7 +16,7 @@ fn get_db_conn() -> Result<Connection, String> {
     Connection::open(db_path).map_err(|e| e.to_string())
 }
 
-fn get_linear_token() -> Result<String, String> {
+pub(crate) fn get_linear_token() -> Result<String, String> {
     let conn = get_db_conn()?;
 
     // Get auth session from config
@@ -45,12 +46,15 @@ pub async fn fetch_linear_tasks() -> Result<Vec<LinearIssue>, String> {
         .map_err(|e| format!("Task join error: {}", e))?
 }
 
-fn fetch_linear_tasks_blocking() -> Result<Vec<LinearIssue>, String> {
+pub(crate) fn fetch_linear_tasks_blocking() -> Result<Vec<LinearIssue>, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "integrations")?;
     let access_token = get_linear_token()?;
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // GraphQL query to get assigned issues
     let query = r#"{

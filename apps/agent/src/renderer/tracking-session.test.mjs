@@ -90,6 +90,21 @@ test('preserves intent as paused when the local server did not survive a restart
   });
 });
 
+test('an agent focus block stays paused even when the local server is online', () => {
+  const checkpoint = createTrackingCheckpoint('running', 75, Date.now());
+  assert.deepEqual(resolveTrackingRestore({
+    nativeRunning: false,
+    serverOnline: true,
+    historySeconds: 90,
+    checkpoint,
+    agentFocusStatus: 'paused',
+  }), {
+    mode: 'paused',
+    totalSeconds: 90,
+    shouldResumeNative: false,
+  });
+});
+
 test('uses durable history for a clean stop and can clear the checkpoint', () => {
   const storage = memoryStorage();
   saveTrackingCheckpoint(storage, 'paused', 42);

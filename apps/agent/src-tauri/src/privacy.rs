@@ -487,6 +487,7 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
     let user_preferences =
         crate::user_preferences::load_user_preferences(&db_path).unwrap_or_default();
     let weekly_report_schedule = crate::report_schedule::get_weekly_report_schedule()?;
+    let local_agent_data = crate::local_agent::state::read()?;
     let coach_messages = crate::coach_chat::load_messages(&conn).unwrap_or_default();
     let application_settings = json!({
         "display_name": config_value(&conn, "dev_name"),
@@ -524,6 +525,7 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
         },
         "user_preferences": user_preferences,
         "weekly_report_schedule": weekly_report_schedule,
+        "local_agent_data": local_agent_data,
         "application_settings": application_settings,
         "local_activity_reports": reports,
         "local_coach_messages": coach_messages,
@@ -610,6 +612,9 @@ pub fn delete_local_data(
     if confirmation != "DELETE" {
         return Err("Type DELETE to confirm local erasure.".to_string());
     }
+    crate::local_agent::restore_on_exit();
+    crate::local_agent::clear_pending_after_data_deletion();
+    crate::local_agent::browser_bridge::queue_unblock_all();
     crate::report_schedule::clear_weekly_report_schedule()?;
     crate::telemetry::set_running(false);
     if let Some(agent) = state.lock().unwrap().as_mut() {

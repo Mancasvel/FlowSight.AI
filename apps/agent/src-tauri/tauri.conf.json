@@ -48,7 +48,11 @@
       "../../../local_llm/bin/*.exe": "local_llm/bin/",
       "../../../local_llm/bin/*.dll": "local_llm/bin/",
       "../../../local_llm/APACHE-2.0.md": "local_llm/APACHE-2.0.md",
-      "../../../local_llm/MODEL_NOTICE.md": "local_llm/MODEL_NOTICE.md"
+      "../../../local_llm/MODEL_NOTICE.md": "local_llm/MODEL_NOTICE.md",
+      "../browser-extension/manifest.json": "browser-extension/manifest.json",
+      "../browser-extension/options.html": "browser-extension/options.html",
+      "../browser-extension/options.js": "browser-extension/options.js",
+      "../browser-extension/worker.js": "browser-extension/worker.js"
     }
   },
   "plugins": {

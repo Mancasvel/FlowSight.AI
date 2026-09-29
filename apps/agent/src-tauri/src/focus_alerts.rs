@@ -685,6 +685,11 @@ fn finish_proposal(app: &tauri::AppHandle, proposal: Proposal, decision: Option<
         let (title, body) = advice.copy();
         (title.into(), body.into())
     };
+    if crate::local_agent::state::hold_notification(&title, &body).unwrap_or(false) {
+        guard.set_pending(proposal.evidence.kind(), false);
+        guard.last_alert = Some(now);
+        return;
+    }
     // Hold the state lock through the OS call: stop/opt-out cannot complete and
     // then have an old, in-flight model result show a notification afterwards.
     #[cfg(desktop)]

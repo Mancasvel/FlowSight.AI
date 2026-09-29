@@ -43,7 +43,8 @@ test('pause stops native monitoring and preserves the session time', async () =>
 
   assert.equal(harness.context.isMonitoring, false);
   assert.equal(harness.context.isPaused, true);
-  assert.deepEqual(harness.calls.slice(0, 4), [
+  assert.deepEqual(harness.calls.slice(0, 5), [
+    'get_local_agent_data',
     'stop_monitoring',
     'commitSessionTime',
     'renderTrackingStatus',
@@ -60,7 +61,8 @@ test('stop ends native monitoring, shuts down the server, and refreshes today', 
 
   assert.equal(harness.context.isMonitoring, false);
   assert.equal(harness.context.isPaused, false);
-  assert.deepEqual(harness.calls.slice(0, 6), [
+  assert.deepEqual(harness.calls.slice(0, 7), [
+    'get_local_agent_data',
     'stop_monitoring',
     'commitSessionTime',
     'renderTrackingStatus',
@@ -71,6 +73,19 @@ test('stop ends native monitoring, shuts down the server, and refreshes today', 
   assert.equal(harness.calls.at(-1), 'refreshTodayView');
   assert.equal(harness.buttons.playTimerBtn.disabled, false);
   assert.equal(harness.buttons.stopTimerBtn.disabled, false);
+});
+
+test('pausing an agent focus block releases its protections through the focus action', async () => {
+  const harness = createHarness({
+    invoke: async (command, args) => {
+      harness.calls.push(command === 'control_local_focus_block' ? `${command}:${args.action}` : command);
+      if (command === 'get_local_agent_data') return { focus: { status: 'running' } };
+    },
+  });
+  await harness.pauseMonitoring();
+  assert.ok(harness.calls.includes('control_local_focus_block:pause'));
+  assert.equal(harness.calls.includes('stop_monitoring'), false);
+  assert.equal(harness.context.isPaused, true);
 });
 
 test('a native stop failure keeps the running state and reports the error', async () => {

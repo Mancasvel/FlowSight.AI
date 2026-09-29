@@ -2,6 +2,7 @@ use reqwest::blocking::Client;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::time::Duration;
 
 // Constants for FlowSight (Registered Atlassian App)
 // In a real production app, Client ID is public, Secret is NOT used for Public Clients (PKCE)
@@ -63,7 +64,10 @@ fn refresh_access_token() -> Result<String, String> {
     let client_secret = get_client_secret();
 
     // Build the token refresh request
-    let http_client = Client::new();
+    let http_client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
     let mut params = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", &refresh_token),
@@ -110,7 +114,7 @@ fn refresh_access_token() -> Result<String, String> {
 
 /// Gets a valid access token, refreshing if necessary
 /// This is the main entry point for getting a token to use in API calls
-fn get_valid_token() -> Result<String, String> {
+pub(crate) fn get_valid_token() -> Result<String, String> {
     let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -118,7 +122,10 @@ fn get_valid_token() -> Result<String, String> {
         .ok_or_else(|| "Not connected to Jira".to_string())?;
 
     // Quick validation: try to access a lightweight endpoint
-    let http_client = Client::new();
+    let http_client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
     let test_resp = http_client
         .get("https://api.atlassian.com/oauth/token/accessible-resources")
         .bearer_auth(&access_token)
@@ -147,7 +154,10 @@ fn get_valid_token() -> Result<String, String> {
 }
 
 fn fetch_cloud_id(token: &str) -> Result<String, Box<dyn Error>> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
     let resp = client
         .get("https://api.atlassian.com/oauth/token/accessible-resources")
         .bearer_auth(token)
@@ -171,7 +181,7 @@ pub async fn fetch_jira_tasks() -> Result<Vec<JiraIssue>, String> {
         .map_err(|e| format!("Task join error: {}", e))?
 }
 
-fn fetch_jira_tasks_blocking() -> Result<Vec<JiraIssue>, String> {
+pub(crate) fn fetch_jira_tasks_blocking() -> Result<Vec<JiraIssue>, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "integrations")?;
     // 1. Get valid token (auto-refreshes if expired)

@@ -1,0 +1,474 @@
+//! Local Qwen tool planner. A model response can suggest one named operation;
+//! the host validates it and holds every mutation until the user confirms it.
+
+mod actions;
+pub mod browser_bridge;
+pub mod connectors;
+mod external_calendar;
+mod messaging;
+mod projects;
+mod registry;
+pub mod state;
+mod system_quiet;
+
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+use reqwest::blocking::Client;
+use serde::Serialize;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Manager, State};
+
+use crate::agent::AgentState;
+use crate::vision_model::LLAMA_CHAT_MODEL_ID;
+
+const MAX_USER_MESSAGE_CHARS: usize = 1200;
+const PROPOSAL_LIFETIME: Duration = Duration::from_secs(5 * 60);
+static PENDING: Mutex<Vec<PendingAction>> = Mutex::new(Vec::new());
+
+struct PendingAction {
+    id: String,
+    tool: String,
+    arguments: Value,
+    summary: String,
+    browser_tab_url: Option<String>,
+    expires_at: Instant,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionProposal {
+    id: String,
+    tool: String,
+    summary: String,
+    arguments: Value,
+    expires_in_seconds: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurn {
+    message: String,
+    proposal: Option<ActionProposal>,
+    result: Option<Value>,
+}
+
+fn parse_arguments(value: &Value) -> Result<Value, String> {
+    match value {
+        Value::String(raw) => serde_json::from_str(raw)
+            .map_err(|_| "The local model returned malformed tool arguments.".to_string()),
+        Value::Object(_) => Ok(value.clone()),
+        _ => Err("The local model returned malformed tool arguments.".into()),
+    }
+}
+
+fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionProposal, String> {
+    registry::validate(spec, &arguments)?;
+    let id = uuid::Uuid::new_v4().to_string();
+    let mut summary = actions::preview(spec.name, &arguments)?;
+    let tab_id = if spec.name == "browser.close_tab"
+        || (spec.name == "automation.run_playbook" && arguments["playbook"] == "recover_focus")
+    {
+        arguments["tab_id"].as_i64()
+    } else {
+        None
+    };
+    let browser_tab_url = tab_id.map(actions::browser_tab_url).transpose()?;
+    if let Some(ref url) = browser_tab_url {
+        summary.push_str(&format!(". Target URL: {url}"));
+    }
+    let mut pending = PENDING.lock().map_err(|error| error.to_string())?;
+    pending.retain(|item| item.expires_at > Instant::now());
+    if pending.len() >= 20 {
+        pending.remove(0);
+    }
+    pending.push(PendingAction {
+        id: id.clone(),
+        tool: spec.name.to_string(),
+        arguments: arguments.clone(),
+        summary: summary.clone(),
+        browser_tab_url,
+        expires_at: Instant::now() + PROPOSAL_LIFETIME,
+    });
+    Ok(ActionProposal {
+        id,
+        tool: spec.name.to_string(),
+        summary,
+        arguments,
+        expires_in_seconds: PROPOSAL_LIFETIME.as_secs(),
+    })
+}
+
+fn decide_from_model(
+    response: &Value,
+) -> Result<(String, Option<(registry::ToolSpec, Value)>), String> {
+    let message = &response["choices"][0]["message"];
+    if !message.is_object() {
+        return Err("The local model did not return a message.".into());
+    }
+    let content = message["content"].as_str().unwrap_or("").trim().to_string();
+    let Some(calls) = message["tool_calls"].as_array() else {
+        return Ok((content, None));
+    };
+    if calls.is_empty() {
+        return Ok((content, None));
+    }
+    if calls.len() != 1 {
+        return Err("The local model requested multiple actions at once. Please ask for one action at a time.".into());
+    }
+    let call = &calls[0]["function"];
+    let name = call["name"]
+        .as_str()
+        .ok_or("The local model omitted the tool name.")?;
+    let spec = registry::by_model_name(name)
+        .ok_or("The local model requested a tool FlowSight does not support.")?;
+    let arguments = parse_arguments(&call["arguments"])?;
+    registry::validate(&spec, &arguments)?;
+    Ok((content, Some((spec, arguments))))
+}
+
+fn request_model(
+    message: &str,
+    app: AppHandle,
+    state: State<'_, AgentState>,
+) -> Result<Value, String> {
+    crate::agent::ensure_local_llm_ready(app, state)?;
+    let url = crate::llama_port::managed_chat_completions_url()
+        .ok_or("The local AI server is unavailable.")?;
+    let definitions: Vec<Value> = registry::specs()
+        .iter()
+        .map(registry::model_definition)
+        .collect();
+    let data = state::read()?;
+    let mut recent_preferences: Vec<_> = data.preferences.iter().collect();
+    recent_preferences.sort_by(|a, b| b.1.updated_at.cmp(&a.1.updated_at));
+    let context = json!({
+        "now": chrono::Local::now().to_rfc3339(),
+        "currentIntention": crate::telemetry::selected_task_for_reminder(),
+        "focus": data.focus,
+        "tasks": data.tasks.iter().rev().take(12).map(|task| json!({
+            "id":task.id,"title":task.title.chars().take(120).collect::<String>(),
+            "status":task.status,"priority":task.priority,"dueAt":task.due_at,
+        })).collect::<Vec<_>>(),
+        "events": data.events.iter().rev().take(12).map(|event| json!({
+            "id":event.id,"title":event.title.chars().take(120).collect::<String>(),
+            "startAt":event.start_at,"endAt":event.end_at,"provider":event.provider,
+        })).collect::<Vec<_>>(),
+        "drafts": data.drafts.iter().rev().take(6).map(|draft| json!({
+            "id":draft.id,"channel":draft.channel,"recipient":draft.recipient,
+            "subject":draft.subject,"sentAt":draft.sent_at,
+        })).collect::<Vec<_>>(),
+        "preferences": recent_preferences.into_iter().take(12).map(|(key,value)| json!({
+            "key":key,"value":value.value.chars().take(160).collect::<String>()
+        })).collect::<Vec<_>>(),
+        "calendarProvider": data.calendar_provider,
+        "emailProvider": data.email_provider,
+    });
+    let mut messages = vec![
+        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. Do not send messages or change external calendars without the user's confirmation. Never set retry_if_uncertain unless the user says they checked that the first delivery did not happen. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
+        json!({"role":"system","content":format!("Current FlowSight context: {context}")}),
+    ];
+    for item in data.conversation.iter().rev().take(4).rev() {
+        if item.role == "user" || item.role == "assistant" {
+            messages.push(json!({"role":item.role,"content":item.content.chars().take(650).collect::<String>()}));
+        }
+    }
+    messages.push(json!({"role":"user","content":message}));
+    let body = json!({
+        "model": LLAMA_CHAT_MODEL_ID,
+        "messages": messages,
+        "tools": definitions,
+        "tool_choice": "auto",
+        "temperature": 0,
+        "max_tokens": 700,
+        "stream": false
+    });
+    let response = Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|error| error.to_string())?
+        .post(url)
+        .json(&body)
+        .send()
+        .map_err(|error| format!("Could not reach local Qwen: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!("Local Qwen returned HTTP {}.", response.status()));
+    }
+    response
+        .json()
+        .map_err(|_| "Local Qwen returned invalid JSON.".into())
+}
+
+#[tauri::command]
+pub fn get_local_agent_tools() -> Vec<Value> {
+    registry::specs()
+        .iter()
+        .map(|spec| {
+            json!({
+                "name": spec.name,
+                "description": spec.description,
+                "confirmationRequired": spec.confirmation,
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn propose_local_agent_tool(
+    name: String,
+    arguments: Value,
+) -> Result<ActionProposal, String> {
+    tauri::async_runtime::spawn_blocking(move || propose_local_agent_tool_blocking(name, arguments))
+        .await
+        .map_err(|error| format!("Local agent worker failed: {error}"))?
+}
+
+fn propose_local_agent_tool_blocking(
+    name: String,
+    arguments: Value,
+) -> Result<ActionProposal, String> {
+    let spec = registry::by_public_name(&name).ok_or("Unknown local agent tool.")?;
+    if !spec.confirmation {
+        return Err("This tool does not need a confirmation proposal.".into());
+    }
+    proposal_for(&spec, arguments)
+}
+
+#[tauri::command]
+pub async fn ask_local_agent(app: AppHandle, message: String) -> Result<AgentTurn, String> {
+    tauri::async_runtime::spawn_blocking(move || ask_local_agent_blocking(app, message))
+        .await
+        .map_err(|error| format!("Local agent worker failed: {error}"))?
+}
+
+fn ask_local_agent_blocking(app: AppHandle, message: String) -> Result<AgentTurn, String> {
+    let message = message.trim();
+    if message.is_empty() || message.chars().count() > MAX_USER_MESSAGE_CHARS {
+        return Err("Write a request of up to 1,200 characters.".into());
+    }
+    let state = app.state::<AgentState>();
+    let response = request_model(message, app.clone(), state.clone())?;
+    let (text, choice) = decide_from_model(&response)?;
+    state::append_conversation("user", message)?;
+    let Some((spec, arguments)) = choice else {
+        let reply = if text.is_empty() {
+            "I need a little more detail to act.".to_string()
+        } else {
+            text
+        };
+        state::append_conversation("assistant", &reply)?;
+        return Ok(AgentTurn {
+            message: reply,
+            proposal: None,
+            result: None,
+        });
+    };
+    if spec.confirmation {
+        let proposal = proposal_for(&spec, arguments)?;
+        state::append_conversation(
+            "assistant",
+            &format!("Proposed {}: {}", proposal.tool, proposal.summary),
+        )?;
+        return Ok(AgentTurn {
+            message: "Please review this action before it runs.".into(),
+            proposal: Some(proposal),
+            result: None,
+        });
+    }
+    let result = actions::execute(spec.name, &arguments, app.clone(), state)?;
+    state::append_conversation("assistant", &format!("{} result: {result}", spec.name))?;
+    Ok(AgentTurn {
+        message: "Here is what I found.".into(),
+        proposal: None,
+        result: Some(result),
+    })
+}
+
+#[tauri::command]
+pub async fn confirm_local_agent_action(app: AppHandle, id: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || confirm_local_agent_action_blocking(app, id))
+        .await
+        .map_err(|error| format!("Local agent worker failed: {error}"))?
+}
+
+fn confirm_local_agent_action_blocking(app: AppHandle, id: String) -> Result<Value, String> {
+    let state = app.state::<AgentState>();
+    let pending = {
+        let mut queue = PENDING.lock().map_err(|error| error.to_string())?;
+        let index = queue
+            .iter()
+            .position(|item| item.id == id)
+            .ok_or("That action is no longer pending.")?;
+        queue.remove(index)
+    };
+    if pending.expires_at <= Instant::now() {
+        return Err("That action expired. Ask the local agent again.".into());
+    }
+    let spec =
+        registry::by_public_name(&pending.tool).ok_or("That action is no longer supported.")?;
+    if !spec.confirmation {
+        return Err("That action does not require confirmation.".into());
+    }
+    registry::validate(&spec, &pending.arguments)?;
+    if let (Some(expected), Some(tab_id)) = (
+        &pending.browser_tab_url,
+        pending.arguments["tab_id"].as_i64(),
+    ) {
+        if actions::browser_tab_url(tab_id)? != *expected {
+            return Err("The browser tab changed since approval. Review a new action.".into());
+        }
+    }
+    let result = actions::execute(spec.name, &pending.arguments, app.clone(), state);
+    if let Ok(ref value) = result {
+        let _ = state::append_conversation(
+            "assistant",
+            &format!("Confirmed {} result: {value}", spec.name),
+        );
+    }
+    let status = if result.is_ok() {
+        "completed"
+    } else {
+        "failed"
+    };
+    let summary = pending.summary;
+    let _ = state::update(|data| {
+        data.audit.push(state::ActionAudit {
+            id: uuid::Uuid::new_v4().to_string(),
+            tool: spec.name.to_string(),
+            summary,
+            status: status.to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        });
+        Ok(())
+    });
+    result
+}
+
+#[tauri::command]
+pub fn cancel_local_agent_action(id: String) -> Result<(), String> {
+    let mut queue = PENDING.lock().map_err(|error| error.to_string())?;
+    queue.retain(|item| item.id != id);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_local_agent_data() -> Result<state::AgentData, String> {
+    state::read()
+}
+
+#[tauri::command]
+pub async fn control_local_focus_block(app: AppHandle, action: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let tool = match action.as_str() {
+            "pause" => "focus.pause",
+            "resume" => "focus.resume",
+            "end" => "focus.end",
+            _ => return Err("Unknown focus control.".into()),
+        };
+        let state = app.state::<AgentState>();
+        if action == "resume" {
+            crate::agent::ensure_local_llm_ready(app.clone(), state.clone())?;
+        }
+        let result = actions::execute(tool, &json!({}), app.clone(), state)?;
+        let _ = state::update(|data| {
+            data.audit.push(state::ActionAudit {
+                id: uuid::Uuid::new_v4().to_string(),
+                tool: tool.into(),
+                summary: format!("Timer control: {action}"),
+                status: "completed".into(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            });
+            Ok(())
+        });
+        Ok(result)
+    })
+    .await
+    .map_err(|error| format!("Focus control worker failed: {error}"))?
+}
+
+pub fn start_maintenance(app: AppHandle) {
+    if let Ok(data) = state::read() {
+        if data.quiet.is_some() {
+            if let Err(error) = system_quiet::disable() {
+                log::warn!("Could not restore notifications after restart: {error}");
+            }
+        }
+        if data
+            .focus
+            .as_ref()
+            .is_some_and(|focus| focus.status == "running")
+        {
+            let _ = state::update(|data| {
+                if let Some(focus) = data.focus.as_mut() {
+                    focus.status = "paused".into();
+                    focus.paused_at = focus
+                        .last_active_at
+                        .clone()
+                        .or_else(|| Some(chrono::Utc::now().to_rfc3339()));
+                    focus.quiet_owned = false;
+                }
+                Ok(())
+            });
+        }
+    }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(15));
+        if let Err(error) = actions::expire_focus_if_due(app.clone(), app.state::<AgentState>()) {
+            log::warn!("Could not expire focus block: {error}");
+        }
+        if let Err(error) = system_quiet::restore_if_expired() {
+            log::warn!("Could not restore Windows notification setting: {error}");
+        }
+        if state::read()
+            .ok()
+            .and_then(|data| data.focus)
+            .is_some_and(|focus| focus.status == "running")
+        {
+            let _ = state::update(|data| {
+                if let Some(focus) = data.focus.as_mut() {
+                    if focus.status == "running" {
+                        focus.last_active_at = Some(chrono::Utc::now().to_rfc3339());
+                    }
+                }
+                Ok(())
+            });
+        }
+    });
+}
+
+pub fn restore_on_exit() {
+    if state::read().ok().and_then(|data| data.quiet).is_some() {
+        if let Err(error) = system_quiet::disable() {
+            log::warn!("Could not restore notifications during quit: {error}");
+        }
+    }
+}
+
+pub fn clear_pending_after_data_deletion() {
+    if let Ok(mut pending) = PENDING.lock() {
+        pending.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unknown_or_multiple_model_calls_never_execute() {
+        let unknown = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"shell_run","arguments":"{}"}}]}}]});
+        assert!(decide_from_model(&unknown).is_err());
+        let two = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"focus_pause","arguments":"{}"}},{"function":{"name":"focus_end","arguments":"{}"}}]}}]});
+        assert!(decide_from_model(&two).is_err());
+    }
+
+    #[test]
+    fn a_valid_mutation_is_held_for_confirmation() {
+        let response = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"tasks_create","arguments":"{\"title\":\"Review PR\"}"}}]}}]});
+        let (_, choice) = decide_from_model(&response).unwrap();
+        let (spec, args) = choice.unwrap();
+        assert!(spec.confirmation);
+        let proposal = proposal_for(&spec, args).unwrap();
+        assert_eq!(proposal.tool, "tasks.create");
+    }
+}

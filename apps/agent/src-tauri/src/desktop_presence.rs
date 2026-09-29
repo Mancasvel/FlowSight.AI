@@ -187,6 +187,7 @@ pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
             "open" => show_main_window(app),
             "quit" => {
                 QUITTING.store(true, Ordering::Relaxed);
+                crate::local_agent::restore_on_exit();
                 app.exit(0);
             }
             _ => {}

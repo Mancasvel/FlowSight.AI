@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "FlowSight Browser Controls",
+  "version": "1.0.0",
+  "description": "Pairs Chrome or Edge with the local FlowSight focus agent.",
+  "permissions": ["alarms", "storage", "tabs", "declarativeNetRequest"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1/*"],
+  "background": { "service_worker": "worker.js" },
+  "options_page": "options.html"
+}

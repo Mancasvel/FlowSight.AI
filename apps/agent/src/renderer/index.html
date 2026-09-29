@@ -3552,6 +3552,7 @@
   <link rel="stylesheet" href="./mobile-theme.css">
   <link rel="stylesheet" href="/theme-dark-mobile.css" id="themeDarkMobile" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="./profile-redesign.css">
+  <link rel="stylesheet" href="./local-agent.css">
 </head>
 
 <body>
@@ -4023,6 +4024,76 @@
         </div>
       </div>
 
+      <!-- TAB: Local action agent -->
+      <div id="tabLocalAgent" class="tab-panel local-agent-panel">
+        <div class="local-agent-heading">
+          <h1>Local agent</h1>
+          <p>Ask Qwen to help with focus, tasks, and connected apps. Changes wait for your approval.</p>
+          <p id="localAgentFocusStatus" class="local-agent-focus-status">No active focus block.</p>
+        </div>
+        <div class="card local-agent-card">
+          <div class="local-agent-log" id="localAgentLog" role="log" aria-live="polite" aria-label="Local agent conversation">
+            <p class="local-agent-empty">Try “Start a 45-minute focus block to finish the PR” or “What do you remember about my work?”</p>
+          </div>
+          <div id="localAgentProposal" class="local-agent-proposal" hidden>
+            <span class="local-agent-proposal-kicker">Review action</span>
+            <p id="localAgentProposalSummary"></p>
+            <div class="local-agent-proposal-actions">
+              <button type="button" class="button button-secondary" id="localAgentCancelBtn">Cancel</button>
+              <button type="button" class="button button-primary" id="localAgentConfirmBtn">Confirm action</button>
+            </div>
+          </div>
+          <form id="localAgentForm" class="local-agent-form">
+            <label class="label" for="localAgentInput">What would you like to do?</label>
+            <textarea id="localAgentInput" class="input" rows="3" maxlength="1200" placeholder="Describe a task or action…"></textarea>
+            <button type="submit" class="button button-primary" id="localAgentAskBtn">Ask local agent</button>
+          </form>
+        </div>
+        <details class="card local-agent-details">
+          <summary>Tools and saved preferences</summary>
+          <h2>Browser pairing</h2>
+          <p class="local-agent-helper">In Chrome or Edge, open Extensions, enable Developer mode, and load the unpacked folder below. Open the extension's options and enter these values once.</p>
+          <button type="button" id="localAgentOpenExtensionBtn" class="button button-secondary">Open extension folder</button>
+          <div class="local-agent-pairing">
+            <div><span>Connection</span><strong id="localAgentBrowserStatus">Checking…</strong></div>
+            <div><span>Port</span><output id="localAgentBrowserPort">—</output></div>
+            <div><span>Pairing key</span><code id="localAgentBrowserToken">—</code></div>
+          </div>
+          <h2>External connections</h2>
+          <p class="local-agent-helper">Add a scoped access token only for a service you want the agent to use. Tokens stay encrypted for your Windows account. Calendar and email use the selected Google or Microsoft connection; without a calendar connection, FlowSight uses its local calendar.</p>
+          <form id="localAgentConnectionForm" class="local-agent-connection-form">
+            <label class="label" for="localAgentProvider">Service</label>
+            <select class="select" id="localAgentProvider">
+              <option value="google">Google Calendar / Gmail</option>
+              <option value="microsoft">Microsoft Calendar / Mail</option>
+              <option value="slack">Slack</option>
+              <option value="teams">Microsoft Teams</option>
+              <option value="github">GitHub</option>
+              <option value="notion">Notion</option>
+            </select>
+            <label class="label" for="localAgentToken">Access token</label>
+            <input class="input" type="password" id="localAgentToken" autocomplete="off" placeholder="Paste a scoped token" maxlength="4096">
+            <div class="local-agent-connection-actions">
+              <button type="submit" class="button button-primary">Save connection</button>
+              <button type="button" id="localAgentDisconnectBtn" class="button button-secondary">Disconnect</button>
+            </div>
+          </form>
+          <p id="localAgentConnectionStatus" class="local-agent-helper" role="status"></p>
+          <div class="local-agent-provider-choices">
+            <label class="label" for="localAgentCalendarProvider">Calendar</label>
+            <select class="select" id="localAgentCalendarProvider"><option value="">FlowSight local</option><option value="google">Google</option><option value="microsoft">Microsoft</option></select>
+            <label class="label" for="localAgentEmailProvider">Email</label>
+            <select class="select" id="localAgentEmailProvider"><option value="">Choose provider</option><option value="google">Gmail</option><option value="microsoft">Microsoft Mail</option></select>
+            <button type="button" id="localAgentSaveProvidersBtn" class="button button-secondary">Save providers</button>
+          </div>
+          <p id="localAgentConfigured" class="local-agent-helper"></p>
+          <h2>Available actions</h2>
+          <div id="localAgentTools" class="local-agent-tools"></div>
+          <h2>What FlowSight remembers</h2>
+          <div id="localAgentMemory" class="local-agent-memory">No saved preferences.</div>
+        </details>
+      </div>
+
       <!-- TAB: AI Coach (Pro) -->
       <div id="tabCloudInsights" class="tab-panel coach-panel">
         <div class="coach-chat-shell" id="coachChatShell">
@@ -4368,6 +4439,13 @@
           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
         </svg>
         <span class="nav-label">Insights</span>
+      </button>
+      <button class="nav-item" data-tab="tabLocalAgent" id="navLocalAgent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
+          <circle cx="12" cy="12" r="4"/>
+        </svg>
+        <span class="nav-label">Agent</span>
       </button>
       <button class="nav-item nav-pro nav-pro-locked" data-tab="tabCloudInsights" id="navCloudInsights">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -5496,9 +5574,10 @@
       if (trackingStateHydrated) return;
 
       try {
-        const [nativeStatus, history] = await Promise.all([
+        const [nativeStatus, history, localAgent] = await Promise.all([
           invoke('get_status'),
           invoke('get_today_history'),
+          invoke('get_local_agent_data').catch(() => null),
         ]);
         const checkpoint = loadTrackingCheckpoint(localStorage);
         let serverOnline = false;
@@ -5513,6 +5592,7 @@
           serverOnline,
           historySeconds: history?.total_seconds,
           checkpoint,
+          agentFocusStatus: localAgent?.focus?.status,
         });
 
         if (restored.shouldResumeNative) {
@@ -5551,7 +5631,9 @@
       trackingTransitionInProgress = true;
       setTrackingControlsBusy(true);
       try {
-        await stopNativeMonitoring({ requireSuccess: true });
+        const focus = (await invoke('get_local_agent_data').catch(() => null))?.focus;
+        if (focus?.status === 'running') await invoke('control_local_focus_block', { action: 'pause' });
+        else await stopNativeMonitoring({ requireSuccess: true });
         isMonitoring = false;
         isPaused = true;
         commitSessionTime();
@@ -5572,7 +5654,9 @@
       trackingTransitionInProgress = true;
       setTrackingControlsBusy(true);
       try {
-        await stopNativeMonitoring({ requireSuccess: isMonitoring });
+        const focus = (await invoke('get_local_agent_data').catch(() => null))?.focus;
+        if (focus) await invoke('control_local_focus_block', { action: 'end' });
+        else await stopNativeMonitoring({ requireSuccess: isMonitoring });
         isMonitoring = false;
         isPaused = false;
         commitSessionTime();
@@ -5600,6 +5684,17 @@
       btn.disabled = true;
       btn.classList.add('loading-state');
       try {
+        const focus = (await invoke('get_local_agent_data').catch(() => null))?.focus;
+        if (focus?.status === 'paused') {
+          await invoke('control_local_focus_block', { action: 'resume' });
+          isMonitoring = true;
+          isPaused = false;
+          resumeSessionTimer();
+          renderTrackingStatus();
+          persistTrackingState();
+          showToast('Focus block resumed', 'success');
+          return;
+        }
         const status = await invoke('check_local_server');
         if (!status.online) {
           await startMonitoringFull();
@@ -8227,6 +8322,262 @@
     document.getElementById('statusReportModal')?.addEventListener('click', (e) => {
       if (e.target.id === 'statusReportModal') closeStatusReportModal();
     });
+    let pendingLocalAgentAction = null;
+    let localAgentBusy = false;
+
+    function appendLocalAgentMessage(role, value) {
+      const log = document.getElementById('localAgentLog');
+      log.dataset.hydrated = 'true';
+      log.querySelector('.local-agent-empty')?.remove();
+      const bubble = document.createElement('div');
+      bubble.className = 'local-agent-message';
+      bubble.dataset.role = role;
+      bubble.textContent = value;
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function setLocalAgentBusy(busy) {
+      localAgentBusy = busy;
+      for (const id of ['localAgentAskBtn', 'localAgentConfirmBtn', 'localAgentCancelBtn']) {
+        const button = document.getElementById(id);
+        if (button) button.disabled = busy;
+      }
+      const ask = document.getElementById('localAgentAskBtn');
+      if (ask) ask.textContent = busy ? 'Working…' : 'Ask local agent';
+    }
+
+    function showLocalAgentProposal(proposal) {
+      pendingLocalAgentAction = proposal;
+      const panel = document.getElementById('localAgentProposal');
+      panel.hidden = !proposal;
+      document.getElementById('localAgentProposalSummary').textContent = proposal?.summary || '';
+      if (proposal) panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function describeLocalAgentResult(result) {
+      if (result?.focus) {
+        const focus = result.focus;
+        const warning = result.protectionWarnings?.length ? `\n${result.protectionWarnings.join('\n')}` : '';
+        return `Focus block ${focus.status}: ${focus.intention}${warning}`;
+      }
+      if (result?.playbook && Array.isArray(result.steps)) {
+        const steps = result.steps.map((step) => {
+          if (step.tool === 'notifications.digest') return `Held reminders: ${step.result?.count || 0}`;
+          if (step.tool === 'focus.end') return `Focus block ended${step.result?.digest?.length ? `; ${step.result.digest.length} held reminder(s) delivered` : ''}`;
+          if (step.error) return `${step.tool}: ${step.error}`;
+          if (step.result?.closed?.restoreId) return `${step.tool}: restore ID ${step.result.closed.restoreId}`;
+          if (step.result?.opened) return `${step.tool}: opened ${step.result.opened}`;
+          if (step.tool) return `${step.tool}: done`;
+          if (step.microplan) return step.microplan.join('\n');
+          if (step.tomorrowPlan) return `Open tasks for tomorrow: ${step.tomorrowPlan.map((task) => task.title).join(', ') || 'none'}`;
+          return JSON.stringify(step);
+        });
+        return `${result.playbook}\n${steps.join('\n')}`;
+      }
+      if (result?.task) return `Task ${result.task.status}: ${result.task.title}`;
+      if (result?.event) return `Calendar event: ${result.event.title} (${result.event.startAt} to ${result.event.endAt})`;
+      if (result?.draft) return `Draft saved for ${result.draft.recipient}. It has not been sent.`;
+      if (result?.childId && result?.parentId) return `Created ${result.provider} child ${result.childId} under ${result.parentId}${result.url ? `: ${result.url}` : ''}${result.linkError ? `\n${result.linkError}` : ''}`;
+      if (result?.published === false && result?.title && result?.body) return `${result.title}\n\n${result.body}\n\nDraft only; copy and review before publishing.`;
+      if (result?.opened) return `Opened ${result.opened}`;
+      if (result?.preferences) return JSON.stringify(result.preferences, null, 2);
+      return JSON.stringify(result, null, 2);
+    }
+
+    async function loadLocalAgentDetails() {
+      const toolsHost = document.getElementById('localAgentTools');
+      const memoryHost = document.getElementById('localAgentMemory');
+      try {
+        const [tools, data, browser, connections] = await Promise.all([
+          invoke('get_local_agent_tools'),
+          invoke('get_local_agent_data'),
+          invoke('get_browser_pairing').catch(() => null),
+          invoke('get_local_agent_connections').catch(() => null),
+        ]);
+        document.getElementById('localAgentBrowserStatus').textContent = browser?.connected ? 'Connected' : 'Not paired';
+        document.getElementById('localAgentBrowserPort').textContent = browser?.port || '—';
+        document.getElementById('localAgentBrowserToken').textContent = browser?.token || 'Bridge unavailable';
+        const focus = data?.focus;
+        document.getElementById('localAgentFocusStatus').textContent = focus
+          ? `${focus.status === 'running' ? 'In focus' : 'Paused'} · ${focus.intention} · ${focus.durationMinutes} min · ${focus.protection} protection`
+          : 'No active focus block.';
+        const conversationLog = document.getElementById('localAgentLog');
+        if (!conversationLog.dataset.hydrated) {
+          for (const message of data?.conversation || []) {
+            appendLocalAgentMessage(message.role === 'user' ? 'you' : 'agent', message.content);
+          }
+          conversationLog.dataset.hydrated = 'true';
+        }
+        const configured = Object.entries(connections?.configured || {}).filter(([, active]) => active).map(([name]) => name);
+        document.getElementById('localAgentConfigured').textContent = configured.length
+          ? `Connected: ${configured.join(', ')}. Jira and Linear use the existing FlowSight connections.`
+          : 'No extra provider tokens saved. Jira and Linear use the existing FlowSight connections.';
+        if (connections && document.activeElement !== document.getElementById('localAgentCalendarProvider')) {
+          document.getElementById('localAgentCalendarProvider').value = connections.calendarProvider || '';
+        }
+        if (connections && document.activeElement !== document.getElementById('localAgentEmailProvider')) {
+          document.getElementById('localAgentEmailProvider').value = connections.emailProvider || '';
+        }
+        toolsHost.replaceChildren();
+        for (const tool of tools) {
+          const item = document.createElement('span');
+          item.className = 'local-agent-tool';
+          item.textContent = tool.name;
+          const needsBrowser = tool.name.startsWith('browser.');
+          if (needsBrowser && !browser?.connected) item.dataset.status = 'needs-connection';
+          item.title = `${tool.description}${needsBrowser && !browser?.connected ? ' Pair the browser extension first.' : ''}`;
+          toolsHost.appendChild(item);
+        }
+        memoryHost.replaceChildren();
+        const entries = Object.entries(data?.preferences || {});
+        if (!entries.length) {
+          memoryHost.textContent = 'No saved preferences.';
+        } else {
+          for (const [key, preference] of entries) {
+            const row = document.createElement('div');
+            row.className = 'local-agent-memory-item';
+            const label = document.createElement('span');
+            label.textContent = `${key}: ${preference.value}`;
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'button button-secondary';
+            remove.textContent = 'Forget';
+            remove.setAttribute('aria-label', `Forget ${key}`);
+            remove.addEventListener('click', async () => {
+              try {
+                showLocalAgentProposal(await invoke('propose_local_agent_tool', {
+                  name: 'memory.forget_preference', arguments: { key },
+                }));
+              } catch (error) {
+                appendLocalAgentMessage('error', String(error));
+              }
+            });
+            row.append(label, remove);
+            memoryHost.appendChild(row);
+          }
+        }
+      } catch (error) {
+        toolsHost.textContent = `Tools unavailable: ${error}`;
+        memoryHost.textContent = 'Saved preferences could not be loaded.';
+      }
+    }
+
+    document.getElementById('localAgentForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (localAgentBusy) return;
+      const input = document.getElementById('localAgentInput');
+      const message = input.value.trim();
+      if (!message) { input.focus(); return; }
+      if (pendingLocalAgentAction) {
+        appendLocalAgentMessage('error', 'Review or cancel the pending action first.');
+        return;
+      }
+      appendLocalAgentMessage('you', message);
+      input.value = '';
+      setLocalAgentBusy(true);
+      try {
+        const turn = await invoke('ask_local_agent', { message });
+        if (turn.message) appendLocalAgentMessage('agent', turn.message);
+        if (turn.result) appendLocalAgentMessage('agent', describeLocalAgentResult(turn.result));
+        if (turn.proposal) showLocalAgentProposal(turn.proposal);
+        await loadLocalAgentDetails();
+      } catch (error) {
+        appendLocalAgentMessage('error', String(error));
+      } finally {
+        setLocalAgentBusy(false);
+      }
+    });
+
+    document.getElementById('localAgentConnectionForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const provider = document.getElementById('localAgentProvider').value;
+      const input = document.getElementById('localAgentToken');
+      const status = document.getElementById('localAgentConnectionStatus');
+      if (!input.value.trim()) { input.focus(); return; }
+      try {
+        await invoke('save_local_agent_connection', { provider, token: input.value });
+        input.value = '';
+        status.textContent = `${provider} token saved on this device.`;
+        await loadLocalAgentDetails();
+      } catch (error) { status.textContent = String(error); }
+    });
+    document.getElementById('localAgentOpenExtensionBtn')?.addEventListener('click', async () => {
+      try { await invoke('open_browser_extension_folder'); }
+      catch (error) { appendLocalAgentMessage('error', String(error)); }
+    });
+
+    document.getElementById('localAgentDisconnectBtn')?.addEventListener('click', async () => {
+      const provider = document.getElementById('localAgentProvider').value;
+      const status = document.getElementById('localAgentConnectionStatus');
+      try {
+        await invoke('remove_local_agent_connection', { provider });
+        status.textContent = `${provider} disconnected.`;
+        await loadLocalAgentDetails();
+      } catch (error) { status.textContent = String(error); }
+    });
+
+    document.getElementById('localAgentSaveProvidersBtn')?.addEventListener('click', async () => {
+      const status = document.getElementById('localAgentConnectionStatus');
+      const calendarProvider = document.getElementById('localAgentCalendarProvider').value || null;
+      const emailProvider = document.getElementById('localAgentEmailProvider').value || null;
+      try {
+        await invoke('set_local_agent_providers', { calendarProvider, emailProvider });
+        status.textContent = 'Calendar and email providers saved.';
+        await loadLocalAgentDetails();
+      } catch (error) { status.textContent = String(error); }
+    });
+
+    document.getElementById('localAgentConfirmBtn')?.addEventListener('click', async () => {
+      if (!pendingLocalAgentAction || localAgentBusy) return;
+      const proposal = pendingLocalAgentAction;
+      setLocalAgentBusy(true);
+      try {
+        const result = await invoke('confirm_local_agent_action', { id: proposal.id });
+        showLocalAgentProposal(null);
+        appendLocalAgentMessage('agent', describeLocalAgentResult(result));
+        await loadLocalAgentDetails();
+      } catch (error) {
+        showLocalAgentProposal(null);
+        appendLocalAgentMessage('error', String(error));
+      } finally {
+        setLocalAgentBusy(false);
+      }
+    });
+
+    document.getElementById('localAgentCancelBtn')?.addEventListener('click', async () => {
+      if (!pendingLocalAgentAction || localAgentBusy) return;
+      const id = pendingLocalAgentAction.id;
+      showLocalAgentProposal(null);
+      try { await invoke('cancel_local_agent_action', { id }); }
+      catch (error) { appendLocalAgentMessage('error', String(error)); }
+      appendLocalAgentMessage('agent', 'Action cancelled.');
+    });
+
+    listen('local-agent-focus-changed', ({ payload }) => {
+      if (payload?.status === 'running') {
+        isMonitoring = true;
+        isPaused = false;
+        resumeSessionTimer();
+      } else {
+        if (isMonitoring) commitSessionTime();
+        isMonitoring = false;
+        isPaused = payload?.status === 'paused';
+      }
+      renderTrackingStatus();
+      persistTrackingState();
+      refreshTodayView().catch(() => {});
+      if (document.getElementById('tabLocalAgent')?.classList.contains('active')) {
+        loadLocalAgentDetails();
+      }
+    });
+    listen('local-agent-digest', ({ payload }) => {
+      if (Array.isArray(payload) && payload.length) {
+        appendLocalAgentMessage('agent', `${payload.length} held reminder(s):\n${payload.map((item) => `• ${item.title}: ${item.body}`).join('\n')}`);
+        showToast(`${payload.length} focus reminder(s) held during quiet mode`, 'success', 5000);
+      }
+    });
+
     function switchTab(tabId) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(n => {
@@ -8238,6 +8589,7 @@
       activeNavItem?.classList.add('active');
       activeNavItem?.setAttribute('aria-current', 'page');
       if (tabId === 'tabSummary') loadHistory();
+      if (tabId === 'tabLocalAgent') loadLocalAgentDetails();
       if (tabId === 'tabCloudInsights') loadCoachChat();
       if (tabId === 'tabToday') refreshTodayView();
     }

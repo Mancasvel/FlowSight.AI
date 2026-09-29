@@ -93,6 +93,7 @@ export function resolveTrackingRestore({
   serverOnline,
   historySeconds,
   checkpoint,
+  agentFocusStatus,
 }) {
   const historyTotal = normalizeSeconds(historySeconds);
   const checkpointTotal = checkpoint ? normalizeSeconds(checkpoint.totalSeconds) : 0;
@@ -104,6 +105,14 @@ export function resolveTrackingRestore({
     return {
       mode: 'running',
       totalSeconds: Math.max(historyTotal, liveCheckpointTotal),
+      shouldResumeNative: false,
+    };
+  }
+
+  if (agentFocusStatus === 'paused') {
+    return {
+      mode: 'paused',
+      totalSeconds: Math.max(historyTotal, checkpointTotal),
       shouldResumeNative: false,
     };
   }
