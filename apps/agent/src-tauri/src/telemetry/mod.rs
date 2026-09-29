@@ -228,3 +228,12 @@ pub fn set_task_context(user_task: Option<String>, jira_ticket: Option<String>) 
         ctx.jira_ticket = jira_ticket;
     }
 }
+
+pub fn selected_task_for_reminder() -> Option<String> {
+    let controller = CONTROLLER.get()?;
+    let context = controller
+        .task_ctx
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    context.user_task.clone()
+}

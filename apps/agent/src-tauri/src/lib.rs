@@ -125,6 +125,7 @@ pub fn run() {
             desktop_presence::set_launch_at_login,
             desktop_presence::set_start_monitoring_at_login,
             desktop_presence::set_focus_alerts_enabled,
+            desktop_presence::set_contextual_focus_alerts_enabled,
             desktop_presence::dismiss_desktop_prompt,
         ])
         .setup(|app| {

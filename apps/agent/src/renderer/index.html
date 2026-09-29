@@ -3660,7 +3660,7 @@
         <input type="checkbox" id="presenceAlertsChoice">
         <span>Let local AI suggest focus reminders</span>
       </label>
-      <p class="privacy-detail">Only while tracking is on. Local Qwen sees aggregate signals and may choose not to notify. Notifications never include app or window names.</p>
+      <p class="privacy-detail">Only while tracking is on. Local Qwen sees aggregate signals and may choose not to notify. Reminders use generic wording unless you separately enable app and task names in Profile.</p>
       <div class="consent-actions">
         <button type="button" class="button button-secondary" id="desktopPresenceLaterBtn">Not now</button>
         <button type="button" class="button button-primary" id="desktopPresenceEnableBtn">Open at sign-in</button>
@@ -3700,7 +3700,7 @@
       <h2 class="consent-title" id="privacyNoticeTitle">Privacy notice</h2>
       <p>Effective 23 August 2026 · Controller legal identity and address: must be completed in the published notice before production · Privacy contact: manuel@flowsight.site.</p>
       <h3>Local tracking</h3>
-      <p>When you start tracking, the app processes images of the active window, active app and interface context on your device to create activity summaries. Images and raw interaction events stay in volatile memory and are discarded after local analysis. Excluded applications are skipped. This processing provides the feature you request. Summaries remain on your device for your selected retention period. If you enable focus reminders, local Qwen receives only verified aggregate counts of app switches or non-work browsing episodes. It can propose a reminder through an internal tool; FlowSight checks permission and cooldown before showing fixed, private text without app or window names.</p>
+      <p>When you start tracking, the app processes images of the active window, active app and interface context on your device to create activity summaries. Images and raw interaction events stay in volatile memory and are discarded after local analysis. Excluded applications are skipped. This processing provides the feature you request. Summaries remain on your device for your selected retention period. If you enable focus reminders, local Qwen receives only verified aggregate counts of app switches or non-work browsing episodes. It can propose a reminder through an internal tool; FlowSight checks permission and cooldown before showing it. Reminders use generic wording by default. If you separately enable contextual reminders in Profile, the system notification may show a public app or site name and your selected task, but never a window title or URL. Those names stay on your device and are not sent to Qwen for reminder decisions.</p>
       <h3>Optional cloud purposes</h3>
       <ul>
         <li><strong>Activity sync:</strong> sends locally generated aggregate summaries, categories, durations, ticket references and team/account IDs to FlowSight's Supabase service.</li>
@@ -4151,6 +4151,11 @@
             <span>Let local Qwen suggest focus reminders</span>
           </label>
           <p class="privacy-detail">Only while tracking is on. Qwen may propose a reminder after at least 2 minutes of non-work browsing or 12 switches across 3 apps within 10 minutes. It sees aggregate counts, not names or screen content, and can choose not to notify. FlowSight enforces a 30-minute cooldown.</p>
+          <label class="consent-toggle-row" for="contextualFocusAlertsToggle">
+            <input type="checkbox" id="contextualFocusAlertsToggle">
+            <span>Add the app or site and my selected task when known</span>
+          </label>
+          <p class="privacy-detail">Optional. FlowSight uses a short public app or site label and your chosen task in system notifications. Window titles and URLs are never shown; Qwen still sees only aggregate counts. System notifications can appear on your lock screen, depending on your device settings.</p>
           <p class="privacy-detail profile-form-status" id="desktopPresenceStatus" aria-live="polite"></p>
         </div>
 
@@ -7256,6 +7261,7 @@
       const launch = document.getElementById('launchAtLoginToggle');
       const monitor = document.getElementById('autoMonitorToggle');
       const alerts = document.getElementById('focusAlertsToggle');
+      const contextualAlerts = document.getElementById('contextualFocusAlertsToggle');
       const status = document.getElementById('desktopPresenceStatus');
       if (launch) {
         launch.checked = Boolean(prefs.launchAtLogin);
@@ -7266,6 +7272,10 @@
         monitor.disabled = Boolean(prefs.developmentBuild || !prefs.launchAtLogin);
       }
       if (alerts) alerts.checked = Boolean(prefs.focusAlertsEnabled);
+      if (contextualAlerts) {
+        contextualAlerts.checked = Boolean(prefs.contextualFocusAlertsEnabled);
+        contextualAlerts.disabled = !prefs.focusAlertsEnabled;
+      }
       if (status) {
         status.textContent = prefs.developmentBuild
           ? 'Install FlowSight to enable launch at sign-in. Focus reminders can be tested here.'
@@ -7373,6 +7383,16 @@
       } catch (error) {
         renderDesktopPreferences();
         showToast('Could not change focus reminders: ' + error, 'error');
+      }
+    });
+
+    document.getElementById('contextualFocusAlertsToggle')?.addEventListener('change', async (event) => {
+      try {
+        await invoke('set_contextual_focus_alerts_enabled', { enabled: event.target.checked });
+        await loadDesktopPreferences();
+      } catch (error) {
+        renderDesktopPreferences();
+        showToast('Could not change reminder details: ' + error, 'error');
       }
     });
 

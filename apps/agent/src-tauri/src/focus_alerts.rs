@@ -135,11 +135,12 @@ impl Evidence {
     }
 }
 
-#[derive(Clone, Copy)]
 struct Proposal {
     evidence: Evidence,
     generation: u64,
     created_at: Instant,
+    origin_app: Option<String>,
+    destination: Option<String>,
 }
 
 #[derive(Default)]
@@ -309,6 +310,8 @@ pub fn record_app_switch(app: &tauri::AppHandle, app_name: &str) {
                 evidence,
                 generation: guard.generation,
                 created_at: now,
+                origin_app: None,
+                destination: None,
             })
         } else {
             None
@@ -324,6 +327,8 @@ pub fn review_browsing_report(
     db_path: &Path,
     category: &str,
     duration_seconds: u64,
+    description: &str,
+    captured_app: Option<&str>,
 ) {
     if duration_seconds == 0 || !category.eq_ignore_ascii_case("Browsing") {
         return;
@@ -360,12 +365,29 @@ pub fn review_browsing_report(
                 },
                 generation: guard.generation,
                 created_at: now,
+                origin_app: captured_app.map(str::to_string),
+                destination: None,
             })
         } else {
             None
         }
     };
-    if let Some(proposal) = proposal {
+    if let Some(mut proposal) = proposal {
+        let sample = crate::focus_semantics::ActivitySample {
+            start: Local::now().naive_local(),
+            duration_seconds: i64::try_from(duration_seconds).unwrap_or(i64::MAX),
+            category: category.to_string(),
+            description: description.to_string(),
+            ticket: None,
+            theme_hint: None,
+            app_name: captured_app.map(str::to_string),
+            window_title: None,
+        };
+        proposal.destination =
+            crate::focus_semantics::notification_destination(&sample).filter(|label| {
+                let app_or_site = label.strip_suffix(" Shorts").unwrap_or(label);
+                !crate::privacy::application_is_excluded(db_path, Some(app_or_site))
+            });
         evaluate_in_background(app.clone(), proposal);
     }
 }
@@ -429,7 +451,7 @@ fn ask_local_qwen(evidence: Evidence) -> Result<Option<Advice>, String> {
     let body = json!({
         "model": LLAMA_CHAT_MODEL_ID,
         "messages": [
-            { "role": "system", "content": "You are FlowSight's local focus reminder planner. You see only verified aggregate signals. You may call send_focus_notification at most once, or make no tool call. App switching can be productive; abstain if a reminder would be speculative or interruptive. Never invent a cause, app, task, emotion, or diagnosis. The app will create the actual notification using fixed private copy; you only choose an allowed advice code." },
+            { "role": "system", "content": "You are FlowSight's local focus reminder planner. You see only verified aggregate signals. You may call send_focus_notification at most once, or make no tool call. App switching can be productive; abstain if a reminder would be speculative or interruptive. Never invent a cause, app, task, emotion, or diagnosis. The app creates the notification from a validated local template; you only choose an allowed advice code." },
             { "role": "user", "content": evidence.model_input().to_string() }
         ],
         "tools": [{
@@ -498,7 +520,7 @@ fn parse_tool_decision(result: &Value, kind: AlertKind) -> Result<Option<Advice>
     Ok(Some(advice))
 }
 
-fn can_deliver(guard: &AlertState, proposal: Proposal, advice: Advice, now: Instant) -> bool {
+fn can_deliver(guard: &AlertState, proposal: &Proposal, advice: Advice, now: Instant) -> bool {
     guard.enabled
         && guard.monitoring
         && guard.pending(proposal.evidence.kind())
@@ -527,19 +549,109 @@ fn safe_foreground_name(application: &str) -> bool {
         && !name.contains("flowsight")
 }
 
-fn notification_surface_safe() -> bool {
+fn notification_surface_safe() -> Option<crate::context::SystemContext> {
     let foreground = crate::context::get_system_context();
     let Some(app_name) = foreground.app_name.as_deref() else {
         // A locked desktop usually has no accessible foreground window.
-        return false;
+        return None;
     };
     if !safe_foreground_name(app_name) {
-        return false;
+        return None;
     }
     let Ok(db_path) = crate::paths::db_path() else {
-        return false;
+        return None;
     };
-    !crate::privacy::application_is_excluded(&db_path, Some(app_name))
+    (!crate::privacy::application_is_excluded(&db_path, Some(app_name))).then_some(foreground)
+}
+
+fn clean_task_label(value: Option<String>) -> Option<String> {
+    let cleaned = value?.split_whitespace().collect::<Vec<_>>().join(" ");
+    if cleaned.is_empty() || cleaned.eq_ignore_ascii_case("general") {
+        return None;
+    }
+    let shortened = cleaned.chars().take(56).collect::<String>();
+    Some(if shortened.chars().count() < cleaned.chars().count() {
+        format!("{shortened}…")
+    } else {
+        shortened
+    })
+}
+
+fn visible_destination<'a>(
+    proposal: &'a Proposal,
+    foreground: &crate::context::SystemContext,
+) -> Option<&'a str> {
+    let destination = proposal.destination.as_deref()?;
+    let origin_app = proposal.origin_app.as_deref()?;
+    let current_app = foreground.app_name.as_deref()?;
+    if crate::privacy::normalized_application(origin_app)
+        != crate::privacy::normalized_application(current_app)
+    {
+        return None;
+    }
+    let site = destination.strip_suffix(" Shorts").unwrap_or(destination);
+    let key = crate::privacy::normalized_application(site);
+    let app_key = crate::privacy::normalized_application(current_app);
+    let title = foreground
+        .window_title
+        .as_deref()
+        .unwrap_or_default()
+        .to_lowercase();
+    (app_key == key || title.contains(&key)).then_some(destination)
+}
+
+fn browsing_still_relevant(
+    proposal: &Proposal,
+    foreground: &crate::context::SystemContext,
+) -> bool {
+    if proposal.evidence.kind() != AlertKind::NonWorkBrowsing {
+        return true;
+    }
+    let Some(origin) = proposal.origin_app.as_deref() else {
+        return true;
+    };
+    crate::privacy::normalized_application(origin)
+        == crate::privacy::normalized_application(
+            foreground.app_name.as_deref().unwrap_or_default(),
+        )
+}
+
+fn contextual_copy(
+    advice: Advice,
+    destination: Option<&str>,
+    task: Option<&str>,
+) -> (String, String) {
+    if destination.is_none() && task.is_none() {
+        let (title, body) = advice.copy();
+        return (title.into(), body.into());
+    }
+    let task = task.map_or_else(|| "your task".to_string(), |name| format!("“{name}”"));
+    let body = match advice {
+        Advice::ChooseOneTask => {
+            format!("You've switched apps several times. Choose {task} for the next few minutes.")
+        }
+        Advice::FinishCurrentStep => format!(
+            "You've switched apps several times. Finish one step of {task} before switching again."
+        ),
+        Advice::PauseAndPrioritize => {
+            format!("Many app switches. Take a moment to return to {task}.")
+        }
+        Advice::ReturnToTask => format!(
+            "{}Return to {task} and keep your momentum going.",
+            destination.map_or(String::new(), |name| format!("{name} can wait. "))
+        ),
+        Advice::TimeboxBrowsing => format!(
+            "{}Set a short limit, then return to {task}.",
+            destination.map_or(String::new(), |name| format!("You're on {name}. "))
+        ),
+        Advice::IntentionalBreak => {
+            format!(
+                "{}If this is a break, make it intentional, then return to {task}.",
+                destination.map_or(String::new(), |name| format!("You're on {name}. "))
+            )
+        }
+    };
+    ("Keep your focus".into(), body)
 }
 
 fn finish_proposal(app: &tauri::AppHandle, proposal: Proposal, decision: Option<Advice>) {
@@ -552,19 +664,37 @@ fn finish_proposal(app: &tauri::AppHandle, proposal: Proposal, decision: Option<
         return;
     };
     let now = Instant::now();
-    if !can_deliver(&guard, proposal, advice, now) {
+    if !can_deliver(&guard, &proposal, advice, now) {
         guard.set_pending(proposal.evidence.kind(), false);
         return;
     }
-    if !notification_surface_safe() {
+    let Some(foreground) = notification_surface_safe() else {
+        guard.set_pending(proposal.evidence.kind(), false);
+        return;
+    };
+    if !browsing_still_relevant(&proposal, &foreground) {
+        // The user already left the distracting app while Qwen was deciding.
         guard.set_pending(proposal.evidence.kind(), false);
         return;
     }
-    let (title, body) = advice.copy();
+    let (title, body) = if crate::desktop_presence::contextual_focus_alerts_enabled() {
+        let destination = visible_destination(&proposal, &foreground);
+        let task = clean_task_label(crate::telemetry::selected_task_for_reminder());
+        contextual_copy(advice, destination, task.as_deref())
+    } else {
+        let (title, body) = advice.copy();
+        (title.into(), body.into())
+    };
     // Hold the state lock through the OS call: stop/opt-out cannot complete and
     // then have an old, in-flight model result show a notification afterwards.
     #[cfg(desktop)]
-    let sent = match app.notification().builder().title(title).body(body).show() {
+    let sent = match app
+        .notification()
+        .builder()
+        .title(&title)
+        .body(&body)
+        .show()
+    {
         Ok(()) => true,
         Err(error) => {
             log::warn!("[FocusAlerts] Could not show notification: {error}");
@@ -688,6 +818,8 @@ mod tests {
             },
             generation: 7,
             created_at: now,
+            origin_app: None,
+            destination: None,
         };
         let mut guard = AlertState {
             enabled: true,
@@ -696,25 +828,61 @@ mod tests {
             generation: 7,
             ..AlertState::default()
         };
-        assert!(can_deliver(&guard, proposal, Advice::ChooseOneTask, now));
+        assert!(can_deliver(&guard, &proposal, Advice::ChooseOneTask, now));
         guard.monitoring = false;
-        assert!(!can_deliver(&guard, proposal, Advice::ChooseOneTask, now));
+        assert!(!can_deliver(&guard, &proposal, Advice::ChooseOneTask, now));
         guard.monitoring = true;
         guard.enabled = false;
-        assert!(!can_deliver(&guard, proposal, Advice::ChooseOneTask, now));
+        assert!(!can_deliver(&guard, &proposal, Advice::ChooseOneTask, now));
         guard.enabled = true;
         guard.generation += 1;
-        assert!(!can_deliver(&guard, proposal, Advice::ChooseOneTask, now));
+        assert!(!can_deliver(&guard, &proposal, Advice::ChooseOneTask, now));
         guard.generation = 7;
         guard.last_alert = Some(now);
-        assert!(!can_deliver(&guard, proposal, Advice::ChooseOneTask, now));
+        assert!(!can_deliver(&guard, &proposal, Advice::ChooseOneTask, now));
         guard.last_alert = None;
         assert!(!can_deliver(
             &guard,
-            proposal,
+            &proposal,
             Advice::ChooseOneTask,
             now + MAX_DECISION_AGE + Duration::from_secs(1)
         ));
+    }
+
+    #[test]
+    fn contextual_reminder_names_only_the_current_destination_and_selected_task() {
+        let proposal = Proposal {
+            evidence: Evidence::NonWorkBrowsing { episodes_today: 1 },
+            generation: 1,
+            created_at: Instant::now(),
+            origin_app: Some("Chrome.exe".into()),
+            destination: Some("YouTube Shorts".into()),
+        };
+        let mut foreground = crate::context::SystemContext {
+            app_name: Some("Chrome.exe".into()),
+            window_title: Some("YouTube Shorts - Google Chrome".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            visible_destination(&proposal, &foreground),
+            Some("YouTube Shorts")
+        );
+        assert!(browsing_still_relevant(&proposal, &foreground));
+        let task = clean_task_label(Some("  Finish   release notes  ".into()));
+        assert_eq!(
+            contextual_copy(Advice::ReturnToTask, visible_destination(&proposal, &foreground), task.as_deref()).1,
+            "YouTube Shorts can wait. Return to “Finish release notes” and keep your momentum going."
+        );
+
+        foreground.window_title = Some("Project wiki - Google Chrome".into());
+        assert_eq!(visible_destination(&proposal, &foreground), None);
+        foreground.app_name = Some("Editor.exe".into());
+        assert_eq!(visible_destination(&proposal, &foreground), None);
+        assert!(!browsing_still_relevant(&proposal, &foreground));
+        assert_eq!(clean_task_label(Some("General".into())), None);
+        let fallback = contextual_copy(Advice::ReturnToTask, None, None);
+        let generic = Advice::ReturnToTask.copy();
+        assert_eq!(fallback, (generic.0.into(), generic.1.into()));
     }
 
     #[test]

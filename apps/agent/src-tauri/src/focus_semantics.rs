@@ -918,7 +918,8 @@ fn foreground_destination_identity(
         .as_deref()
         .or_else(|| description_field(&sample.description, "APP"))
         .unwrap_or_default();
-    let app_key = crate::privacy::normalized_application(app);
+    let app_key =
+        crate::privacy::normalized_application(app.rsplit(['/', '\\']).next().unwrap_or(app));
     if excluded.contains(&app_key) {
         return None;
     }
@@ -1001,6 +1002,55 @@ fn foreground_destination_identity(
         kind,
         strong_identity: false,
     })
+}
+
+/// A short public app/site label for an opt-in system notification. Never use
+/// legacy guesses, raw window titles, URLs or the browser process as copy.
+pub(crate) fn notification_destination(sample: &ActivitySample) -> Option<String> {
+    if sample.category != "Browsing" {
+        return None;
+    }
+    let destination = foreground_destination_identity(sample, &BTreeSet::new())?;
+    if !destination.strong_identity || destination.label.chars().count() > 40 {
+        return None;
+    }
+    let app_key = sample
+        .app_name
+        .as_deref()
+        .map(|app| {
+            crate::privacy::normalized_application(app.rsplit(['/', '\\']).next().unwrap_or(app))
+        })
+        .unwrap_or_default();
+    let browser_or_unknown = app_key.is_empty()
+        || is_browser_application(&app_key)
+        || is_generic_application_container(&app_key);
+    if browser_or_unknown
+        && !matches!(
+            destination.key.as_str(),
+            "youtube"
+                | "youtube shorts"
+                | "tiktok"
+                | "instagram"
+                | "reddit"
+                | "twitch"
+                | "netflix"
+                | "facebook"
+                | "twitter"
+                | "pinterest"
+                | "discord"
+        )
+    {
+        return None;
+    }
+    if destination.key == "youtube"
+        && description_field(&sample.description, "CURRENT ACTION").is_some_and(|action| {
+            let action = action.to_ascii_lowercase();
+            action.contains("shorts") || action.contains("short videos")
+        })
+    {
+        return Some("YouTube Shorts".into());
+    }
+    Some(destination.label)
 }
 
 fn analyze_context_detours(
@@ -2155,6 +2205,53 @@ mod tests {
         assert!(
             analysis.apps.is_empty(),
             "two one-minute visits must not create a fake Arc app distraction"
+        );
+    }
+
+    #[test]
+    fn notification_uses_only_a_verified_public_destination() {
+        let mut browsing = sample(22, 9, 1, 120, "Browsing", None);
+        browsing.app_name = Some("Chrome.exe".into());
+        browsing.description =
+            "FOREGROUND DESTINATION: YouTube\nCURRENT ACTION: watching YouTube Shorts".into();
+        assert_eq!(
+            notification_destination(&browsing).as_deref(),
+            Some("YouTube Shorts")
+        );
+        browsing.app_name = Some("C:\\Program Files\\Google\\Chrome\\chrome.exe".into());
+        assert_eq!(
+            notification_destination(&browsing).as_deref(),
+            Some("YouTube Shorts")
+        );
+        browsing.app_name = Some("Chrome.exe".into());
+        browsing.description =
+            "FOREGROUND DESTINATION: YouTube\nCURRENT ACTION: scrolling short videos".into();
+        assert_eq!(
+            notification_destination(&browsing).as_deref(),
+            Some("YouTube Shorts")
+        );
+
+        browsing.description = "WINDOW CONTEXT: YouTube feed\nCURRENT ACTION: browsing".into();
+        assert_eq!(notification_destination(&browsing), None);
+
+        browsing.description =
+            "FOREGROUND DESTINATION: https://private.example/path\nCURRENT ACTION: browsing".into();
+        assert_eq!(notification_destination(&browsing), None);
+
+        browsing.description =
+            "FOREGROUND DESTINATION: Confidential plan\nCURRENT ACTION: browsing".into();
+        assert_eq!(notification_destination(&browsing), None);
+
+        browsing.description =
+            "FOREGROUND DESTINATION: YouTube\nCURRENT ACTION: watching videos".into();
+        browsing.category = "Research".into();
+        assert_eq!(notification_destination(&browsing), None);
+
+        browsing.category = "Browsing".into();
+        browsing.app_name = Some("Discord.exe".into());
+        assert_eq!(
+            notification_destination(&browsing).as_deref(),
+            Some("Discord")
         );
     }
 
