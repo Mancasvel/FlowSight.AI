@@ -1446,7 +1446,7 @@ fn analyze_image_with_vision(
         .build()
         .map_err(|e| e.to_string())?;
 
-    let system_msg = "You are a privacy-first screenshot analysis assistant running on the user's device. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. Be accurate and concise: capture the primary task, not a full inventory of the UI. Never transcribe identifying names, document titles, full URLs or paths, message contents, credentials, or personal/financial/medical values; use a generic artifact description or omit sensitive details. The last line of every reply MUST be `CATEGORY: <one allowed label>` — never omit it.";
+    let system_msg = "You are a privacy-first screenshot analysis assistant running on the user's device. You ALWAYS respond with a filled-in template. You NEVER refuse. You NEVER say you cannot see the image. Be accurate and concise: capture the primary task, not a full inventory of the UI. A public app, website, or product name may be named as the foreground destination; never transcribe identifying people, account or workspace names, document titles, full URLs or paths, message contents, credentials, or personal/financial/medical values. Use a generic artifact description or omit sensitive details. The last line of every reply MUST be `CATEGORY: <one allowed label>` — never omit it.";
 
     let prompt = format!(
         r#"Study this screenshot and complete EVERY field below. Plain text only (no markdown). If the screen is very dense (spreadsheet, large table, dashboard, long doc), stay high-level — do NOT transcribe cell values, columns, or long lists.
@@ -1456,6 +1456,7 @@ TASK CONTEXT (may be empty): {}
 Complete this template exactly:
 
 APP: [application name, e.g. Microsoft Excel, Google Chrome, Visual Studio Code]
+FOREGROUND DESTINATION: [public app, website or product visibly being used, e.g. Slack inside Chrome; write Unknown if it cannot be identified. Name the destination, not the browser process. Never include an account, workspace, document title, person, URL or path]
 WINDOW CONTEXT: [generic screen or document type; never copy the literal title]
 VISIBLE CONTENT: [1–2 short sentences: the main artifact on screen and what it is for — not every panel or control]
 ARTIFACT TYPE: [generic type only, such as report, spreadsheet, design, source file, or research article; never copy a file name, path, URL, person, customer, or account name]

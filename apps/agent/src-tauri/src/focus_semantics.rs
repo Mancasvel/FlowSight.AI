@@ -75,7 +75,7 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime, Timelike};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub const POLICY_VERSION: &str = "deep-focus-v1";
 /// Transparent reporting tiers, not biological or phenomenological cut-offs.
@@ -349,6 +349,59 @@ pub struct CategorySeconds {
     pub seconds: i64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct DistractionAppDay {
+    pub date: String,
+    pub seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DistractionAppRow {
+    pub app_name: String,
+    pub seconds: i64,
+    /// An app can appear in the same qualifying episode as another app, so
+    /// these per-app counts are not additive across rows.
+    pub episodes: usize,
+    pub days: usize,
+    pub transitions_from_focus: usize,
+    pub daily_seconds: Vec<DistractionAppDay>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DistractionAppAnalysis {
+    pub qualifying_episodes: usize,
+    pub qualifying_seconds: i64,
+    pub attributed_seconds: i64,
+    pub unattributed_seconds: i64,
+    pub other_app_seconds: i64,
+    pub apps: Vec<DistractionAppRow>,
+    /// Named foreground destinations inferred locally from captured screen
+    /// context. These are visits, not exact browser tab/open events.
+    pub detours: Vec<ContextDetourRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ContextDetourDay {
+    pub date: String,
+    pub visits: usize,
+    pub seconds: i64,
+    pub work_interleaved_revisits: usize,
+    pub shortest_revisit_minutes: Option<i64>,
+    /// Local clock times of the first captured frame in each observed visit.
+    pub observed_at: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ContextDetourRow {
+    pub label: String,
+    pub kind: String,
+    pub seconds: i64,
+    pub visits: usize,
+    pub days: usize,
+    pub work_interleaved_revisits: usize,
+    pub daily_visits: Vec<ContextDetourDay>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FocusSession {
     pub start: String,
@@ -537,63 +590,721 @@ fn split_into_hours(mut start: NaiveDateTime, mut seconds: i64, hourly: &mut [i6
     }
 }
 
-fn summarize_distractions(samples: &[ActivitySample]) -> (usize, i64) {
-    let mut active_kind: Option<&str> = None;
+fn flush_browsing_episode(
+    episodes: &mut Vec<Vec<usize>>,
+    active: &mut Vec<usize>,
+    seconds: &mut i64,
+) {
+    if *seconds >= BROWSING_DISTRACTION_MIN_SECS {
+        episodes.push(std::mem::take(active));
+    } else {
+        active.clear();
+    }
+    *seconds = 0;
+}
+
+fn qualifying_browsing_episodes(samples: &[ActivitySample]) -> Vec<Vec<usize>> {
+    let mut episodes = Vec::new();
+    let mut active = Vec::new();
     let mut active_seconds = 0i64;
     let mut last_end: Option<NaiveDateTime> = None;
-    let mut events = 0usize;
-    let mut total = 0i64;
 
-    let flush =
-        |kind: &mut Option<&str>, seconds: &mut i64, events: &mut usize, total: &mut i64| {
-            let threshold = match *kind {
-                Some("Browsing") => BROWSING_DISTRACTION_MIN_SECS,
-                _ => i64::MAX,
-            };
-            if *seconds >= threshold {
-                *events += 1;
-                *total += *seconds;
-            }
-            *kind = None;
-            *seconds = 0;
-        };
-
-    for sample in samples {
+    for (index, sample) in samples.iter().enumerate() {
         let is_distraction = sample.category == "Browsing";
         if !is_distraction {
-            flush(
-                &mut active_kind,
-                &mut active_seconds,
-                &mut events,
-                &mut total,
-            );
+            flush_browsing_episode(&mut episodes, &mut active, &mut active_seconds);
             last_end = None;
             continue;
         }
-        let contiguous = active_kind == Some(sample.category.as_str())
+        let contiguous = !active.is_empty()
             && last_end.is_some_and(|end| {
                 end.date() == sample.start.date()
                     && (sample.start - end).num_seconds().max(0) <= SENSOR_GRACE_SECS
             });
         if !contiguous {
-            flush(
-                &mut active_kind,
-                &mut active_seconds,
-                &mut events,
-                &mut total,
-            );
-            active_kind = Some(sample.category.as_str());
+            flush_browsing_episode(&mut episodes, &mut active, &mut active_seconds);
         }
+        active.push(index);
         active_seconds += sample.duration_seconds;
         last_end = Some(sample.end());
     }
-    flush(
-        &mut active_kind,
-        &mut active_seconds,
-        &mut events,
-        &mut total,
-    );
-    (events, total)
+    flush_browsing_episode(&mut episodes, &mut active, &mut active_seconds);
+    episodes
+}
+
+fn summarize_distractions(samples: &[ActivitySample]) -> (usize, i64) {
+    let episodes = qualifying_browsing_episodes(samples);
+    let seconds = episodes
+        .iter()
+        .flat_map(|episode| episode.iter())
+        .map(|index| samples[*index].duration_seconds)
+        .sum();
+    (episodes.len(), seconds)
+}
+
+fn app_identity(app_name: Option<&str>, excluded: &BTreeSet<String>) -> Option<(String, String)> {
+    let cleaned = app_name?
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let key = crate::privacy::normalized_application(&cleaned);
+    let label = cleaned.chars().take(72).collect::<String>();
+    (!key.is_empty() && !excluded.contains(&key)).then_some((key, label))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ForegroundDestination {
+    key: String,
+    label: String,
+    kind: &'static str,
+    strong_identity: bool,
+}
+
+fn description_field<'a>(description: &'a str, name: &str) -> Option<&'a str> {
+    description.lines().find_map(|line| {
+        let (field, value) = line.trim().split_once(':')?;
+        field
+            .trim()
+            .eq_ignore_ascii_case(name)
+            .then_some(value.trim())
+    })
+}
+
+fn clean_destination_label(raw: &str) -> Option<String> {
+    let cleaned = raw
+        .trim()
+        .trim_matches(|character: char| matches!(character, '"' | '\'' | '`' | '.' | ':'))
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let cleaned = cleaned
+        .strip_suffix("'s")
+        .or_else(|| cleaned.strip_suffix("’s"))
+        .unwrap_or(&cleaned)
+        .to_string();
+    let key = crate::privacy::normalized_application(&cleaned);
+    if cleaned.is_empty()
+        || cleaned.chars().count() > 72
+        || cleaned.split_whitespace().count() > 4
+        || cleaned.contains("://")
+        || cleaned.contains(['/', '\\', '@', '#', '?'])
+        || matches!(
+            key.as_str(),
+            "unknown"
+                | "none"
+                | "n/a"
+                | "not visible"
+                | "not identifiable"
+                | "browser"
+                | "web browser"
+                | "website"
+                | "app"
+                | "application"
+                | "the screen"
+                | "chat interface"
+                | "music streaming app"
+                | "android"
+                | "java"
+                | "windows"
+                | "ios"
+                | "macos"
+                | "linux"
+        )
+        || is_browser_application(&key)
+    {
+        return None;
+    }
+    Some(cleaned)
+}
+
+fn native_application_label(raw: &str) -> Option<String> {
+    let process = raw.rsplit(['/', '\\']).next()?.trim();
+    let lower = process.to_lowercase();
+    let without_suffix = if lower.ends_with(".exe") || lower.ends_with(".root") {
+        &process[..process.len() - if lower.ends_with(".exe") { 4 } else { 5 }]
+    } else {
+        process
+    };
+    clean_destination_label(without_suffix)
+}
+
+fn is_name_word(word: &str) -> bool {
+    if word.is_empty()
+        || matches!(
+            word.to_ascii_lowercase().as_str(),
+            "the"
+                | "a"
+                | "an"
+                | "user"
+                | "viewing"
+                | "browsing"
+                | "using"
+                | "current"
+                | "window"
+                | "visible"
+                | "screen"
+                | "this"
+                | "that"
+                | "in"
+                | "on"
+        )
+    {
+        return false;
+    }
+    word.chars().any(char::is_uppercase)
+}
+
+fn legacy_destination_from_line(line: &str) -> Option<String> {
+    const AFTER_NAME: &[&str] = &[
+        "app",
+        "application",
+        "interface",
+        "homepage",
+        "website",
+        "site",
+        "platform",
+        "workspace",
+        "webapp",
+        "webpage",
+        "feed",
+        "tab",
+        "channel",
+        "player",
+        "playlist",
+        "tracks",
+        "videos",
+        "video",
+        "messages",
+        "chat",
+        "page",
+    ];
+    let words = line
+        .split_whitespace()
+        .map(|word| {
+            word.trim_matches(|character: char| {
+                !character.is_alphanumeric() && !matches!(character, '.' | '-' | '&')
+            })
+        })
+        .collect::<Vec<_>>();
+    for (index, word) in words.iter().enumerate() {
+        if !AFTER_NAME.contains(&word.to_ascii_lowercase().as_str()) {
+            continue;
+        }
+        let mut start = index;
+        while start > 0 && index - start < 3 && is_name_word(words[start - 1]) {
+            start -= 1;
+        }
+        if start < index {
+            if let Some(label) = clean_destination_label(&words[start..index].join(" ")) {
+                return Some(label);
+            }
+        }
+    }
+    None
+}
+
+fn foreground_action_evidence(sample: &ActivitySample) -> String {
+    let context = description_field(&sample.description, "WINDOW CONTEXT")
+        .or_else(|| description_field(&sample.description, "VISIBLE CONTENT"))
+        .unwrap_or_default();
+    let action = description_field(&sample.description, "CURRENT ACTION").unwrap_or_default();
+    format!("{context} {action}").to_lowercase()
+}
+
+fn obvious_work_context(sample: &ActivitySample) -> bool {
+    let evidence = foreground_action_evidence(sample);
+    [
+        "audio production",
+        "music production",
+        "music composition",
+        "audio mixing",
+        "arranging a track",
+        "midi pattern",
+        "editing track",
+        "developer verification",
+        "app publication",
+        "store listing",
+        "publishing an app",
+        "publishing an application",
+        "application package",
+        "integrated development environment",
+        "code editor",
+        "source code",
+        " ide ",
+        "tutorial",
+        "coursework",
+    ]
+    .iter()
+    .any(|term| evidence.contains(term))
+}
+
+fn destination_kind(sample: &ActivitySample) -> &'static str {
+    let evidence = foreground_action_evidence(sample);
+    if sample.category == "Communication" {
+        "communication"
+    } else if obvious_work_context(sample) {
+        "other"
+    } else if ["music", "playlist", "song", "playback", "audio player"]
+        .iter()
+        .any(|term| evidence.contains(term))
+    {
+        "music"
+    } else if ["video", "watching", "shorts", "streaming"]
+        .iter()
+        .any(|term| evidence.contains(term))
+    {
+        "video"
+    } else if sample.category == "Browsing" {
+        "browsing"
+    } else {
+        "other"
+    }
+}
+
+fn kind_priority(kind: &str) -> u8 {
+    match kind {
+        "communication" | "music" | "video" => 2,
+        "browsing" => 1,
+        _ => 0,
+    }
+}
+
+fn is_browser_application(app: &str) -> bool {
+    matches!(
+        app,
+        "arc"
+            | "chrome"
+            | "google chrome"
+            | "msedge"
+            | "microsoft edge"
+            | "firefox"
+            | "vivaldi"
+            | "safari"
+            | "brave"
+            | "opera"
+            | "chromium"
+            | "browser"
+            | "web browser"
+            | "arc browser"
+            | "chrome browser"
+    )
+}
+
+fn is_generic_application_container(app: &str) -> bool {
+    matches!(
+        app,
+        "applicationframehost" | "electron" | "msedgewebview2" | "runtimebroker" | "unknown"
+    )
+}
+
+fn foreground_destination_identity(
+    sample: &ActivitySample,
+    excluded: &BTreeSet<String>,
+) -> Option<ForegroundDestination> {
+    if sample.category == "Idle" {
+        return None;
+    }
+    let app = sample
+        .app_name
+        .as_deref()
+        .or_else(|| description_field(&sample.description, "APP"))
+        .unwrap_or_default();
+    let app_key = crate::privacy::normalized_application(app);
+    if excluded.contains(&app_key) {
+        return None;
+    }
+    let kind = destination_kind(sample);
+    if !app_key.is_empty()
+        && !is_browser_application(&app_key)
+        && !is_generic_application_container(&app_key)
+    {
+        if let Some(label) = native_application_label(app) {
+            let key = crate::privacy::normalized_application(&label);
+            return (!excluded.contains(&key)).then_some(ForegroundDestination {
+                key,
+                label,
+                kind,
+                strong_identity: true,
+            });
+        }
+    }
+
+    // New local vision captures provide a product/site label without an
+    // account, title, or URL. The browser process itself is never the label.
+    if let Some(label) = description_field(&sample.description, "FOREGROUND DESTINATION")
+        .and_then(clean_destination_label)
+    {
+        let key = crate::privacy::normalized_application(&label);
+        return (!excluded.contains(&key)).then_some(ForegroundDestination {
+            key,
+            label,
+            kind,
+            strong_identity: true,
+        });
+    }
+
+    // Legacy summaries predate that field. Extract only a proper product name
+    // immediately attached to a foreground UI noun, never arbitrary words in
+    // visible content or a discussion about another service.
+    let context = description_field(&sample.description, "WINDOW CONTEXT")
+        .or_else(|| description_field(&sample.description, "VISIBLE CONTENT"))
+        .unwrap_or_default();
+    let context_lower = context.to_lowercase();
+    if [
+        "discussing",
+        "messages about",
+        "conversation about",
+        "no active window",
+        "application icons",
+        "desktop shows",
+    ]
+    .iter()
+    .any(|term| context_lower.contains(term))
+        || (context_lower.contains("desktop")
+            && ["icon", "no open window", "start menu", "wallpaper"]
+                .iter()
+                .any(|term| context_lower.contains(term)))
+    {
+        return None;
+    }
+    let from_context = legacy_destination_from_line(context);
+    if from_context.is_none()
+        && [
+            "file explorer",
+            "finder",
+            "chat interface",
+            "conversation",
+            "messages about",
+        ]
+        .iter()
+        .any(|term| context_lower.contains(term))
+    {
+        return None;
+    }
+    let label = from_context.or_else(|| {
+        description_field(&sample.description, "CURRENT ACTION")
+            .and_then(legacy_destination_from_line)
+    })?;
+    let key = crate::privacy::normalized_application(&label);
+    (!excluded.contains(&key)).then_some(ForegroundDestination {
+        key,
+        label,
+        kind,
+        strong_identity: false,
+    })
+}
+
+fn analyze_context_detours(
+    samples: &[ActivitySample],
+    excluded: &BTreeSet<String>,
+) -> Vec<ContextDetourRow> {
+    struct Visit {
+        key: String,
+        label: String,
+        kind: &'static str,
+        date: String,
+        start: NaiveDateTime,
+        end: NaiveDateTime,
+        seconds: i64,
+        browsing_seconds: i64,
+        interruption_seconds: i64,
+        strong_identity: bool,
+        observed_at: NaiveDateTime,
+        first_index: usize,
+        last_index: usize,
+    }
+
+    let mut visits = Vec::<Visit>::new();
+    let destinations = samples
+        .iter()
+        .map(|sample| foreground_destination_identity(sample, excluded))
+        .collect::<Vec<_>>();
+    for (index, sample) in samples.iter().enumerate() {
+        let Some(destination) = destinations[index].as_ref() else {
+            continue;
+        };
+        let clearly_work = obvious_work_context(sample);
+        let browsing_seconds = if sample.category == "Browsing" && !clearly_work {
+            sample.duration_seconds
+        } else {
+            0
+        };
+        let interruption_seconds = if sample.category == "Communication"
+            || (!clearly_work
+                && (sample.category == "Browsing"
+                    || (sample.category == "General" && destination.strong_identity)))
+        {
+            sample.duration_seconds
+        } else {
+            0
+        };
+        if let Some(last) = visits.last_mut() {
+            let unidentified_browsing_bridge = index > last.last_index + 1
+                && index - last.last_index <= 3
+                && (sample.start - last.end).num_seconds().max(0) <= 3 * 60
+                && (last.last_index + 1..index).all(|between| {
+                    destinations[between].is_none()
+                        && samples[between].category == "Browsing"
+                        && samples[between]
+                            .app_name
+                            .as_deref()
+                            .map(crate::privacy::normalized_application)
+                            .map_or(true, |app| is_browser_application(&app))
+                });
+            if last.key == destination.key
+                && (last.last_index + 1 == index || unidentified_browsing_bridge)
+                && last.end.date() == sample.start.date()
+                && (sample.start - last.end).num_seconds().max(0)
+                    <= if unidentified_browsing_bridge {
+                        3 * 60
+                    } else {
+                        SENSOR_GRACE_SECS
+                    }
+            {
+                last.end = sample.end();
+                last.seconds += sample.duration_seconds;
+                last.browsing_seconds += browsing_seconds;
+                last.interruption_seconds += interruption_seconds;
+                last.strong_identity |= destination.strong_identity;
+                if kind_priority(destination.kind) > kind_priority(last.kind) {
+                    last.kind = destination.kind;
+                }
+                last.last_index = index;
+                continue;
+            }
+        }
+        visits.push(Visit {
+            key: destination.key.clone(),
+            label: destination.label.clone(),
+            kind: destination.kind,
+            date: sample.start.date().format("%Y-%m-%d").to_string(),
+            start: sample.start,
+            end: sample.end(),
+            seconds: sample.duration_seconds,
+            browsing_seconds,
+            interruption_seconds,
+            strong_identity: destination.strong_identity,
+            observed_at: sample.end(),
+            first_index: index,
+            last_index: index,
+        });
+    }
+
+    let mut grouped = BTreeMap::<String, Vec<&Visit>>::new();
+    for visit in &visits {
+        grouped.entry(visit.key.clone()).or_default().push(visit);
+    }
+    let mut rows = Vec::new();
+    for (key, group) in grouped {
+        // The reporting UI itself is instrumentation, not a useful
+        // third-party attention destination.
+        if key == "flowsight" || key.starts_with("flowsight ") || key.starts_with("flowsight.") {
+            continue;
+        }
+        let mut daily = BTreeMap::<String, ContextDetourDay>::new();
+        for visit in &group {
+            let day = daily
+                .entry(visit.date.clone())
+                .or_insert_with(|| ContextDetourDay {
+                    date: visit.date.clone(),
+                    visits: 0,
+                    seconds: 0,
+                    work_interleaved_revisits: 0,
+                    shortest_revisit_minutes: None,
+                    observed_at: Vec::new(),
+                });
+            day.visits += 1;
+            day.seconds += visit.seconds;
+            day.observed_at
+                .push(visit.observed_at.format("%H:%M").to_string());
+        }
+        let mut work_interleaved_revisits = 0;
+        for pair in group.windows(2) {
+            let previous = pair[0];
+            let next = pair[1];
+            if previous.date != next.date
+                || (next.start - previous.end).num_seconds() > 60 * 60
+                || !(previous.last_index + 1..next.first_index).any(|index| {
+                    samples[index].is_focus_eligible()
+                        && destinations[index]
+                            .as_ref()
+                            .map(|destination| destination.key.as_str())
+                            != Some(previous.key.as_str())
+                })
+            {
+                continue;
+            }
+            work_interleaved_revisits += 1;
+            if let Some(day) = daily.get_mut(&next.date) {
+                day.work_interleaved_revisits += 1;
+                let minutes = (next.start - previous.start).num_minutes().max(1);
+                day.shortest_revisit_minutes = Some(
+                    day.shortest_revisit_minutes
+                        .map_or(minutes, |current| current.min(minutes)),
+                );
+            }
+        }
+        let browsing_seconds: i64 = group.iter().map(|visit| visit.browsing_seconds).sum();
+        let interruption_seconds: i64 = group.iter().map(|visit| visit.interruption_seconds).sum();
+        let strong_identity = group.iter().any(|visit| visit.strong_identity);
+        // Repeated transitions are useful even for a work-classified app such
+        // as Slack. A one-off app session is shown only if it was sustained
+        // casual browsing, not merely because the app existed on screen.
+        if interruption_seconds == 0
+            || (!strong_identity && browsing_seconds < 2 * 60)
+            || (work_interleaved_revisits == 0 && browsing_seconds < 5 * 60)
+        {
+            continue;
+        }
+        rows.push(ContextDetourRow {
+            label: group[0].label.clone(),
+            kind: group
+                .iter()
+                .max_by_key(|visit| kind_priority(visit.kind))
+                .map(|visit| visit.kind)
+                .unwrap_or("other")
+                .to_string(),
+            seconds: group.iter().map(|visit| visit.seconds).sum(),
+            visits: group.len(),
+            days: daily.len(),
+            work_interleaved_revisits,
+            daily_visits: daily.into_values().collect(),
+        });
+    }
+    rows.sort_by(|left, right| {
+        right
+            .work_interleaved_revisits
+            .cmp(&left.work_interleaved_revisits)
+            .then_with(|| right.visits.cmp(&left.visits))
+            .then_with(|| right.seconds.cmp(&left.seconds))
+            .then_with(|| left.label.cmp(&right.label))
+    });
+    rows.truncate(5);
+    rows
+}
+
+fn analyze_distraction_apps(
+    samples: Vec<ActivitySample>,
+    excluded_applications: &[String],
+) -> DistractionAppAnalysis {
+    struct AppAccumulator {
+        app_name: String,
+        seconds: i64,
+        episodes: usize,
+        transitions_from_focus: usize,
+        daily_seconds: BTreeMap<String, i64>,
+    }
+
+    let excluded = excluded_applications
+        .iter()
+        .map(|app| crate::privacy::normalized_application(app))
+        .collect::<BTreeSet<_>>();
+    // Current privacy exclusions also remove historical observations from
+    // this optional app-level analysis, not merely their display names.
+    let samples = samples
+        .into_iter()
+        .filter(|sample| {
+            sample
+                .app_name
+                .as_deref()
+                .map(|app| !excluded.contains(&crate::privacy::normalized_application(app)))
+                .unwrap_or(true)
+        })
+        .collect();
+    let (samples, _) = normalize_timeline(samples);
+    let detours = analyze_context_detours(&samples, &excluded);
+    let mut display_labels = BTreeMap::<String, String>::new();
+    for sample in &samples {
+        if let Some((key, label)) = app_identity(sample.app_name.as_deref(), &excluded) {
+            display_labels.entry(key).or_insert(label);
+        }
+    }
+    let episodes = qualifying_browsing_episodes(&samples);
+    let mut apps = BTreeMap::<String, AppAccumulator>::new();
+    let mut qualifying_seconds = 0i64;
+    let mut attributed_seconds = 0i64;
+
+    for episode in &episodes {
+        let first_index = episode[0];
+        let first = &samples[first_index];
+        let followed_focus = first_index > 0
+            && samples[first_index - 1].is_focus_eligible()
+            && (first.start - samples[first_index - 1].end())
+                .num_seconds()
+                .max(0)
+                <= SENSOR_GRACE_SECS;
+        let first_app_key = app_identity(first.app_name.as_deref(), &excluded).map(|(key, _)| key);
+        let mut seen = BTreeSet::new();
+
+        for index in episode {
+            let sample = &samples[*index];
+            qualifying_seconds += sample.duration_seconds;
+            let Some((key, label)) = app_identity(sample.app_name.as_deref(), &excluded) else {
+                continue;
+            };
+            attributed_seconds += sample.duration_seconds;
+            let app = apps.entry(key.clone()).or_insert_with(|| AppAccumulator {
+                app_name: display_labels.get(&key).cloned().unwrap_or(label),
+                seconds: 0,
+                episodes: 0,
+                transitions_from_focus: 0,
+                daily_seconds: BTreeMap::new(),
+            });
+            app.seconds += sample.duration_seconds;
+            *app.daily_seconds
+                .entry(sample.start.date().format("%Y-%m-%d").to_string())
+                .or_default() += sample.duration_seconds;
+            if seen.insert(key.clone()) {
+                app.episodes += 1;
+                if followed_focus && first_app_key.as_deref() == Some(key.as_str()) {
+                    app.transitions_from_focus += 1;
+                }
+            }
+        }
+    }
+
+    let mut rows = apps
+        .into_values()
+        .map(|app| DistractionAppRow {
+            app_name: app.app_name,
+            seconds: app.seconds,
+            episodes: app.episodes,
+            days: app.daily_seconds.len(),
+            transitions_from_focus: app.transitions_from_focus,
+            daily_seconds: app
+                .daily_seconds
+                .into_iter()
+                .map(|(date, seconds)| DistractionAppDay { date, seconds })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        right
+            .seconds
+            .cmp(&left.seconds)
+            .then_with(|| left.app_name.cmp(&right.app_name))
+    });
+    let other_app_seconds = rows.iter().skip(5).map(|row| row.seconds).sum();
+    rows.truncate(5);
+
+    DistractionAppAnalysis {
+        qualifying_episodes: episodes.len(),
+        qualifying_seconds,
+        attributed_seconds,
+        unattributed_seconds: qualifying_seconds - attributed_seconds,
+        other_app_seconds,
+        apps: rows,
+        detours,
+    }
 }
 
 fn normalize_timeline(mut samples: Vec<ActivitySample>) -> (Vec<ActivitySample>, i64) {
@@ -882,6 +1593,30 @@ pub fn summarize_from_db(
     period_start: &str,
     period_end: &str,
 ) -> Result<FocusSummary, String> {
+    Ok(summarize(load_samples_from_db(
+        conn,
+        period_start,
+        period_end,
+    )?))
+}
+
+pub fn distraction_apps_from_db(
+    conn: &Connection,
+    period_start: &str,
+    period_end: &str,
+    excluded_applications: &[String],
+) -> Result<DistractionAppAnalysis, String> {
+    Ok(analyze_distraction_apps(
+        load_samples_from_db(conn, period_start, period_end)?,
+        excluded_applications,
+    ))
+}
+
+fn load_samples_from_db(
+    conn: &Connection,
+    period_start: &str,
+    period_end: &str,
+) -> Result<Vec<ActivitySample>, String> {
     let window = LocalDateWindow::parse(period_start, period_end)?;
     let mut stmt = conn
         .prepare(
@@ -930,7 +1665,7 @@ pub fn summarize_from_db(
             },
         )
         .collect();
-    Ok(summarize(samples))
+    Ok(samples)
 }
 
 #[cfg(test)]
@@ -1342,6 +2077,338 @@ mod tests {
         let long_break = summarize(vec![sample(22, 9, 0, 1800, "Idle", None)]);
         assert_eq!(long_break.distraction_events, 0);
         assert_eq!(long_break.distraction_seconds, 0);
+    }
+
+    #[test]
+    fn app_patterns_attribute_only_qualifying_browsing_and_respect_exclusions() {
+        let mut a_first = sample(22, 9, 10, 60, "Browsing", None);
+        a_first.app_name = Some("Browser A.exe".into());
+        let mut b = sample(22, 9, 11, 60, "Browsing", None);
+        b.app_name = Some("Browser B.exe".into());
+        let mut a_long = sample(22, 9, 20, 180, "Browsing", None);
+        a_long.app_name = Some("browser a.EXE".into());
+        let mut a_blip = sample(22, 9, 30, 60, "Browsing", None);
+        a_blip.app_name = Some("Browser A.exe".into());
+        let mut a_next_day = sample(23, 9, 0, 120, "Browsing", None);
+        a_next_day.app_name = Some("Browser A.exe".into());
+        let samples = vec![
+            sample(22, 9, 0, 600, "Coding", Some("FS-1")),
+            a_first,
+            b,
+            a_long,
+            a_blip,
+            sample(22, 9, 31, 300, "Meeting", None),
+            a_next_day,
+        ];
+        let canonical = summarize(samples.clone());
+        let apps = analyze_distraction_apps(samples, &["browser b".into()]);
+
+        assert_eq!(canonical.distraction_events, 3);
+        assert_eq!(canonical.distraction_seconds, 420);
+        assert_eq!(apps.qualifying_episodes, 2);
+        assert_eq!(apps.qualifying_seconds, 300);
+        assert_eq!(apps.attributed_seconds, 300);
+        assert_eq!(apps.unattributed_seconds, 0);
+        assert_eq!(apps.apps.len(), 1);
+        assert_eq!(apps.apps[0].app_name, "Browser A.exe");
+        assert_eq!(apps.apps[0].episodes, 2);
+        assert_eq!(apps.apps[0].days, 2);
+        assert_eq!(apps.apps[0].transitions_from_focus, 0);
+        assert_eq!(apps.apps[0].daily_seconds[0].seconds, 180);
+        assert_eq!(apps.apps[0].daily_seconds[1].seconds, 120);
+    }
+
+    #[test]
+    fn browser_destinations_count_short_work_interleaved_revisits_not_the_browser_process() {
+        let mut work_before = sample(22, 9, 0, 60, "Research", None);
+        work_before.app_name = Some("Arc".into());
+        let mut music_first = sample(22, 9, 1, 60, "Browsing", None);
+        music_first.app_name = Some("Arc".into());
+        music_first.description = "WINDOW CONTEXT: Apple Music playlist and playback controls\nCURRENT ACTION: selecting a song in Apple Music".into();
+        let mut work_between = sample(22, 9, 2, 180, "Coding", None);
+        work_between.app_name = Some("Arc".into());
+        let mut music_again = sample(22, 9, 5, 60, "Browsing", None);
+        music_again.app_name = Some("Arc".into());
+        music_again.description = "WINDOW CONTEXT: music streaming app showing a playlist\nCURRENT ACTION: browsing tracks in the Apple Music app".into();
+        let mut work_after = sample(22, 9, 6, 60, "Design", None);
+        work_after.app_name = Some("Arc".into());
+        let analysis = analyze_distraction_apps(
+            vec![
+                work_before,
+                music_first,
+                work_between,
+                music_again,
+                work_after,
+            ],
+            &[],
+        );
+
+        assert_eq!(analysis.detours.len(), 1);
+        let music = &analysis.detours[0];
+        assert_eq!(music.label, "Apple Music");
+        assert_eq!(music.kind, "music");
+        assert_eq!(music.seconds, 120);
+        assert_eq!(music.visits, 2);
+        assert_eq!(music.work_interleaved_revisits, 1);
+        assert_eq!(music.daily_visits[0].shortest_revisit_minutes, Some(4));
+        assert_eq!(music.daily_visits[0].observed_at, ["09:02", "09:06"]);
+        assert!(
+            analysis.apps.is_empty(),
+            "two one-minute visits must not create a fake Arc app distraction"
+        );
+    }
+
+    #[test]
+    fn same_destination_with_changing_work_category_is_one_visit() {
+        let mut youtube_first = sample(22, 9, 1, 60, "Browsing", None);
+        youtube_first.app_name = Some("Arc".into());
+        youtube_first.description =
+            "WINDOW CONTEXT: YouTube video page\nCURRENT ACTION: browsing YouTube videos".into();
+        let mut youtube_misclassified = sample(22, 9, 2, 60, "Research", None);
+        youtube_misclassified.app_name = Some("Arc".into());
+        youtube_misclassified.description =
+            "WINDOW CONTEXT: YouTube video page\nCURRENT ACTION: watching YouTube video".into();
+        let mut youtube_again = sample(22, 9, 3, 60, "Browsing", None);
+        youtube_again.app_name = Some("Arc".into());
+        youtube_again.description =
+            "WINDOW CONTEXT: YouTube video page\nCURRENT ACTION: browsing YouTube videos".into();
+        let work = sample(22, 9, 4, 60, "Coding", None);
+        let mut youtube_after_work = sample(22, 9, 5, 60, "Browsing", None);
+        youtube_after_work.app_name = Some("Arc".into());
+        youtube_after_work.description =
+            "WINDOW CONTEXT: YouTube video page\nCURRENT ACTION: browsing YouTube videos".into();
+
+        let analysis = analyze_distraction_apps(
+            vec![
+                youtube_first,
+                youtube_misclassified,
+                youtube_again,
+                work,
+                youtube_after_work,
+            ],
+            &[],
+        );
+        assert_eq!(analysis.detours.len(), 1);
+        let youtube = &analysis.detours[0];
+        assert_eq!(youtube.visits, 2);
+        assert_eq!(youtube.seconds, 240);
+        assert_eq!(youtube.work_interleaved_revisits, 1);
+    }
+
+    #[test]
+    fn any_structured_browser_destination_can_be_reported_without_a_brand_allowlist() {
+        let mut first = sample(22, 9, 1, 60, "Browsing", None);
+        first.app_name = Some("Arc".into());
+        first.description = "FOREGROUND DESTINATION: Kiteboard\nWINDOW CONTEXT: project workspace\nCURRENT ACTION: reviewing a board".into();
+        let mut second = sample(22, 9, 5, 60, "Browsing", None);
+        second.app_name = Some("Chrome".into());
+        second.description = first.description.clone();
+        let analysis = analyze_distraction_apps(
+            vec![first, sample(22, 9, 2, 180, "Coding", None), second],
+            &[],
+        );
+        assert_eq!(analysis.detours.len(), 1);
+        assert_eq!(analysis.detours[0].label, "Kiteboard");
+        assert_eq!(analysis.detours[0].visits, 2);
+        assert_eq!(analysis.detours[0].work_interleaved_revisits, 1);
+    }
+
+    #[test]
+    fn unknown_or_container_processes_do_not_hide_a_structured_destination() {
+        for app in ["Unknown", "ApplicationFrameHost"] {
+            let mut screen = sample(22, 9, 1, 60, "Browsing", None);
+            screen.app_name = Some(app.into());
+            screen.description =
+                "FOREGROUND DESTINATION: Kiteboard\nWINDOW CONTEXT: project workspace".into();
+            let destination = foreground_destination_identity(&screen, &BTreeSet::new()).unwrap();
+            assert_eq!(destination.label, "Kiteboard");
+        }
+    }
+
+    #[test]
+    fn native_message_and_unknown_apps_need_a_repeated_work_interruption() {
+        let mut slack_first = sample(22, 9, 1, 60, "Communication", None);
+        slack_first.app_name = Some("Slack.exe".into());
+        let mut slack_second = sample(22, 9, 5, 60, "Communication", None);
+        slack_second.app_name = Some("Slack.exe".into());
+        let mut pixel_first = sample(22, 9, 10, 60, "General", None);
+        pixel_first.app_name = Some("PixelNest.exe".into());
+        let mut pixel_second = sample(22, 9, 14, 60, "General", None);
+        pixel_second.app_name = Some("PixelNest.exe".into());
+        let mut one_off = sample(22, 9, 20, 600, "Communication", None);
+        one_off.app_name = Some("Microsoft Outlook".into());
+        let analysis = analyze_distraction_apps(
+            vec![
+                slack_first,
+                sample(22, 9, 2, 180, "Coding", None),
+                slack_second,
+                pixel_first,
+                sample(22, 9, 11, 180, "Design", None),
+                pixel_second,
+                one_off,
+            ],
+            &[],
+        );
+        assert_eq!(analysis.detours.len(), 2);
+        assert_eq!(analysis.detours[0].label, "PixelNest");
+        assert_eq!(analysis.detours[0].work_interleaved_revisits, 1);
+        assert_eq!(analysis.detours[1].label, "Slack");
+        assert_eq!(analysis.detours[1].kind, "communication");
+        assert_eq!(analysis.detours[1].work_interleaved_revisits, 1);
+        assert!(!analysis
+            .detours
+            .iter()
+            .any(|row| row.label == "Microsoft Outlook"));
+    }
+
+    #[test]
+    fn legacy_browser_context_finds_unknown_site_but_not_a_chat_mention() {
+        let mut first = sample(22, 9, 1, 60, "Browsing", None);
+        first.app_name = Some("Arc".into());
+        first.description = "WINDOW CONTEXT: Kiteboard workspace showing a project board\nCURRENT ACTION: using Kiteboard app".into();
+        let mut second = sample(22, 9, 5, 60, "Browsing", None);
+        second.app_name = Some("Arc".into());
+        second.description = first.description.clone();
+        let mut discussion = sample(22, 9, 8, 60, "Communication", None);
+        discussion.app_name = Some("Arc".into());
+        discussion.description = "WINDOW CONTEXT: chat interface discussing Kiteboard app\nCURRENT ACTION: sending a message about Kiteboard app".into();
+        let analysis = analyze_distraction_apps(
+            vec![
+                first,
+                sample(22, 9, 2, 180, "Coding", None),
+                second,
+                discussion,
+            ],
+            &[],
+        );
+        assert_eq!(analysis.detours.len(), 1);
+        assert_eq!(analysis.detours[0].label, "Kiteboard");
+        assert_eq!(analysis.detours[0].visits, 2);
+    }
+
+    #[test]
+    fn desktop_shortcuts_are_not_counted_as_open_destinations() {
+        let mut icon = sample(22, 9, 1, 600, "Browsing", None);
+        icon.app_name = None;
+        icon.description = "VISIBLE CONTENT: The Windows desktop start menu shows a Kiteboard app icon; no app window is open\nCURRENT ACTION: possibly opening the Kiteboard app".into();
+        let analysis = analyze_distraction_apps(vec![icon], &[]);
+        assert!(analysis.detours.is_empty());
+    }
+
+    #[test]
+    fn casual_browsing_label_does_not_override_obvious_creative_or_publishing_work() {
+        let mut music_work = sample(22, 9, 1, 180, "Browsing", None);
+        music_work.app_name = None;
+        music_work.description = "WINDOW CONTEXT: audio production software with MIDI patterns\nCURRENT ACTION: arranging a track in SoundForge app".into();
+        let mut music_work_again = sample(22, 9, 7, 180, "Browsing", None);
+        music_work_again.app_name = None;
+        music_work_again.description = music_work.description.clone();
+        let mut publishing = sample(22, 10, 1, 180, "Browsing", None);
+        publishing.app_name = Some("Arc".into());
+        publishing.description = "FOREGROUND DESTINATION: Kiteboard Console\nWINDOW CONTEXT: developer verification dashboard\nCURRENT ACTION: publishing an application".into();
+        let mut publishing_again = sample(22, 10, 7, 180, "Browsing", None);
+        publishing_again.app_name = Some("Arc".into());
+        publishing_again.description = publishing.description.clone();
+        let analysis = analyze_distraction_apps(
+            vec![
+                music_work,
+                sample(22, 9, 4, 180, "Coding", None),
+                music_work_again,
+                publishing,
+                sample(22, 10, 4, 180, "Coding", None),
+                publishing_again,
+            ],
+            &[],
+        );
+        assert!(analysis.detours.is_empty());
+    }
+
+    #[test]
+    fn ambiguous_browser_sample_does_not_invent_an_exit_and_possessive_names_merge() {
+        let mut first = sample(22, 9, 1, 60, "Browsing", None);
+        first.app_name = Some("Arc".into());
+        first.description =
+            "WINDOW CONTEXT: YouTube video feed\nCURRENT ACTION: browsing videos".into();
+        let mut unnamed = sample(22, 9, 2, 60, "Browsing", None);
+        unnamed.app_name = Some("Arc".into());
+        unnamed.description =
+            "WINDOW CONTEXT: video player\nCURRENT ACTION: watching a clip".into();
+        let mut same_site = sample(22, 9, 3, 60, "Browsing", None);
+        same_site.app_name = Some("Arc".into());
+        same_site.description =
+            "WINDOW CONTEXT: YouTube's video feed\nCURRENT ACTION: browsing videos".into();
+        let mut after_work = sample(22, 9, 5, 60, "Browsing", None);
+        after_work.app_name = Some("Arc".into());
+        after_work.description = first.description.clone();
+        let analysis = analyze_distraction_apps(
+            vec![
+                first,
+                unnamed,
+                same_site,
+                sample(22, 9, 4, 60, "Coding", None),
+                after_work,
+            ],
+            &[],
+        );
+        assert_eq!(analysis.detours.len(), 1);
+        assert_eq!(analysis.detours[0].label, "YouTube");
+        assert_eq!(analysis.detours[0].visits, 2);
+        assert_eq!(analysis.detours[0].work_interleaved_revisits, 1);
+    }
+
+    #[test]
+    fn the_reporting_app_does_not_rank_as_its_own_distraction() {
+        let mut first = sample(22, 9, 1, 60, "General", None);
+        first.app_name = Some("FlowSight Agent".into());
+        let mut second = sample(22, 9, 5, 60, "General", None);
+        second.app_name = Some("FlowSight Agent".into());
+        let analysis = analyze_distraction_apps(
+            vec![first, sample(22, 9, 2, 180, "Coding", None), second],
+            &[],
+        );
+        assert!(analysis.detours.is_empty());
+    }
+
+    #[test]
+    fn context_mentions_and_excluded_apps_do_not_become_destinations() {
+        let mut telegram = sample(22, 10, 0, 60, "Browsing", None);
+        telegram.app_name = Some("Telegram Desktop".into());
+        telegram.description = "WINDOW CONTEXT: chat interface discussing Apple Music\nCURRENT ACTION: sending a message about Apple Music".into();
+        let mut folder = sample(22, 10, 1, 60, "Browsing", None);
+        folder.app_name = None;
+        folder.description = "VISIBLE CONTENT: A file explorer shows folders and an Apple Music sidebar\nCURRENT ACTION: selecting files in Finder".into();
+        let mut music = sample(22, 10, 2, 300, "Browsing", None);
+        music.app_name = Some("Arc".into());
+        music.description = "VISIBLE CONTENT: Apple Music is open with a playlist\nCURRENT ACTION: browsing Apple Music tracks".into();
+        let mut annotation = music.clone();
+        annotation.start = at(22, 10, 4);
+        annotation.duration_seconds = 0;
+
+        let included = analyze_distraction_apps(
+            vec![telegram.clone(), folder.clone(), music.clone(), annotation],
+            &[],
+        );
+        assert_eq!(included.detours.len(), 1);
+        assert_eq!(included.detours[0].seconds, 300);
+        assert_eq!(included.detours[0].visits, 1);
+
+        let excluded = analyze_distraction_apps(vec![telegram, folder, music], &["Arc".into()]);
+        assert!(excluded.detours.is_empty());
+    }
+
+    #[test]
+    fn app_patterns_do_not_treat_short_browsing_or_context_work_as_distraction() {
+        let apps = analyze_distraction_apps(
+            vec![
+                sample(22, 9, 0, 90, "Browsing", None),
+                sample(22, 9, 2, 180, "Communication", None),
+                sample(22, 9, 5, 300, "Research", None),
+            ],
+            &[],
+        );
+        assert_eq!(apps.qualifying_episodes, 0);
+        assert_eq!(apps.qualifying_seconds, 0);
+        assert!(apps.apps.is_empty());
     }
 
     #[test]

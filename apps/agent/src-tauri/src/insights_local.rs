@@ -103,8 +103,26 @@ pub fn build_local_insights_report(
     db_path: &std::path::Path,
     period_days: i32,
 ) -> Result<serde_json::Value, String> {
+    build_local_insights_report_inner(db_path, period_days, None).map(|(report, _)| report)
+}
+
+fn build_local_insights_report_inner(
+    db_path: &std::path::Path,
+    period_days: i32,
+    excluded_applications: Option<&[String]>,
+) -> Result<
+    (
+        serde_json::Value,
+        Option<Result<crate::focus_semantics::DistractionAppAnalysis, String>>,
+    ),
+    String,
+> {
     let days = period_days.clamp(1, 30);
     let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| e.to_string())?;
+    // The aggregate and the optional app-level evidence must observe the
+    // same SQLite snapshot, even while tracking writes new rows.
+    conn.execute_batch("BEGIN DEFERRED TRANSACTION")
         .map_err(|e| e.to_string())?;
 
     let period_end = Local::now().date_naive();
@@ -408,45 +426,53 @@ pub fn build_local_insights_report(
     } else {
         0.0
     };
-    Ok(serde_json::json!({
-        "source": "local_sqlite",
-        "period_start": start_str,
-        "period_end": end_str,
-        "period_days": days,
-        "total_seconds": total_seconds,
-        "total_hours": round_hours(total_seconds),
-        "activity_count": activity_count,
-        "deep_focus_seconds": deep_focus_seconds,
-        "deep_focus_hours": round_hours(deep_focus_seconds),
-        "focus_eligible_seconds": focus_eligible_seconds,
-        "distraction_events": distraction_count,
-        "distraction_seconds": distraction_seconds,
-        "distraction_hours": round_hours(distraction_seconds),
-        "ticketed_seconds": ticketed_seconds,
-        "unticketed_seconds": unticketed_seconds,
-        "ticketed_hours": round_hours(ticketed_seconds),
-        "unticketed_hours": round_hours(unticketed_seconds),
-        "ticket_coverage_pct": ticket_coverage_pct,
-        "task_labeled_seconds": task_labeled_seconds,
-        "task_labeled_hours": round_hours(task_labeled_seconds),
-        "task_label_coverage_pct": task_label_coverage_pct,
-        "active_days": active_days,
-        "tracking_consistency_pct": tracking_consistency_pct,
-        "avg_session_minutes": avg_session_minutes,
-        "deep_focus_sessions": deep_focus_sessions,
-        "focus_semantics": canonical_focus,
-        "unsynced_reports": unsynced_count,
-        "peak_day": peak_day,
-        "quiet_day": quiet_day,
-        "peak_focus_hour": peak_focus_hour,
-        "prior_period": prior_period,
-        "category_breakdown": category_breakdown,
-        "ticket_breakdown": ticket_breakdown,
-        "daily_totals": daily_totals,
-        "day_category_breakdown": day_category_breakdown,
-        "work_themes": work_themes,
-        "sample_activities": sample_activities,
-    }))
+    let distraction_app_analysis = excluded_applications.map(|excluded| {
+        crate::focus_semantics::distraction_apps_from_db(&conn, &start_str, &end_str, excluded)
+    });
+    conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+
+    Ok((
+        serde_json::json!({
+            "source": "local_sqlite",
+            "period_start": start_str,
+            "period_end": end_str,
+            "period_days": days,
+            "total_seconds": total_seconds,
+            "total_hours": round_hours(total_seconds),
+            "activity_count": activity_count,
+            "deep_focus_seconds": deep_focus_seconds,
+            "deep_focus_hours": round_hours(deep_focus_seconds),
+            "focus_eligible_seconds": focus_eligible_seconds,
+            "distraction_events": distraction_count,
+            "distraction_seconds": distraction_seconds,
+            "distraction_hours": round_hours(distraction_seconds),
+            "ticketed_seconds": ticketed_seconds,
+            "unticketed_seconds": unticketed_seconds,
+            "ticketed_hours": round_hours(ticketed_seconds),
+            "unticketed_hours": round_hours(unticketed_seconds),
+            "ticket_coverage_pct": ticket_coverage_pct,
+            "task_labeled_seconds": task_labeled_seconds,
+            "task_labeled_hours": round_hours(task_labeled_seconds),
+            "task_label_coverage_pct": task_label_coverage_pct,
+            "active_days": active_days,
+            "tracking_consistency_pct": tracking_consistency_pct,
+            "avg_session_minutes": avg_session_minutes,
+            "deep_focus_sessions": deep_focus_sessions,
+            "focus_semantics": canonical_focus,
+            "unsynced_reports": unsynced_count,
+            "peak_day": peak_day,
+            "quiet_day": quiet_day,
+            "peak_focus_hour": peak_focus_hour,
+            "prior_period": prior_period,
+            "category_breakdown": category_breakdown,
+            "ticket_breakdown": ticket_breakdown,
+            "daily_totals": daily_totals,
+            "day_category_breakdown": day_category_breakdown,
+            "work_themes": work_themes,
+            "sample_activities": sample_activities,
+        }),
+        distraction_app_analysis,
+    ))
 }
 
 const LLM_PASS_TIMEOUT_SECS: u64 = 150;
@@ -461,7 +487,15 @@ pub fn generate_local_status_report(
 ) -> Result<serde_json::Value, String> {
     let db_path = crate::paths::db_path()?;
     let days = period_days.unwrap_or(7).clamp(1, 30);
-    let local_data = build_local_insights_report(&db_path, days)?;
+    let initial_privacy = crate::privacy::load_privacy_settings(&db_path);
+    let (mut local_data, distraction_app_analysis) = build_local_insights_report_inner(
+        &db_path,
+        days,
+        initial_privacy
+            .as_ref()
+            .ok()
+            .map(|privacy| privacy.excluded_applications.as_slice()),
+    )?;
 
     let app_handle = app.clone();
     emit_report_progress(
@@ -516,6 +550,31 @@ pub fn generate_local_status_report(
     let ai_powered = generation_passes
         .iter()
         .any(|p| p["id"].as_str() != Some("fallback"));
+
+    // App names are appended only to the on-device report payload after the
+    // local narrative is generated. If exclusions changed during generation,
+    // discard the app-level result rather than disclose a newly excluded app.
+    // The shared aggregate used by the cloud coach, MCP, and Notion remains unchanged.
+    let current_privacy = crate::privacy::load_privacy_settings(&db_path);
+    local_data["distraction_app_analysis"] = match (
+        initial_privacy,
+        current_privacy,
+        distraction_app_analysis,
+    ) {
+        (Ok(initial), Ok(current), Some(Ok(analysis)))
+            if initial.excluded_applications == current.excluded_applications =>
+        {
+            serde_json::json!(analysis)
+        }
+        (_, _, Some(Err(error))) => {
+            log::warn!("[LocalReport] App-level distraction analysis unavailable: {error}");
+            serde_json::json!({ "unavailable": true })
+        }
+        _ => {
+            log::warn!("[LocalReport] App-level distraction analysis unavailable: privacy settings changed or could not be loaded");
+            serde_json::json!({ "unavailable": true })
+        }
+    };
 
     Ok(serde_json::json!({
         "local_data": local_data,
@@ -2260,6 +2319,55 @@ mod tests {
             Some(60)
         );
         assert_eq!(seconds_for(&today.format("%Y-%m-%d").to_string()), Some(60));
+    }
+
+    #[test]
+    fn app_names_are_only_added_to_the_local_status_payload_and_exclusions_are_applied() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("app-distractions.sqlite");
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT);
+             CREATE TABLE reports (
+                id INTEGER PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                activity_type TEXT NOT NULL,
+                description TEXT NOT NULL,
+                jira_ticket_id TEXT,
+                duration_seconds INTEGER NOT NULL,
+                synced INTEGER DEFAULT 0,
+                active_app TEXT,
+                window_title TEXT,
+                capture_source TEXT,
+                theme_hint TEXT
+             );",
+        )
+        .unwrap();
+        let today = Local::now().date_naive();
+        for (minute, app) in [(5, "Browser.exe"), (15, "Bitwarden.exe")] {
+            let observed_end = today.and_hms_opt(12, minute, 0).unwrap();
+            conn.execute(
+                "INSERT INTO reports (
+                    created_at, activity_type, description, duration_seconds,
+                    synced, active_app, capture_source
+                 ) VALUES (?1, 'Browsing', 'fixture', 180, 0, ?2, 'test')",
+                params![utc_storage_timestamp(observed_end), app],
+            )
+            .unwrap();
+        }
+        drop(conn);
+
+        let excluded = vec!["Bitwarden".to_string()];
+        let (aggregate, details) =
+            build_local_insights_report_inner(&db_path, 1, Some(&excluded)).unwrap();
+        assert!(aggregate.get("distraction_app_analysis").is_none());
+        let details = serde_json::to_value(details.unwrap().unwrap()).unwrap();
+        assert_eq!(details["qualifying_episodes"], 1);
+        assert_eq!(details["qualifying_seconds"], 180);
+        assert_eq!(details["attributed_seconds"], 180);
+        assert_eq!(details["unattributed_seconds"], 0);
+        assert_eq!(details["apps"][0]["app_name"], "Browser.exe");
+        assert!(!details.to_string().contains("Bitwarden"));
     }
 
     #[test]

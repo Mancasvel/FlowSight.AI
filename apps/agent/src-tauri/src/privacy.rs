@@ -209,7 +209,7 @@ pub fn store_window_titles(db_path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn normalized_application(value: &str) -> String {
+pub(crate) fn normalized_application(value: &str) -> String {
     let normalized = value.trim().to_lowercase();
     normalized
         .strip_suffix(".exe")

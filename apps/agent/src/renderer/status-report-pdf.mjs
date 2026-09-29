@@ -74,6 +74,53 @@ function drawNumberedItems(doc, items, y) {
   return y;
 }
 
+function drawDistractionApps(doc, distractions, y) {
+  if (!distractions.apps.length) {
+    return drawParagraph(doc, distractions.message, y, { size: 8.8, leading: 4.6, color: MUTED }) + 4;
+  }
+  for (const [index, app] of distractions.apps.entries()) {
+    y = ensureSpace(doc, y, 35);
+    if (index) {
+      doc.setDrawColor(...RULE);
+      doc.line(LEFT, y - 3, RIGHT, y - 3);
+      y += 2;
+    }
+    const headingY = y;
+    const printableName = /^[\u0020-\u00FF]+$/.test(app.appName)
+      ? app.appName
+      : 'App name unavailable in this PDF font - see on-screen report';
+    const printableAdvice = printableName === app.appName
+      ? app.advice
+      : app.advice.replaceAll(app.appName, 'this app');
+    const printableObserved = printableName === app.appName
+      ? app.observed
+      : app.observed.replaceAll(app.appName, 'this app');
+    y = drawParagraph(doc, printableName, y, {
+      x: LEFT, width: WIDTH - 32, size: 9.5, leading: 4.9, weight: 'bold',
+    });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.2);
+    doc.setTextColor(...PURPLE);
+    doc.text(app.duration, RIGHT, headingY, { align: 'right' });
+    y += 1;
+    doc.setFillColor(238, 235, 244);
+    doc.roundedRect(LEFT, y, WIDTH, 2.2, 1, 1, 'F');
+    doc.setFillColor(...PURPLE);
+    doc.roundedRect(LEFT, y, Math.max(2, app.percentOfTop / 100 * WIDTH), 2.2, 1, 1, 'F');
+    y += 7;
+    y = drawParagraph(doc, printableObserved, y, { size: 8.5, leading: 4.4 }) + 1;
+    y = drawParagraph(doc, `Next session: ${printableAdvice}`, y, {
+      size: 8.5, leading: 4.4, color: MUTED,
+    }) + 5;
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  y = ensureSpace(doc, y, textLines(doc, distractions.caveat, WIDTH).length * 4 + 3);
+  return drawParagraph(doc, distractions.caveat, y, {
+    size: 7.5, leading: 4, color: MUTED,
+  }) + 3;
+}
+
 function drawSimpleItems(doc, items, y, emptyLabel) {
   if (!items.length) return drawParagraph(doc, emptyLabel, y, { size: 8.7, color: MUTED }) + 2;
   for (const item of items) {
@@ -120,7 +167,7 @@ function drawDayChart(doc, days, y) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(days.length > 14 ? 5 : 6.5);
     doc.setTextColor(...MUTED);
-    doc.text(day.hours + 'h', x + barW / 2, chartBottom + 9, { align: 'center' });
+    doc.text(day.displayDuration, x + barW / 2, chartBottom + 9, { align: 'center' });
   });
   return chartBottom + 15;
 }
@@ -150,7 +197,7 @@ function drawCategoryChart(doc, categories, y) {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(...INK);
-      doc.text(`${category.hours}h`, RIGHT, y + 4, { align: 'right' });
+      doc.text(category.displayDuration, RIGHT, y + 4, { align: 'right' });
       y += 11;
       continue;
     }
@@ -165,7 +212,7 @@ function drawCategoryChart(doc, categories, y) {
     }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.text(`${category.hours}h`, RIGHT, y + 4, { align: 'right' });
+    doc.text(category.displayDuration, RIGHT, y + 4, { align: 'right' });
     y += height + 2;
   }
   return y + 3;
@@ -181,7 +228,7 @@ function drawEvidenceColumns(doc, model, y) {
     return drawCategoryChart(doc, model.categories, y);
   }
 
-  const panelHeight = Math.max(52, 22 + Math.min(model.categories.length, 6) * 6.2);
+  const panelHeight = Math.max(44, 18 + Math.min(model.categories.length, 6) * 6.2);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   const captionHeight = model.timelineCaption
@@ -196,7 +243,7 @@ function drawEvidenceColumns(doc, model, y) {
   doc.text('Activity by day', LEFT, y);
   doc.text('Time by category', rightX, y);
 
-  const chartTop = y + 9;
+  const chartTop = y + 10;
   const chartBottom = chartTop + 25;
   const dayGap = 2;
   const dayW = (columnW - dayGap * 6) / 7;
@@ -204,6 +251,10 @@ function drawEvidenceColumns(doc, model, y) {
   model.days.forEach((day, index) => {
     const x = LEFT + index * (dayW + dayGap);
     const height = day.seconds ? Math.max(1.5, day.seconds / maxSeconds * 25) : 0;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5.8);
+    doc.setTextColor(...MUTED);
+    doc.text(day.displayDuration, x + dayW / 2, chartTop - 2, { align: 'center' });
     doc.setFillColor(238, 235, 244);
     doc.roundedRect(x, chartTop, dayW, 25, 1, 1, 'F');
     if (height) {
@@ -214,10 +265,6 @@ function drawEvidenceColumns(doc, model, y) {
     doc.setFontSize(6.2);
     doc.setTextColor(...INK);
     doc.text(day.label, x + dayW / 2, chartBottom + 4.5, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5.8);
-    doc.setTextColor(...MUTED);
-    doc.text(`${day.hours}h`, x + dayW / 2, chartBottom + 8.4, { align: 'center' });
   });
 
   if (!model.categories.length) {
@@ -239,7 +286,7 @@ function drawEvidenceColumns(doc, model, y) {
     }
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
-    doc.text(`${category.hours}h`, rightX + columnW, rowY + 1, { align: 'right' });
+    doc.text(category.displayDuration, rightX + columnW, rowY + 1, { align: 'right' });
   });
   return y + panelHeight;
 }
@@ -301,13 +348,26 @@ function drawWorkAreas(doc, rows, y) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(...INK);
-    y = drawParagraph(doc, row.element, y, { size: 9, leading: 4.8, weight: 'bold' });
-    y = drawParagraph(doc, row.status, y, { size: 8, leading: 4.2, color: PURPLE });
+    doc.setFontSize(8);
+    const compactStatus = doc.getTextWidth(row.status) <= 43;
+    const headingY = y;
+    y = drawParagraph(doc, row.element, y, {
+      width: compactStatus ? WIDTH - 47 : WIDTH,
+      size: 9, leading: 4.8, weight: 'bold',
+    });
+    if (compactStatus) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...PURPLE);
+      doc.text(row.status, RIGHT, headingY, { align: 'right' });
+    } else {
+      y = drawParagraph(doc, row.status, y, { size: 8, leading: 4.2, color: PURPLE });
+    }
     if (row.notes) y = drawParagraph(doc, row.notes, y, { size: 8.6, leading: 4.6 });
     if (row.owner && row.owner.toLowerCase() !== 'self') {
       y = drawParagraph(doc, `Owner: ${row.owner}`, y, { size: 7.5, leading: 4, color: MUTED });
     }
-    y += 3;
+    y += 1;
   }
   return y;
 }
@@ -331,7 +391,7 @@ function drawCompactDetails(doc, model, y) {
     + (model.highlights.length ? 7 + itemHeight(model.highlights) : 0);
   const rightHeight = 15 + 7 + itemHeight(model.knownIssues, 'None flagged.')
     + 7 + itemHeight(model.potentialRisks, 'None flagged.');
-  const height = Math.max(leftHeight, rightHeight) + 8;
+  const height = Math.max(leftHeight, rightHeight) + 5;
   if (height > 190) return null;
   y = ensureSpace(doc, y, height);
   doc.setDrawColor(...RULE);
@@ -379,7 +439,45 @@ function drawCompactDetails(doc, model, y) {
   rightY = items(model.knownIssues, 'None flagged.', rightX, rightY);
   rightY = subheading('Potential risks', rightX, rightY + 1);
   rightY = items(model.potentialRisks, 'None flagged.', rightX, rightY);
-  return Math.max(leftY, rightY) + 6;
+  return Math.max(leftY, rightY) + 3;
+}
+
+function drawCompactLessons(doc, lessons, y) {
+  if (lessons.length !== 2) return null;
+  const gap = 12;
+  const columnW = (WIDTH - gap) / 2;
+  const rightX = LEFT + columnW + gap;
+  const measured = lessons.map((lesson) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.8);
+    const title = textLines(doc, lesson.title, columnW);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.3);
+    const body = textLines(doc, lesson.body, columnW);
+    return { title, body, height: title.length * 4.7 + body.length * 4.4 + 3 };
+  });
+  const height = Math.max(...measured.map((lesson) => lesson.height));
+  if (height > 40) return null;
+  y = drawSection(doc, 'What this period taught us', y, '', height);
+  measured.forEach((lesson, index) => {
+    const x = index ? rightX : LEFT;
+    let lineY = y;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.8);
+    doc.setTextColor(...INK);
+    lesson.title.forEach((line) => {
+      doc.text(line, x, lineY);
+      lineY += 4.7;
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.3);
+    doc.setTextColor(...INK);
+    lesson.body.forEach((line) => {
+      doc.text(line, x, lineY);
+      lineY += 4.4;
+    });
+  });
+  return y + height;
 }
 
 function addFooters(doc, model) {
@@ -406,7 +504,12 @@ export function renderStatusReportPdf(doc, model) {
   y = drawSection(doc, 'What to do next', y, 'Actions suggested by the recorded evidence', 16);
   y = drawNumberedItems(doc, model.actions, y);
 
-  y = drawSection(doc, 'The week in view', y, 'Recorded time, not a productivity score', 54);
+  y = drawSection(doc, 'Attention detours', y,
+    'Observed visits and returns between work screens',
+    model.distractions.apps.length ? 35 : 8);
+  y = drawDistractionApps(doc, model.distractions, y);
+
+  y = drawSection(doc, model.evidenceTitle, y, 'Recorded time, not a productivity score', 54);
   y = drawEvidenceColumns(doc, model, y);
   if (model.timelineCaption) y = drawParagraph(doc, model.timelineCaption, y, { size: 8.5, leading: 4.5, color: MUTED }) + 6;
 
@@ -441,26 +544,31 @@ export function renderStatusReportPdf(doc, model) {
     y = compactDetailsEnd;
   }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.8);
-  const lessonHeight = 22 + model.lessons.reduce((sum, lesson) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    const titleHeight = textLines(doc, lesson.title, WIDTH).length * 4.8;
+  const compactLessonsEnd = drawCompactLessons(doc, model.lessons, y);
+  if (compactLessonsEnd == null) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.8);
-    return sum + titleHeight + textLines(doc, lesson.body, WIDTH).length * 4.7 + 4;
-  }, 0);
-  y = ensureSpace(doc, y, Math.min(lessonHeight, 190));
-  y = drawSection(doc, 'What this period taught us', y, '', 15);
-  if (!model.lessons.length) {
-    y = drawParagraph(doc, model.lessonEmptyMessage, y, { color: MUTED }) + 3;
-  } else {
-    for (const lesson of model.lessons) {
-      y = ensureSpace(doc, y, 12);
-      y = drawParagraph(doc, lesson.title, y, { size: 9, leading: 4.8, weight: 'bold' });
-      y = drawParagraph(doc, lesson.body, y, { size: 8.8, leading: 4.7 }) + 4;
+    const lessonHeight = 22 + model.lessons.reduce((sum, lesson) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      const titleHeight = textLines(doc, lesson.title, WIDTH).length * 4.8;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.8);
+      return sum + titleHeight + textLines(doc, lesson.body, WIDTH).length * 4.7 + 4;
+    }, 0);
+    y = ensureSpace(doc, y, Math.min(lessonHeight, 190));
+    y = drawSection(doc, 'What this period taught us', y, '', 15);
+    if (!model.lessons.length) {
+      y = drawParagraph(doc, model.lessonEmptyMessage, y, { color: MUTED }) + 3;
+    } else {
+      for (const lesson of model.lessons) {
+        y = ensureSpace(doc, y, 12);
+        y = drawParagraph(doc, lesson.title, y, { size: 9, leading: 4.8, weight: 'bold' });
+        y = drawParagraph(doc, lesson.body, y, { size: 8.8, leading: 4.7 }) + 4;
+      }
     }
+  } else {
+    y = compactLessonsEnd;
   }
   addFooters(doc, model);
   return doc;

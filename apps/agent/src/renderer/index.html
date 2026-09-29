@@ -3470,6 +3470,21 @@
     .sr-action-number { color: hsl(var(--primary)); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; padding-top: 3px; }
     .sr-action-list p { margin: 0; max-width: 72ch; font-size: 13px; line-height: 1.55; }
 
+    .sr-distraction-list { border-top: 1px solid hsl(var(--border)); }
+    .sr-distraction-row { display: grid; grid-template-columns: minmax(150px, .65fr) minmax(0, 1.35fr); gap: 24px; padding: 16px 0; }
+    .sr-distraction-row + .sr-distraction-row { border-top: 1px solid hsl(var(--border)); }
+    .sr-distraction-measure { min-width: 0; }
+    .sr-distraction-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-variant-numeric: tabular-nums; }
+    .sr-distraction-top strong { min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.4; }
+    .sr-distraction-top span { flex: none; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 650; }
+    .sr-distraction-track { height: 7px; margin-top: 10px; border-radius: 7px; background: hsl(var(--muted)); overflow: hidden; }
+    .sr-distraction-track span { display: block; height: 100%; border-radius: inherit; background: hsl(var(--primary)); }
+    .sr-distraction-detail p { max-width: 72ch; margin: 0; font-size: 11px; line-height: 1.6; }
+    .sr-distraction-observed { color: hsl(var(--foreground)); }
+    .sr-distraction-detail .sr-distraction-advice { margin-top: 6px; color: hsl(var(--muted-foreground)); }
+    .sr-distraction-advice strong { margin-right: 5px; color: hsl(var(--foreground)); }
+    .sr-distraction-caveat { max-width: 75ch; margin: 8px 0 0; padding-top: 13px; border-top: 1px solid hsl(var(--border)); color: hsl(var(--muted-foreground)); font-size: 11px; line-height: 1.6; }
+
     .sr-evidence-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px; }
     .sr-figure { margin: 0; min-width: 0; }
     .sr-figure + .sr-figure { padding-left: 30px; border-left: 1px solid hsl(var(--border)); }
@@ -3520,6 +3535,7 @@
       .sr-review-hero { padding: 25px 22px 21px; }
       .sr-overview, .sr-section, .sr-review-footer { padding-left: 22px; padding-right: 22px; }
       .sr-evidence-grid, .sr-detail-grid { grid-template-columns: 1fr; gap: 25px; }
+      .sr-distraction-row { grid-template-columns: 1fr; gap: 11px; }
       .sr-figure + .sr-figure, .sr-detail-grid > div + div { padding: 23px 0 0; border-left: 0; border-top: 1px solid hsl(var(--border)); }
       .sr-section-heading { display: block; }
       .sr-section-heading > p { margin-top: 4px; text-align: left; }

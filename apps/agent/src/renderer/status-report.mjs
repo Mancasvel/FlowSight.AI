@@ -53,6 +53,9 @@ function reportDays(local) {
       .format(new Date(`${date}T12:00:00Z`)),
     seconds: totals.get(date) || 0,
     hours: ((totals.get(date) || 0) / 3600).toFixed(1),
+    displayDuration: (totals.get(date) || 0) >= 3600
+      ? `${((totals.get(date) || 0) / 3600).toFixed(1)}h`
+      : durationLabel(totals.get(date) || 0),
     percentOfPeak: Math.round(((totals.get(date) || 0) / max) * 100),
   }));
 }
@@ -81,7 +84,7 @@ function reportLessons(report, { categories, days, totalSeconds, focusSeconds, f
   if (top) {
     lessons.push({
       title: 'The work mix had a clear centre',
-      body: `${top.hours}h (${top.percent}% of tracked time) was categorised as ${top.label}. Compare that mix with your intended priorities; time distribution alone is not an outcome measure.`,
+      body: `${top.displayDuration} (${top.percent}% of tracked time) was categorised as ${top.label}. Compare that mix with your intended priorities; time distribution alone is not an outcome measure.`,
     });
   }
   if (focusSeconds > 0) {
@@ -106,6 +109,94 @@ function reportLessons(report, { categories, days, totalSeconds, focusSeconds, f
   return lessons;
 }
 
+function durationLabel(seconds) {
+  if (seconds < 60) return '<1 min';
+  if (seconds < 600) return `${(seconds / 60).toFixed(seconds % 60 ? 1 : 0)} min`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  return `${(seconds / 3600).toFixed(1)} h`;
+}
+
+function distractionAdvice(appName, kind, workInterleavedRevisits) {
+  if (kind === 'music') {
+    return workInterleavedRevisits
+      ? `Choose a playlist in ${appName} before the next work block, leave playback running, and batch track changes into one break. Check whether you return less often next session.`
+      : `Choose a playlist in ${appName} before the work block and leave playback in the background; save track changes for a break.`;
+  }
+  if (kind === 'video') {
+    return `Queue or save what you want to watch in ${appName} for a planned break, then close it during the work block.`;
+  }
+  if (kind === 'communication') {
+    return `If ${appName} is not needed for live collaboration, mute it for the next focus block and check it at a chosen interval; keep urgent contacts available.`;
+  }
+  return `Decide whether ${appName} belongs to the current task. If not, close it for one focus block and move optional checks to a planned break.`;
+}
+
+function reportDistractionApps(local) {
+  const analysis = local.distraction_app_analysis;
+  if (!analysis || analysis.unavailable || !Array.isArray(analysis.detours)) {
+    return {
+      state: 'unavailable', apps: [],
+      message: analysis?.unavailable
+        ? 'Foreground destination analysis could not be completed. Try generating the report again.'
+        : 'This report predates app and site context analysis. Generate a new report to see it.',
+      caveat: '',
+    };
+  }
+  const maxSeconds = Math.max(1, ...analysis.detours.map((row) => asSeconds(row.seconds)));
+  const apps = analysis.detours
+    .map((row) => {
+      const appName = String(row?.label ?? '').replace(/\s+/g, ' ').trim().slice(0, 72);
+      const kind = String(row?.kind ?? 'social');
+      const seconds = asSeconds(row?.seconds);
+      const visits = Math.max(0, Number(row?.visits) || 0);
+      const days = Math.max(0, Number(row?.days) || 0);
+      const workInterleavedRevisits = Math.max(0, Number(row?.work_interleaved_revisits) || 0);
+      const daily = asItems(row?.daily_visits)
+        .map((day) => ({
+          date: isoDay(day?.date), seconds: asSeconds(day?.seconds),
+          visits: Math.max(0, Number(day?.visits) || 0),
+          workInterleavedRevisits: Math.max(0, Number(day?.work_interleaved_revisits) || 0),
+          shortestRevisitMinutes: Math.max(0, Number(day?.shortest_revisit_minutes) || 0),
+          observedAt: asItems(day?.observed_at)
+            .map((time) => String(time).trim())
+            .filter((time) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time)),
+        }))
+        .filter((day) => day.date && day.visits > 0)
+        .sort((left, right) => left.date.localeCompare(right.date));
+      const repeatedDay = daily.find((day) => day.date === isoDay(local.period_end) && day.visits >= 2)
+        || [...daily].reverse().find((day) => day.visits >= 2);
+      const dayLabel = repeatedDay?.date === isoDay(local.period_end) ? 'Today' : repeatedDay?.date;
+      const observedTimes = repeatedDay?.observedAt.slice(0, 4) || [];
+      const timeList = observedTimes.length < 2 ? ''
+        : observedTimes.length === 2 ? observedTimes.join(' and ')
+          : `${observedTimes.slice(0, -1).join(', ')} and ${observedTimes.at(-1)}`;
+      const repeated = repeatedDay
+        ? `${dayLabel}: ${repeatedDay.visits} foreground sightings${timeList ? ` around ${timeList}` : ''} (${durationLabel(repeatedDay.seconds)} sampled).`
+          + (repeatedDay.workInterleavedRevisits
+            ? ` Work screens appeared between sightings; ${appName} reappeared ${repeatedDay.workInterleavedRevisits === 1 ? 'once' : `${repeatedDay.workInterleavedRevisits} times`}${repeatedDay.shortestRevisitMinutes ? `, with the shortest interval ${repeatedDay.shortestRevisitMinutes} min` : ''}.`
+            : '')
+        : '';
+      const periodSummary = days === 1 && repeatedDay ? ''
+        : `${visits} foreground ${visits === 1 ? 'sighting' : 'sightings'} across ${days} ${days === 1 ? 'day' : 'days'}; ${durationLabel(seconds)} on screen. `;
+      const observed = `${periodSummary}${repeated || (workInterleavedRevisits ? `${workInterleavedRevisits} revisits had work screens in between.` : '')}`.trim();
+      return {
+        appName, kind, seconds, visits, days, workInterleavedRevisits, daily,
+        duration: durationLabel(seconds),
+        percentOfTop: Math.max(2, Math.round(seconds / maxSeconds * 100)),
+        observed,
+        advice: distractionAdvice(appName, kind, workInterleavedRevisits),
+      };
+    })
+    .filter((row) => row.appName && row.seconds > 0)
+    .slice(0, 5);
+  return {
+    state: apps.length ? 'ready' : 'none',
+    apps,
+    message: 'No recurring work-to-app return or sustained casual-browsing destination was observed in this period.',
+    caveat: 'Based on sampled foreground screens; background playback is not included.',
+  };
+}
+
 export function createStatusReportViewModel(payload, { userName = 'Knowledge worker', todayDate = '' } = {}) {
   const report = payload?.report || {};
   const local = payload?.local_data || {};
@@ -117,8 +208,10 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
   const focusSessions = Math.max(0, Number(local.deep_focus_sessions) || 0);
   const days = reportDays(local);
   const activeDays = Math.max(0, Number(local.active_days) || days.filter((day) => day.seconds > 0).length);
+  const periodStart = isoDay(local.period_start);
+  const periodEnd = isoDay(local.period_end);
   const period = text(meta.period_label)
-    || [isoDay(local.period_start), isoDay(local.period_end)].filter(Boolean).join(' – ')
+    || (periodStart && periodStart === periodEnd ? periodStart : [periodStart, periodEnd].filter(Boolean).join(' – '))
     || todayDate;
   const status = text(report.overall_health) || 'No assessment available';
   const categories = asItems(local.category_breakdown)
@@ -128,11 +221,14 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
     .map((row) => ({
       ...row,
       hours: (row.seconds / 3600).toFixed(1),
+      displayDuration: row.seconds >= 3600 ? `${(row.seconds / 3600).toFixed(1)}h` : durationLabel(row.seconds),
       percent: totalSeconds ? Math.min(100, Math.round(row.seconds / totalSeconds * 100)) : 0,
     }));
+  const distractions = reportDistractionApps(local);
 
   return {
-    title: 'Weekly work review',
+    title: days.length === 1 ? 'Daily work review' : 'Weekly work review',
+    evidenceTitle: days.length === 1 ? 'The day in view' : 'The week in view',
     period,
     userName: text(userName) || 'Knowledge worker',
     generatedAt: text(payload?.generated_at) || todayDate,
@@ -151,6 +247,7 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
     empty: totalSeconds === 0,
     days,
     categories,
+    distractions,
     actions: list(report.recommendations),
     breakdown: asItems(report.health_breakdown).map((row) => ({
       element: text(row.element) || 'Work area',
@@ -185,8 +282,8 @@ function reportList(items, emptyLabel) {
 
 export function renderStatusReportHtml(model) {
   const days = model.days.map((day) => `
-    <div class="sr-day" title="${escapeHtml(day.date)}: ${day.hours}h" aria-label="${escapeHtml(day.date)}: ${day.hours} hours">
-      <div class="sr-day-value">${day.seconds ? `${day.hours}h` : '—'}</div>
+    <div class="sr-day" title="${escapeHtml(day.date)}: ${day.seconds ? escapeHtml(day.displayDuration) : '0.0h'}" aria-label="${escapeHtml(day.date)}: ${day.seconds ? escapeHtml(day.displayDuration) : '0.0 hours'}">
+      <div class="sr-day-value">${day.seconds ? day.displayDuration : '—'}</div>
       <div class="sr-day-track"><span style="height:${day.seconds ? Math.max(7, day.percentOfPeak) : 0}%"></span></div>
       <div class="sr-day-label">${escapeHtml(day.label)}<small>${escapeHtml(day.date.slice(8))}</small></div>
     </div>`).join('');
@@ -195,7 +292,7 @@ export function renderStatusReportHtml(model) {
       <div class="sr-category-row">
         <span class="sr-category-name" title="${escapeHtml(category.label)}">${escapeHtml(category.label)}</span>
         <div class="sr-category-track" aria-label="${category.percent}% of tracked time"><span style="width:${Math.max(2, category.percent)}%"></span></div>
-        <strong>${category.hours}h</strong>
+        <strong>${category.displayDuration}</strong>
       </div>`).join('')
     : '<p class="sr-muted">No category time recorded.</p>';
   const actions = model.actions.length
@@ -212,6 +309,19 @@ export function renderStatusReportHtml(model) {
   const lessons = model.lessons.length
     ? `<div class="sr-lessons">${model.lessons.map((lesson) => `<div><strong>${escapeHtml(lesson.title)}</strong><p>${escapeHtml(lesson.body)}</p></div>`).join('')}</div>`
     : `<p class="sr-muted">${escapeHtml(model.lessonEmptyMessage)}</p>`;
+  const distractions = model.distractions.apps.length
+    ? `<div class="sr-distraction-list">${model.distractions.apps.map((app) => `
+      <div class="sr-distraction-row">
+        <div class="sr-distraction-measure">
+          <div class="sr-distraction-top"><strong title="${escapeHtml(app.appName)}">${escapeHtml(app.appName)}</strong><span>${escapeHtml(app.duration)}</span></div>
+          <div class="sr-distraction-track" role="img" aria-label="${escapeHtml(app.appName)}: ${escapeHtml(app.duration)} in sampled foreground visits"><span style="width:${app.percentOfTop}%"></span></div>
+        </div>
+        <div class="sr-distraction-detail">
+          <p class="sr-distraction-observed">${escapeHtml(app.observed)}</p>
+          <p class="sr-distraction-advice"><strong>Next session</strong> ${escapeHtml(app.advice)}</p>
+        </div>
+      </div>`).join('')}</div>`
+    : `<p class="sr-muted">${escapeHtml(model.distractions.message)}</p>`;
 
   return `
     <article class="status-report sr-review">
@@ -235,8 +345,14 @@ export function renderStatusReportHtml(model) {
         ${actions}
       </section>
 
+      <section class="sr-section sr-distractions" aria-labelledby="srDistractionsTitle">
+        <div class="sr-section-heading"><h3 id="srDistractionsTitle">Attention detours</h3><p>Observed visits and returns between work screens</p></div>
+        ${distractions}
+        ${model.distractions.caveat ? `<p class="sr-distraction-caveat" id="srDistractionCaveat">${escapeHtml(model.distractions.caveat)}</p>` : ''}
+      </section>
+
       <section class="sr-section" aria-labelledby="srEvidenceTitle">
-        <div class="sr-section-heading"><h3 id="srEvidenceTitle">The week in view</h3><p>Recorded time, not a productivity score</p></div>
+        <div class="sr-section-heading"><h3 id="srEvidenceTitle">${escapeHtml(model.evidenceTitle)}</h3><p>Recorded time, not a productivity score</p></div>
         <div class="sr-evidence-grid">
           <figure class="sr-figure"><figcaption>Activity by day</figcaption>
             ${days ? `<div class="sr-day-chart">${days}</div>` : '<p class="sr-muted">No dated activity available.</p>'}
