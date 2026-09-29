@@ -656,7 +656,11 @@ fn call_local_llm_json(
 
     for attempt in 0..=LLM_PASS_RETRIES {
         let raw = match call_local_llm_with_system(
-            prompt, max_tokens, temperature, REPORT_SYSTEM_PROMPT, &response_format,
+            prompt,
+            max_tokens,
+            temperature,
+            REPORT_SYSTEM_PROMPT,
+            &response_format,
         ) {
             Ok(r) => r,
             Err(e) => {
@@ -674,7 +678,11 @@ fn call_local_llm_json(
                 last_err = e;
             }
         }
-        log::warn!("[LocalReport] Grounded selection attempt {} failed: {}", attempt + 1, last_err);
+        log::warn!(
+            "[LocalReport] Grounded selection attempt {} failed: {}",
+            attempt + 1,
+            last_err
+        );
     }
 
     Err(last_err)
@@ -780,9 +788,15 @@ fn llm_section(
 }
 
 fn grounded_selection_prompt(stats: &str, fallback: &serde_json::Value) -> Option<String> {
-    let candidates = fallback.as_object()?.iter()
-        .filter_map(|(key, value)| value.as_array().filter(|items| items.len() > 1)
-            .map(|items| (key.clone(), serde_json::Value::Array(items.clone()))))
+    let candidates = fallback
+        .as_object()?
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .as_array()
+                .filter(|items| items.len() > 1)
+                .map(|items| (key.clone(), serde_json::Value::Array(items.clone())))
+        })
         .collect::<serde_json::Map<String, serde_json::Value>>();
     if candidates.is_empty() {
         return None;
@@ -801,16 +815,23 @@ fn grounded_selection_response_format(fallback: &serde_json::Value) -> Option<se
     let mut properties = serde_json::Map::new();
     let mut required = Vec::new();
     for (key, value) in fallback.as_object()? {
-        let Some(items) = value.as_array().filter(|items| items.len() > 1) else { continue };
+        let Some(items) = value.as_array().filter(|items| items.len() > 1) else {
+            continue;
+        };
         required.push(key.clone());
-        properties.insert(key.clone(), serde_json::json!({
-            "type": "array",
-            "minItems": 1,
-            "maxItems": items.len().min(6),
-            "items": {"type": "integer", "enum": (0..items.len()).collect::<Vec<_>>()}
-        }));
+        properties.insert(
+            key.clone(),
+            serde_json::json!({
+                "type": "array",
+                "minItems": 1,
+                "maxItems": items.len().min(6),
+                "items": {"type": "integer", "enum": (0..items.len()).collect::<Vec<_>>()}
+            }),
+        );
     }
-    if required.is_empty() { return None; }
+    if required.is_empty() {
+        return None;
+    }
     Some(serde_json::json!({
         "type": "json_schema",
         "json_schema": {
@@ -834,15 +855,23 @@ fn apply_grounded_selection(
     fallback: &serde_json::Value,
     selection: &serde_json::Value,
 ) -> Option<serde_json::Value> {
-    let selected = selection.as_object()?.get("selected_indices")?.as_object()?;
+    let selected = selection
+        .as_object()?
+        .get("selected_indices")?
+        .as_object()?;
     if selection.as_object()?.len() != 1 {
         return None;
     }
     let mut report = fallback.clone();
     let choices = fallback.as_object()?;
-    let selectable = choices.iter()
-        .filter_map(|(key, value)| value.as_array().filter(|items| items.len() > 1)
-            .map(|items| (key, items)))
+    let selectable = choices
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .as_array()
+                .filter(|items| items.len() > 1)
+                .map(|items| (key, items))
+        })
         .collect::<Vec<_>>();
     if selected.len() != selectable.len() {
         return None;
@@ -1615,7 +1644,11 @@ fn repair_learning_fields(report: &mut serde_json::Value, local_data: &serde_jso
         .into_iter()
         .flatten()
         .filter_map(|item| item.as_str().map(str::trim))
-        .filter(|item| verified_recommendations.iter().any(|verified| verified == item))
+        .filter(|item| {
+            verified_recommendations
+                .iter()
+                .any(|verified| verified == item)
+        })
         .map(str::to_string)
         .collect();
     if recommendations.is_empty() {
@@ -2583,7 +2616,10 @@ mod tests {
         });
         repair_learning_fields(&mut report, &local_data);
         assert_ne!(report["lessons_learned"][0]["title"], "Observed pattern");
-        assert_ne!(report["recommendations"][0], "Keep the next session labelled.");
+        assert_ne!(
+            report["recommendations"][0],
+            "Keep the next session labelled."
+        );
 
         let mut empty_report = report;
         repair_learning_fields(&mut empty_report, &serde_json::json!({"total_seconds": 0}));
