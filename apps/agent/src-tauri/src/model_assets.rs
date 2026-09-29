@@ -1,6 +1,6 @@
 //! First-run acquisition of the local vision weights.
 //!
-//! Los GGUF (~1.9 GB) no viajan en el instalador NSIS: se descargan una vez
+//! Los GGUF (~1.55 GB) no viajan en el instalador NSIS: se descargan una vez
 //! al directorio de datos de la app (`app_data_dir()/models`) y se verifican
 //! por SHA-256 antes de usarse. El runtime local sí va en el instalador.
 //!
@@ -21,7 +21,7 @@ use crate::vision_model::{VISION_GGUF_FILENAME, VISION_MMPROJ_FILENAME};
 
 const MODELS_SUBDIR: &str = "models";
 const DEFAULT_MODELS_REPO: &str = "Mancasvel/FlowSight.AI";
-const DEFAULT_MODELS_TAG: &str = "models-v0.2.0";
+const DEFAULT_MODELS_TAG: &str = "models-v0.3.0";
 const DOWNLOAD_PROGRESS_EVENT: &str = "local-model-download";
 const CONNECT_TIMEOUT_SECS: u64 = 30;
 const TCP_KEEPALIVE_SECS: u64 = 30;
@@ -31,7 +31,7 @@ const PROGRESS_EMIT_INTERVAL: Duration = Duration::from_millis(400);
 /// Un peso descargable del release de modelos.
 ///
 /// `size_bytes` y `sha256` se obtuvieron de los assets publicados en
-/// `<repo>/releases/download/models-v0.2.0/` y coinciden byte a byte con los
+/// `<repo>/releases/download/models-v0.3.0/` y coinciden byte a byte con los
 /// ficheros que usa `scripts/fetch-models.mjs` en `local_llm/`.
 struct WeightAsset {
     filename: &'static str,
@@ -42,13 +42,13 @@ struct WeightAsset {
 const VISION_ASSETS: [WeightAsset; 2] = [
     WeightAsset {
         filename: VISION_GGUF_FILENAME,
-        size_bytes: 1_556_390_528,
-        sha256: "381a869147e725e9e0087990f72ac5f3d5025aa3e4d0bc04b457fd7b30b6f7e4",
+        size_bytes: 1_107_409_952,
+        sha256: "089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae",
     },
     WeightAsset {
         filename: VISION_MMPROJ_FILENAME,
-        size_bytes: 364_663_936,
-        sha256: "351b26e2e94552a501d9b0d25455e34592d778def7e2e6d28cc9e7040f91c4ad",
+        size_bytes: 445_053_216,
+        sha256: "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
     },
 ];
 
@@ -486,10 +486,10 @@ mod tests {
 
     #[test]
     fn part_path_appends_suffix_without_replacing_extension() {
-        let dest = PathBuf::from("/models/Qwen3.5-2B-Q6_K.gguf");
+        let dest = PathBuf::from("/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf");
         assert_eq!(
             part_path(&dest),
-            PathBuf::from("/models/Qwen3.5-2B-Q6_K.gguf.part")
+            PathBuf::from("/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf.part")
         );
     }
 

@@ -21,7 +21,7 @@ external AI through MCP can also send the requested report data to that AI.
 
 ## Features
 
-- **100% local inference** — bundled `llama.cpp` + quantized Qwen3.5-2B GGUF
+- **100% local inference** — bundled `llama.cpp` + quantized Qwen3-VL-2B-Instruct GGUF
   weights downloaded once and verified on the device. No cloud roundtrips for
   sensitive data; inference works offline after the model is present.
 - **Desktop-native** — Tauri 2 (Rust) shell, Vite frontend, SQLite for local
@@ -29,6 +29,10 @@ external AI through MCP can also send the requested report data to that AI.
 - **Activity-oriented, not surveillance-oriented** — the agent surfaces
   meaningful work units (branches, PRs, focus windows) rather than keystroke
   counts.
+- **Opt-in local focus reminders** — on Windows, Qwen can propose a reminder
+  through an internal tool using only aggregate signals. FlowSight checks
+  tracking state, consent, observed evidence and cooldown before showing fixed
+  notification text; external MCP clients cannot call this tool.
 - **Team analytics, with consent** — opt-in aggregation into a Supabase
   backend only for users who join a team.
 - **Self-hostable backend** — the Community Edition can run against your own
@@ -81,7 +85,7 @@ two GGUF weights into the user's app-data directory, verifies their SHA-256,
 and then runs without network access. Keeping the weights out of NSIS also
 makes later app updates much smaller.
 
-The checkpoint is Qwen3.5-2B (Apache-2.0), converted and quantized locally;
+The checkpoint is Qwen3-VL-2B-Instruct (Apache-2.0), using the Qwen team's official Q4_K_M GGUF;
 see [model provenance and hashes](./local_llm/MODEL_NOTICE.md). It is not yet
 fine-tuned on FlowSight usage. The [local review workflow](./docs/LOCAL_FINETUNE_READINESS.md)
 prepares optional, human-checked labels for a future model iteration.

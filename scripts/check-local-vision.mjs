@@ -1,5 +1,5 @@
 /**
- * Release smoke test for the exact Qwen3.5 llama-server contract used by the app.
+ * Release smoke test for the exact Qwen3-VL-2B-Instruct llama-server contract used by the app.
  * The image is a tiny, synthetic PNG; this checks loading and the multimodal API,
  * not classification accuracy. No user screen, account, or database is read.
  */
@@ -10,9 +10,9 @@ import { createServer } from "node:net";
 
 const root = resolve(import.meta.dirname, "..");
 const bin = join(root, "local_llm", "bin", process.platform === "win32" ? "llama-server.exe" : "llama-server");
-const model = join(root, "local_llm", "Qwen3.5-2B-Q6_K.gguf");
-const projector = join(root, "local_llm", "mmproj-Qwen3.5-2B-Q8_0.gguf");
-const alias = "flowsight-qwen3.5-2b";
+const model = join(root, "local_llm", "Qwen3VL-2B-Instruct-Q4_K_M.gguf");
+const projector = join(root, "local_llm", "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf");
+const alias = "flowsight-qwen3vl-2b-instruct";
 // A public-domain 1x1 PNG. Its content is deliberately not used as an accuracy test.
 const image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a+FQAAAAASUVORK5CYII=";
 
@@ -94,9 +94,92 @@ try {
   }
   const reasoning = body?.choices?.[0]?.message?.reasoning_content?.trim();
   if (reasoning) {
-    throw new Error(`Qwen thinking was not disabled (${reasoning.length} reasoning chars)`);
+    throw new Error(`Unexpected reasoning content from Instruct (${reasoning.length} chars)`);
   }
   console.log(`[check-local-vision] OK: ${alias}, multimodal response ${answer.length} chars`);
+
+  // The proactive reminder feature uses a real local OpenAI-compatible tool
+  // call. A forced canary checks llama.cpp's parser/template independently of
+  // whether the model chooses to notify in a particular user situation.
+  const toolResponse = await fetch(`${origin}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(120_000),
+    body: JSON.stringify({
+      model: alias,
+      messages: [
+        { role: "system", content: "Call the supplied tool once with advice=choose_one_task. Do not write prose." },
+        { role: "user", content: JSON.stringify({ signal: "context_switching", switches: 12, unique_apps: 3, span_seconds: 200 }) },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "send_focus_notification",
+          description: "Propose one local focus reminder.",
+          parameters: {
+            type: "object",
+            properties: { advice: { type: "string", enum: ["choose_one_task"] } },
+            required: ["advice"],
+            additionalProperties: false,
+          },
+        },
+      }],
+      tool_choice: "required",
+      temperature: 0,
+      max_tokens: 100,
+      stream: false,
+    }),
+  });
+  const toolBody = await toolResponse.json();
+  if (!toolResponse.ok) throw new Error(`Local tool call failed (${toolResponse.status}): ${JSON.stringify(toolBody)}`);
+  const call = toolBody?.choices?.[0]?.message?.tool_calls?.[0];
+  let args;
+  try { args = typeof call?.function?.arguments === "string" ? JSON.parse(call.function.arguments) : call?.function?.arguments; }
+  catch { /* checked below */ }
+  if (toolBody.model !== alias || call?.function?.name !== "send_focus_notification" || args?.advice !== "choose_one_task") {
+    throw new Error(`Local model did not produce a valid tool call: ${JSON.stringify(toolBody)}`);
+  }
+  console.log(`[check-local-vision] OK: ${alias}, local focus-notification tool call`);
+
+  const autoResponse = await fetch(`${origin}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(120_000),
+    body: JSON.stringify({
+      model: alias,
+      messages: [
+        { role: "system", content: "You are FlowSight's local focus reminder planner. You see only verified aggregate signals. You may call send_focus_notification at most once, or make no tool call. App switching can be productive; abstain if a reminder would be speculative or interruptive. Never invent a cause, app, task, emotion, or diagnosis. The app will create the actual notification using fixed private copy; you only choose an allowed advice code." },
+        { role: "user", content: JSON.stringify({ signal: "non_work_browsing", minimum_episode_seconds: 120, episodes_today: 3 }) },
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "send_focus_notification",
+          description: "Propose one evidence-grounded focus reminder. The host application validates the signal, permission, cooldown and advice before showing anything.",
+          parameters: {
+            type: "object",
+            properties: { advice: { type: "string", enum: ["choose_one_task", "finish_current_step", "pause_and_prioritize", "return_to_task", "timebox_browsing", "intentional_break"] } },
+            required: ["advice"],
+            additionalProperties: false,
+          },
+        },
+      }],
+      tool_choice: "auto",
+      temperature: 0,
+      max_tokens: 100,
+      stream: false,
+    }),
+  });
+  const autoBody = await autoResponse.json();
+  if (!autoResponse.ok) throw new Error(`Auto tool choice failed (${autoResponse.status}): ${JSON.stringify(autoBody)}`);
+  const autoCall = autoBody?.choices?.[0]?.message?.tool_calls?.[0];
+  let autoArgs;
+  try { autoArgs = typeof autoCall?.function?.arguments === "string" ? JSON.parse(autoCall.function.arguments) : autoCall?.function?.arguments; }
+  catch { /* checked below */ }
+  if (autoCall?.function?.name !== "send_focus_notification" || !["return_to_task", "timebox_browsing", "intentional_break"].includes(autoArgs?.advice)) {
+    throw new Error(`Auto reminder decision was missing or ungrounded: ${JSON.stringify(autoBody)}`);
+  }
+  console.log(`[check-local-vision] OK: auto reminder decision ${autoArgs.advice}`);
 } finally {
   child.kill(); // Only the child launched by this test; never kill an installed FlowSight server.
 }
