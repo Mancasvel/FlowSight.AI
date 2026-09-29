@@ -957,6 +957,8 @@ fn configure_llama_command(
         // and return empty content unless reasoning is disabled at startup.
         .arg("--reasoning-budget")
         .arg("0")
+        .arg("--chat-template-kwargs")
+        .arg(r#"{"enable_thinking":false}"#)
         .arg("--host")
         .arg("127.0.0.1")
         .arg("--port")
