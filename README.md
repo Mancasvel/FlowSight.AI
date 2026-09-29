@@ -21,8 +21,9 @@ external AI through MCP can also send the requested report data to that AI.
 
 ## Features
 
-- **100% local inference** — bundled `llama.cpp` + a small Qwen3-VL GGUF
-  model. No cloud roundtrips for sensitive data.
+- **100% local inference** — bundled `llama.cpp` + quantized Qwen3.5-2B GGUF
+  weights downloaded once and verified on the device. No cloud roundtrips for
+  sensitive data; inference works offline after the model is present.
 - **Desktop-native** — Tauri 2 (Rust) shell, Vite frontend, SQLite for local
   state. Installs as a single `.msi` on Windows.
 - **Activity-oriented, not surveillance-oriented** — the agent surfaces
@@ -54,7 +55,7 @@ v1.0. Track progress on the [Releases](../../releases) page.
 - **Windows 10/11** (Linux and macOS are on the roadmap).
 - **Rust** stable (for building the Tauri shell).
 - **Node.js** 18+ and **pnpm** 8+.
-- **Python** 3.11+ (runs the prebuild script that fetches the LLM model).
+- **Python** 3.11+ (optional: run local review-queue tests and future model evaluation tools).
 
 ### Install and run
 
@@ -75,8 +76,15 @@ pnpm build
 ```
 
 The installer lands in `apps/agent/src-tauri/target/release/bundle/`. It
-bundles `llama-server.exe`, the required DLLs, and the GGUF model into the
-MSI, so the end user does **not** need any runtime download.
+bundles `llama-server.exe` and its DLLs. On first use, FlowSight downloads the
+two GGUF weights into the user's app-data directory, verifies their SHA-256,
+and then runs without network access. Keeping the weights out of NSIS also
+makes later app updates much smaller.
+
+The checkpoint is Qwen3.5-2B (Apache-2.0), converted and quantized locally;
+see [model provenance and hashes](./local_llm/MODEL_NOTICE.md). It is not yet
+fine-tuned on FlowSight usage. The [local review workflow](./docs/LOCAL_FINETUNE_READINESS.md)
+prepares optional, human-checked labels for a future model iteration.
 
 ---
 

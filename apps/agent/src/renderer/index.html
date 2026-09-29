@@ -890,6 +890,37 @@
     .setup-subtext {
       font-size: 11px;
       color: hsl(var(--muted-foreground));
+      max-width: 320px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .setup-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .setup-actions[hidden] {
+      display: none !important;
+    }
+
+    .setup-actions button {
+      min-height: 42px;
+      padding: 0 18px;
+      border-radius: 12px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      color: hsl(var(--foreground));
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    .setup-actions button:first-child {
+      background: hsl(var(--primary));
+      border-color: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
     }
 
     /* ===== App Shell & Tab Navigation ===== */
@@ -4340,6 +4371,10 @@
       <div class="progress-bar" id="setupProgress"></div>
     </div>
     <div class="setup-subtext" id="setupSubtext">Esto tomará unos minutos</div>
+    <div class="setup-actions" id="setupActions" hidden>
+      <button type="button" id="setupRetryBtn">Retry download</button>
+      <button type="button" id="setupDismissBtn">Later</button>
+    </div>
   </div>
 
   <!-- SETUP OVERLAY -->
@@ -6569,6 +6604,44 @@
       }
     }
 
+    function formatModelBytes(bytes) {
+      return `${Math.round((Number(bytes) || 0) / (1024 * 1024))} MB`;
+    }
+
+    // The installer contains the local runtime, while verified Qwen weights
+    // are downloaded once into user app data. Later launches work offline.
+    async function ensureLocalModelDownloaded(showStep) {
+      const status = await invoke('local_model_status');
+      if (status?.ready) return;
+
+      showStep(
+        'Downloading local AI model…',
+        `One-time ${formatModelBytes(status?.totalBytes)} download. Your screen stays on this device.`,
+        2
+      );
+      const unlisten = await listen('local-model-download', ({ payload }) => {
+        const p = payload || {};
+        if (p.phase === 'downloading') {
+          const fileFraction = p.totalBytes > 0 ? Math.min(1, p.downloadedBytes / p.totalBytes) : 0;
+          const overall = ((Number(p.index) || 1) - 1 + fileFraction) / Math.max(1, Number(p.count) || 1);
+          showStep(
+            `Downloading local AI model… ${p.percent || 0}%`,
+            `File ${p.index} of ${p.count} · ${formatModelBytes(p.downloadedBytes)} / ${formatModelBytes(p.totalBytes)}`,
+            Math.max(2, Math.round(2 + overall * 16))
+          );
+        } else if (p.phase === 'verifying') {
+          showStep('Verifying model…', `Checking file ${p.index} of ${p.count} against SHA-256.`, 18);
+        } else if (p.phase === 'ready') {
+          showStep('Local model ready', 'Starting the local AI engine…', 19);
+        }
+      });
+      try {
+        await invoke('download_local_model');
+      } finally {
+        unlisten();
+      }
+    }
+
     let setupInProgress = false;
 
     async function startMonitoringFull() {
@@ -6582,6 +6655,9 @@
       const progress = document.getElementById('setupProgress');
       const statusText = document.getElementById('setupStatus');
       const subtext = document.getElementById('setupSubtext');
+      const actions = document.getElementById('setupActions');
+      actions.hidden = true;
+      let setupFailed = false;
       let unlistenAiProgress = null;
       let aiWaitTimer = null;
       let aiAttemptLabel = 'Preparing the local model';
@@ -6595,6 +6671,7 @@
       };
 
       try {
+        await ensureLocalModelDownloaded(showStep);
         const startedAt = Date.now();
         const updateAiWait = () => {
           const seconds = Math.floor((Date.now() - startedAt) / 1000);
@@ -6733,13 +6810,25 @@
         localServerConfirmedOnline = true;
         await checkLocalServerHealth();
       } catch (e) {
-        overlay.hidden = true;
+        setupFailed = true;
         console.error("Start Failed:", e);
-        showToast("Error: " + e, "error");
+        progress.style.width = '100%';
+        statusText.textContent = 'Local AI is not ready';
+        subtext.textContent = String(e).slice(0, 360);
+        actions.hidden = false;
+        document.getElementById('setupRetryBtn').onclick = () => {
+          overlay.hidden = true;
+          startMonitoringFull();
+        };
+        document.getElementById('setupDismissBtn').onclick = () => {
+          overlay.hidden = true;
+          actions.hidden = true;
+        };
+        overlay.hidden = false;
       } finally {
         if (aiWaitTimer) clearInterval(aiWaitTimer);
         unlistenAiProgress?.();
-        overlay.hidden = true;
+        if (!setupFailed) overlay.hidden = true;
         setupInProgress = false;
         btn.disabled = false;
         btn.classList.remove('loading-state');

@@ -1,9 +1,6 @@
 use crate::agent_pure::{parse_analysis, resolve_persisted_category};
 use crate::focus_semantics::{allowed_categories_prompt, canonical_ticket_value, LocalDateWindow};
-use crate::vision_model::{
-    CONFIG_VISION_MODEL_ID, LLAMA_CHAT_MODEL_ID, VISION_GGUF_FILENAME, VISION_MMPROJ_FILENAME,
-    VISION_STATUS_LABEL,
-};
+use crate::vision_model::{CONFIG_VISION_MODEL_ID, LLAMA_CHAT_MODEL_ID, VISION_STATUS_LABEL};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use chrono::{Datelike, Local};
 use rusqlite::{params, Connection};
@@ -954,6 +951,12 @@ fn configure_llama_command(
         .arg(model_path)
         .arg("--mmproj")
         .arg(mmproj_path)
+        .arg("--alias")
+        .arg(LLAMA_CHAT_MODEL_ID)
+        // Qwen3.5 can spend an entire short classification budget thinking
+        // and return empty content unless reasoning is disabled at startup.
+        .arg("--reasoning-budget")
+        .arg("0")
         .arg("--host")
         .arg("127.0.0.1")
         .arg("--port")
@@ -1109,25 +1112,13 @@ fn spawn_llama_managed_child(
     // dev cae al layout del repo autom\u00e1ticamente.
     let local_llm_dir = crate::paths::resource_local_llm_dir(app)?;
     let bin_path = local_llm_dir.join("bin").join("llama-server.exe");
-    let model_path = local_llm_dir.join(VISION_GGUF_FILENAME);
-    let mmproj_path = local_llm_dir.join(VISION_MMPROJ_FILENAME);
+    let (model_path, mmproj_path) = crate::model_assets::resolved_vision_weights(app)
+        .ok_or_else(|| "Local AI weights are missing. Download the model and retry.".to_string())?;
 
     if !bin_path.exists() {
         return Err(format!(
             "llama-server not found at {:?}. Reinstall FlowSight Agent.",
             bin_path
-        ));
-    }
-    if !model_path.exists() {
-        return Err(format!(
-            "Vision weights not found at {:?}. Reinstall FlowSight Agent.",
-            model_path
-        ));
-    }
-    if !mmproj_path.exists() {
-        return Err(format!(
-            "Vision projector not found at {:?}. Reinstall FlowSight Agent.",
-            mmproj_path
         ));
     }
 
@@ -1235,6 +1226,10 @@ pub fn start_server(
             }));
         }
     }
+
+    // The UI downloads in a responsive command first. This also covers
+    // callers such as report generation without launching empty weights.
+    crate::model_assets::ensure_vision_weights(&app)?;
 
     match mode {
         GpuServeMode::Manual(gpu_layers) => {
