@@ -15,6 +15,7 @@ mod linear;
 mod llama_port;
 mod llama_windows_job;
 pub mod mcp;
+mod model_assets;
 mod notion;
 mod oauth_env;
 pub mod paths;
@@ -87,6 +88,8 @@ pub fn run() {
             coach_chat::get_coach_chat_usage,
             coach_chat::send_coach_chat_message,
             insights_local::generate_local_status_report,
+            model_assets::local_model_status,
+            model_assets::download_local_model,
             mcp::get_mcp_connection_info,
             user_preferences::get_user_preferences,
             user_preferences::save_user_preferences_command,

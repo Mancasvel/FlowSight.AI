@@ -106,6 +106,8 @@ pnpm-debug.log*
 *.db
 *.sqlite
 *.sqlite3
+**/review_queue.jsonl
+**/reviewed_labels.jsonl
 data/
 # Salida del generador Rust `tools/popular-apps-catalog`
 !data/popular-apps-catalog.txt

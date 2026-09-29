@@ -123,8 +123,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm --filter @flowsight/agent fetch-models
 
+      - name: Smoke test bundled Qwen3.5 multimodal runtime
+        run: node scripts/check-local-vision.mjs
+
       - name: Renderer tests
         run: pnpm --filter @flowsight/agent test:renderer
+
+      - name: Local review queue privacy tests
+        run: python -m unittest discover -s tools/finetune -p 'test_*.py'
 
       - name: Rust tests
         run: cargo test --manifest-path apps/agent/src-tauri/Cargo.toml --lib
