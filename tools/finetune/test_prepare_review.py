@@ -55,6 +55,8 @@ class ReviewQueueTests(unittest.TestCase):
 
     def test_split_is_stable_and_grouped_by_app_and_site(self):
         self.assertEqual(split_for("Code.exe", "GitHub"), split_for("code", "github"))
+        self.assertEqual(split_for("Chrome.exe", "GitHub"), split_for("Arc.exe", "github"))
+        self.assertEqual(split_for("Code.exe", None), split_for("code", None))
 
     def test_invalid_destination_is_rejected(self):
         queue = make_queue(self.db, 30, 500)

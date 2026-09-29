@@ -127,9 +127,10 @@ def safe_destination(value: object) -> str | None:
 
 
 def split_for(app: str, destination: str | None) -> str:
-    # Group all sessions of the same app/site into one split. A later trainer
-    # must also hold out whole days and users; this is not a model score.
-    key = f"{normalized_app(app)}|{(destination or '').casefold()}"
+    # The same public site belongs to one split even when viewed in different
+    # browsers. Native apps without a destination are grouped by executable.
+    # A later trainer must also hold out whole days/users; this is not a score.
+    key = f"site|{destination.casefold()}" if destination else f"app|{normalized_app(app)}"
     bucket = int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big") % 100
     return "train" if bucket < 70 else "validation" if bucket < 85 else "test"
 
