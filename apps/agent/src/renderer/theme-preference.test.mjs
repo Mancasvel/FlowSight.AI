@@ -8,7 +8,12 @@ const source = readFileSync(new URL('./public/theme-preference.js', import.meta.
 function createThemePage({ saved = null, systemDark = false, storageAvailable = true } = {}) {
   const values = new Map(saved ? [['flowsight_theme_preference', saved]] : []);
   const root = { dataset: {}, style: {} };
-  const sheets = [{ media: '(prefers-color-scheme: dark)' }, { media: '(prefers-color-scheme: dark)' }];
+  const sheets = [
+    { media: '(prefers-color-scheme: dark)', background: 'dark' },
+    { media: '(prefers-color-scheme: dark)', background: 'dark' },
+  ];
+  // Vite injects its bundled light CSS after the links present in index.html.
+  const stylesheetOrder = [...sheets, { media: '', background: 'light' }];
   const button = {
     title: 'Switch to dark mode',
     attributes: {},
@@ -20,6 +25,12 @@ function createThemePage({ saved = null, systemDark = false, storageAvailable = 
   const document = {
     documentElement: root,
     readyState: 'loading',
+    head: {
+      appendChild(sheet) {
+        stylesheetOrder.splice(stylesheetOrder.indexOf(sheet), 1);
+        stylesheetOrder.push(sheet);
+      },
+    },
     getElementById(id) {
       return { themeDarkBase: sheets[0], themeDarkMobile: sheets[1], themeToggleBtn: button }[id];
     },
@@ -47,6 +58,9 @@ function createThemePage({ saved = null, systemDark = false, storageAvailable = 
   onReady();
   return {
     root, sheets, button, values,
+    visibleBackground() {
+      return stylesheetOrder.filter((sheet) => !sheet.media || sheet.media === 'all').at(-1)?.background;
+    },
     systemChange(matches) { onSystemChange({ matches }); },
   };
 }
@@ -56,10 +70,12 @@ test('theme button switches the entire stylesheet and persists the manual choice
   assert.equal(page.root.dataset.theme, 'dark');
   assert.deepEqual(page.sheets.map((sheet) => sheet.media), ['all', 'all']);
   assert.equal(page.button.attributes['aria-pressed'], 'true');
+  assert.equal(page.visibleBackground(), 'dark');
 
   page.button.click();
   assert.equal(page.root.dataset.theme, 'light');
   assert.deepEqual(page.sheets.map((sheet) => sheet.media), ['not all', 'not all']);
+  assert.equal(page.visibleBackground(), 'light');
   assert.equal(page.button.title, 'Switch to dark mode');
   assert.equal(page.values.get('flowsight_theme_preference'), 'light');
   page.systemChange(true);
@@ -69,6 +85,7 @@ test('theme button switches the entire stylesheet and persists the manual choice
   assert.equal(reopened.root.dataset.theme, 'light');
   reopened.button.click();
   assert.equal(reopened.root.dataset.theme, 'dark');
+  assert.equal(reopened.visibleBackground(), 'dark');
   assert.equal(reopened.button.title, 'Switch to light mode');
 });
 
