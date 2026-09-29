@@ -953,8 +953,8 @@ fn configure_llama_command(
         .arg(mmproj_path)
         .arg("--alias")
         .arg(LLAMA_CHAT_MODEL_ID)
-        // Qwen3.5 can spend an entire short classification budget thinking
-        // and return empty content unless reasoning is disabled at startup.
+        // Keep the local classifier in content-only mode so an unexpected
+        // reasoning segment cannot consume the short response budget.
         .arg("--reasoning-budget")
         .arg("0")
         .arg("--chat-template-kwargs")

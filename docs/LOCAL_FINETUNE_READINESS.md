@@ -1,6 +1,6 @@
 # Local model evolution: reviewed data before fine-tuning
 
-FlowSight 5's bundled `Qwen3.5-2B-Q6_K.gguf` is a quantized **base model**, not a
+FlowSight 5's `Qwen3VL-2B-Instruct-Q4_K_M.gguf` is a quantized **base model**, not a
 fine-tune trained on anyone's work. The app continues to infer locally. Its
 ordinary monitoring does **not** retain screenshots for training, and this
 release does not turn that on.
