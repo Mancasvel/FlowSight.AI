@@ -11,12 +11,10 @@ use crate::vision_model::LLAMA_CHAT_MODEL_ID;
 /// Per-section LLM context from SQLite aggregates (separate calls, richer than a single snapshot).
 const LLM_SECTION_STATS_MAX_CHARS: usize = 2800;
 
-const REPORT_SYSTEM_PROMPT: &str = "You are a privacy-first work-pattern analyst writing detailed work status reports. \
-CRITICAL: English only. Output valid JSON only — no markdown. \
-Cite specific dates, hours, categories, task descriptions, and manual task labels or optional ticket IDs from the provided STATS. \
-Be concrete and actionable; avoid generic filler. Never infer task completion, subjective flow, or a productivity score from passive activity. \
-Treat sustained-block metrics as an observable proxy across all knowledge-work roles; context work is valuable, not distraction. Never claim a universal recovery time or biological 90-minute cycle, and describe the configured deep threshold as a product reference. \
-Array fields may contain up to 6 items. String fields may be up to 220 characters.";
+const REPORT_SYSTEM_PROMPT: &str = "You are a privacy-first local report editor. \
+Return valid JSON only. Select zero-based indices from the provided verified candidates. \
+Never write report prose, invent metrics, or add fields. \
+The application copies selected candidate text verbatim from local data.";
 
 #[derive(Serialize)]
 struct CategoryRow {
@@ -549,7 +547,7 @@ pub fn generate_local_status_report(
 
     let ai_powered = generation_passes
         .iter()
-        .any(|p| p["id"].as_str() != Some("fallback"));
+        .any(|p| p["source"].as_str() == Some("local_ai_selection"));
 
     // App names are appended only to the on-device report payload after the
     // local narrative is generated. If exclusions changed during generation,
@@ -587,15 +585,12 @@ pub fn generate_local_status_report(
     }))
 }
 
-fn call_local_llm(prompt: &str, max_tokens: u32, temperature: f32) -> Result<String, String> {
-    call_local_llm_with_system(prompt, max_tokens, temperature, REPORT_SYSTEM_PROMPT)
-}
-
 fn call_local_llm_with_system(
     prompt: &str,
     max_tokens: u32,
     temperature: f32,
     system_prompt: &str,
+    response_format: &serde_json::Value,
 ) -> Result<String, String> {
     let chat_url = crate::llama_port::managed_chat_completions_url()
         .ok_or_else(|| "Local AI server offline.".to_string())?;
@@ -616,7 +611,8 @@ fn call_local_llm_with_system(
         ],
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "stream": false
+        "stream": false,
+        "response_format": response_format
     });
 
     let resp = client
@@ -652,22 +648,20 @@ fn call_local_llm_json(
     prompt: &str,
     max_tokens: u32,
     temperature: f32,
+    fallback: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let json_hint = "\n\nReturn valid JSON only. Up to 6 array items; cite specific STATS facts in each string.";
+    let response_format = grounded_selection_response_format(fallback)
+        .ok_or_else(|| "No verified candidates to rank.".to_string())?;
     let mut last_err = String::from("unknown error");
 
     for attempt in 0..=LLM_PASS_RETRIES {
-        let user_prompt =
-            if attempt == 0 {
-                format!("{}{}", prompt, json_hint)
-            } else {
-                format!(
-                "{}{}\n\n(RETRY {}/{}) Return valid JSON. English only. Keep schema, be specific.",
-                prompt, json_hint, attempt + 1, LLM_PASS_RETRIES + 1
-            )
-            };
-
-        let raw = match call_local_llm(&user_prompt, max_tokens, temperature) {
+        let raw = match call_local_llm_with_system(
+            prompt,
+            max_tokens,
+            temperature,
+            REPORT_SYSTEM_PROMPT,
+            &response_format,
+        ) {
             Ok(r) => r,
             Err(e) => {
                 last_err = e;
@@ -676,30 +670,19 @@ fn call_local_llm_json(
         };
 
         match parse_report_json(&raw) {
-            Ok(v) => return Ok(v),
+            Ok(v) if apply_grounded_selection(fallback, &v).is_some() => return Ok(v),
+            Ok(_) => {
+                last_err = "Local AI selected invalid candidate indices.".to_string();
+            }
             Err(e) => {
-                last_err = e.clone();
-                log::warn!(
-                    "[LocalReport] JSON parse attempt {} failed: {}",
-                    attempt + 1,
-                    e
-                );
-                if attempt < LLM_PASS_RETRIES {
-                    if let Ok(fixed) = call_local_llm(
-                        &format!(
-                            "The following is broken JSON. Return ONLY repaired valid JSON. English text only. Same schema, compact.\n\n{}",
-                            raw.chars().take(1200).collect::<String>()
-                        ),
-                        max_tokens,
-                        0.1,
-                    ) {
-                        if let Ok(v) = parse_report_json(&fixed) {
-                            return Ok(v);
-                        }
-                    }
-                }
+                last_err = e;
             }
         }
+        log::warn!(
+            "[LocalReport] Grounded selection attempt {} failed: {}",
+            attempt + 1,
+            last_err
+        );
     }
 
     Err(last_err)
@@ -762,7 +745,7 @@ fn llm_section(
     pass_id: &str,
     label: &str,
     stats: &str,
-    prompt_body: &str,
+    _prompt_body: &str,
     max_tokens: u32,
     temperature: f32,
     fallback: serde_json::Value,
@@ -777,19 +760,139 @@ fn llm_section(
         "start",
     );
     log::info!("[LocalReport] Section {} — {}", step, pass_id);
-    let prompt = format!("{}\n\nSTATS:\n{}", prompt_body, stats);
-    let result = call_local_llm_json(&prompt, max_tokens, temperature).unwrap_or_else(|err| {
-        log::warn!("[LocalReport] Section {} fallback: {}", pass_id, err);
-        fallback
-    });
+    // The local model may rank verified candidates, but must never author a
+    // factual claim that goes straight into a report. The final strings and
+    // numbers always come from the SQLite-derived fallback below.
+    let (result, source) = match grounded_selection_prompt(stats, &fallback) {
+        None => (fallback, "verified_data"),
+        Some(prompt) => match call_local_llm_json(&prompt, max_tokens, temperature, &fallback)
+            .ok()
+            .and_then(|choice| apply_grounded_selection(&fallback, &choice))
+        {
+            Some(selected) => (selected, "local_ai_selection"),
+            None => {
+                log::warn!("[LocalReport] Section {} used verified fallback", pass_id);
+                (fallback, "verified_data")
+            }
+        },
+    };
     let detail = section_detail(&result, pass_id);
     emit_report_progress(app, step, pass_id, label, &detail, "done");
     passes.push(serde_json::json!({
         "id": pass_id,
         "label": label,
         "detail": detail,
+        "source": source,
     }));
     result
+}
+
+fn grounded_selection_prompt(stats: &str, fallback: &serde_json::Value) -> Option<String> {
+    let candidates = fallback
+        .as_object()?
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .as_array()
+                .filter(|items| items.len() > 1)
+                .map(|items| (key.clone(), serde_json::Value::Array(items.clone())))
+        })
+        .collect::<serde_json::Map<String, serde_json::Value>>();
+    if candidates.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "Rank the most useful verified report items for this period. Return JSON only: \
+{{\"selected_indices\":{{\"FIELD\":[0,1]}}}}. Use each CANDIDATES field name exactly. \
+For each field, select 1 to 6 distinct zero-based indices that exist in that field, most useful first. \
+Do not write or edit report text. The application copies candidate text verbatim; your output is only indices.\n\nSTATS:\n{}\n\nCANDIDATES:\n{}",
+        stats,
+        serde_json::Value::Object(candidates)
+    ))
+}
+
+fn grounded_selection_response_format(fallback: &serde_json::Value) -> Option<serde_json::Value> {
+    let mut properties = serde_json::Map::new();
+    let mut required = Vec::new();
+    for (key, value) in fallback.as_object()? {
+        let Some(items) = value.as_array().filter(|items| items.len() > 1) else {
+            continue;
+        };
+        required.push(key.clone());
+        properties.insert(
+            key.clone(),
+            serde_json::json!({
+                "type": "array",
+                "minItems": 1,
+                "maxItems": items.len().min(6),
+                "items": {"type": "integer", "enum": (0..items.len()).collect::<Vec<_>>()}
+            }),
+        );
+    }
+    if required.is_empty() {
+        return None;
+    }
+    Some(serde_json::json!({
+        "type": "json_schema",
+        "json_schema": {
+            "name": "GroundedReportSelection",
+            "strict": true,
+            "schema": {
+                "type": "object", "additionalProperties": false,
+                "required": ["selected_indices"],
+                "properties": {"selected_indices": {
+                    "type": "object", "additionalProperties": false,
+                    "required": required, "properties": properties
+                }}
+            }
+        }
+    }))
+}
+
+/// Fail closed: prose, fabricated values, missing fields, duplicated/out-of-range
+/// indices, and extra keys can never be copied into the user-visible report.
+fn apply_grounded_selection(
+    fallback: &serde_json::Value,
+    selection: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let selected = selection
+        .as_object()?
+        .get("selected_indices")?
+        .as_object()?;
+    if selection.as_object()?.len() != 1 {
+        return None;
+    }
+    let mut report = fallback.clone();
+    let choices = fallback.as_object()?;
+    let selectable = choices
+        .iter()
+        .filter_map(|(key, value)| {
+            value
+                .as_array()
+                .filter(|items| items.len() > 1)
+                .map(|items| (key, items))
+        })
+        .collect::<Vec<_>>();
+    if selected.len() != selectable.len() {
+        return None;
+    }
+    for (key, candidates) in selectable {
+        let indices = selected.get(key)?.as_array()?;
+        if indices.is_empty() || indices.len() > candidates.len().min(6) {
+            return None;
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut picked = Vec::with_capacity(indices.len());
+        for index in indices {
+            let index = usize::try_from(index.as_u64()?).ok()?;
+            if !seen.insert(index) {
+                return None;
+            }
+            picked.push(candidates.get(index)?.clone());
+        }
+        report[key] = serde_json::Value::Array(picked);
+    }
+    Some(report)
 }
 
 fn build_report_meta(local_data: &serde_json::Value) -> serde_json::Value {
@@ -1516,42 +1619,40 @@ fn sanitize_report_english(value: &mut serde_json::Value) {
 }
 
 fn repair_learning_fields(report: &mut serde_json::Value, local_data: &serde_json::Value) {
+    let verified_lessons = build_lessons_learned(local_data);
     let mut lessons: Vec<serde_json::Value> = report["lessons_learned"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|lesson| {
-            lesson["title"]
-                .as_str()
-                .is_some_and(|s| !s.trim().is_empty())
-                && lesson["body"]
-                    .as_str()
-                    .is_some_and(|s| !s.trim().is_empty())
-        })
+        .filter(|lesson| verified_lessons.contains(lesson))
         .cloned()
         .collect();
 
-    // A syntactically valid AI response can still omit the required section.
-    // Keep genuine AI lessons, but recover missing content from observed data.
+    // Only verbatim, locally derived lessons are allowed in the final report.
     if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
         lessons.clear();
     } else if lessons.is_empty() {
-        let mut fallback = serde_json::json!(build_lessons_learned(local_data));
+        let mut fallback = serde_json::json!(verified_lessons);
         sanitize_report_english(&mut fallback);
         lessons = fallback.as_array().cloned().unwrap_or_default();
     }
     report["lessons_learned"] = serde_json::json!(lessons);
 
+    let verified_recommendations = default_recommendations(local_data);
     let mut recommendations: Vec<String> = report["recommendations"]
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|item| item.as_str().map(str::trim))
-        .filter(|item| !item.is_empty())
+        .filter(|item| {
+            verified_recommendations
+                .iter()
+                .any(|verified| verified == item)
+        })
         .map(str::to_string)
         .collect();
     if recommendations.is_empty() {
-        recommendations = default_recommendations(local_data);
+        recommendations = verified_recommendations;
     }
     report["recommendations"] = serde_json::json!(recommendations);
 }
@@ -1638,7 +1739,7 @@ Observed explicit theme changes averaged {:.1} per labelled focus hour.",
     serde_json::json!({
         "executive_overview": executive_overview,
         "work_summary": format!(
-            "Primary effort concentrated on the work areas and optional task labels shown in the breakdown. {:.1} total hours were captured in the local report.",
+            "The breakdown lists observed work areas and optional task labels. {:.1} total hours were captured in the local report.",
             total_hours
         ),
         "overall_health": overall_health,
@@ -1873,7 +1974,7 @@ fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
     if let Some(days) = local_data["day_category_breakdown"].as_array() {
         for d in days.iter().rev().take(7) {
             progress.push(format!(
-                "{} — {:.1}h total, mostly {} ({:.1}h)",
+                "{} — {:.1}h total, largest category {} ({:.1}h)",
                 d["date"].as_str().unwrap_or(""),
                 d["total_hours"].as_f64().unwrap_or(0.0),
                 d["top_category"].as_str().unwrap_or("Work"),
@@ -2507,15 +2608,15 @@ mod tests {
     }
 
     #[test]
-    fn learning_repair_preserves_valid_ai_copy_but_rejects_empty_period_claims() {
+    fn learning_repair_rejects_unverified_ai_copy_and_empty_period_claims() {
         let local_data = serde_json::json!({"total_seconds": 3600});
         let mut report = serde_json::json!({
             "lessons_learned": [{"title": "Observed pattern", "body": "One hour was recorded."}],
             "recommendations": ["Keep the next session labelled."],
         });
         repair_learning_fields(&mut report, &local_data);
-        assert_eq!(report["lessons_learned"][0]["title"], "Observed pattern");
-        assert_eq!(
+        assert_ne!(report["lessons_learned"][0]["title"], "Observed pattern");
+        assert_ne!(
             report["recommendations"][0],
             "Keep the next session labelled."
         );
@@ -2534,5 +2635,41 @@ mod tests {
         let copy = "FlowSight.ai recorded 2.0h (100% of tracked time). Review the mix.";
         assert_eq!(extract_english_text(copy), copy);
         assert_eq!(extract_english_text("2.5h tracked"), "2.5h tracked");
+    }
+
+    #[test]
+    fn grounded_selection_only_reorders_verified_candidates() {
+        let fallback = serde_json::json!({
+            "lessons_learned": [
+                {"title":"Observed A", "body":"2.0h of Analysis recorded."},
+                {"title":"Observed B", "body":"1.0h of Research recorded."}
+            ],
+            "recommendations": ["Review the Analysis block.", "Label the next task."],
+            "health_notes": "2.0h of Analysis recorded."
+        });
+        let selection = serde_json::json!({
+            "selected_indices": {"lessons_learned":[1,0], "recommendations":[1]}
+        });
+        let chosen = apply_grounded_selection(&fallback, &selection).unwrap();
+        assert_eq!(chosen["lessons_learned"][0], fallback["lessons_learned"][1]);
+        assert_eq!(chosen["recommendations"][0], fallback["recommendations"][1]);
+        assert_eq!(chosen["health_notes"], fallback["health_notes"]);
+    }
+
+    #[test]
+    fn grounded_selection_rejects_fabricated_prose_and_invalid_indices() {
+        let fallback = serde_json::json!({
+            "observed_work": ["Analysis was recorded.", "Research was recorded."],
+            "summary": "Only observed work is shown."
+        });
+        for invalid in [
+            serde_json::json!({"observed_work":["Completed product launch."]}),
+            serde_json::json!({"selected_indices":{"observed_work":[2]}}),
+            serde_json::json!({"selected_indices":{"observed_work":[0,0]}}),
+            serde_json::json!({"selected_indices":{"observed_work":[0]}, "summary":"Completed product launch."}),
+            serde_json::json!({"selected_indices":{"observed_work":["0"]}}),
+        ] {
+            assert!(apply_grounded_selection(&fallback, &invalid).is_none());
+        }
     }
 }
