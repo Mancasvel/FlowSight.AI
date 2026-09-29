@@ -194,32 +194,50 @@ fn sanitize_pdf_filename(name: &str) -> Result<String, String> {
     Ok(safe)
 }
 
-fn unique_download_path(downloads: &std::path::Path, filename: &str) -> PathBuf {
-    let mut path = downloads.join(filename);
-    if !path.exists() {
-        return path;
-    }
-    let stem = filename.strip_suffix(".pdf").unwrap_or(filename);
-    for n in 2..=99 {
-        let candidate = format!("{stem}_{n}.pdf");
-        path = downloads.join(&candidate);
-        if !path.exists() {
-            return path;
-        }
-    }
-    let stamp = chrono::Local::now().format("%H%M%S");
-    downloads.join(format!("{stem}_{stamp}.pdf"))
-}
-
 /// Guarda un PDF en la carpeta Descargas del usuario y devuelve la ruta absoluta escrita.
 #[tauri::command]
 pub fn save_pdf_to_downloads(filename: String, bytes: Vec<u8>) -> Result<String, String> {
     let downloads = dirs::download_dir()
         .ok_or_else(|| "Downloads folder not available on this system".to_string())?;
-    let safe = sanitize_pdf_filename(&filename)?;
-    let path = unique_download_path(&downloads, &safe);
-    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to save PDF: {e}"))?;
-    Ok(path.to_string_lossy().to_string())
+    save_pdf_to_directory(&downloads, &filename, &bytes)
+}
+
+/// Save the same report PDF in a user-selected folder without overwriting an
+/// earlier report. The caller validates that the folder is a real directory.
+pub fn save_pdf_to_directory(
+    directory: &std::path::Path,
+    filename: &str,
+    bytes: &[u8],
+) -> Result<String, String> {
+    use std::io::Write;
+
+    let safe = sanitize_pdf_filename(filename)?;
+    let stem = &safe[..safe.len() - 4];
+    for number in 1..=999 {
+        let name = if number == 1 {
+            safe.clone()
+        } else {
+            format!("{stem}_{number}.pdf")
+        };
+        let path = directory.join(name);
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                if let Err(error) = file.write_all(bytes) {
+                    drop(file);
+                    let _ = std::fs::remove_file(&path);
+                    return Err(format!("Failed to save PDF: {error}"));
+                }
+                return Ok(path.to_string_lossy().to_string());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("Failed to save PDF: {error}")),
+        }
+    }
+    Err("This folder already contains too many reports with the same name.".into())
 }
 
 /// Writes an already-sanitized privacy export to the user's Downloads folder.
@@ -268,4 +286,21 @@ pub fn get_flowsight_user_paths() -> Result<serde_json::Value, String> {
         "authLog": auth_log_path()?.to_string_lossy(),
         "agentErrorLog": agent_error_log_path()?.to_string_lossy(),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn saving_a_second_report_preserves_the_first_pdf() {
+        let directory = tempfile::tempdir().unwrap();
+        let first =
+            save_pdf_to_directory(directory.path(), "FlowSight_Report.pdf", b"first").unwrap();
+        let second =
+            save_pdf_to_directory(directory.path(), "FlowSight_Report.pdf", b"second").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(std::fs::read(first).unwrap(), b"first");
+        assert_eq!(std::fs::read(second).unwrap(), b"second");
+    }
 }

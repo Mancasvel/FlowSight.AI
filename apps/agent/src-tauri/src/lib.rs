@@ -20,6 +20,7 @@ mod notion;
 mod oauth_env;
 pub mod paths;
 mod privacy;
+mod report_schedule;
 mod secure_config;
 mod sync;
 mod sync_env;
@@ -57,6 +58,7 @@ pub fn run() {
     }));
 
     builder
+        .plugin(tauri_plugin_dialog::init())
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![
             initialize_agent,
@@ -121,6 +123,9 @@ pub fn run() {
             paths::get_flowsight_user_paths,
             paths::save_pdf_to_downloads,
             paths::open_path_in_file_manager,
+            report_schedule::get_weekly_report_schedule,
+            report_schedule::save_weekly_report_schedule,
+            report_schedule::save_scheduled_report_pdf,
             desktop_presence::get_desktop_preferences,
             desktop_presence::set_launch_at_login,
             desktop_presence::set_start_monitoring_at_login,
@@ -166,6 +171,7 @@ pub fn run() {
                     ])
                     .build(),
             )?;
+            report_schedule::start_check_loop(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {

@@ -4159,6 +4159,48 @@
           <p class="privacy-detail profile-form-status" id="desktopPresenceStatus" aria-live="polite"></p>
         </div>
 
+        <div class="card" id="weeklyReportCard">
+          <div class="card-header">
+            <div class="card-title">Weekly work report</div>
+          </div>
+          <p class="upgrade-hint profile-card-intro">Automatically save the same seven-day PDF as Work report. FlowSight must be open, including in the system tray.</p>
+          <form id="weeklyReportForm">
+            <label class="consent-toggle-row" for="weeklyReportEnabled">
+              <input type="checkbox" id="weeklyReportEnabled">
+              <span>Save a report every week</span>
+            </label>
+            <div class="weekly-report-grid">
+              <div class="form-group">
+                <label class="label" for="weeklyReportWeekday">Day</label>
+                <select id="weeklyReportWeekday" class="select">
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                  <option value="0">Sunday</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="label" for="weeklyReportTime">Local time</label>
+                <input id="weeklyReportTime" class="input" type="time" value="17:00" required>
+              </div>
+            </div>
+            <div class="form-group weekly-report-destination">
+              <label class="label" for="weeklyReportChooseFolder">Save in folder</label>
+              <div class="weekly-report-folder-row">
+                <span id="weeklyReportFolder" class="weekly-report-folder" aria-live="polite">Choose a folder</span>
+                <button type="button" class="button button-secondary" id="weeklyReportChooseFolder">Choose</button>
+              </div>
+            </div>
+            <p class="weekly-report-note">On the selected day, FlowSight runs at the set time or when you next open it that day. It uses your computer's local time.</p>
+            <button type="submit" class="button button-primary profile-full-button" id="weeklyReportSaveBtn">Save schedule</button>
+          </form>
+          <p id="weeklyReportStatus" class="profile-form-status weekly-report-status" role="status" aria-live="polite"></p>
+          <button type="button" class="button button-ghost profile-full-button" id="weeklyReportOpenLastBtn" hidden>Open last report folder</button>
+        </div>
+
         <div class="card" id="privacyAnalyticsCard">
           <div class="card-header">
             <div class="card-title">Privacy &amp; data</div>
@@ -4377,6 +4419,7 @@
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { getVersion } from '@tauri-apps/api/app';
     import { check as checkAppUpdate } from '@tauri-apps/plugin-updater';
+    import { open as openFolderDialog } from '@tauri-apps/plugin-dialog';
     import { relaunch } from '@tauri-apps/plugin-process';
     import {
       claimLicenseCode,
@@ -4398,6 +4441,7 @@
       renderStatusReportHtml,
     } from './status-report.mjs';
     import { renderStatusReportPdf } from './status-report-pdf.mjs';
+    import { isWeeklyReportDue } from './weekly-report-schedule.mjs';
     import {
       buildTaskBreakdown,
       focusBarPercent,
@@ -7807,6 +7851,11 @@
       await loadPrivacySettings();
       await loadDesktopPreferences().catch((error) => console.warn('[Startup] Preferences unavailable:', error));
       await initMainApp();
+      await loadWeeklyReportSchedule().catch((error) => {
+        setWeeklyReportStatus('Weekly report settings could not be loaded: ' + error, 'error');
+      });
+      weeklyReportsReady = true;
+      checkScheduledReport().catch((error) => console.warn('[WeeklyReport] Startup check failed:', error));
       maybeStartMonitoringAtLogin();
       loadAppVersionLabel().catch(() => {});
       await loadAnalyticsConsent();
@@ -7829,6 +7878,18 @@
       if (typeof loadHistory === 'function') {
         loadHistory().catch(() => {});
       }
+    });
+
+    listen('weekly-report-check', () => {
+      checkScheduledReport().catch((error) => console.warn('[WeeklyReport] Scheduled check failed:', error));
+    });
+    const checkWeeklyReportOnReturn = () => {
+      checkScheduledReport().catch((error) => console.warn('[WeeklyReport] Return check failed:', error));
+    };
+    window.addEventListener('focus', checkWeeklyReportOnReturn);
+    window.addEventListener('pageshow', checkWeeklyReportOnReturn);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) checkWeeklyReportOnReturn();
     });
 
     startAutomaticUpdateChecks();
@@ -7960,6 +8021,179 @@
     let lastStatusReportPayload = null;
     let reportProgressUnlisten = null;
     let reportProgressState = { activeStep: 0, doneThrough: -1, detail: '' };
+    let reportGenerationPromise = null;
+    let weeklyReportSchedule = null;
+    let weeklyReportSelectedFolder = '';
+    let weeklyReportsReady = false;
+    let scheduledReportCheckPromise = null;
+    let scheduledReportPendingPdf = null;
+    let scheduledReportRetryAt = 0;
+    let scheduledReportRetryKey = '';
+    let scheduledReportLastError = '';
+
+    const WEEKDAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    function setWeeklyReportStatus(message, state = '') {
+      const status = document.getElementById('weeklyReportStatus');
+      if (!status) return;
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function renderWeeklyReportStatus(schedule = weeklyReportSchedule) {
+      if (!schedule) return;
+      const lastSaved = schedule.lastGeneratedDate ? ` Last saved ${schedule.lastGeneratedDate}.` : '';
+      setWeeklyReportStatus(schedule.enabled
+        ? `Scheduled for ${WEEKDAY_LABELS[schedule.weekday]} at ${schedule.time}.${lastSaved}`
+        : `Automatic reports are off.${lastSaved}`);
+      const openLast = document.getElementById('weeklyReportOpenLastBtn');
+      if (openLast) openLast.hidden = !schedule.lastSavedPath;
+    }
+
+    function renderWeeklyReportForm(schedule) {
+      document.getElementById('weeklyReportEnabled').checked = Boolean(schedule.enabled);
+      document.getElementById('weeklyReportWeekday').value = String(schedule.weekday);
+      document.getElementById('weeklyReportTime').value = schedule.time || '17:00';
+      weeklyReportSelectedFolder = schedule.folder || '';
+      document.getElementById('weeklyReportFolder').textContent = weeklyReportSelectedFolder || 'Choose a folder';
+      renderWeeklyReportStatus(schedule);
+    }
+
+    async function loadWeeklyReportSchedule() {
+      weeklyReportSchedule = await invoke('get_weekly_report_schedule');
+      renderWeeklyReportForm(weeklyReportSchedule);
+    }
+
+    document.getElementById('weeklyReportChooseFolder')?.addEventListener('click', async () => {
+      const button = document.getElementById('weeklyReportChooseFolder');
+      button.disabled = true;
+      try {
+        const selected = await openFolderDialog({
+          directory: true,
+          multiple: false,
+          title: 'Choose where to save weekly reports',
+          ...(weeklyReportSelectedFolder ? { defaultPath: weeklyReportSelectedFolder } : {}),
+        });
+        if (typeof selected === 'string' && selected) {
+          weeklyReportSelectedFolder = selected;
+          document.getElementById('weeklyReportFolder').textContent = selected;
+        }
+      } catch (error) {
+        setWeeklyReportStatus('Could not choose a folder: ' + error, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById('weeklyReportForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('weeklyReportSaveBtn');
+      const schedule = {
+        enabled: document.getElementById('weeklyReportEnabled').checked,
+        weekday: Number(document.getElementById('weeklyReportWeekday').value),
+        time: document.getElementById('weeklyReportTime').value,
+        folder: weeklyReportSelectedFolder,
+      };
+      if (schedule.enabled && !schedule.folder) {
+        setWeeklyReportStatus('Choose a folder before turning on automatic reports.', 'error');
+        document.getElementById('weeklyReportChooseFolder').focus();
+        return;
+      }
+      button.disabled = true;
+      try {
+        weeklyReportSchedule = await invoke('save_weekly_report_schedule', { schedule });
+        renderWeeklyReportForm(weeklyReportSchedule);
+        scheduledReportRetryAt = 0;
+        scheduledReportPendingPdf = null;
+        showToast('Weekly report schedule saved', 'success');
+        checkScheduledReport().catch((error) => console.warn('[WeeklyReport] Check failed:', error));
+      } catch (error) {
+        setWeeklyReportStatus('Could not save schedule: ' + error, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById('weeklyReportOpenLastBtn')?.addEventListener('click', async () => {
+      if (!weeklyReportSchedule?.lastSavedPath) return;
+      try {
+        const folder = weeklyReportSchedule.lastSavedPath.replace(/[/\\][^/\\]+$/, '');
+        await invoke('open_path_in_file_manager', { path: folder || weeklyReportSchedule.lastSavedPath });
+      } catch (error) {
+        setWeeklyReportStatus('Could not open the last report folder: ' + error, 'error');
+      }
+    });
+
+    function requestStatusReportPayload() {
+      if (!reportGenerationPromise) {
+        reportGenerationPromise = invoke('generate_local_status_report', { periodDays: 7 })
+          .finally(() => { reportGenerationPromise = null; });
+      }
+      return reportGenerationPromise;
+    }
+
+    function checkScheduledReport() {
+      if (!weeklyReportsReady || scheduledReportCheckPromise) return scheduledReportCheckPromise;
+      scheduledReportCheckPromise = (async () => {
+        const schedule = await invoke('get_weekly_report_schedule');
+        weeklyReportSchedule = schedule;
+        const now = new Date();
+        const pendingAge = Date.now() - Date.parse(scheduledReportPendingPdf?.startedAt);
+        const pendingPdf = scheduledReportPendingPdf?.revision === schedule.revision
+          && pendingAge >= 0 && pendingAge <= 24 * 60 * 60 * 1000
+          ? scheduledReportPendingPdf : null;
+        if (!isWeeklyReportDue(schedule, now) && !pendingPdf) return;
+        const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const runKey = pendingPdf?.runKey || `${schedule.revision}:${localDay}`;
+        if (scheduledReportRetryKey === runKey && Date.now() < scheduledReportRetryAt) return;
+
+        try {
+          setWeeklyReportStatus('Generating and saving this week\'s work report…');
+          if (!scheduledReportPendingPdf || scheduledReportPendingPdf.runKey !== runKey) {
+            const payload = await requestStatusReportPayload();
+            lastStatusReportPayload = payload;
+            const { doc, filename } = await buildStatusReportPdf(payload, currentHistoryData);
+            scheduledReportPendingPdf = {
+              runKey,
+              revision: schedule.revision,
+              startedAt: now.toISOString(),
+              filename,
+              bytes: Array.from(new Uint8Array(doc.output('arraybuffer'))),
+            };
+          }
+          await invoke('save_scheduled_report_pdf', {
+            revision: scheduledReportPendingPdf.revision,
+            startedAt: scheduledReportPendingPdf.startedAt,
+            filename: scheduledReportPendingPdf.filename,
+            bytes: scheduledReportPendingPdf.bytes,
+          });
+          scheduledReportPendingPdf = null;
+          scheduledReportRetryAt = 0;
+          scheduledReportLastError = '';
+          weeklyReportSchedule = await invoke('get_weekly_report_schedule');
+          renderWeeklyReportStatus(weeklyReportSchedule);
+          showToast('Weekly work report saved', 'success');
+        } catch (error) {
+          const latest = await invoke('get_weekly_report_schedule').catch(() => null);
+          if (latest && latest.revision !== schedule.revision) {
+            weeklyReportSchedule = latest;
+            renderWeeklyReportStatus(latest);
+            return;
+          }
+          const message = String(error);
+          const retrying = Boolean(scheduledReportPendingPdf) || isWeeklyReportDue(schedule, new Date());
+          setWeeklyReportStatus('Automatic report could not be saved: ' + message
+            + (retrying ? '. FlowSight will retry.' : '. Check the schedule for the next run.'), 'error');
+          scheduledReportRetryKey = runKey;
+          scheduledReportRetryAt = Date.now() + 10 * 60 * 1000;
+          if (scheduledReportLastError !== message) {
+            showToast('Automatic work report failed: ' + message, 'error', 8000);
+            scheduledReportLastError = message;
+          }
+        }
+      })().finally(() => { scheduledReportCheckPromise = null; });
+      return scheduledReportCheckPromise;
+    }
 
     const REPORT_GEN_STEP_LABELS = [
       'Starting local AI engine…',
@@ -8394,7 +8628,7 @@
       await beginReportProgressListen();
 
       try {
-        const payload = await invoke('generate_local_status_report', { periodDays: 7 });
+        const payload = await requestStatusReportPayload();
         lastStatusReportPayload = payload;
         reportProgressState = {
           activeStep: REPORT_GEN_STEP_LABELS.length - 1,

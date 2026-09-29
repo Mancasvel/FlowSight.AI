@@ -36,6 +36,10 @@ external AI through MCP can also send the requested report data to that AI.
   verified public app or site label and the selected task to the local system
   notification; names are never sent to Qwen for the reminder decision.
   External MCP clients cannot call this tool.
+- **Weekly work reports** — choose a weekday, local time, and folder in Settings.
+  FlowSight creates the same seven-day PDF as the Work report button while it
+  is open, including when its window is in the system tray. It saves at most
+  one automatic report per week and leaves previous PDFs intact.
 - **Team analytics, with consent** — opt-in aggregation into a Supabase
   backend only for users who join a team.
 - **Self-hostable backend** — the Community Edition can run against your own
