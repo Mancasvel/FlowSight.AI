@@ -77,9 +77,10 @@ pub(crate) fn refresh_session_if_expiring(db_path: &std::path::PathBuf) {
                 "[Sync] Proactive JWT refresh OK (previous access exp: {})",
                 exp
             );
-            if let Ok(entitlements) =
-                crate::entitlements::refresh_entitlements_from_supabase(&new_session.access_token)
-            {
+            if let Ok(entitlements) = crate::entitlements::refresh_entitlements_from_supabase(
+                &new_session.access_token,
+                &new_session.user_id,
+            ) {
                 let _ = crate::entitlements::save_entitlements(&conn, &entitlements);
             }
         }
@@ -113,10 +114,12 @@ pub(crate) fn get_user_session_from_conn(conn: &Connection) -> Option<UserSessio
             .and_then(|json_str| serde_json::from_str(&json_str).ok());
 
     match (user_session, auth_session) {
-        // Both exist: only merge if auth_session is from Supabase (google), NOT jira/linear
+        // Both exist: merge only the same Supabase identity. A stale auth_session
+        // from another FlowSight account must never donate its JWT to this user.
         (Some(mut us), Some(auth)) => {
             let provider = auth["provider"].as_str().unwrap_or("");
-            if provider == "google" || provider == "manual" {
+            let same_user = auth["user"]["id"].as_str() == Some(us.user_id.as_str());
+            if same_user && (provider == "google" || provider == "manual") {
                 if let Some(auth_token) = auth["access_token"].as_str() {
                     if auth_token != us.access_token {
                         // Only merge if auth_session token is actually newer (decode JWT exp)
@@ -135,7 +138,7 @@ pub(crate) fn get_user_session_from_conn(conn: &Connection) -> Option<UserSessio
                     }
                 }
             }
-            // Non-Supabase auth_session (e.g. Jira): keep user_session only; no merge.
+            // Non-Supabase or different-user auth_session: keep user_session only.
             Some(us)
         }
         // Only user_session exists: use as-is
@@ -245,6 +248,7 @@ fn refresh_supabase_token(session: &UserSession) -> Result<UserSession, String> 
 // Clear user session (logout)
 #[tauri::command]
 pub fn clear_user_session() -> Result<(), String> {
+    crate::calendar_companion::on_cloud_logout();
     let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
 
@@ -290,9 +294,10 @@ fn perform_sync(db_path: &std::path::PathBuf) -> Result<String, String> {
         return Ok(reason);
     }
 
-    if let Ok(entitlements) =
-        crate::entitlements::refresh_entitlements_from_supabase(&session.access_token)
-    {
+    if let Ok(entitlements) = crate::entitlements::refresh_entitlements_from_supabase(
+        &session.access_token,
+        &session.user_id,
+    ) {
         let _ = crate::entitlements::save_entitlements(&conn, &entitlements);
         if !entitlements.can_sync {
             println!("[CloudSync] License inactive — sync disabled.");
@@ -952,6 +957,9 @@ fn join_team_blocking(token: String) -> Result<serde_json::Value, String> {
 mod user_session_tests {
     use super::UserSession;
 
+    #[cfg(windows)]
+    use super::get_user_session_from_conn;
+
     #[test]
     fn user_session_json_roundtrip() {
         let s = UserSession {
@@ -965,5 +973,43 @@ mod user_session_tests {
         let back: UserSession = serde_json::from_str(&j).unwrap();
         assert_eq!(back.email, s.email);
         assert_eq!(back.team_id, s.team_id);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn never_merge_supabase_tokens_from_a_different_user() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)", [])
+            .unwrap();
+        let user = UserSession {
+            user_id: "owner-a".into(),
+            team_id: None,
+            access_token: "owner-a-access".into(),
+            refresh_token: Some("owner-a-refresh".into()),
+            email: "a@example.com".into(),
+        };
+        crate::secure_config::save_secret(
+            &conn,
+            "user_session",
+            &serde_json::to_string(&user).unwrap(),
+        )
+        .unwrap();
+        crate::secure_config::save_secret(
+            &conn,
+            "auth_session",
+            &serde_json::json!({
+                "provider": "google",
+                "user": { "id": "owner-b", "email": "b@example.com" },
+                "access_token": "eyJhbGciOiJub25lIn0.eyJleHAiOjk5OTk5OTk5OTl9.sig",
+                "refresh_token": "owner-b-refresh"
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let resolved = get_user_session_from_conn(&conn).unwrap();
+        assert_eq!(resolved.user_id, "owner-a");
+        assert_eq!(resolved.access_token, "owner-a-access");
+        assert_eq!(resolved.refresh_token.as_deref(), Some("owner-a-refresh"));
     }
 }

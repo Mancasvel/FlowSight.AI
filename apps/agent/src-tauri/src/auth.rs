@@ -1150,6 +1150,7 @@ pub fn get_auth_session() -> Result<Option<PublicAuthSession>, String> {
 
 #[tauri::command]
 pub fn logout() -> Result<(), String> {
+    crate::calendar_companion::on_cloud_logout();
     let conn = get_db_conn()?;
     crate::secure_config::delete_secret(&conn, "auth_session")?;
     crate::secure_config::delete_secret(&conn, "user_session")?;

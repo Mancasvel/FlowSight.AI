@@ -87,6 +87,7 @@ pub fn specs() -> Vec<ToolSpec> {
             "end_at": {"type":"string","format":"date-time"}
         }), &["start_at","end_at"], false),
         spec("calendar.list_events", "calendar_list_events", "List FlowSight-owned local and connected calendar events with their IDs.", json!({}), &[], false),
+        spec("calendar.get_current_event", "calendar_get_current_event", "Read the current connected calendar event, its task description, time, and organizer status. No mutation.", json!({}), &[], false),
         spec("calendar.create_event", "calendar_create_event", "Create a focus event in FlowSight's local calendar. Connected calendar writes are unavailable in this release.", json!({
             "title": {"type":"string","maxLength":200},
             "start_at": {"type":"string","format":"date-time"},
@@ -332,7 +333,7 @@ mod tests {
             assert!(model.insert(spec.model_name));
             assert!(!spec.model_name.contains('.'));
         }
-        assert_eq!(public.len(), 32);
+        assert_eq!(public.len(), 33);
     }
 
     #[test]
@@ -355,7 +356,7 @@ mod tests {
 
     #[test]
     fn unverified_external_writes_are_not_offered() {
-        assert_eq!(enabled_specs().len(), 29);
+        assert_eq!(enabled_specs().len(), 30);
         for name in DISABLED_EXTERNAL_WRITES {
             assert!(by_public_name(name).is_some());
             assert!(enabled_by_public_name(name).is_none());

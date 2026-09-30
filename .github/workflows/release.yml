@@ -30,6 +30,11 @@ permissions:
 #   (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are also accepted.)
 # (Opcional: TAURI_LINEAR_CLIENT_ID, TAURI_LINEAR_CLIENT_SECRET si usáis Linear.)
 # No commitees .env.local; el CI inyecta estos valores en `pnpm build`.
+# Variables PUBLICAS opcionales para Calendar companion: TAURI_GOOGLE_CALENDAR_CLIENT_ID,
+# TAURI_MICROSOFT_CALENDAR_CLIENT_ID. Sin ambas, sus botones quedan deshabilitados.
+# Variables PUBLICAS con la URL oficial asignada por la tienda. La ficha puede
+# seguir en revision; el instalador sera util para usuarios cuando se publique:
+# FLOWSIGHT_CHROME_EXTENSION_STORE_URL, FLOWSIGHT_EDGE_EXTENSION_STORE_URL.
 
 # Note: Linux builds live in a separate repo (Mancasvel/FlowSight_linux).
 # Cliente iOS: repositorio dedicado FlowSight-iOS (fuera de este monorepo).
@@ -45,6 +50,10 @@ jobs:
       TAURI_JIRA_CLIENT_SECRET: ${{ secrets.TAURI_JIRA_CLIENT_SECRET }}
       TAURI_LINEAR_CLIENT_ID: ${{ secrets.TAURI_LINEAR_CLIENT_ID }}
       TAURI_LINEAR_CLIENT_SECRET: ${{ secrets.TAURI_LINEAR_CLIENT_SECRET }}
+      TAURI_GOOGLE_CALENDAR_CLIENT_ID: ${{ vars.TAURI_GOOGLE_CALENDAR_CLIENT_ID }}
+      TAURI_MICROSOFT_CALENDAR_CLIENT_ID: ${{ vars.TAURI_MICROSOFT_CALENDAR_CLIENT_ID }}
+      FLOWSIGHT_CHROME_EXTENSION_STORE_URL: ${{ vars.FLOWSIGHT_CHROME_EXTENSION_STORE_URL }}
+      FLOWSIGHT_EDGE_EXTENSION_STORE_URL: ${{ vars.FLOWSIGHT_EDGE_EXTENSION_STORE_URL }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_PUBLIC_KEY }}
       # Required for signed auto-update artifacts (tauri-plugin-updater).

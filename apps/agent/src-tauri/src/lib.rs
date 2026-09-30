@@ -2,6 +2,7 @@ mod agent;
 mod agent_pure;
 mod anonymous_analytics;
 mod auth;
+mod calendar_companion;
 mod coach_chat;
 pub mod context;
 mod crash_guard;
@@ -78,7 +79,6 @@ pub fn run() {
             sync::get_user_teams,
             sync::set_active_team,
             entitlements::get_entitlements,
-            entitlements::save_entitlements_command,
             entitlements::refresh_entitlements,
             notion::get_notion_status,
             notion::start_notion_oauth,
@@ -101,11 +101,17 @@ pub fn run() {
             local_agent::get_local_agent_data,
             local_agent::control_local_focus_block,
             local_agent::browser_bridge::get_browser_pairing,
+            local_agent::browser_bridge::open_browser_extension_store,
             local_agent::browser_bridge::open_browser_extension_folder,
             local_agent::connectors::get_local_agent_connections,
             local_agent::connectors::save_local_agent_connection,
             local_agent::connectors::remove_local_agent_connection,
             local_agent::connectors::set_local_agent_providers,
+            calendar_companion::get_calendar_companion_status,
+            calendar_companion::start_calendar_oauth,
+            calendar_companion::disconnect_calendar,
+            calendar_companion::set_calendar_auto_publish,
+            calendar_companion::open_current_calendar_event,
             mcp::get_mcp_connection_info,
             user_preferences::get_user_preferences,
             user_preferences::save_user_preferences_command,
@@ -190,6 +196,7 @@ pub fn run() {
                 log::warn!("Browser bridge unavailable: {error}");
             }
             local_agent::start_maintenance(app.handle().clone());
+            calendar_companion::start_monitor();
             Ok(())
         })
         .on_window_event(|window, event| {

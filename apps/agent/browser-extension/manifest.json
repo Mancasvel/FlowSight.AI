@@ -2,9 +2,11 @@
   "manifest_version": 3,
   "name": "FlowSight Browser Controls",
   "version": "1.0.0",
-  "description": "Pairs Chrome or Edge with the local FlowSight focus agent.",
+  "description": "Connects FlowSight to your browser for optional focus blocks and tab actions.",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "permissions": ["alarms", "storage", "tabs", "declarativeNetRequest"],
-  "host_permissions": ["<all_urls>", "http://127.0.0.1/*"],
+  "host_permissions": ["http://127.0.0.1/*"],
   "background": { "service_worker": "worker.js" },
+  "action": { "default_title": "FlowSight Browser Controls", "default_icon": { "16": "icon16.png", "48": "icon48.png" } },
   "options_page": "options.html"
 }

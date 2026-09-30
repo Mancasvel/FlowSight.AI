@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 use tauri::Manager;
 use tiny_http::{Header, Method, Response, Server, StatusCode};
+use url::Url;
 
 const MAX_RESULT_BYTES: usize = 128 * 1024;
 const PAIRING_TIMEOUT: Duration = Duration::from_secs(75);
@@ -170,7 +171,77 @@ pub fn get_browser_pairing() -> Result<Value, String> {
         "port": bridge.port,
         "token": bridge.token,
         "connected": queue.last_seen.is_some_and(|seen| seen.elapsed() < PAIRING_TIMEOUT),
+        "chromeStoreAvailable": browser_store_url("chrome").is_some(),
+        "edgeStoreAvailable": browser_store_url("edge").is_some(),
     }))
+}
+
+fn browser_store_url(browser: &str) -> Option<&'static str> {
+    let (raw, expected_host, path_prefix) = match browser {
+        "chrome" => (
+            option_env!("FLOWSIGHT_CHROME_EXTENSION_STORE_URL"),
+            "chromewebstore.google.com",
+            "/detail/",
+        ),
+        "edge" => (
+            option_env!("FLOWSIGHT_EDGE_EXTENSION_STORE_URL"),
+            "microsoftedge.microsoft.com",
+            "/addons/detail/",
+        ),
+        _ => return None,
+    };
+    let raw = raw?;
+    valid_store_url(raw, expected_host, path_prefix).then_some(raw)
+}
+
+fn valid_store_url(raw: &str, expected_host: &str, path_prefix: &str) -> bool {
+    let Ok(parsed) = Url::parse(raw) else {
+        return false;
+    };
+    parsed.scheme() == "https"
+        && parsed.host_str() == Some(expected_host)
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.path().starts_with(path_prefix)
+        && parsed.path().len() > path_prefix.len()
+        && parsed.query().is_none()
+        && parsed.fragment().is_none()
+}
+
+#[tauri::command]
+pub fn open_browser_extension_store(browser: String) -> Result<(), String> {
+    let url = browser_store_url(&browser)
+        .ok_or("The official browser extension listing is not available in this build yet.")?;
+    open::that(url).map_err(|error| format!("Could not open the browser extension store: {error}"))
+}
+
+#[cfg(test)]
+mod store_url_tests {
+    use super::valid_store_url;
+
+    #[test]
+    fn accepts_only_canonical_official_listing_urls() {
+        assert!(valid_store_url(
+            "https://chromewebstore.google.com/detail/flowsight/abcdefghijklmnopabcdefghijklmnop",
+            "chromewebstore.google.com",
+            "/detail/"
+        ));
+        assert!(!valid_store_url(
+            "https://chromewebstore.google.com.evil.example/detail/flowsight/id",
+            "chromewebstore.google.com",
+            "/detail/"
+        ));
+        assert!(!valid_store_url(
+            "http://chromewebstore.google.com/detail/flowsight/id",
+            "chromewebstore.google.com",
+            "/detail/"
+        ));
+        assert!(!valid_store_url(
+            "https://chromewebstore.google.com/",
+            "chromewebstore.google.com",
+            "/detail/"
+        ));
+    }
 }
 
 pub fn queue_unblock_all() {

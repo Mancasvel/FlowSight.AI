@@ -2328,297 +2328,7 @@
       line-height: 1.45;
     }
 
-    /* AI Coach (Pro) chat */
-    .coach-panel {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      margin: -16px -16px 0;
-      height: calc(100% + 16px);
-      padding: 0 !important;
-    }
-
-    .coach-chat-shell {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      min-height: 0;
-      position: relative;
-    }
-
-    .coach-chat-shell.is-locked .coach-chat-inner {
-      filter: blur(6px);
-      pointer-events: none;
-      user-select: none;
-    }
-
-    .coach-chat-inner {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      padding: 12px 12px 0;
-    }
-
-    .coach-usage-bar {
-      font-size: 10px;
-      color: hsl(var(--muted-foreground));
-      padding: 0 4px 8px;
-    }
-
-    .coach-usage-bar.warn {
-      color: hsl(32 90% 38%);
-    }
-
-    .coach-messages {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: 4px 2px 12px;
-    }
-
-    .coach-empty {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      gap: 8px;
-      padding: 24px 16px;
-      color: hsl(var(--muted-foreground));
-    }
-
-    .coach-empty-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: hsl(var(--foreground));
-      letter-spacing: -0.02em;
-    }
-
-    .coach-empty-sub {
-      font-size: 12px;
-      line-height: 1.5;
-      max-width: 260px;
-    }
-
-    .coach-msg {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-width: 92%;
-    }
-
-    .coach-msg.user {
-      align-self: flex-end;
-      align-items: flex-end;
-    }
-
-    .coach-msg.assistant {
-      align-self: flex-start;
-    }
-
-    .coach-msg-bubble {
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-size: 12px;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-
-    .coach-msg.user .coach-msg-bubble {
-      background: hsl(var(--primary));
-      color: hsl(var(--primary-foreground));
-      border-bottom-right-radius: 4px;
-    }
-
-    .coach-msg.assistant .coach-msg-bubble {
-      background: hsl(var(--card));
-      border: 1px solid hsl(var(--border));
-      border-bottom-left-radius: 4px;
-    }
-
-    .coach-msg-bubble h1,
-    .coach-msg-bubble h2,
-    .coach-msg-bubble h3 {
-      font-size: 13px;
-      font-weight: 700;
-      margin: 8px 0 4px;
-    }
-
-    .coach-msg-bubble h1:first-child,
-    .coach-msg-bubble h2:first-child,
-    .coach-msg-bubble h3:first-child {
-      margin-top: 0;
-    }
-
-    .coach-msg-bubble p {
-      margin: 0 0 6px;
-    }
-
-    .coach-msg-bubble ul,
-    .coach-msg-bubble ol {
-      margin: 4px 0 6px;
-      padding-left: 18px;
-    }
-
-    .coach-msg-bubble li {
-      margin-bottom: 3px;
-    }
-
-    .coach-thinking {
-      align-self: flex-start;
-      font-size: 11px;
-      color: hsl(var(--muted-foreground));
-      padding: 4px 8px;
-    }
-
-    .coach-composer-wrap {
-      padding: 8px 12px 12px;
-      border-top: 1px solid hsl(var(--border));
-      background: hsl(var(--card));
-    }
-
-    .coach-composer {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border: 1px solid hsl(var(--border));
-      border-radius: 14px;
-      background: hsl(var(--background));
-      padding: 10px 10px 8px;
-      box-shadow: 0 2px 12px rgb(0 0 0 / 0.04);
-    }
-
-    .coach-composer:focus-within {
-      border-color: hsl(var(--ring));
-    }
-
-    .coach-input {
-      width: 100%;
-      min-height: 44px;
-      max-height: 120px;
-      resize: none;
-      border: none;
-      background: transparent;
-      font-size: 13px;
-      line-height: 1.45;
-      color: hsl(var(--foreground));
-      outline: none;
-      font-family: inherit;
-    }
-
-    .coach-input::placeholder {
-      color: hsl(var(--muted-foreground));
-    }
-
-    .coach-composer-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .coach-char-count {
-      font-size: 10px;
-      color: hsl(var(--muted-foreground));
-    }
-
-    .coach-char-count.warn {
-      color: hsl(32 90% 38%);
-    }
-
-    .coach-send-btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border: none;
-      border-radius: 10px;
-      background: hsl(var(--primary));
-      color: hsl(var(--primary-foreground));
-      cursor: pointer;
-    }
-
-    .coach-send-btn:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-
-    .coach-quick-prompts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
-    }
-
-    .coach-quick-btn {
-      border: 1px solid hsl(var(--border));
-      background: hsl(var(--background));
-      color: hsl(var(--muted-foreground));
-      border-radius: 999px;
-      padding: 5px 10px;
-      font-size: 10px;
-      cursor: pointer;
-    }
-
-    .coach-quick-btn:hover {
-      color: hsl(var(--foreground));
-      background: hsl(var(--accent));
-    }
-
-    .coach-lock-overlay {
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      z-index: 20;
-      background: hsl(var(--background) / 0.35);
-      backdrop-filter: blur(2px);
-    }
-
-    .coach-lock-overlay.visible {
-      display: flex;
-    }
-
-    .coach-lock-card {
-      max-width: 280px;
-      text-align: center;
-      background: hsl(var(--card));
-      border: 1px solid hsl(var(--border));
-      border-radius: 16px;
-      padding: 20px 18px;
-      box-shadow: 0 12px 40px rgb(0 0 0 / 0.12);
-    }
-
-    .coach-lock-card h3 {
-      margin: 0 0 8px;
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    .coach-lock-card p {
-      margin: 0 0 14px;
-      font-size: 12px;
-      line-height: 1.5;
-      color: hsl(var(--muted-foreground));
-    }
-
-    .nav-item.nav-pro .nav-label {
-      font-weight: 600;
-    }
-
-    .nav-item.nav-pro-locked .nav-label {
-      opacity: 0.72;
-    }
-
-    /* Shared controls and progress state for the local report. */
+/* Shared controls and progress state for the local report. */
     .sr-download-btn {
       display: inline-flex;
       align-items: center;
@@ -2971,8 +2681,7 @@
 
     .input,
     .select,
-    .onboarding-name-input,
-    .coach-composer {
+    .onboarding-name-input {
       border-color: hsl(var(--input));
       background: hsl(var(--card));
       box-shadow: inset 0 1px 1px rgb(15 23 42 / 0.025);
@@ -3072,8 +2781,7 @@
 
     .consent-card,
     .modal-content,
-    .report-modal,
-    .coach-lock-card {
+    .report-modal {
       background: hsl(var(--card));
       border-color: hsl(var(--border) / 0.82);
       box-shadow: 0 24px 64px rgb(15 23 42 / 0.18);
@@ -3244,21 +2952,6 @@
       }
     }
 
-    .coach-chat-shell.is-locked .coach-chat-inner {
-      filter: none;
-      opacity: 0.24;
-    }
-
-    .coach-lock-overlay {
-      background: hsl(var(--background) / 0.76);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-
-    .coach-lock-card {
-      border-radius: 20px;
-    }
-
     @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
       .app-titlebar,
       .bottom-nav {
@@ -3267,11 +2960,6 @@
         backdrop-filter: saturate(1.12) blur(12px);
       }
 
-      .coach-lock-card {
-        background: hsl(var(--card) / 0.82);
-        -webkit-backdrop-filter: saturate(1.08) blur(10px);
-        backdrop-filter: saturate(1.08) blur(10px);
-      }
     }
 
     @media (prefers-contrast: more) {
@@ -3294,8 +2982,7 @@
 
     @media (prefers-reduced-transparency: reduce) {
       .app-titlebar,
-      .bottom-nav,
-      .coach-lock-card {
+      .bottom-nav {
         background: hsl(var(--card));
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
@@ -3553,6 +3240,8 @@
   <link rel="stylesheet" href="/theme-dark-mobile.css" id="themeDarkMobile" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="./profile-redesign.css">
   <link rel="stylesheet" href="./local-agent.css">
+  <link rel="stylesheet" href="./calendar-companion.css">
+  <link rel="stylesheet" href="./coach.css">
 </head>
 
 <body>
@@ -3560,7 +3249,7 @@
   <!--
     THESIS: FlowSight desktop is the focused companion to the mobile app, not a dark Ratio-style instrument or a stretched phone screenshot.
     OWN-WORLD: The mobile family's pale 56px grid, slate typography, Manrope and Plus Jakarta Sans, teal signals, softly layered white surfaces, and one indigo-to-teal tracking action adapt to a compact desktop window.
-    STORY: See the tracking state, start or pause a block, review observed time and focus, then reach coach and settings with the same visual vocabulary and privacy controls.
+    STORY: See the tracking state, start or pause a block, review observed time and focus, then reach settings and the proactive local agent's controls without a chat surface.
     FIRST VIEWPORT: Light branded titlebar; a concise Today heading; a rounded timer surface with centered status and time, linear progress, goal and streak, then a full-width tracking action; a floating four-tab dock stays accessible.
     FORM: User-pinned FlowSight mobile design system adapted for desktop; concept seed 6628a6fb is overridden by that explicit reference.
     FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
@@ -3622,6 +3311,7 @@
       <button type="button" class="button button-primary onboarding-continue" id="onboardingContinueBtn" disabled>
         Continue
       </button>
+      <button type="button" class="button button-ghost onboarding-skip-calendar" id="onboardingSkipCalendarBtn" hidden>Skip calendar for now</button>
     </div>
   </div>
 
@@ -3705,7 +3395,7 @@
       <h3>Optional cloud purposes</h3>
       <ul>
         <li><strong>Activity sync:</strong> sends locally generated aggregate summaries, categories, durations, ticket references and team/account IDs to FlowSight's Supabase service.</li>
-        <li><strong>Cloud AI:</strong> sends your message, recent conversation and a seven-day local activity summary through FlowSight to Azure OpenAI for coaching. Cloud-generated individual reports use OpenRouter and its selected model provider.</li>
+        <li><strong>Cloud AI:</strong> if you enable it and explicitly use a cloud AI feature, selected work context may be processed by FlowSight and its AI providers, including Azure OpenAI or OpenRouter. The proactive local agent does not use cloud AI.</li>
         <li><strong>Product analytics:</strong> sends a random installation ID, seven daily usage totals and the week's primary category. No account ID or email is included.</li>
         <li><strong>Integrations:</strong> Jira, Linear and Notion receive only data needed for actions you request under their own privacy terms.</li>
       </ul>
@@ -3935,6 +3625,18 @@
             <div class="timer-inner">
               <div class="timer-display" id="timerDisplay">00:00:00</div>
             </div>
+            <div class="today-calendar-status" aria-live="polite">
+              <div class="today-calendar-context" id="todayCalendarContext" hidden>
+                <div>
+                  <span class="today-task-source" id="todayTaskSource"></span>
+                  <strong id="todayCalendarTitle"></strong>
+                  <small id="todayCalendarTime"></small>
+                </div>
+                <button type="button" class="button button-ghost" id="todayCalendarOpenBtn" aria-label="Open current calendar event">Open</button>
+              </div>
+              <p class="today-calendar-idle" id="todayCalendarIdle" hidden></p>
+              <p class="today-calendar-overlap" id="todayCalendarOverlap" hidden>Several events overlap right now. Describe the task below; FlowSight will not guess which event is yours.</p>
+            </div>
             <div class="today-goal-progress" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="todayGoalProgressTrack">
               <span id="todayGoalProgress"></span>
             </div>
@@ -3966,6 +3668,28 @@
         </div>
 
         <div class="today-preferences">
+        <div class="today-task-card" id="todayTaskCard">
+          <div class="today-task-heading">
+            <span class="label">Task details</span>
+          </div>
+          <div class="today-task-inputs">
+            <div class="today-task-manual" id="todayManualTaskWrap">
+              <label class="label" id="todayManualTaskLabel" for="manualTask">Task description</label>
+              <input type="text" id="manualTask" class="input" placeholder="What are you working on?">
+            </div>
+            <div class="today-task-integration" id="todayIntegrationControls">
+              <label class="label" id="todayLinkedTaskLabel" for="jiraSelect">Linked task</label>
+              <select id="jiraSelect" class="select" style="width: 100%;">
+                <option value="">Select Task...</option>
+                <option value="General">General / No Ticket</option>
+              </select>
+            </div>
+          </div>
+          <label class="checkbox-wrapper" id="syncToJiraWrapper">
+            <input type="checkbox" id="syncToJira" class="checkbox" checked>
+            <span class="checkbox-label">Sync time to Jira</span>
+          </label>
+        </div>
         <div class="today-goal-row">
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="dailyGoalSelect">Daily goal</label>
@@ -3985,24 +3709,6 @@
               <option value="12">12 hours</option>
             </select>
           </div>
-        </div>
-
-        <div class="today-task-card">
-          <div class="form-group" style="margin-bottom: 8px;">
-            <label class="label">Current task</label>
-            <div id="todayIntegrationControls">
-              <select id="jiraSelect" class="select" style="width: 100%;">
-                <option value="">Select Task...</option>
-                <option value="General">General / No Ticket</option>
-              </select>
-            </div>
-            <input type="text" id="manualTask" class="input" placeholder="What are you working on?"
-              style="margin-top: 6px; display: none;">
-          </div>
-          <label class="checkbox-wrapper" id="syncToJiraWrapper">
-            <input type="checkbox" id="syncToJira" class="checkbox" checked>
-            <span class="checkbox-label">Sync time to Jira</span>
-          </label>
         </div>
         </div>
 
@@ -4024,102 +3730,30 @@
         </div>
       </div>
 
-      <!-- TAB: Local action agent -->
-      <div id="tabLocalAgent" class="tab-panel local-agent-panel">
-        <div class="local-agent-heading">
-          <h1>Local agent</h1>
-          <p>Ask local Qwen to help with focus, tasks, your browser, and work plans. Changes wait for your approval.</p>
-          <p id="localAgentFocusStatus" class="local-agent-focus-status">No active focus block.</p>
-        </div>
-        <div class="card local-agent-card">
-          <div class="local-agent-log" id="localAgentLog" role="log" aria-live="polite" aria-label="Local agent conversation">
-            <p class="local-agent-empty">Try “Start a 45-minute focus block to finish the PR” or “What do you remember about my work?”</p>
-          </div>
-          <div id="localAgentProposal" class="local-agent-proposal" hidden>
-            <span class="local-agent-proposal-kicker">Review action</span>
-            <p id="localAgentProposalSummary"></p>
-            <div class="local-agent-proposal-actions">
-              <button type="button" class="button button-secondary" id="localAgentCancelBtn">Cancel</button>
-              <button type="button" class="button button-primary" id="localAgentConfirmBtn">Confirm action</button>
-            </div>
-          </div>
-          <form id="localAgentForm" class="local-agent-form">
-            <label class="label" for="localAgentInput">What would you like to do?</label>
-            <textarea id="localAgentInput" class="input" rows="3" maxlength="1200" placeholder="Describe a task or action…"></textarea>
-            <button type="submit" class="button button-primary" id="localAgentAskBtn">Ask local agent</button>
-          </form>
-        </div>
-        <details class="card local-agent-details">
-          <summary>Tools and saved preferences</summary>
-          <h2>Browser pairing</h2>
-          <p class="local-agent-helper">In Chrome or Edge, open Extensions, enable Developer mode, and load the unpacked folder below. Open the extension's options and enter these values once.</p>
-          <button type="button" id="localAgentOpenExtensionBtn" class="button button-secondary">Open extension folder</button>
-          <div class="local-agent-pairing">
-            <div><span>Connection</span><strong id="localAgentBrowserStatus">Checking…</strong></div>
-            <div><span>Port</span><output id="localAgentBrowserPort">—</output></div>
-            <div><span>Pairing key</span><code id="localAgentBrowserToken">—</code></div>
-          </div>
-          <p class="local-agent-helper">Sending messages and changing connected calendars or project services will become available after connector testing. For now, drafts, plans, focus actions, browser actions, and the FlowSight local calendar stay on your device.</p>
-          <button type="button" id="localAgentUseLocalCalendarBtn" class="button button-secondary" hidden>Use local calendar</button>
-          <div id="localAgentExternalConnections" hidden>
-          <h2>External connections</h2>
-          <p class="local-agent-helper">Add a scoped access token only for a service you want the agent to use. Tokens stay encrypted for your Windows account. Calendar and email use the selected Google or Microsoft connection; without a calendar connection, FlowSight uses its local calendar.</p>
-          <form id="localAgentConnectionForm" class="local-agent-connection-form">
-            <label class="label" for="localAgentProvider">Service</label>
-            <select class="select" id="localAgentProvider">
-              <option value="google">Google Calendar / Gmail</option>
-              <option value="microsoft">Microsoft Calendar / Mail</option>
-              <option value="slack">Slack</option>
-              <option value="teams">Microsoft Teams</option>
-              <option value="github">GitHub</option>
-              <option value="notion">Notion</option>
-            </select>
-            <label class="label" for="localAgentToken">Access token</label>
-            <input class="input" type="password" id="localAgentToken" autocomplete="off" placeholder="Paste a scoped token" maxlength="4096">
-            <div class="local-agent-connection-actions">
-              <button type="submit" class="button button-primary">Save connection</button>
-              <button type="button" id="localAgentDisconnectBtn" class="button button-secondary">Disconnect</button>
-            </div>
-          </form>
-          <p id="localAgentConnectionStatus" class="local-agent-helper" role="status"></p>
-          <div class="local-agent-provider-choices">
-            <label class="label" for="localAgentCalendarProvider">Calendar</label>
-            <select class="select" id="localAgentCalendarProvider"><option value="">FlowSight local</option><option value="google">Google</option><option value="microsoft">Microsoft</option></select>
-            <label class="label" for="localAgentEmailProvider">Email</label>
-            <select class="select" id="localAgentEmailProvider"><option value="">Choose provider</option><option value="google">Gmail</option><option value="microsoft">Microsoft Mail</option></select>
-            <button type="button" id="localAgentSaveProvidersBtn" class="button button-secondary">Save providers</button>
-          </div>
-          <p id="localAgentConfigured" class="local-agent-helper"></p>
-          </div>
-          <h2>Available actions</h2>
-          <div id="localAgentTools" class="local-agent-tools"></div>
-          <h2>What FlowSight remembers</h2>
-          <div id="localAgentMemory" class="local-agent-memory">No saved preferences.</div>
-        </details>
-      </div>
-
-      <!-- TAB: AI Coach (Pro) -->
+      <!-- TAB: Pro Coach. The proactive local agent remains in Settings, not here. -->
       <div id="tabCloudInsights" class="tab-panel coach-panel">
+        <div class="coach-header">
+          <h1>Coach</h1>
+          <span>Pro</span>
+        </div>
         <div class="coach-chat-shell" id="coachChatShell">
           <div class="coach-chat-inner">
-            <div class="coach-usage-bar" id="coachUsageBar" style="display:none;"></div>
-            <div class="coach-messages" id="coachMessages">
+            <div class="coach-usage-bar" id="coachUsageBar" hidden></div>
+            <div class="coach-messages" id="coachMessages" role="log" aria-live="polite" aria-label="Coach conversation">
               <div class="coach-empty" id="coachEmptyState">
                 <div class="coach-empty-title">What's next for your work?</div>
-                <div class="coach-empty-sub">Sustained work, context, and planning — grounded in your tracked activity.</div>
+                <div class="coach-empty-sub">Ask about focus, activity, and planning, grounded in your tracked work.</div>
               </div>
             </div>
-            <div class="coach-thinking" id="coachThinking" style="display:none;">Thinking…</div>
+            <div class="coach-thinking" id="coachThinking" hidden>Thinking…</div>
           </div>
           <div class="coach-composer-wrap">
             <form class="coach-composer" id="coachComposerForm">
-              <textarea id="coachInput" class="coach-input" rows="2"
-                placeholder="Ask about focus, activity, planning, or your week…" maxlength="500"></textarea>
+              <textarea id="coachInput" class="coach-input" rows="2" placeholder="Ask about your focus, activity, or week…" maxlength="500" aria-label="Message Coach"></textarea>
               <div class="coach-composer-footer">
                 <span class="coach-char-count" id="coachCharCount">0/500</span>
-                <button type="submit" class="coach-send-btn" id="coachSendBtn" title="Send" aria-label="Send">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
+                <button type="submit" class="coach-send-btn" id="coachSendBtn" title="Send message" aria-label="Send message">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
                   </svg>
                 </button>
@@ -4132,11 +3766,11 @@
             </div>
           </div>
         </div>
-        <div class="coach-lock-overlay" id="coachLockOverlay">
+        <div class="coach-lock-overlay" id="coachLockOverlay" hidden>
           <div class="coach-lock-card">
-            <h3 id="coachLockTitle">Upgrade to Pro</h3>
-            <p id="coachLockText">Unlock your AI coach — personalized guidance from your tracked activity.</p>
-            <button type="button" class="button button-primary" id="coachUpgradeBtn" style="width:100%;">Activate cloud</button>
+            <h2 id="coachLockTitle">Activate Coach</h2>
+            <p id="coachLockText">Unlock personalized guidance from your tracked activity.</p>
+            <button type="button" class="button button-primary" id="coachUpgradeBtn">Activate cloud</button>
           </div>
         </div>
       </div>
@@ -4205,6 +3839,102 @@
           <button type="button" class="button button-secondary profile-full-button" id="editWorkPreferencesBtn">
             Edit work preferences
           </button>
+        </div>
+
+        <div class="card calendar-companion-card" id="calendarCompanionCard">
+          <div class="card-header calendar-companion-header">
+            <div class="card-title">Calendar companion</div>
+            <span class="calendar-companion-tier">Cloud</span>
+          </div>
+          <p id="calendarSummary" class="calendar-summary">No calendar connected</p>
+          <details class="calendar-manage-details" id="calendarManageDetails">
+            <summary>Manage calendars</summary>
+            <div class="calendar-details-body">
+          <p class="profile-card-intro">Your current event appears in Today. Choose whether to add a short evidence-based recap when it ends.</p>
+          <p id="calendarLicenseMessage" class="calendar-companion-note" role="status"></p>
+          <div class="calendar-provider-list" aria-label="Calendar connections">
+            <div class="calendar-provider-row">
+              <div><strong>Google Calendar</strong><span id="calendarGoogleState" data-calendar-state="google">Not connected</span></div>
+              <button type="button" class="button button-secondary" data-calendar-connect="google">Connect</button>
+              <button type="button" class="button button-ghost" data-calendar-disconnect="google" hidden>Disconnect</button>
+            </div>
+            <div class="calendar-provider-row">
+              <div><strong>Microsoft Calendar</strong><span id="calendarMicrosoftState" data-calendar-state="microsoft">Not connected</span></div>
+              <button type="button" class="button button-secondary" data-calendar-connect="microsoft">Connect</button>
+              <button type="button" class="button button-ghost" data-calendar-disconnect="microsoft" hidden>Disconnect</button>
+            </div>
+          </div>
+          <label class="consent-toggle-row" for="calendarAutoPublishToggle">
+            <input type="checkbox" id="calendarAutoPublishToggle" data-calendar-auto>
+            <span>Add a mini work report to events I organize</span>
+          </label>
+          <p class="privacy-detail">Includes events with guests. Guests may see the recap, and their calendar service may notify them. FlowSight never includes window titles or private activity descriptions. No report is posted when recorded activity is too brief to be useful or events overlap.</p>
+          <p id="calendarCompanionStatus" class="calendar-companion-note" role="status" aria-live="polite"></p>
+            </div>
+          </details>
+        </div>
+
+        <div class="card local-agent-settings" id="localAgentSettingsCard">
+          <div class="card-header"><div class="card-title">Local automations</div></div>
+          <p class="profile-card-intro">The local agent works in the background. It can suggest focus reminders while tracking; actions that change your work still need your confirmation.</p>
+          <details class="local-agent-browser-setup" id="localAgentBrowserSetup">
+            <summary>
+              <span class="local-agent-browser-summary-copy">
+                <strong>Connect your browser</strong>
+                <span>Optional site and tab actions in Arc or Chrome</span>
+              </span>
+              <span class="local-agent-browser-badge" id="localAgentBrowserStatus">Checking…</span>
+            </summary>
+            <ol class="local-agent-browser-steps">
+              <li>
+                <div class="local-agent-browser-step-copy">
+                  <strong>Install Browser Controls</strong>
+                  <p>Open the official Chrome Web Store page and add the extension to Arc or Chrome. Its pairing page opens automatically after installation.</p>
+                </div>
+                <div class="local-agent-install-actions" id="localAgentInstallActions" hidden>
+                  <button type="button" id="localAgentInstallChromeBtn" class="button button-secondary" hidden>Open Chrome Web Store</button>
+                  <button type="button" id="localAgentInstallEdgeBtn" class="button button-secondary" hidden>Open Edge Add-ons</button>
+                </div>
+                <p id="localAgentBrowserInstallStatus" class="local-agent-helper" role="status" aria-live="polite"></p>
+              </li>
+              <li>
+                <div class="local-agent-browser-step-copy">
+                  <strong>Pair on this computer</strong>
+                  <p>Copy the key below, paste it into the extension's pairing page, then choose <em>Save and connect</em>. If you closed that page, click the FlowSight extension icon to reopen it.</p>
+                </div>
+                <div class="local-agent-pairing">
+                  <div><span>Local port</span><output id="localAgentBrowserPort">—</output></div>
+                  <div><span>Pairing key</span><input id="localAgentBrowserToken" type="password" readonly autocomplete="off" aria-label="Pairing key, hidden for your privacy" value=""></div>
+                </div>
+                <button type="button" id="localAgentCopyBrowserKeyBtn" class="button button-secondary" disabled>Copy pairing key</button>
+              </li>
+              <li>
+                <div class="local-agent-browser-step-copy">
+                  <strong>Check the connection</strong>
+                  <p>Return to FlowSight after saving. Browser actions become available when the status above says Connected.</p>
+                </div>
+                <button type="button" id="localAgentCheckBrowserBtn" class="button button-secondary">Check connection</button>
+                <p id="localAgentBrowserCheckStatus" class="local-agent-helper" role="status" aria-live="polite"></p>
+              </li>
+            </ol>
+            <p class="local-agent-browser-privacy">The key stays on this device. The extension communicates with FlowSight through 127.0.0.1; browser actions still follow your confirmation settings.</p>
+          </details>
+          <details class="local-agent-details" id="localAgentManageDetails">
+            <summary>Tools and saved preferences</summary>
+            <div id="localAgentProposal" class="local-agent-proposal" hidden>
+              <span class="local-agent-proposal-kicker">Review action</span>
+              <p id="localAgentProposalSummary"></p>
+              <div class="local-agent-proposal-actions">
+                <button type="button" class="button button-secondary" id="localAgentCancelBtn">Cancel</button>
+                <button type="button" class="button button-primary" id="localAgentConfirmBtn">Confirm action</button>
+              </div>
+            </div>
+            <h2>Available actions</h2>
+            <div id="localAgentTools" class="local-agent-tools"></div>
+            <h2>What FlowSight remembers</h2>
+            <div id="localAgentMemory" class="local-agent-memory">No saved preferences.</div>
+          </details>
+          <p id="localAgentSettingsStatus" class="profile-form-status" role="status" aria-live="polite"></p>
         </div>
 
         <div class="card" id="desktopPresenceCard">
@@ -4289,9 +4019,9 @@
           <p class="privacy-detail" id="cloudSyncStatus">Off — activity stays on this device.</p>
           <label class="consent-toggle-row" for="cloudAiToggle">
             <input type="checkbox" id="cloudAiToggle">
-            <span>Share context with the cloud AI coach</span>
+            <span>Allow optional cloud AI processing</span>
           </label>
-          <p class="privacy-detail" id="cloudAiStatus">Off — the AI coach cannot receive activity or messages.</p>
+          <p class="privacy-detail" id="cloudAiStatus">Off — cloud AI features cannot receive activity.</p>
           <label class="consent-toggle-row" for="analyticsConsentToggle">
             <input type="checkbox" id="analyticsConsentToggle">
             <span>Share pseudonymous product analytics</span>
@@ -4444,19 +4174,12 @@
         </svg>
         <span class="nav-label">Insights</span>
       </button>
-      <button class="nav-item" data-tab="tabLocalAgent" id="navLocalAgent">
+      <button class="nav-item nav-pro nav-pro-locked" data-tab="tabCloudInsights" id="navCloudInsights" aria-label="Coach, Pro">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
-          <circle cx="12" cy="12" r="4"/>
-        </svg>
-        <span class="nav-label">Agent</span>
-      </button>
-      <button class="nav-item nav-pro nav-pro-locked" data-tab="tabCloudInsights" id="navCloudInsights">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/>
-          <path d="M5 19h14"/><path d="M8 19v-3"/><path d="M16 19v-3"/>
+          <path d="M5 19h14M8 19v-3M16 19v-3"/>
         </svg>
-        <span class="nav-label" id="navCloudInsightsLabel">Coach</span>
+        <span class="nav-label">Coach</span>
       </button>
       <button class="nav-item" data-tab="tabProfile" id="navProfile">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -4511,6 +4234,7 @@
       signInForCloudFeatures,
       signOutWorker,
     } from './auth-service.js';
+    import { hasPaidCalendarEntitlement } from './calendar-license.mjs';
     import {
       clearTrackingCheckpoint,
       loadTrackingCheckpoint,
@@ -4524,6 +4248,7 @@
     } from './status-report.mjs';
     import { renderStatusReportPdf } from './status-report-pdf.mjs';
     import { isWeeklyReportDue } from './weekly-report-schedule.mjs';
+    import { resolveTaskContext, transitionTaskDetail } from './today-task-context.mjs';
     import {
       buildTaskBreakdown,
       focusBarPercent,
@@ -4659,6 +4384,12 @@
     let currentUser = null;
     let authSession = null;
     let currentEntitlements = null;
+    let calendarStatus = null;
+    let calendarConnectPending = null;
+    let calendarConnectionPoll = null;
+    let calendarViewPoll = null;
+    let lastCalendarTaskKey = null;
+    const taskDetailsByContext = new Map();
     let notionIntegrationState = null;
     let notionSearchResults = [];
     let notionConnectionPoll = null;
@@ -4677,6 +4408,171 @@
       if (button) button.style.display = isNotionPro() ? 'inline-flex' : 'none';
       if (!isNotionPro()) closeNotionIntegrationModal();
     }
+
+    function canUseCalendarCompanion() {
+      return hasPaidCalendarEntitlement(currentEntitlements, currentUser?.id);
+    }
+
+    function activeCalendarTask() {
+      return canUseCalendarCompanion() ? calendarStatus?.current || null : null;
+    }
+
+    function syncTodayTaskFields() {
+      const hasEvent = Boolean(activeCalendarTask());
+      const canIntegrate = Boolean(currentEntitlements?.can_integrations);
+      const integration = document.getElementById('todayIntegrationControls');
+      const manualLabel = document.getElementById('todayManualTaskLabel');
+      const manualInput = document.getElementById('manualTask');
+      if (integration) integration.hidden = !canIntegrate;
+      if (manualLabel) manualLabel.textContent = hasEvent ? 'Add context to this event (optional)' : 'Task description';
+      if (manualInput) manualInput.placeholder = hasEvent ? 'What are you doing during this event?' : 'What are you working on?';
+    }
+
+    function renderCalendarStatus() {
+      const status = calendarStatus || {};
+      const licensed = canUseCalendarCompanion();
+      for (const provider of ['google', 'microsoft']) {
+        const label = provider === 'google' ? 'Google' : 'Microsoft';
+        const connected = Boolean(status[`${provider}Connected`]);
+        const available = Boolean(status[`${provider}Available`]);
+        document.querySelectorAll(`[data-calendar-state="${provider}"]`).forEach((node) => {
+          node.textContent = connected ? 'Connected on this device'
+            : !available ? 'Connection not configured in this build'
+              : calendarConnectPending === provider ? 'Waiting for browser authorization…'
+                : 'Not connected';
+        });
+        document.querySelectorAll(`[data-calendar-connect="${provider}"]`).forEach((button) => {
+          button.hidden = connected;
+          button.disabled = !licensed || !available || calendarConnectPending === provider;
+          button.title = !licensed ? 'Requires an eligible FlowSight Cloud plan. The one-time local purchase does not include Calendar.'
+            : !available ? `${label} Calendar OAuth is not configured in this build.` : '';
+        });
+        document.querySelectorAll(`[data-calendar-disconnect="${provider}"]`).forEach((button) => {
+          button.hidden = !connected;
+        });
+      }
+      document.querySelectorAll('[data-calendar-auto]').forEach((input) => {
+        input.checked = Boolean(status.autoPublish);
+        input.disabled = !licensed || !(status.googleConnected || status.microsoftConnected);
+      });
+      const licenseMessage = document.getElementById('calendarLicenseMessage');
+      if (licenseMessage) licenseMessage.textContent = licensed ? '' : 'Calendar requires an eligible active FlowSight Cloud plan with integrations. The one-time local purchase does not include Cloud integrations.';
+      const onboardingLicenseMessage = document.getElementById('onboardingCalendarLicenseMessage');
+      if (onboardingLicenseMessage) onboardingLicenseMessage.hidden = licensed;
+      const event = activeCalendarTask();
+      const todayContext = document.getElementById('todayCalendarContext');
+      if (todayContext) todayContext.hidden = !event;
+      const taskSource = document.getElementById('todayTaskSource');
+      if (taskSource) taskSource.textContent = event ? `Now · ${event.provider === 'google' ? 'Google' : 'Microsoft'} Calendar` : '';
+      const overlapping = licensed && !event && status.overlapCount > 1;
+      const overlap = document.getElementById('todayCalendarOverlap');
+      if (overlap) overlap.hidden = !overlapping;
+      const idle = document.getElementById('todayCalendarIdle');
+      if (idle) {
+        idle.hidden = !licensed || !(status.googleConnected || status.microsoftConnected) || Boolean(event) || overlapping;
+        idle.textContent = status.lastError
+          ? 'Calendar is temporarily unavailable. Check the connection in You.'
+          : 'Calendar connected · your current event will appear here automatically.';
+      }
+      if (event) {
+        const time = (value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('todayCalendarTitle').textContent = event.title;
+        document.getElementById('todayCalendarTime').textContent = `${time(event.startAt)}–${time(event.endAt)}`;
+      }
+      const todayOpenButton = document.getElementById('todayCalendarOpenBtn');
+      if (todayOpenButton) todayOpenButton.hidden = !event?.webLink;
+      const accountKey = currentUser?.id || 'local';
+      const eventKey = event
+        ? `${accountKey}:${event.provider}:${event.calendarId}:${event.id}:${event.startAt}`
+        : `${accountKey}:manual`;
+      if (eventKey !== lastCalendarTaskKey) {
+        const manualInput = document.getElementById('manualTask');
+        if (manualInput) manualInput.value = transitionTaskDetail(taskDetailsByContext, lastCalendarTaskKey, eventKey, manualInput.value);
+        lastCalendarTaskKey = eventKey;
+        if (isMonitoring) pushTaskContextToBackend();
+      }
+      syncTodayTaskFields();
+      const summary = document.getElementById('calendarSummary');
+      if (summary) summary.textContent = !licensed ? 'Cloud plan required · connect after activation'
+        : status.googleConnected || status.microsoftConnected
+            ? `${status.googleConnected ? 'Google' : ''}${status.googleConnected && status.microsoftConnected ? ' + ' : ''}${status.microsoftConnected ? 'Microsoft' : ''} connected · ${status.autoPublish ? 'mini reports on' : 'mini reports off'}`
+            : 'Connect Google or Microsoft Calendar';
+      const message = document.getElementById('calendarCompanionStatus');
+      if (message) message.textContent = status.lastError || status.lastReport || (status.autoPublish
+        ? 'Automatic recap is on for events you organize while FlowSight is open.'
+        : 'Automatic recap is off. Your calendar stays read-only.');
+    }
+
+    async function loadCalendarStatus() {
+      calendarStatus = await invoke('get_calendar_companion_status');
+      renderCalendarStatus();
+      return calendarStatus;
+    }
+
+    async function connectCalendar(provider) {
+      if (!canUseCalendarCompanion()) {
+        showToast('Calendar requires an eligible FlowSight Cloud plan with integrations.', 'error');
+        return;
+      }
+      if (calendarConnectPending) return;
+      calendarConnectPending = provider;
+      renderCalendarStatus();
+      try {
+        await invoke('start_calendar_oauth', { provider });
+        showToast(`Finish ${provider === 'google' ? 'Google' : 'Microsoft'} authorization in your browser.`, 'success');
+        let attempts = 0;
+        clearInterval(calendarConnectionPoll);
+        calendarConnectionPoll = setInterval(async () => {
+          attempts += 1;
+          try {
+            const status = await loadCalendarStatus();
+            if (status[`${provider}Connected`] || status.lastError || attempts >= 90) {
+              clearInterval(calendarConnectionPoll);
+              calendarConnectionPoll = null;
+              calendarConnectPending = null;
+              renderCalendarStatus();
+              if (status[`${provider}Connected`]) showToast('Calendar connected', 'success');
+              else if (attempts >= 90) showToast('Calendar authorization timed out. Try connecting again.', 'error');
+            }
+          } catch (_) { /* the next poll can recover */ }
+        }, 2000);
+      } catch (error) {
+        calendarConnectPending = null;
+        renderCalendarStatus();
+        showToast(String(error), 'error');
+      }
+    }
+
+    document.addEventListener('click', async (event) => {
+      const connect = event.target.closest('[data-calendar-connect]');
+      if (connect) { await connectCalendar(connect.dataset.calendarConnect); return; }
+      const disconnect = event.target.closest('[data-calendar-disconnect]');
+      if (!disconnect) return;
+      const provider = disconnect.dataset.calendarDisconnect;
+      try {
+        await invoke('disconnect_calendar', { provider });
+        await loadCalendarStatus();
+        showToast('Calendar disconnected from this device', 'success');
+      } catch (error) { showToast(String(error), 'error'); }
+    });
+
+    document.addEventListener('change', async (event) => {
+      if (!event.target.matches('[data-calendar-auto]')) return;
+      const enabled = event.target.checked;
+      try {
+        await invoke('set_calendar_auto_publish', { enabled });
+        await loadCalendarStatus();
+        showToast(enabled ? 'Calendar mini reports enabled' : 'Calendar mini reports disabled', 'success');
+      } catch (error) {
+        renderCalendarStatus();
+        showToast(String(error), 'error');
+      }
+    });
+
+    document.getElementById('todayCalendarOpenBtn')?.addEventListener('click', async () => {
+      try { await invoke('open_current_calendar_event'); }
+      catch (error) { showToast(String(error), 'error'); }
+    });
 
     function setNotionIntegrationMessage(message, isError = false) {
       const element = document.getElementById('notionIntegrationMessage');
@@ -4948,17 +4844,21 @@
       el.style.color = isError ? 'hsl(var(--destructive))' : 'hsl(var(--muted-foreground))';
     }
 
+    function hasCloudAccountSession() {
+      return ['cloud', 'worker', 'google', 'manual'].includes(authSession?.provider);
+    }
+
     function updateLicenseActivationCard() {
       const card = document.getElementById('licenseActivationCard');
       if (!card) return;
-      card.style.display = authSession && !isPaidActive() ? '' : 'none';
-      if (!authSession || isPaidActive()) {
+      card.style.display = hasCloudAccountSession() && !isPaidActive() ? '' : 'none';
+      if (!hasCloudAccountSession() || isPaidActive()) {
         setLicenseActivationStatus('');
       }
     }
 
     function handleActivateCloudClick() {
-      if (authSession && !isPaidActive()) {
+      if (hasCloudAccountSession() && !isPaidActive()) {
         switchTab('tabProfile');
         document.getElementById('profileLicenseCode')?.focus();
         return;
@@ -4987,7 +4887,7 @@
           entitlements = await invoke('refresh_entitlements');
         }
 
-        await persistEntitlements(entitlements);
+        await persistEntitlements();
 
         if (!isPaidActive()) {
           throw new Error('License could not be activated. Check your code and try again.');
@@ -5010,13 +4910,10 @@
       const badge = document.getElementById('loginBadge');
       const activateBtn = document.getElementById('activateCloudBtn');
       const logoutBtn = document.getElementById('logoutBtn');
-      const navCloud = document.getElementById('navCloudInsights');
       const integrationsCard = document.getElementById('integrationsCard');
       const integrationsProviderRow = document.getElementById('integrationsProviderRow');
       const upgradeHint = document.getElementById('integrationsUpgradeHint');
       const teamCodeGroup = document.getElementById('teamCodeGroup');
-      const todayIntegrationControls = document.getElementById('todayIntegrationControls');
-      const manualTask = document.getElementById('manualTask');
       const syncToJiraWrapper = document.getElementById('syncToJiraWrapper');
       const licenseCard = document.getElementById('licenseActivationCard');
       const canIntegrate = Boolean(currentEntitlements?.can_integrations);
@@ -5025,12 +4922,11 @@
 
       badge.classList.remove('plan-badge-free', 'plan-badge-individual', 'plan-badge-team', 'badge-success');
 
-      if (todayIntegrationControls) todayIntegrationControls.style.display = canIntegrate ? '' : 'none';
-      if (manualTask) manualTask.style.display = canIntegrate ? 'none' : 'block';
+      syncTodayTaskFields();
       if (syncToJiraWrapper) syncToJiraWrapper.style.display = canIntegrate ? '' : 'none';
 
       if (!isPaidActive()) {
-        if (authSession) {
+        if (hasCloudAccountSession()) {
           badge.textContent = 'Cloud account';
           badge.classList.add('plan-badge-free');
           if (activateBtn) {
@@ -5047,10 +4943,6 @@
           }
           if (logoutBtn) logoutBtn.style.display = 'none';
         }
-        if (navCloud) {
-          navCloud.style.display = '';
-          navCloud.classList.add('nav-pro-locked');
-        }
         if (integrationsCard) integrationsCard.classList.add('paid-feature-locked');
         if (integrationsProviderRow) integrationsProviderRow.style.display = 'none';
         if (upgradeHint) upgradeHint.style.display = 'block';
@@ -5064,7 +4956,7 @@
       if (licenseCard) licenseCard.style.display = 'none';
 
       const plan = currentEntitlements.plan || 'paid';
-      badge.textContent = plan === 'individual' ? 'Individual' : plan === 'team' ? 'Team' : 'Licensed';
+      badge.textContent = plan === 'individual' ? 'Individual Pro' : plan === 'team' ? 'Team' : 'Licensed';
       badge.classList.add(plan === 'individual' ? 'plan-badge-individual' : 'plan-badge-team');
       if (activateBtn) activateBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
@@ -5073,28 +4965,14 @@
       if (upgradeHint) upgradeHint.style.display = canIntegrate ? 'none' : 'block';
       if (teamCodeGroup) teamCodeGroup.style.display = currentEntitlements.plan === 'team' ? '' : 'none';
 
-      if (navCloud) {
-        navCloud.style.display = '';
-        navCloud.classList.toggle('nav-pro-locked', !currentEntitlements.can_cloud_ai);
-      }
       updateCoachLockState();
       updateNotionControls();
     }
 
-    async function persistEntitlements(entitlements) {
-      currentEntitlements = entitlements;
-      await invoke('save_entitlements_command', {
-        entitlements: {
-          plan: entitlements.plan ?? null,
-          status: entitlements.status ?? 'free',
-          team_ids: entitlements.team_ids ?? entitlements.teamIds ?? [],
-          active_team_id: entitlements.active_team_id ?? entitlements.activeTeamId ?? null,
-          can_sync: Boolean(entitlements.can_sync ?? entitlements.canSync),
-          can_cloud_ai: Boolean(entitlements.can_cloud_ai ?? entitlements.canCloudAi),
-          can_integrations: Boolean(entitlements.can_integrations ?? entitlements.canIntegrations),
-        },
-      }).catch((e) => console.warn('[Entitlements] save failed:', e));
+    async function persistEntitlements() {
+      currentEntitlements = await invoke('get_entitlements');
       updatePlanBadge();
+      renderCalendarStatus();
       renderPrivacySettings();
     }
 
@@ -5148,6 +5026,7 @@
         avatar.src = '';
       }
       updatePlanBadge();
+      renderCalendarStatus();
       renderPrivacySettings();
     }
 
@@ -5173,10 +5052,10 @@
 
       try {
         const session = await invoke('get_auth_session');
-        if (session) {
+        if (session && ['google', 'manual'].includes(session.provider)) {
           authSession = session;
           currentUser = session.user;
-          await invoke('refresh_entitlements').then(persistEntitlements).catch(() => {});
+          await invoke('refresh_entitlements').then(() => persistEntitlements()).catch(() => {});
           updateProfileHeader();
           return true;
         }
@@ -5197,7 +5076,7 @@
             },
           };
           currentUser = authSession.user;
-          await invoke('refresh_entitlements').then(persistEntitlements).catch(() => {});
+          await invoke('refresh_entitlements').then(() => persistEntitlements()).catch(() => {});
           updateProfileHeader();
           await loadUserTeams();
           return true;
@@ -5291,7 +5170,8 @@
           email: result.user.email,
         });
 
-        await persistEntitlements(result.entitlements);
+        await invoke('refresh_entitlements');
+        await persistEntitlements();
         authSession = workerAuthSession;
         currentUser = workerAuthSession.user;
         hideCloudActivationPanel();
@@ -6172,106 +6052,80 @@
     let coachUsage = null;
 
     function canUseCoachChat() {
-      return Boolean(
-        authSession &&
-        currentEntitlements &&
-        currentEntitlements.can_cloud_ai &&
-        privacySettings?.cloudAiEnabled &&
-        isPaidActive()
-      );
+      return Boolean(authSession && currentEntitlements?.can_cloud_ai &&
+        privacySettings?.cloudAiEnabled && isPaidActive());
     }
 
     function updateCoachLockState() {
-      const shell = document.getElementById('coachChatShell');
       const overlay = document.getElementById('coachLockOverlay');
-      const title = document.getElementById('coachLockTitle');
-      const text = document.getElementById('coachLockText');
-      const btn = document.getElementById('coachUpgradeBtn');
+      const nav = document.getElementById('navCloudInsights');
+      if (!overlay) return;
       const locked = !canUseCoachChat();
-
-      if (shell) shell.classList.toggle('is-locked', locked);
-      if (overlay) overlay.classList.toggle('visible', locked);
-
-      if (locked && title && text && btn) {
-        if (!authSession) {
-          title.textContent = 'Upgrade to Pro';
-          text.textContent = 'Unlock your AI coach — personalized guidance from your tracked activity.';
-          btn.textContent = 'Activate cloud';
-        } else if (!isPaidActive()) {
-          title.textContent = 'Upgrade to Pro';
-          text.textContent = 'Activate your Individual or Team license to chat with your AI coach.';
-          btn.textContent = 'Activate license';
-        } else if (!privacySettings?.cloudAiEnabled) {
-          title.textContent = 'Cloud AI sharing is off';
-          text.textContent = 'Enable cloud AI in Profile > Privacy & data before sending messages or activity context.';
-          btn.textContent = 'Review privacy settings';
-        } else {
-          title.textContent = 'Pro feature';
-          text.textContent = 'Your plan does not include the AI coach yet. Upgrade to Pro to continue.';
-          btn.textContent = 'View Profile';
-        }
+      overlay.hidden = !locked;
+      nav?.classList.toggle('nav-pro-locked', locked);
+      if (!locked) return;
+      const title = document.getElementById('coachLockTitle');
+      const message = document.getElementById('coachLockText');
+      const button = document.getElementById('coachUpgradeBtn');
+      if (!authSession) {
+        title.textContent = 'Activate Coach';
+        message.textContent = 'Sign in and activate a cloud plan to talk with your AI Coach.';
+        button.textContent = 'Activate cloud';
+      } else if (!isPaidActive()) {
+        title.textContent = 'Activate Coach';
+        message.textContent = 'Activate an eligible cloud license to use your AI Coach.';
+        button.textContent = 'Activate license';
+      } else if (!currentEntitlements?.can_cloud_ai) {
+        title.textContent = 'Coach is not in this plan';
+        message.textContent = 'Your current plan does not include cloud AI chat.';
+        button.textContent = 'View plan';
+      } else {
+        title.textContent = 'Cloud AI is off';
+        message.textContent = 'Enable cloud AI in You → Privacy & data before sharing messages or work context.';
+        button.textContent = 'Review privacy settings';
       }
     }
 
-    function renderCoachMarkdown(text) {
-      let html = escapeHtml(text || '');
-      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-      html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
-      html = html.replace(/^-\s+(.+)$/gm, '<li>$1</li>');
-      html = html.replace(/(<li>.*<\/li>\n?)+/g, (block) => `<ul>${block}</ul>`);
-      html = html.replace(/\n\n/g, '</p><p>');
+    function renderCoachMarkdown(value) {
+      let html = escapeHtml(value || '');
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/^-\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, (block) => `<ul>${block}</ul>`)
+        .replace(/\n\n/g, '</p><p>');
       html = `<p>${html}</p>`;
-      html = html.replace(/<p>\s*<\/p>/g, '');
-      html = html.replace(/<p>(<h[123]>)/g, '$1');
-      html = html.replace(/(<\/h[123]>)<\/p>/g, '$1');
-      html = html.replace(/<p>(<ul>)/g, '$1');
-      html = html.replace(/(<\/ul>)<\/p>/g, '$1');
-      return html;
+      return html.replace(/<p>\s*<\/p>/g, '')
+        .replace(/<p>(<h[123]>)/g, '$1')
+        .replace(/(<\/h[123]>)<\/p>/g, '$1')
+        .replace(/<p>(<ul>)/g, '$1')
+        .replace(/(<\/ul>)<\/p>/g, '$1');
     }
 
     function renderCoachMessages() {
       const container = document.getElementById('coachMessages');
       if (!container) return;
-
       if (!coachMessages.length) {
-        container.innerHTML = `
-          <div class="coach-empty" id="coachEmptyState">
-            <div class="coach-empty-title">What's next for your work?</div>
-            <div class="coach-empty-sub">Sustained work, context, and planning — grounded in your tracked activity.</div>
-          </div>`;
+        container.innerHTML = '<div class="coach-empty" id="coachEmptyState"><div class="coach-empty-title">What\'s next for your work?</div><div class="coach-empty-sub">Ask about focus, activity, and planning, grounded in your tracked work.</div></div>';
         return;
       }
-
-      container.innerHTML = coachMessages.map((msg) => {
-        const role = msg.role === 'assistant' ? 'assistant' : 'user';
-        const body = role === 'assistant'
-          ? renderCoachMarkdown(msg.content)
-          : escapeHtml(msg.content);
-        return `
-          <div class="coach-msg ${role}">
-            <div class="coach-msg-bubble">${body}</div>
-          </div>`;
+      container.innerHTML = coachMessages.map((item) => {
+        const role = item.role === 'assistant' ? 'assistant' : 'user';
+        const body = role === 'assistant' ? renderCoachMarkdown(item.content) : escapeHtml(item.content);
+        return `<div class="coach-msg ${role}"><div class="coach-msg-bubble">${body}</div></div>`;
       }).join('');
-
       container.scrollTop = container.scrollHeight;
     }
 
     function updateCoachUsageBar() {
       const bar = document.getElementById('coachUsageBar');
       if (!bar) return;
-      if (!coachUsage || !coachUsage.limit) {
-        bar.style.display = 'none';
-        return;
-      }
-      bar.style.display = '';
-      const remainingText = coachUsage.remaining > 0
-        ? ` · ${coachUsage.remaining} left`
-        : ' · limit reached';
-      bar.textContent = `Coach: ${coachUsage.used}/${coachUsage.limit} prompts this month${remainingText}`;
-      bar.classList.toggle('warn', coachUsage.limit > 0 && coachUsage.remaining <= Math.ceil(coachUsage.limit * 0.2));
+      bar.hidden = !coachUsage?.limit;
+      if (bar.hidden) return;
+      bar.textContent = `Coach: ${coachUsage.used}/${coachUsage.limit} prompts this month · ${coachUsage.remaining > 0 ? `${coachUsage.remaining} left` : 'limit reached'}`;
+      bar.classList.toggle('warn', coachUsage.remaining <= Math.ceil(coachUsage.limit * .2));
     }
 
     async function loadCoachChatUsage() {
@@ -6281,131 +6135,100 @@
         return;
       }
       try {
-        const data = await invoke('get_coach_chat_usage');
-        coachUsage = data?.usage ?? data;
+        const result = await invoke('get_coach_chat_usage');
+        coachUsage = result?.usage ?? result;
         updateCoachUsageBar();
-      } catch (e) {
-        console.warn('[Coach] usage load failed:', e);
+      } catch (error) {
+        console.warn('[Coach] usage unavailable:', error);
       }
     }
 
     async function loadCoachChat() {
       updateCoachLockState();
-      if (!canUseCoachChat()) return;
-
-      try {
-        coachMessages = await invoke('get_coach_chat_messages') || [];
-      } catch (e) {
-        console.warn('[Coach] messages load failed:', e);
-        coachMessages = [];
-      }
-      renderCoachMessages();
-      await loadCoachChatUsage();
-    }
-
-    async function sendCoachMessage(text) {
-      const trimmed = (text || '').trim();
-      if (!trimmed || coachSending) return;
       if (!canUseCoachChat()) {
-        updateCoachLockState();
-        switchTab('tabCloudInsights');
+        coachMessages = [];
+        renderCoachMessages();
+        await loadCoachChatUsage();
         return;
       }
-
-      coachSending = true;
-      const input = document.getElementById('coachInput');
-      const thinking = document.getElementById('coachThinking');
-      const sendBtn = document.getElementById('coachSendBtn');
-      if (input) input.value = '';
-      updateCoachCharCount();
-      if (thinking) thinking.style.display = '';
-      if (sendBtn) sendBtn.disabled = true;
-
-      coachMessages.push({
-        id: `u-${Date.now()}`,
-        role: 'user',
-        content: trimmed,
-      });
-      renderCoachMessages();
-
       try {
-        const result = await invoke('send_coach_chat_message', { message: trimmed });
-        if (Array.isArray(result?.messages)) {
-          coachMessages = result.messages;
-        } else if (result?.reply) {
-          coachMessages.push({
-            id: `a-${Date.now()}`,
-            role: 'assistant',
-            content: result.reply,
-          });
-        }
-        if (result?.usage) {
-          coachUsage = result.usage;
-          updateCoachUsageBar();
-        } else {
-          await loadCoachChatUsage();
-        }
-      } catch (e) {
-        coachMessages.push({
-          id: `a-${Date.now()}`,
-          role: 'assistant',
-          content: String(e),
-        });
-        showToast(String(e), 'error', 4500);
-      } finally {
-        coachSending = false;
-        if (thinking) thinking.style.display = 'none';
-        if (sendBtn) sendBtn.disabled = false;
+        coachMessages = await invoke('get_coach_chat_messages') || [];
         renderCoachMessages();
+      } catch (error) {
+        console.warn('[Coach] conversation unavailable:', error);
+        showToast('Could not load your Coach conversation.', 'error');
       }
+      await loadCoachChatUsage();
     }
 
     function updateCoachCharCount() {
       const input = document.getElementById('coachInput');
       const counter = document.getElementById('coachCharCount');
       if (!input || !counter) return;
-      const len = input.value.length;
-      counter.textContent = `${len}/${COACH_MAX_CHARS}`;
-      counter.classList.toggle('warn', len >= COACH_MAX_CHARS);
+      counter.textContent = `${input.value.length}/${COACH_MAX_CHARS}`;
+      counter.classList.toggle('warn', input.value.length >= COACH_MAX_CHARS);
     }
 
-    document.getElementById('coachComposerForm')?.addEventListener('submit', (e) => {
-      e.preventDefault();
+    async function sendCoachMessage(value) {
+      const message = (value || '').trim();
+      if (!message || coachSending) return;
+      if (!canUseCoachChat()) {
+        updateCoachLockState();
+        return;
+      }
+      coachSending = true;
       const input = document.getElementById('coachInput');
-      sendCoachMessage(input?.value || '');
-    });
+      const thinking = document.getElementById('coachThinking');
+      const button = document.getElementById('coachSendBtn');
+      if (input) input.value = '';
+      updateCoachCharCount();
+      thinking.hidden = false;
+      button.disabled = true;
+      const optimisticId = `u-${Date.now()}`;
+      coachMessages.push({ id: optimisticId, role: 'user', content: message });
+      renderCoachMessages();
+      try {
+        const result = await invoke('send_coach_chat_message', { message });
+        coachMessages = Array.isArray(result?.messages) ? result.messages : [
+          ...coachMessages,
+          { id: `a-${Date.now()}`, role: 'assistant', content: result?.reply || '' },
+        ];
+        coachUsage = result?.usage || null;
+        updateCoachUsageBar();
+        if (!coachUsage) await loadCoachChatUsage();
+      } catch (error) {
+        coachMessages = coachMessages.filter((item) => item.id !== optimisticId);
+        if (input) input.value = message;
+        updateCoachCharCount();
+        showToast(String(error), 'error', 4500);
+      } finally {
+        coachSending = false;
+        thinking.hidden = true;
+        button.disabled = false;
+        renderCoachMessages();
+      }
+    }
 
+    document.getElementById('coachComposerForm')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      sendCoachMessage(document.getElementById('coachInput')?.value);
+    });
     document.getElementById('coachInput')?.addEventListener('input', updateCoachCharCount);
-    document.getElementById('coachInput')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendCoachMessage(e.target.value);
+    document.getElementById('coachInput')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendCoachMessage(event.target.value);
       }
     });
-
-    document.querySelectorAll('[data-coach-prompt]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (!canUseCoachChat()) {
-          switchTab('tabCloudInsights');
-          return;
-        }
-        sendCoachMessage(btn.getAttribute('data-coach-prompt'));
-      });
+    document.querySelectorAll('[data-coach-prompt]').forEach((button) => {
+      button.addEventListener('click', () => sendCoachMessage(button.dataset.coachPrompt));
     });
-
     document.getElementById('coachUpgradeBtn')?.addEventListener('click', () => {
-      if (!authSession) {
-        showCloudActivationPanel();
-        return;
-      }
-      if (!isPaidActive()) {
-        switchTab('tabProfile');
-        document.getElementById('profileLicenseCode')?.focus();
-        return;
-      }
+      if (!authSession) return showCloudActivationPanel();
       switchTab('tabProfile');
+      if (!isPaidActive()) document.getElementById('profileLicenseCode')?.focus();
+      else document.getElementById('cloudAiToggle')?.focus();
     });
-
     updateCoachCharCount();
 
     function escapeHtml(text) {
@@ -7023,6 +6846,9 @@
       refreshTodayView();
       if (todayRefreshInterval) clearInterval(todayRefreshInterval);
       todayRefreshInterval = setInterval(refreshTodayView, 60000);
+      await loadCalendarStatus().catch((error) => console.warn('[Calendar] Status unavailable:', error));
+      if (calendarViewPoll) clearInterval(calendarViewPoll);
+      calendarViewPoll = setInterval(() => loadCalendarStatus().catch(() => {}), 30000);
 
       // If logged in with Jira on a paid plan, fetch tasks
       if (currentEntitlements?.can_integrations && authSession && authSession.provider === 'jira') {
@@ -7174,6 +7000,7 @@
         case 2: return onboardingState.workActivities.length > 0;
         case 3: return onboardingState.improvementGoals.length > 0;
         case 4: return onboardingState.dailyGoalHours != null;
+        case 5: return true;
         default: return false;
       }
     }
@@ -7206,8 +7033,9 @@
       if (!body || !continueBtn) return;
 
       const step = onboardingState.step;
-      fill.style.width = `${((step + 1) / 5) * 100}%`;
+      fill.style.width = `${((step + 1) / 6) * 100}%`;
       backBtn.style.visibility = step === 0 ? 'hidden' : 'visible';
+      document.getElementById('onboardingSkipCalendarBtn').hidden = step !== 5;
 
       if (step === 0) {
         body.innerHTML = `
@@ -7304,7 +7132,32 @@
             renderOnboardingStep();
           };
         });
+        continueBtn.textContent = 'Continue';
+      } else if (step === 5) {
+        body.innerHTML = `
+          <h1 class="onboarding-title">Bring your calendar into focus</h1>
+          <p class="onboarding-subtitle">Optional for cloud plans. See your current event and, if you choose, add a short work recap after it ends.</p>
+          <p class="onboarding-calendar-note" id="onboardingCalendarLicenseMessage" hidden>Calendar requires an eligible FlowSight Cloud plan with integrations. The one-time local purchase does not include it. Sign in and activate your Cloud plan in You after setup.</p>
+          <div class="onboarding-calendar-list">
+            <div class="calendar-provider-row">
+              <div><strong>Google Calendar</strong><span data-calendar-state="google">Not connected</span></div>
+              <button type="button" class="button button-secondary" data-calendar-connect="google">Connect</button>
+              <button type="button" class="button button-ghost" data-calendar-disconnect="google" hidden>Disconnect</button>
+            </div>
+            <div class="calendar-provider-row">
+              <div><strong>Microsoft Calendar</strong><span data-calendar-state="microsoft">Not connected</span></div>
+              <button type="button" class="button button-secondary" data-calendar-connect="microsoft">Connect</button>
+              <button type="button" class="button button-ghost" data-calendar-disconnect="microsoft" hidden>Disconnect</button>
+            </div>
+          </div>
+          <label class="consent-toggle-row" for="onboardingCalendarAutoPublishToggle">
+            <input type="checkbox" id="onboardingCalendarAutoPublishToggle" data-calendar-auto>
+            <span>Add a mini report to events I organize</span>
+          </label>
+          <p class="onboarding-calendar-note">If guests are invited, they may see the recap or receive a calendar update. No window titles or private descriptions are included. You can change this later in Settings.</p>`;
         continueBtn.textContent = 'Finish setup';
+        renderCalendarStatus();
+        loadCalendarStatus().catch(() => {});
       }
 
       continueBtn.disabled = !onboardingCanContinue();
@@ -7329,6 +7182,7 @@
       overlay?.classList.add('visible');
       overlay?.setAttribute('aria-hidden', 'false');
       renderOnboardingStep();
+      loadCalendarStatus().catch(() => {});
     }
 
     function hideOnboardingWizard() {
@@ -7339,7 +7193,7 @@
 
     async function onboardingContinue() {
       if (!onboardingCanContinue()) return;
-      if (onboardingState.step < 4) {
+      if (onboardingState.step < 5) {
         await persistUserPreferences({}, false);
         onboardingState.step += 1;
         renderOnboardingStep();
@@ -7367,7 +7221,7 @@
         const btn = document.getElementById('onboardingContinueBtn');
         if (btn) {
           btn.disabled = !onboardingCanContinue();
-          btn.textContent = onboardingState.step === 4 ? 'Finish setup' : 'Continue';
+          btn.textContent = onboardingState.step === 5 ? 'Finish setup' : 'Continue';
         }
       }
     }
@@ -7381,6 +7235,9 @@
     }
 
     document.getElementById('onboardingContinueBtn')?.addEventListener('click', () => {
+      onboardingContinue().catch((e) => showToast(String(e), 'error'));
+    });
+    document.getElementById('onboardingSkipCalendarBtn')?.addEventListener('click', () => {
       onboardingContinue().catch((e) => showToast(String(e), 'error'));
     });
     document.getElementById('onboardingBackBtn')?.addEventListener('click', () => {
@@ -7576,8 +7433,8 @@
       }
       if (aiStatus) {
         aiStatus.textContent = settings.cloudAiEnabled
-          ? 'On — coach data is processed by FlowSight and Azure OpenAI; cloud-generated individual reports may use OpenRouter and its selected model provider.'
-          : 'Off — the AI coach cannot receive activity or messages.';
+          ? 'On — Coach can process messages and selected work context in the cloud. The proactive agent stays local.'
+          : 'Off — Coach cannot receive messages or activity.';
       }
       updateCoachLockState();
     }
@@ -7707,7 +7564,7 @@
       const enabled = event.target.checked;
       try {
         if (enabled && (!authSession || !currentEntitlements?.can_cloud_ai)) {
-          throw new Error('Sign in with a plan that includes the cloud AI coach first.');
+          throw new Error('Sign in with a plan that includes cloud AI first.');
         }
         await applyPrivacyPatch({ cloudAiEnabled: enabled });
         showToast(enabled ? 'Cloud AI sharing enabled' : 'Cloud AI sharing disabled', 'success');
@@ -8080,12 +7937,8 @@
 
     const refreshJira = refreshTasks;
 
-    document.getElementById('jiraSelect').onchange = (e) => {
-      if (e.target.value === 'MANUAL') {
-        document.getElementById('manualTask').style.display = 'block';
-      } else {
-        document.getElementById('manualTask').style.display = 'none';
-      }
+    document.getElementById('jiraSelect').onchange = () => {
+      syncTodayTaskFields();
       if (isMonitoring) pushTaskContextToBackend();
     };
 
@@ -8094,23 +7947,14 @@
     });
 
     function getTaskContext() {
-      let task = 'General';
-      let jiraTicket = null;
       const sel = document.getElementById('jiraSelect');
-      const manualTask = document.getElementById('manualTask');
-
-      if (!currentEntitlements?.can_integrations) {
-        task = manualTask?.value?.trim() || 'General';
-        return { task, jiraTicket };
-      }
-
-      if (sel.value && sel.value !== 'MANUAL' && sel.value !== 'General') {
-        jiraTicket = sel.value;
-        task = sel.options[sel.selectedIndex].text;
-      } else if (sel.value === 'MANUAL') {
-        task = manualTask?.value?.trim() || 'General';
-      }
-      return { task, jiraTicket };
+      return resolveTaskContext({
+        calendarEvent: activeCalendarTask(),
+        canIntegrate: Boolean(currentEntitlements?.can_integrations),
+        selectedValue: sel?.value,
+        selectedLabel: sel?.selectedOptions?.[0]?.textContent,
+        manualTask: document.getElementById('manualTask')?.value,
+      });
     }
 
     // ===== TAB NAVIGATION =====
@@ -8232,7 +8076,8 @@
     }
 
     function checkScheduledReport() {
-      if (!weeklyReportsReady || scheduledReportCheckPromise) return scheduledReportCheckPromise;
+      if (!weeklyReportsReady) return Promise.resolve();
+      if (scheduledReportCheckPromise) return scheduledReportCheckPromise;
       scheduledReportCheckPromise = (async () => {
         const schedule = await invoke('get_weekly_report_schedule');
         weeklyReportSchedule = schedule;
@@ -8328,27 +8173,24 @@
     });
     let pendingLocalAgentAction = null;
     let localAgentBusy = false;
+    let localBrowserPairing = null;
+    let browserPairingPollTimer = null;
 
-    function appendLocalAgentMessage(role, value) {
-      const log = document.getElementById('localAgentLog');
-      log.dataset.hydrated = 'true';
-      log.querySelector('.local-agent-empty')?.remove();
-      const bubble = document.createElement('div');
-      bubble.className = 'local-agent-message';
-      bubble.dataset.role = role;
-      bubble.textContent = value;
-      log.appendChild(bubble);
-      log.scrollTop = log.scrollHeight;
+    function setLocalAgentStatus(role, value) {
+      const status = document.getElementById('localAgentSettingsStatus');
+      if (status) {
+        status.textContent = value;
+        status.dataset.state = role;
+      }
+      if (role === 'error') showToast(value, 'error');
     }
 
     function setLocalAgentBusy(busy) {
       localAgentBusy = busy;
-      for (const id of ['localAgentAskBtn', 'localAgentConfirmBtn', 'localAgentCancelBtn']) {
+      for (const id of ['localAgentConfirmBtn', 'localAgentCancelBtn']) {
         const button = document.getElementById(id);
         if (button) button.disabled = busy;
       }
-      const ask = document.getElementById('localAgentAskBtn');
-      if (ask) ask.textContent = busy ? 'Working…' : 'Ask local agent';
     }
 
     function showLocalAgentProposal(proposal) {
@@ -8356,7 +8198,10 @@
       const panel = document.getElementById('localAgentProposal');
       panel.hidden = !proposal;
       document.getElementById('localAgentProposalSummary').textContent = proposal?.summary || '';
-      if (proposal) panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (proposal) {
+        document.getElementById('localAgentManageDetails').open = true;
+        panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
     }
 
     function describeLocalAgentResult(result) {
@@ -8389,41 +8234,64 @@
       return JSON.stringify(result, null, 2);
     }
 
+    function renderBrowserPairing(browser) {
+      localBrowserPairing = browser;
+      const status = document.getElementById('localAgentBrowserStatus');
+      status.textContent = !browser ? 'Unavailable' : browser.connected ? 'Connected' : 'Not connected';
+      status.dataset.state = !browser ? 'unavailable' : browser.connected ? 'connected' : 'disconnected';
+      document.getElementById('localAgentBrowserPort').textContent = browser?.port || '—';
+      document.getElementById('localAgentBrowserToken').value = browser?.token || '';
+      document.getElementById('localAgentCopyBrowserKeyBtn').disabled = !browser?.token;
+      const chromeAvailable = Boolean(browser?.chromeStoreAvailable);
+      const edgeAvailable = Boolean(browser?.edgeStoreAvailable);
+      document.getElementById('localAgentInstallChromeBtn').hidden = !chromeAvailable;
+      document.getElementById('localAgentInstallEdgeBtn').hidden = !edgeAvailable;
+      document.getElementById('localAgentInstallActions').hidden = !(chromeAvailable || edgeAvailable);
+      document.getElementById('localAgentBrowserInstallStatus').textContent = !browser
+        ? 'The local browser bridge is unavailable. Restart FlowSight and try again.'
+        : chromeAvailable || edgeAvailable
+          ? 'The store controls installation. If its page is not available yet, Google or Microsoft may still be reviewing the extension.'
+          : 'The official store listing is not available in this build yet. Other local tools still work.';
+      const checkStatus = document.getElementById('localAgentBrowserCheckStatus');
+      if (browser?.connected) {
+        checkStatus.textContent = 'Ready. You can use browser actions from local automations.';
+      } else if (checkStatus.textContent.startsWith('Ready.')) {
+        checkStatus.textContent = 'The connection was lost. Reopen the extension and choose Save and connect.';
+      }
+      document.querySelectorAll('#localAgentTools .local-agent-tool').forEach((tool) => {
+        if (tool.textContent.startsWith('browser.')) {
+          if (browser?.connected) delete tool.dataset.status;
+          else tool.dataset.status = 'needs-connection';
+        }
+      });
+    }
+
+    async function refreshBrowserPairing() {
+      let browser = null;
+      try { browser = await invoke('get_browser_pairing'); }
+      catch (_) { /* The status and recovery text are rendered below. */ }
+      renderBrowserPairing(browser);
+      return browser;
+    }
+
+    function updateBrowserPairingPoll() {
+      if (browserPairingPollTimer) clearInterval(browserPairingPollTimer);
+      browserPairingPollTimer = null;
+      if (document.getElementById('localAgentBrowserSetup')?.open && document.getElementById('tabProfile')?.classList.contains('active')) {
+        browserPairingPollTimer = setInterval(() => { refreshBrowserPairing(); }, 5000);
+      }
+    }
+
     async function loadLocalAgentDetails() {
       const toolsHost = document.getElementById('localAgentTools');
       const memoryHost = document.getElementById('localAgentMemory');
       try {
-        const [tools, data, browser, connections] = await Promise.all([
+        const [tools, data, browser] = await Promise.all([
           invoke('get_local_agent_tools'),
           invoke('get_local_agent_data'),
           invoke('get_browser_pairing').catch(() => null),
-          invoke('get_local_agent_connections').catch(() => null),
         ]);
-        document.getElementById('localAgentBrowserStatus').textContent = browser?.connected ? 'Connected' : 'Not paired';
-        document.getElementById('localAgentBrowserPort').textContent = browser?.port || '—';
-        document.getElementById('localAgentBrowserToken').textContent = browser?.token || 'Bridge unavailable';
-        const focus = data?.focus;
-        document.getElementById('localAgentFocusStatus').textContent = focus
-          ? `${focus.status === 'running' ? 'In focus' : 'Paused'} · ${focus.intention} · ${focus.durationMinutes} min · ${focus.protection} protection`
-          : 'No active focus block.';
-        const conversationLog = document.getElementById('localAgentLog');
-        if (!conversationLog.dataset.hydrated) {
-          for (const message of data?.conversation || []) {
-            appendLocalAgentMessage(message.role === 'user' ? 'you' : 'agent', message.content);
-          }
-          conversationLog.dataset.hydrated = 'true';
-        }
-        const configured = Object.entries(connections?.configured || {}).filter(([, active]) => active).map(([name]) => name);
-        document.getElementById('localAgentConfigured').textContent = configured.length
-          ? `Connected: ${configured.join(', ')}. Jira and Linear use the existing FlowSight connections.`
-          : 'No extra provider tokens saved. Jira and Linear use the existing FlowSight connections.';
-        if (connections && document.activeElement !== document.getElementById('localAgentCalendarProvider')) {
-          document.getElementById('localAgentCalendarProvider').value = connections.calendarProvider || '';
-        }
-        document.getElementById('localAgentUseLocalCalendarBtn').hidden = !connections?.calendarProvider;
-        if (connections && document.activeElement !== document.getElementById('localAgentEmailProvider')) {
-          document.getElementById('localAgentEmailProvider').value = connections.emailProvider || '';
-        }
+        renderBrowserPairing(browser);
         toolsHost.replaceChildren();
         for (const tool of tools) {
           const item = document.createElement('span');
@@ -8455,7 +8323,7 @@
                   name: 'memory.forget_preference', arguments: { key },
                 }));
               } catch (error) {
-                appendLocalAgentMessage('error', String(error));
+                setLocalAgentStatus('error', String(error));
               }
             });
             row.append(label, remove);
@@ -8468,79 +8336,46 @@
       }
     }
 
-    document.getElementById('localAgentForm')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      if (localAgentBusy) return;
-      const input = document.getElementById('localAgentInput');
-      const message = input.value.trim();
-      if (!message) { input.focus(); return; }
-      if (pendingLocalAgentAction) {
-        appendLocalAgentMessage('error', 'Review or cancel the pending action first.');
+    document.getElementById('localAgentManageDetails')?.addEventListener('toggle', (event) => {
+      if (event.target.open) loadLocalAgentDetails();
+    });
+    document.getElementById('localAgentBrowserSetup')?.addEventListener('toggle', (event) => {
+      if (event.target.open) refreshBrowserPairing();
+      updateBrowserPairingPoll();
+    });
+    for (const [buttonId, browser] of [
+      ['localAgentInstallChromeBtn', 'chrome'],
+      ['localAgentInstallEdgeBtn', 'edge'],
+    ]) {
+      document.getElementById(buttonId)?.addEventListener('click', async () => {
+        try { await invoke('open_browser_extension_store', { browser }); }
+        catch (error) { setLocalAgentStatus('error', String(error)); }
+      });
+    }
+    document.getElementById('localAgentCopyBrowserKeyBtn')?.addEventListener('click', async () => {
+      const key = localBrowserPairing?.token;
+      const status = document.getElementById('localAgentBrowserCheckStatus');
+      if (!key) {
+        status.textContent = 'The pairing key is unavailable. Restart FlowSight and try again.';
         return;
       }
-      appendLocalAgentMessage('you', message);
-      input.value = '';
-      setLocalAgentBusy(true);
       try {
-        const turn = await invoke('ask_local_agent', { message });
-        if (turn.message) appendLocalAgentMessage('agent', turn.message);
-        if (turn.result) appendLocalAgentMessage('agent', describeLocalAgentResult(turn.result));
-        if (turn.proposal) showLocalAgentProposal(turn.proposal);
-        await loadLocalAgentDetails();
-      } catch (error) {
-        appendLocalAgentMessage('error', String(error));
-      } finally {
-        setLocalAgentBusy(false);
+        await navigator.clipboard.writeText(key);
+        status.textContent = 'Key copied. Paste it into the extension’s pairing page and choose Save and connect.';
+      } catch (_) {
+        status.textContent = 'Could not copy automatically. Select the hidden key field above and copy it manually.';
       }
     });
-
-    document.getElementById('localAgentConnectionForm')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const provider = document.getElementById('localAgentProvider').value;
-      const input = document.getElementById('localAgentToken');
-      const status = document.getElementById('localAgentConnectionStatus');
-      if (!input.value.trim()) { input.focus(); return; }
-      try {
-        await invoke('save_local_agent_connection', { provider, token: input.value });
-        input.value = '';
-        status.textContent = `${provider} token saved on this device.`;
-        await loadLocalAgentDetails();
-      } catch (error) { status.textContent = String(error); }
-    });
-    document.getElementById('localAgentOpenExtensionBtn')?.addEventListener('click', async () => {
-      try { await invoke('open_browser_extension_folder'); }
-      catch (error) { appendLocalAgentMessage('error', String(error)); }
-    });
-
-    document.getElementById('localAgentDisconnectBtn')?.addEventListener('click', async () => {
-      const provider = document.getElementById('localAgentProvider').value;
-      const status = document.getElementById('localAgentConnectionStatus');
-      try {
-        await invoke('remove_local_agent_connection', { provider });
-        status.textContent = `${provider} disconnected.`;
-        await loadLocalAgentDetails();
-      } catch (error) { status.textContent = String(error); }
-    });
-
-    document.getElementById('localAgentSaveProvidersBtn')?.addEventListener('click', async () => {
-      const status = document.getElementById('localAgentConnectionStatus');
-      const calendarProvider = document.getElementById('localAgentCalendarProvider').value || null;
-      const emailProvider = document.getElementById('localAgentEmailProvider').value || null;
-      try {
-        await invoke('set_local_agent_providers', { calendarProvider, emailProvider });
-        status.textContent = 'Calendar and email providers saved.';
-        await loadLocalAgentDetails();
-      } catch (error) { status.textContent = String(error); }
-    });
-
-    document.getElementById('localAgentUseLocalCalendarBtn')?.addEventListener('click', async () => {
-      try {
-        await invoke('set_local_agent_providers', { calendarProvider: null, emailProvider: null });
-        appendLocalAgentMessage('agent', 'FlowSight local calendar is now selected. Connected-service writes remain unavailable.');
-        await loadLocalAgentDetails();
-      } catch (error) {
-        appendLocalAgentMessage('error', String(error));
-      }
+    document.getElementById('localAgentCheckBrowserBtn')?.addEventListener('click', async () => {
+      const button = document.getElementById('localAgentCheckBrowserBtn');
+      const status = document.getElementById('localAgentBrowserCheckStatus');
+      button.disabled = true;
+      status.textContent = 'Checking the local connection…';
+      const browser = await refreshBrowserPairing();
+      if (!browser?.connected) status.textContent = browser
+        ? 'Not connected yet. Choose Save and connect in the extension, then check again.'
+        : 'The local browser bridge is unavailable. Restart FlowSight and try again.';
+      button.disabled = false;
     });
 
     document.getElementById('localAgentConfirmBtn')?.addEventListener('click', async () => {
@@ -8550,11 +8385,11 @@
       try {
         const result = await invoke('confirm_local_agent_action', { id: proposal.id });
         showLocalAgentProposal(null);
-        appendLocalAgentMessage('agent', describeLocalAgentResult(result));
+        setLocalAgentStatus('success', describeLocalAgentResult(result));
         await loadLocalAgentDetails();
       } catch (error) {
         showLocalAgentProposal(null);
-        appendLocalAgentMessage('error', String(error));
+        setLocalAgentStatus('error', String(error));
       } finally {
         setLocalAgentBusy(false);
       }
@@ -8565,8 +8400,8 @@
       const id = pendingLocalAgentAction.id;
       showLocalAgentProposal(null);
       try { await invoke('cancel_local_agent_action', { id }); }
-      catch (error) { appendLocalAgentMessage('error', String(error)); }
-      appendLocalAgentMessage('agent', 'Action cancelled.');
+      catch (error) { setLocalAgentStatus('error', String(error)); }
+      setLocalAgentStatus('success', 'Action cancelled.');
     });
 
     listen('local-agent-focus-changed', ({ payload }) => {
@@ -8582,13 +8417,13 @@
       renderTrackingStatus();
       persistTrackingState();
       refreshTodayView().catch(() => {});
-      if (document.getElementById('tabLocalAgent')?.classList.contains('active')) {
+      if (document.getElementById('localAgentManageDetails')?.open) {
         loadLocalAgentDetails();
       }
     });
     listen('local-agent-digest', ({ payload }) => {
       if (Array.isArray(payload) && payload.length) {
-        appendLocalAgentMessage('agent', `${payload.length} held reminder(s):\n${payload.map((item) => `• ${item.title}: ${item.body}`).join('\n')}`);
+        setLocalAgentStatus('success', `${payload.length} held reminder(s):\n${payload.map((item) => `• ${item.title}: ${item.body}`).join('\n')}`);
         showToast(`${payload.length} focus reminder(s) held during quiet mode`, 'success', 5000);
       }
     });
@@ -8604,8 +8439,12 @@
       activeNavItem?.classList.add('active');
       activeNavItem?.setAttribute('aria-current', 'page');
       if (tabId === 'tabSummary') loadHistory();
-      if (tabId === 'tabLocalAgent') loadLocalAgentDetails();
       if (tabId === 'tabCloudInsights') loadCoachChat();
+      if (tabId === 'tabProfile') {
+        refreshBrowserPairing();
+        if (document.getElementById('localAgentManageDetails')?.open) loadLocalAgentDetails();
+      }
+      updateBrowserPairingPoll();
       if (tabId === 'tabToday') refreshTodayView();
     }
 

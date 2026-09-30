@@ -105,6 +105,11 @@ pub fn set_local_agent_providers(
         if provider != "google" && provider != "microsoft" {
             return Err("Choose Google or Microsoft.".into());
         }
+    }
+    if let Some(provider) = calendar_provider.as_deref() {
+        crate::calendar_companion::access_token(provider)?;
+    }
+    if let Some(provider) = email_provider.as_deref() {
         credential(provider)?;
     }
     state::update(|data| {

@@ -176,7 +176,6 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
 .nav-item.active,
 .nav-item.active:hover { background: #e8f8f5; box-shadow: none; color: #0ca99c; }
 .nav-item:hover:not(.active) { background: #f2f7f8; color: #526d7b; }
-.nav-item.nav-pro-locked .nav-label { opacity: 0.83; }
 
 .today-header,
 .profile-heading { margin: 0 0 22px; }
@@ -278,7 +277,6 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
 .input,
 .select { min-height: 39px; padding: 8px 11px; border: 1px solid #d9e4e9; border-radius: 11px; background: #fff; color: #34445a; font-size: 12px; box-shadow: none; }
 .input::placeholder,
-.coach-input::placeholder { color: #8393a4; }
 .input:focus,
 .select:focus { border-color: #28b9ad; box-shadow: 0 0 0 3px rgb(0 184 169 / 0.13); }
 input[type="checkbox"] { accent-color: #14b5a9; }
@@ -402,47 +400,6 @@ input[type="checkbox"] { accent-color: #14b5a9; }
 .notion-panel-section { border-color: #e3edef; background: #fff; }
 .notion-status-copy { color: #6c8192; }
 
-/* Coach: a calm work surface, not a separate visual product. */
-.coach-panel {
-  width: calc(100% + 40px);
-  height: calc(100% + 136px);
-  min-height: 420px;
-  margin: -24px -20px -112px;
-  padding: 18px 20px 98px !important;
-}
-.coach-chat-shell {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  border: 1px solid #e5eef0;
-  border-radius: 22px;
-  overflow: hidden;
-  background: rgb(255 255 255 / 0.96);
-  box-shadow: 0 10px 30px rgb(43 76 92 / 0.05);
-}
-.coach-chat-inner { padding: 18px 18px 0; }
-.coach-empty { padding: 26px; }
-.coach-empty::before { content: ""; display: block; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 14px; background: linear-gradient(140deg, #dfe3ff, #cef5ef); }
-.coach-empty-title { color: #334458; font-family: Manrope, sans-serif; font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
-.coach-empty-sub { max-width: 330px; color: #6d8092; font-size: 11px; }
-.coach-msg-bubble { padding: 12px 14px; border-radius: 15px; font-size: 12px; }
-.coach-msg.user .coach-msg-bubble { background: #1bb3a8; color: #fff; }
-.coach-msg.assistant .coach-msg-bubble { background: #f5faf9; border-color: #e2eeed; color: #3b4e60; }
-.coach-composer-wrap { padding: 12px 16px 16px; border-color: #e5edef; background: #fff; }
-.coach-composer { padding: 10px 11px 8px; border-color: #dbe8e9; border-radius: 14px; background: #fbfdfc; box-shadow: none; }
-.coach-composer:focus-within { border-color: #21b6aa; box-shadow: 0 0 0 3px rgb(0 184 169 / 0.12); }
-.coach-input { color: #34465a; }
-.coach-char-count { color: #7f90a0; }
-.coach-send-btn { width: 34px; height: 34px; border-radius: 11px; background: #1ab5aa; }
-.coach-send-btn:hover:not(:disabled) { background: #079b91; }
-.coach-quick-btn { min-height: 29px; padding: 5px 10px; border-color: #dbe9e9; background: #f7fbfa; color: #4c6a73; font-size: 10px; }
-.coach-quick-btn:hover { background: #e8f8f4; color: #087e76; }
-.coach-lock-overlay { background: rgb(246 251 250 / 0.78); }
-.coach-chat-shell.is-locked .coach-chat-inner { filter: none; opacity: 0.28; }
-.coach-lock-card { width: min(100%, 310px); max-width: none; padding: 22px; border: 1px solid #dce9e9; border-radius: 21px; background: #fff; box-shadow: 0 18px 45px rgb(34 77 85 / 0.13); }
-.coach-lock-card h3 { color: #334458; font-family: Manrope, sans-serif; font-size: 18px; font-weight: 800; }
-.coach-lock-card p { color: #697e90; }
-
 /* Permission and first-run decisions must stay readable in the minimum window. */
 .consent-overlay { padding: 16px; background: rgb(26 45 58 / 0.4); backdrop-filter: none; }
 .consent-card {
@@ -556,7 +513,6 @@ input[type="checkbox"] { accent-color: #14b5a9; }
   .profile-heading,
   #tabProfile > .card:first-of-type,
   #privacyAnalyticsCard { grid-column: 1 / -1; }
-  .coach-panel { width: calc(100% + 56px); margin: -30px -28px -120px; height: calc(100% + 150px); padding: 24px 28px 104px !important; }
 }
 
 @media (max-width: 380px) {
@@ -577,7 +533,6 @@ input[type="checkbox"] { accent-color: #14b5a9; }
   .summary-download-btn,
   .summary-download-btn:hover:not(:disabled) { min-width: 0; padding-left: 9px; }
   .summary-download-label { font-size: 9px; }
-  .coach-panel { width: calc(100% + 30px); margin: -18px -15px -98px; height: calc(100% + 116px); padding: 12px 15px 87px !important; }
 }
 
 @media (max-height: 520px) {

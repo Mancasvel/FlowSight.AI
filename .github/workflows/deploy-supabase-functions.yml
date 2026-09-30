@@ -17,7 +17,9 @@ concurrency:
 
 # Required GitHub Actions secrets for migrations and Notion deployment:
 # SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF, SUPABASE_DB_PASSWORD,
-# NOTION_CLIENT_ID, NOTION_CLIENT_SECRET, NOTION_TOKEN_ENCRYPTION_KEY.
+# NOTION_CLIENT_ID, NOTION_CLIENT_SECRET, NOTION_TOKEN_ENCRYPTION_KEY,
+# GOOGLE_CALENDAR_CLIENT_SECRET. Public TAURI_GOOGLE_CALENDAR_CLIENT_ID is a
+# repository variable shared with the Windows release build.
 # Optional repository variable: NOTION_REDIRECT_URI. When omitted, the workflow
 # derives the canonical callback URL from SUPABASE_PROJECT_REF.
 
@@ -56,6 +58,7 @@ jobs:
         run: deno test --node-modules-dir=none --allow-env --allow-read supabase/functions
 
       - name: Validate required deployment secrets
+        id: deployment_config
         shell: bash
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -64,6 +67,8 @@ jobs:
           NOTION_CLIENT_ID: ${{ secrets.NOTION_CLIENT_ID }}
           NOTION_CLIENT_SECRET: ${{ secrets.NOTION_CLIENT_SECRET }}
           NOTION_TOKEN_ENCRYPTION_KEY: ${{ secrets.NOTION_TOKEN_ENCRYPTION_KEY }}
+          GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
+          TAURI_GOOGLE_CALENDAR_CLIENT_ID: ${{ vars.TAURI_GOOGLE_CALENDAR_CLIENT_ID }}
         run: |
           set -euo pipefail
           missing=()
@@ -73,21 +78,31 @@ jobs:
             SUPABASE_DB_PASSWORD \
             NOTION_CLIENT_ID \
             NOTION_CLIENT_SECRET \
-            NOTION_TOKEN_ENCRYPTION_KEY; do
+            NOTION_TOKEN_ENCRYPTION_KEY \
+            GOOGLE_CALENDAR_CLIENT_SECRET \
+            TAURI_GOOGLE_CALENDAR_CLIENT_ID; do
             [ -n "${!name:-}" ] || missing+=("$name")
           done
           if [ "${#missing[@]}" -ne 0 ]; then
-            printf '::error::Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
-            exit 1
+            printf '::warning::Supabase deployment skipped; missing configuration: %s\n' "${missing[*]}"
+            printf 'ready=false\n' >> "$GITHUB_OUTPUT"
+            printf '### Supabase deployment not run\nMissing configuration: `%s`. Edge Function tests passed, but no functions or migrations were deployed.\n' "${missing[*]}" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+              exit 1
+            fi
+          else
+            printf 'ready=true\n' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Link Supabase project
+        if: steps.deployment_config.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Set Edge Function secrets
+        if: steps.deployment_config.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -99,6 +114,8 @@ jobs:
           NOTION_CLIENT_SECRET: ${{ secrets.NOTION_CLIENT_SECRET }}
           NOTION_REDIRECT_URI: ${{ vars.NOTION_REDIRECT_URI }}
           NOTION_TOKEN_ENCRYPTION_KEY: ${{ secrets.NOTION_TOKEN_ENCRYPTION_KEY }}
+          GOOGLE_CALENDAR_CLIENT_ID: ${{ vars.TAURI_GOOGLE_CALENDAR_CLIENT_ID }}
+          GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
         run: |
           set -euo pipefail
@@ -112,15 +129,19 @@ jobs:
           SECRETS+=("NOTION_CLIENT_SECRET=${NOTION_CLIENT_SECRET}")
           SECRETS+=("NOTION_REDIRECT_URI=${NOTION_REDIRECT_URI:-https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/notion-oauth}")
           SECRETS+=("NOTION_TOKEN_ENCRYPTION_KEY=${NOTION_TOKEN_ENCRYPTION_KEY}")
+          SECRETS+=("GOOGLE_CALENDAR_CLIENT_ID=${GOOGLE_CALENDAR_CLIENT_ID}")
+          SECRETS+=("GOOGLE_CALENDAR_CLIENT_SECRET=${GOOGLE_CALENDAR_CLIENT_SECRET}")
           supabase secrets set "${SECRETS[@]}"
 
       - name: Apply database migrations
+        if: steps.deployment_config.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: supabase db push --linked --password "$SUPABASE_DB_PASSWORD"
 
       - name: Deploy Edge Functions
+        if: steps.deployment_config.outputs.ready == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -131,6 +152,7 @@ jobs:
             notion-oauth \
             notion-destinations \
             publish-notion-report \
+            calendar-token \
             privacy-rights; do
             supabase functions deploy "$function_name"
           done

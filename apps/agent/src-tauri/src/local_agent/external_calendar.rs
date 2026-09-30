@@ -19,7 +19,7 @@ pub fn busy_events(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
 ) -> Result<Vec<LocalEvent>, String> {
-    let token = connectors::credential(provider)?;
+    let token = crate::calendar_companion::access_token(provider)?;
     let client = connectors::client()?;
     let mut events = Vec::new();
     if provider == "google" {

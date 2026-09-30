@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { isWeeklyReportDue } from './weekly-report-schedule.mjs';
+
+test('early schedule checks preserve the promise contract used on window focus', () => {
+  const source = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+  assert.match(source, /function checkScheduledReport\(\) \{\s*if \(!weeklyReportsReady\) return Promise\.resolve\(\);\s*if \(scheduledReportCheckPromise\) return scheduledReportCheckPromise;/);
+});
 
 test('runs on the selected local day at or after the selected time', () => {
   const schedule = { enabled: true, weekday: 5, time: '17:00' };

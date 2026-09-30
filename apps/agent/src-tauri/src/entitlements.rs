@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Entitlements {
+    #[serde(default)]
+    pub owner_user_id: Option<String>,
     pub plan: Option<String>,
     pub status: String,
     pub team_ids: Vec<String>,
@@ -18,6 +20,7 @@ pub struct Entitlements {
 impl Entitlements {
     pub fn free() -> Self {
         Self {
+            owner_user_id: None,
             plan: None,
             status: "free".to_string(),
             team_ids: vec![],
@@ -46,6 +49,7 @@ fn parse_entitlements_json(value: &serde_json::Value) -> Entitlements {
         .unwrap_or_default();
 
     Entitlements {
+        owner_user_id: None,
         plan: value["plan"].as_str().map(String::from),
         status: value["status"].as_str().unwrap_or("free").to_string(),
         team_ids: team_ids.clone(),
@@ -83,7 +87,10 @@ pub fn clear_entitlements(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-pub fn refresh_entitlements_from_supabase(access_token: &str) -> Result<Entitlements, String> {
+pub fn refresh_entitlements_from_supabase(
+    access_token: &str,
+    owner_user_id: &str,
+) -> Result<Entitlements, String> {
     let client = Client::new();
     let url = format!("{}/rest/v1/rpc/get_user_entitlements", supabase_url());
 
@@ -104,7 +111,9 @@ pub fn refresh_entitlements_from_supabase(access_token: &str) -> Result<Entitlem
     }
 
     let json: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
-    Ok(parse_entitlements_json(&json))
+    let mut entitlements = parse_entitlements_json(&json);
+    entitlements.owner_user_id = Some(owner_user_id.to_string());
+    Ok(entitlements)
 }
 
 pub fn require_feature(db_path: &std::path::Path, feature: &str) -> Result<(), String> {
@@ -135,13 +144,6 @@ pub fn get_entitlements() -> Result<Entitlements, String> {
 }
 
 #[tauri::command]
-pub fn save_entitlements_command(entitlements: Entitlements) -> Result<(), String> {
-    let db_path = crate::paths::db_path()?;
-    let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
-    save_entitlements(&conn, &entitlements)
-}
-
-#[tauri::command]
 pub fn refresh_entitlements() -> Result<Entitlements, String> {
     let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|e| e.to_string())?;
@@ -149,7 +151,7 @@ pub fn refresh_entitlements() -> Result<Entitlements, String> {
     let session =
         get_user_session_from_conn(&conn).ok_or("Not logged in — cannot refresh entitlements")?;
 
-    let entitlements = refresh_entitlements_from_supabase(&session.access_token)?;
+    let entitlements = refresh_entitlements_from_supabase(&session.access_token, &session.user_id)?;
     save_entitlements(&conn, &entitlements)?;
     Ok(entitlements)
 }

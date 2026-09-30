@@ -2057,12 +2057,14 @@ mod tests {
     fn renderer_and_cloud_prompts_depend_on_the_canonical_payload() {
         let renderer = include_str!("../../src/renderer/index.html");
         let charts = include_str!("../../src/renderer/insights-charts.mjs");
+        let task_context = include_str!("../../src/renderer/today-task-context.mjs");
         assert!(renderer.contains("data.focus?.deep_focus_seconds"));
         assert!(renderer.contains("focus.hourly_deep_focus"));
         assert!(renderer.contains("focus.deep_threshold_seconds"));
         assert!(renderer.contains("focus.sensor_grace_seconds"));
         assert!(renderer.contains("focus.browsing_distraction_min_seconds"));
-        assert!(renderer.contains("sel.value !== 'General'"));
+        assert!(renderer.contains("resolveTaskContext"));
+        assert!(task_context.contains("selectedValue !== 'General'"));
         assert!(renderer.contains("Sustained non-work browsing"));
         assert!(renderer.contains("no deep focus"));
         assert!(renderer.contains("each bar is one hour"));

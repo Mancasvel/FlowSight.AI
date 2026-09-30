@@ -33,3 +33,8 @@ verify_jwt = true
 
 [functions.privacy-rights]
 verify_jwt = true
+
+# Authenticated users with a paid integrations entitlement only. The Google
+# desktop client secret is stored in Supabase secrets, never in the Tauri app.
+[functions.calendar-token]
+verify_jwt = true

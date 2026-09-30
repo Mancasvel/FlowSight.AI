@@ -162,8 +162,13 @@ async function poll() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => { chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 }); poll(); });
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 });
+  if (reason === 'install') chrome.runtime.openOptionsPage();
+  poll();
+});
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 }); poll(); });
+chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === POLL_ALARM) poll(); });
 chrome.runtime.onMessage.addListener((message) => { if (message?.type === 'poll-now') poll(); });
 chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 });

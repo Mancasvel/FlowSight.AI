@@ -200,6 +200,22 @@ fn context_for_family(family: &str, data: &state::AgentData) -> Value {
         );
     }
     if family == "calendar" {
+        if let Ok(status) = crate::calendar_companion::get_calendar_companion_status() {
+            let event = &status["current"];
+            fields.insert("currentCalendarEvent".into(), if event.is_object() {
+                json!({
+                    "title": event["title"].as_str().unwrap_or("").chars().take(120).collect::<String>(),
+                    "provider": event["provider"],
+                    "startAt": event["startAt"],
+                    "endAt": event["endAt"],
+                    "organizer": event["organizer"],
+                })
+            } else { Value::Null });
+            fields.insert(
+                "overlappingCalendarEvents".into(),
+                status["overlapCount"].clone(),
+            );
+        }
         fields.insert(
             "events".into(),
             json!(data
@@ -293,7 +309,7 @@ fn request_model(
     let offered = registry::specs_for_family(family);
     let context = context_for_family(family, &data);
     let mut messages = vec![
-        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. In this release, messages cannot be sent and connected calendars or projects cannot be changed; offer a local draft or plan instead. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
+        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. In this release, messages cannot be sent and connected calendar events cannot be changed by agent tools; FlowSight's separately consented mini-report automation may append a recap after an event. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
         json!({"role":"system","content":format!("Current FlowSight context: {context}")}),
     ];
     messages.extend(recent_messages(&data, 350));

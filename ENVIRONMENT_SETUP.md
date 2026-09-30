@@ -22,7 +22,7 @@ Es la base de datos principal y proveedor de autenticación.
 - **Site URL:** `http://localhost:3000` (Para el Dashboard local).
 - **Redirect URLs:**
   - `http://localhost:1420/*` (Agente desarrollo).
-  - `http://localhost:12345/callback` (Agente auth manual).
+  - `http://localhost:12345/callback?state=*` (retorno del login de escritorio; el `state` cambia en cada intento).
   - `tauri://localhost` (Agente producción).
 
 ⚠️ **No es necesario activar "Supabase OAuth Server"** (Authorization Path /oauth/consent). Déjalo desactivado a menos que quieras que otras apps usen tu login.
@@ -40,13 +40,41 @@ Para permitir login con cuentas de Google.
 5. **Orígenes autorizados:** `http://localhost:1420` (para desarrollo Taurus) y la URL de Supabase.
 6. **URIs de redirección:**
    - La URL callback de Supabase (ver arriba).
-   - Para el agente local (PKCE): `http://localhost:12345/callback`
-7. Copia el **Client ID** y **Client Secret**.
+   - El agente vuelve desde Supabase al `localhost` incluido en Redirect URLs de Supabase, no desde Google directamente.
+7. Configura el **Client ID** y **Client Secret** de este cliente Web solo en
+   Supabase Dashboard -> Authentication -> Sign In / Providers -> Google.
+   No pongas el Client Secret en una variable `VITE_` ni en el bundle de Tauri.
 
-```env
-VITE_GOOGLE_CLIENT_ID="...apps.googleusercontent.com"
-VITE_GOOGLE_CLIENT_SECRET="GOCSPX-..."
-```
+Este cliente **Web** es solo para Google como proveedor de login de Supabase.
+No sirve para Calendar companion: Google rechaza el callback local de puerto
+temporal con `redirect_uri_mismatch`. Para Calendar companion crea **otro** ID
+de cliente OAuth, tipo **Aplicacion de escritorio**, habilita Google Calendar
+API y configura la pantalla de consentimiento para
+`calendar.events.owned` y `calendar.calendarlist.readonly`. Coloca solo ese
+Client ID publico en `TAURI_GOOGLE_CALENDAR_CLIENT_ID`; no incluyas ningun
+Client Secret en el bundle de la app. Google exige el secret incluso con PKCE
+en el canje de este cliente de escritorio, por lo que la funcion Supabase
+`calendar-token` hace solo el canje y la renovacion; FlowSight conserva los
+tokens cifrados y procesa los eventos localmente. Configura
+`GOOGLE_CALENDAR_CLIENT_SECRET` como secreto de Supabase Edge Functions y
+`TAURI_GOOGLE_CALENDAR_CLIENT_ID` como variable publica de GitHub Actions.
+La cuenta de Supabase que despliega funciones necesita `SUPABASE_ACCESS_TOKEN`,
+`SUPABASE_PROJECT_REF` y `SUPABASE_DB_PASSWORD` en los secretos de GitHub
+Actions. Nunca pegues el client secret en `.env`, `.env.local`, `VITE_*` o el
+repositorio.
+
+### Extensión de navegador para usuarios finales
+
+Las automatizaciones del navegador requieren publicar **FlowSight Browser Controls**
+en Chrome Web Store (Arc/Chrome) y Microsoft Edge Add-ons (Edge). No se debe
+pedir a usuarios finales que activen el modo desarrollador ni que abran
+`options.html` desde `file://`: esa página solo funciona dentro de la extensión
+instalada. Cuando la tienda asigne un ID a la ficha, configura su URL oficial
+como variable de GitHub Actions `FLOWSIGHT_CHROME_EXTENSION_STORE_URL` o
+`FLOWSIGHT_EDGE_EXTENSION_STORE_URL`. FlowSight muestra el enlace y un recorrido
+de instalación, emparejamiento y comprobación; la instalación de usuarios
+finales solo es posible cuando la tienda publique la extensión. La clave de
+emparejamiento local se copia desde FlowSight, no se comparte con servidores.
 
 ---
 

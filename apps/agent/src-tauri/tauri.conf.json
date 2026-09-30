@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "FlowSight Agent",
-  "version": "5.0.6",
+  "version": "5.0.7",
   "identifier": "ai.flowsight.agent",
   "build": {
     "frontendDist": "../dist",
@@ -52,7 +52,10 @@
       "../browser-extension/manifest.json": "browser-extension/manifest.json",
       "../browser-extension/options.html": "browser-extension/options.html",
       "../browser-extension/options.js": "browser-extension/options.js",
-      "../browser-extension/worker.js": "browser-extension/worker.js"
+      "../browser-extension/worker.js": "browser-extension/worker.js",
+      "../browser-extension/icon16.png": "browser-extension/icon16.png",
+      "../browser-extension/icon48.png": "browser-extension/icon48.png",
+      "../browser-extension/icon128.png": "browser-extension/icon128.png"
     }
   },
   "plugins": {

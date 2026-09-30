@@ -603,6 +603,12 @@ pub fn execute(
                 json!({"source":"FlowSight-owned calendar events","events":data.events.into_iter().rev().take(30).collect::<Vec<_>>()}),
             )
         }
+        "calendar.get_current_event" => {
+            let status = crate::calendar_companion::get_calendar_companion_status()?;
+            Ok(
+                json!({"current":status["current"],"overlapCount":status["overlapCount"],"checkedAt":status["checkedAt"]}),
+            )
+        }
         "calendar.create_event" => {
             let (start, end) = interval(args)?;
             let data = state::read()?;

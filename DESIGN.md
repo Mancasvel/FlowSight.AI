@@ -129,7 +129,7 @@ components:
 
 The desktop renderer belongs to the FlowSight mobile family. A pale technical grid, slate reading text, teal signals, softly raised white panels, and one indigo-to-teal tracking action make the compact Tauri window feel related to the Android app without stretching a phone screen into desktop proportions.
 
-The visual language carries through Today, Insights, Coach, Settings, first run, and consent. It puts a clear tracking decision beside measured time, then uses quieter cards and rails for supporting evidence. This contract describes the desktop WebView and its shared interface patterns.
+The visual language carries through Today, Insights, Settings, first run, and consent. It puts a clear tracking decision beside measured time, then uses quieter cards and rails for supporting evidence. This contract describes the desktop WebView and its shared interface patterns.
 
 **Key Characteristics:**
 
@@ -223,7 +223,7 @@ Standard cards use 20px corners, 20px internal padding, a fine border, and ambie
 
 ### Navigation
 
-The four-tab dock holds Today, Insights, Coach, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls.
+The three-tab dock holds Today, Insights, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls. The proactive local agent does not occupy navigation or expose a chat; its permissions and proposals live in Settings, and its reminders arrive as notifications.
 
 ### Timer and evidence
 

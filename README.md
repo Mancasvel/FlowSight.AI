@@ -67,7 +67,7 @@ Available tools are `focus.start`, `focus.pause`, `focus.resume`, `focus.end`,
 `system.set_dnd`, `browser.list_tabs`, `browser.block`, `browser.unblock`,
 `browser.close_tab`, `browser.restore_tab`, `tasks.create`, `tasks.list`,
 `tasks.update`, `tasks.complete`, `tasks.reprioritize`,
-`calendar.get_availability`, `calendar.list_events`, `calendar.create_event`,
+`calendar.get_availability`, `calendar.list_events`, `calendar.get_current_event`, `calendar.create_event`,
 `calendar.move_event`, `notifications.digest`, `messages.draft`,
 `messages.list_drafts`, `project.get_current_work`,
 `project.prepare_pr_description`, `desktop.open_resource`, `automation.run_playbook`,
@@ -76,9 +76,10 @@ Available tools are `focus.start`, `focus.pause`, `focus.resume`, `focus.end`,
 
 The code for `messages.send`, `project.update_status`, and
 `project.create_subtask` is present but disabled in this release until scoped
-provider tests pass. Calendar creation and changes are limited to FlowSight's
-local calendar; connected-calendar writes are also disabled. These tools are
-not offered to Qwen or shown as available actions.
+provider tests pass. Calendar creation and changes requested through local-agent
+tools remain limited to FlowSight's local calendar. The separately consented
+Calendar companion below can append a mini report to a connected event; it does
+not grant the model general event-editing authority.
 
 - **Focus:** Gentle starts tracking; standard also silences Windows app
   notification banners; strict additionally blocks the browser patterns you
@@ -86,22 +87,100 @@ not offered to Qwen or shown as available actions.
   timed block expires. Windows' separate Focus Assist contact/app allowlists
   are not changed. The digest contains FlowSight reminders held while banners
   were silenced; it cannot read other apps' private notifications.
-- **Browser:** In Chrome or Edge, open Extensions, enable Developer mode, then
-  choose “Load unpacked” and select the folder opened by **Local agent → Tools
-  and saved preferences → Open extension folder**. Open the extension's options
-  and copy the port and pairing key from FlowSight. The extension communicates
+- **Browser:** Browser actions need the separate FlowSight Browser Controls
+  extension. Public users will install it from Chrome Web Store (Arc/Chrome) or
+  Microsoft Edge Add-ons (Edge), with no developer mode. The app only offers a
+  store button when its official listing URL is configured; until publication,
+  browser actions are unavailable in the public build. After installation,
+  users open the extension's options and enter the port and pairing key from
+  **You → Local automations → Browser pairing**. The extension communicates
   only over `127.0.0.1` and requires the pairing key. Temporary blocks expire
   in the extension and are released if FlowSight disconnects. Closing a tab
   saves its URL so it can be restored.
-- **Calendar:** Availability and focus events use FlowSight's local calendar.
-  Connected calendars are not changed by this release, even if a provider was
-  configured in a development build.
+- **Calendar:** Availability and focus-event creation use FlowSight's local
+  calendar by default. A paid Calendar companion connection can read the
+  current Google or Microsoft event, while `calendar.get_current_event` exposes
+  that event to the on-device agent on request. General connected-event edits
+  remain disabled.
 - **Messages:** Drafts are saved locally and never sent by this release.
 - **Projects and playbooks:** `project.get_current_work` can read existing
   FlowSight Jira/Linear connections. A PR description is returned as local text
   for review; FlowSight does not publish it. Deep work, end of day and recover
   focus playbooks return their individual steps and results for review. They
   cannot update external project services in this release.
+
+## Calendar companion (paid cloud plan)
+
+Calendar companion is an optional paid integration in **Settings → Calendar
+companion** and the last, skippable onboarding step. It requires an eligible,
+active FlowSight Cloud Individual/Pro plan with integrations. The EUR 10
+one-time Individual local purchase uses a separate license and does not unlock
+Cloud integrations. The calendar APIs need internet access; FlowSight activity
+analysis and the mini-report calculation remain local. Free, expired, and
+other-account Cloud entitlements cannot connect, read live events, or publish
+recaps. The app checks the Cloud entitlement locally; Google's token broker
+checks it again against the signed-in Supabase account.
+
+Each user connects their own Google or Microsoft account through their
+provider's browser consent screen. FlowSight uses a public desktop OAuth client
+ID, Authorization Code with PKCE and a temporary loopback callback; it never
+embeds a client secret in the app. Google token exchange uses the paid Supabase
+broker described below. Access and refresh tokens are protected with
+Windows DPAPI for that user. Revoking access from Settings removes local tokens.
+Connections and the publishing switch are also isolated by the signed-in
+FlowSight account on a shared computer. Signing out suspends automatic
+publishing; another FlowSight account must authorize its own calendar. A new
+device must be authorized separately, because DPAPI credentials do not roam.
+The app refreshes short-lived tokens when necessary. Google requests
+`calendar.events.owned` and `calendar.calendarlist.readonly`; Microsoft requests
+`Calendars.ReadWrite` and `offline_access`. Google reads owned calendars and
+Microsoft reads editable calendars, expanding recurring event occurrences.
+All-day, cancelled and free events are ignored. If more than one event overlaps,
+FlowSight does not choose one or publish a report.
+
+The live event title and time appear in Today above the tracking controls,
+with a link that opens the event in its calendar. Manual task detail stays
+below as an optional supplement; Settings shows connection and consent status
+without repeating the event. With the separate **Add a mini work report** switch
+on, FlowSight appends a short recap only after a timed event it observed while
+running and which the connected user organizes. This includes meetings with
+guests: the recap can be visible to them and the calendar service may send an
+update. The recap has three short sections: **At a glance** compares scheduled and
+observed time and summarizes the activity pattern; **Time by activity** shows
+up to three categories plus any remainder; **Next step** offers one bounded
+suggestion or asks the organizer to record the actual outcome. It never
+includes window titles, captured descriptions, URLs, custom category text or a
+claim that the planned task was completed. Unknown categories are shown as
+**Other**. FlowSight waits briefly for late observations;
+if less than a minute was recorded or the event was ambiguous, nothing is
+posted.
+The existing event body and Teams meeting information are preserved; an
+occurrence-specific marker makes retries idempotent. Auto-publishing defaults
+off and is stopped if the license is no longer eligible.
+
+For distributors, create and verify **one** Google desktop OAuth application
+and **one** Microsoft public/native application for FlowSight. Set their public
+IDs as `TAURI_GOOGLE_CALENDAR_CLIENT_ID` and
+`TAURI_MICROSOFT_CALENDAR_CLIENT_ID` at build time (GitHub Actions repository
+variables of the same names for the Windows release). Enable the Google
+Calendar API and publish/verify its consent screen for the scopes above. Google
+currently requires the Desktop client's secret even with PKCE, so only the
+authenticated, paid `calendar-token` Supabase Edge Function exchanges and
+refreshes tokens. Set `GOOGLE_CALENDAR_CLIENT_SECRET` only in Supabase/GitHub
+deployment secrets; never package it in Tauri or expose it as `VITE_*`. Calendar
+event data and local activity do not go through this token broker. In
+Microsoft Entra, support personal and organizational accounts, grant delegated
+`Calendars.ReadWrite`, enable a mobile/desktop public client and register the
+mobile/desktop redirect `http://localhost/callback` (Entra ignores its dynamic
+port for `localhost`; it does not do that for `127.0.0.1`).
+The Google Calendar client must be a **Desktop app** credential, not the Web
+client used by Supabase Google sign-in. The desktop app sign-in itself also
+requires `http://localhost:12345/callback?state=*` in Supabase Auth's Redirect
+URLs; the callback URL without the dynamic `state` query is insufficient.
+Without a configured ID, the corresponding Connect button is disabled; a
+Supabase Google sign-in does not grant these Calendar scopes. Validate both
+providers with owned test events, guest meetings and recurrent instances before
+announcing the integration as live.
 
 ## Status
 

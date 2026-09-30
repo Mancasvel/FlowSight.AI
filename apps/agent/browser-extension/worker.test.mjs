@@ -11,8 +11,9 @@ function harness() {
   const changes = [];
   const listeners = { addListener() {} };
   const chrome = {
+    action: { onClicked: listeners },
     alarms: { create() {}, onAlarm: listeners },
-    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners },
+    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, openOptionsPage() {} },
     storage: { local: {
       async get(names) {
         const keys = Array.isArray(names) ? names : [names];

@@ -23,7 +23,7 @@ Sensitive screen-context analysis runs on the user's device. The user chooses wh
 ## Operating Context
 
 - A narrow desktop window defaults to 370 × 700 px and can be resized down to 340 × 400 px.
-- The main tasks are Today (start/pause tracking and set a goal or task), Insights (inspect activity and generate a local work report), Coach (cloud AI guidance when entitled), and Settings/You (account, privacy, integrations, and app preferences).
+- The main tasks are Today (start/pause tracking and set a goal or task), Insights (inspect activity and generate a local work report), and Settings/You (account, privacy, integrations, and app preferences). The local agent works proactively in the background and uses tools according to the user's permissions; it has no chat tab.
 - Closing the window hides it in the system tray; quitting is a separate action.
 
 ## Capabilities and Constraints
