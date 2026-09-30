@@ -118,7 +118,11 @@ function makeUpdate(overrides = {}) {
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 test('automatic checks start after installation verification and repeat while open', async () => {
-  assert.match(renderer, /installationCheckPromise = installationRepair\.check\(\);\s*installationCheckPromise\.finally\(\(\) => startAutomaticUpdateChecks\(\)\);\s*init\(\);/);
+  const installCheck = renderer.indexOf('installationCheckPromise = installationRepair.check();');
+  const nativeRepairSignal = renderer.indexOf("listen('installation-repair-required'", installCheck);
+  const updateCheck = renderer.indexOf('installationCheckPromise.finally(() => startAutomaticUpdateChecks());', nativeRepairSignal);
+  const appInit = renderer.indexOf('    init();', updateCheck);
+  assert.ok(installCheck >= 0 && nativeRepairSignal > installCheck && updateCheck > nativeRepairSignal && appInit > updateCheck);
   const harness = createHarness();
   harness.updater.startAutomaticUpdateChecks();
   await flush();

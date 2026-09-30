@@ -242,9 +242,15 @@ pnpm build
 The installer lands in `apps/agent/src-tauri/target/release/bundle/`. It
 bundles `llama-server.exe`, its DLLs, and signed Microsoft Visual C++ runtime
 files beside both executables. Installed releases verify the bundled files
-at startup and offer a signed repair if a file is missing or damaged. On first
-use, FlowSight downloads the
-two GGUF weights into the user's app-data directory, verifies their SHA-256,
+at startup and again before starting local AI. If a file is missing or damaged,
+FlowSight automatically downloads a signature-verified installer, replaces the
+packaged files in the same per-user installation, and restarts. If the download
+fails, the repair screen offers a manual retry without showing technical errors.
+The installer does not remove `%LOCALAPPDATA%\FlowSight`, which stores local
+history, settings, and license state. If `app.exe` itself cannot open, run the
+latest installer from the official release page; an app that cannot start cannot
+offer its in-app repair screen. On first use, FlowSight downloads the two GGUF
+weights into the user's app-data directory, verifies their SHA-256,
 and then runs without network access. Keeping the weights out of NSIS also
 makes later app updates much smaller.
 

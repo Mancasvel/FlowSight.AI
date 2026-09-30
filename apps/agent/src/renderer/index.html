@@ -7895,6 +7895,9 @@
     });
 
     installationCheckPromise = installationRepair.check();
+    listen('installation-repair-required', () => {
+      installationCheckPromise = installationRepair.check();
+    }).catch(() => {});
     installationCheckPromise.finally(() => startAutomaticUpdateChecks());
     init();
 

@@ -56,7 +56,7 @@ fn check_asset(root: &Path, asset: &InstallAsset) -> Result<(), String> {
     Ok(())
 }
 
-fn check_installation(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn check_installation(app: &AppHandle) -> Result<(), String> {
     if INSTALL_ASSETS.is_empty() {
         // Development builds resolve assets from the working tree. The release
         // build always embeds a complete manifest and checks every listed file.
@@ -70,6 +70,17 @@ fn check_installation(app: &AppHandle) -> Result<(), String> {
         check_asset(&root, asset)?;
     }
     Ok(())
+}
+
+#[cfg(windows)]
+pub(crate) fn verify_before_local_ai(app: &AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+
+    check_installation(app).map_err(|error| {
+        log::error!("[Installation] Refusing to start local AI: {error}");
+        let _ = app.emit("installation-repair-required", ());
+        "FlowSight needs a repair before local AI can start.".to_string()
+    })
 }
 
 #[tauri::command]
