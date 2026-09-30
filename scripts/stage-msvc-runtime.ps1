@@ -12,6 +12,21 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($env:OS -ne 'Windows_NT') { throw 'The Visual C++ runtime is only staged on Windows.' }
 
+# Tauri invokes this script through Windows PowerShell 5.1 from a pwsh 7 CI
+# process. Its inherited PSModulePath can resolve the pwsh 7 Security module,
+# which Windows PowerShell cannot load. Import the module shipped with this
+# exact host instead of relying on module auto-loading by name.
+$securityModule = Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1'
+if (-not (Test-Path -LiteralPath $securityModule -PathType Leaf)) {
+    throw "The Microsoft.PowerShell.Security module is missing from this PowerShell host: $securityModule"
+}
+try {
+    Import-Module -Name $securityModule -ErrorAction Stop
+} catch {
+    throw "Could not load this PowerShell host's Microsoft.PowerShell.Security module from ${securityModule}: $($_.Exception.Message)"
+}
+Write-Host "PowerShell $($PSVersionTable.PSVersion) using Security module $securityModule"
+
 $dllNames = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
 $minimumVersion = [version] '14.40.0.0'
 $destination = Join-Path $PSScriptRoot '../local_llm/bin'

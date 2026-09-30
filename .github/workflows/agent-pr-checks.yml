@@ -19,6 +19,15 @@ jobs:
         shell: pwsh
         run: ./scripts/stage-msvc-runtime.ps1
 
+      - name: Repeat staging with Tauri's Windows PowerShell 5.1 host
+        shell: pwsh
+        working-directory: apps/agent
+        run: |
+          & powershell.exe -NoProfile -File ../../scripts/stage-msvc-runtime.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Windows PowerShell staging failed with exit code $LASTEXITCODE"
+          }
+
       - name: Verify both executable runtime directories
         shell: pwsh
         run: |
