@@ -2903,6 +2903,12 @@
       color: hsl(var(--foreground));
     }
 
+    .update-dialog__progress:focus-visible {
+      outline: 2px solid hsl(var(--ring) / 0.45);
+      outline-offset: 4px;
+      border-radius: 8px;
+    }
+
     .update-dialog__progress-track {
       height: 7px;
       overflow: hidden;
