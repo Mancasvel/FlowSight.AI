@@ -1,13 +1,13 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "FlowSight Agent",
-  "version": "5.0.8",
+  "version": "5.0.9",
   "identifier": "ai.flowsight.agent",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "corepack pnpm --filter @flowsight/agent vite",
-    "beforeBuildCommand": "corepack pnpm --filter @flowsight/agent vite build"
+    "beforeBuildCommand": "powershell -NoProfile -File ../../scripts/stage-msvc-runtime.ps1 && corepack pnpm --filter @flowsight/agent vite build"
   },
   "app": {
     "windows": [
@@ -47,6 +47,9 @@
     "resources": {
       "../../../local_llm/bin/*.exe": "local_llm/bin/",
       "../../../local_llm/bin/*.dll": "local_llm/bin/",
+      "../../../local_llm/app_runtime/msvcp140.dll": "msvcp140.dll",
+      "../../../local_llm/app_runtime/vcruntime140.dll": "vcruntime140.dll",
+      "../../../local_llm/app_runtime/vcruntime140_1.dll": "vcruntime140_1.dll",
       "../../../local_llm/APACHE-2.0.md": "local_llm/APACHE-2.0.md",
       "../../../local_llm/MODEL_NOTICE.md": "local_llm/MODEL_NOTICE.md",
       "../browser-extension/manifest.json": "browser-extension/manifest.json",

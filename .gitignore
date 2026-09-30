@@ -37,6 +37,11 @@ dist-electron/
 # abajo, se distribuyen via GitHub Releases).
 !local_llm/bin/*.exe
 !local_llm/bin/*.dll
+# Staged from the signed Microsoft VC redistributable during Windows builds.
+local_llm/bin/msvcp140.dll
+local_llm/bin/vcruntime140.dll
+local_llm/bin/vcruntime140_1.dll
+local_llm/app_runtime/
 *.msi
 *.dmg
 *.app

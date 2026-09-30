@@ -1123,6 +1123,12 @@ fn spawn_llama_managed_child(
             bin_path
         ));
     }
+    #[cfg(all(windows, not(debug_assertions)))]
+    for name in ["msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"] {
+        if !bin_path.with_file_name(name).is_file() {
+            return Err("Local AI installation needs repair.".to_string());
+        }
+    }
 
     let log_path = crate::paths::server_log_path()?;
 

@@ -217,6 +217,8 @@ FlowSight is in **active development**. The current Windows version is
 - **Rust** stable (for building the Tauri shell).
 - **Node.js** 18+ and **pnpm** 8+.
 - **Python** 3.11+ (optional: run local review-queue tests and future model evaluation tools).
+- **Visual Studio 2022 C++ tools** with the current x64 VC redistributable
+  files (14.40 or newer) for a Windows build.
 
 ### Install and run
 
@@ -224,6 +226,7 @@ FlowSight is in **active development**. The current Windows version is
 git clone https://github.com/Mancasvel/FlowSight.AI.git
 cd FlowSight.AI
 pnpm install
+powershell -File scripts/stage-msvc-runtime.ps1
 pnpm dev
 ```
 
@@ -237,7 +240,10 @@ pnpm build
 ```
 
 The installer lands in `apps/agent/src-tauri/target/release/bundle/`. It
-bundles `llama-server.exe` and its DLLs. On first use, FlowSight downloads the
+bundles `llama-server.exe`, its DLLs, and signed Microsoft Visual C++ runtime
+files beside both executables. Installed releases verify the bundled files
+at startup and offer a signed repair if a file is missing or damaged. On first
+use, FlowSight downloads the
 two GGUF weights into the user's app-data directory, verifies their SHA-256,
 and then runs without network access. Keeping the weights out of NSIS also
 makes later app updates much smaller.
