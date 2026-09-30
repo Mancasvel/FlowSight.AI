@@ -217,8 +217,9 @@ FlowSight is in **active development**. The current Windows version is
 - **Rust** stable (for building the Tauri shell).
 - **Node.js** 18+ and **pnpm** 8+.
 - **Python** 3.11+ (optional: run local review-queue tests and future model evaluation tools).
-- **Visual Studio 2022 C++ tools** with the current x64 VC redistributable
-  files (14.40 or newer) for a Windows build.
+- **Visual Studio C++ tools** with distributable x64 CRT files (14.40 or newer)
+  for a Windows build. The staging script discovers Visual Studio 2022 or 2026
+  through `vswhere` and verifies each DLL's Microsoft signature and x64 format.
 
 ### Install and run
 
