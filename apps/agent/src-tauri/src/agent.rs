@@ -1123,6 +1123,11 @@ fn spawn_llama_managed_child(
             bin_path
         ));
     }
+    // Check immediately before spawning as well as at UI startup. Native
+    // commands can start this process without using the renderer's start path,
+    // and Windows shows its own DLL loader dialog before llama-server's main().
+    #[cfg(all(windows, not(debug_assertions)))]
+    crate::install_health::verify_before_local_ai(app)?;
 
     let log_path = crate::paths::server_log_path()?;
 
@@ -1216,6 +1221,11 @@ pub fn start_server(
     app: tauri::AppHandle,
     state: State<'_, AgentState>,
 ) -> Result<serde_json::Value, String> {
+    // Background reports and Coach can start local AI without the renderer's
+    // monitoring button. Verify before any model download on those paths.
+    #[cfg(all(windows, not(debug_assertions)))]
+    crate::install_health::verify_before_local_ai(&app)?;
+
     let mode = gpu_serve_mode(&state);
     {
         let guard = SERVER_PROCESS.lock().unwrap();

@@ -33,9 +33,18 @@ fn harden_process_early() {
 
     extern "system" {
         fn SetProcessMitigationPolicy(policy: u32, buf: *const c_void, len: u32) -> i32;
+        fn GetErrorMode() -> u32;
+        fn SetErrorMode(mode: u32) -> u32;
     }
 
     unsafe {
+        // A sidecar loader failure must not display a raw Windows system
+        // dialog. Children inherit this error mode; installation checks still
+        // report damage through FlowSight's repair UI.
+        const SEM_FAILCRITICALERRORS: u32 = 0x0001;
+        const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
+        SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+
         // ProcessExtensionPointDisablePolicy = 6, DisableExtensionPoints = bit 0.
         // Blocks AppInit_DLLs from loading when user32.dll is subsequently imported.
         let policy: u32 = 1u32;

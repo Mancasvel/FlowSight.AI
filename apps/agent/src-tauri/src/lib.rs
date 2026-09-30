@@ -11,6 +11,8 @@ mod entitlements;
 mod focus_alerts;
 mod focus_semantics;
 mod insights_local;
+#[cfg(desktop)]
+mod install_health;
 mod jira;
 mod linear;
 mod llama_port;
@@ -80,6 +82,10 @@ pub fn run() {
             sync::set_active_team,
             entitlements::get_entitlements,
             entitlements::refresh_entitlements,
+            #[cfg(desktop)]
+            install_health::check_installation_health,
+            #[cfg(windows)]
+            install_health::repair_installation,
             notion::get_notion_status,
             notion::start_notion_oauth,
             notion::disconnect_notion,

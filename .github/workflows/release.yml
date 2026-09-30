@@ -132,6 +132,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm --filter @flowsight/agent fetch-models
 
+      - name: Stage signed Visual C++ runtime beside both executables
+        shell: pwsh
+        run: ./scripts/stage-msvc-runtime.ps1
+
       - name: Smoke test Qwen3-VL-2B-Instruct multimodal runtime
         run: node scripts/check-local-vision.mjs
 
@@ -158,6 +162,10 @@ jobs:
 
       - name: Build app
         run: pnpm build
+
+      - name: Verify installer contains both Visual C++ runtime copies
+        shell: pwsh
+        run: ./scripts/check-bundled-runtime.ps1
 
       - name: Smoke test MCP in the packaged executable
         run: node scripts/check-mcp-stdio.mjs apps/agent/src-tauri/target/release/app.exe

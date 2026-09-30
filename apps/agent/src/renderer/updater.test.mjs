@@ -67,6 +67,7 @@ function createHarness() {
   checkButton.textContent = 'Check for updates';
   checkButton.focus();
   const context = {
+    installationRepair: { needsRepair: () => false },
     Date: { now: () => now },
     document,
     window: { addEventListener: (type, listener) => windowListeners.set(type, listener) },
@@ -116,8 +117,12 @@ function makeUpdate(overrides = {}) {
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-test('automatic checks start before app initialization and repeat while open', async () => {
-  assert.match(renderer, /startAutomaticUpdateChecks\(\);\s*init\(\);/);
+test('automatic checks start after installation verification and repeat while open', async () => {
+  const installCheck = renderer.indexOf('installationCheckPromise = installationRepair.check();');
+  const nativeRepairSignal = renderer.indexOf("listen('installation-repair-required'", installCheck);
+  const updateCheck = renderer.indexOf('installationCheckPromise.finally(() => startAutomaticUpdateChecks());', nativeRepairSignal);
+  const appInit = renderer.indexOf('    init();', updateCheck);
+  assert.ok(installCheck >= 0 && nativeRepairSignal > installCheck && updateCheck > nativeRepairSignal && appInit > updateCheck);
   const harness = createHarness();
   harness.updater.startAutomaticUpdateChecks();
   await flush();

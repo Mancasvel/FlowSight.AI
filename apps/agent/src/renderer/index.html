@@ -2903,6 +2903,12 @@
       color: hsl(var(--foreground));
     }
 
+    .update-dialog__progress:focus-visible {
+      outline: 2px solid hsl(var(--ring) / 0.45);
+      outline-offset: 4px;
+      border-radius: 8px;
+    }
+
     .update-dialog__progress-track {
       height: 7px;
       overflow: hidden;
@@ -4225,6 +4231,7 @@
     console.log('[FlowSight] Script starting...');
 
     import { invoke } from '@tauri-apps/api/core';
+    import { createInstallationRepairController } from './installation-repair.mjs';
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { getVersion } from '@tauri-apps/api/app';
@@ -6284,6 +6291,14 @@
       }, duration);
     }
 
+    const installationRepair = createInstallationRepairController({
+      invoke,
+      listen,
+      document,
+      isMicrosoftStoreBuild: false,
+    });
+    let installationCheckPromise = Promise.resolve(true);
+
     const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
     const UPDATE_FOCUS_CHECK_MIN_MS = 5 * 60 * 1000;
     const UPDATE_CHECK_TIMEOUT_MS = 20 * 1000;
@@ -6325,7 +6340,7 @@
     // Checks GitHub Releases for a newer signed build and asks before downloading.
     // Manual checks ignore a previous "Later" choice and report no-op/errors.
     async function checkForUpdates({ manual = false } = {}) {
-      if (updateCheckInFlight || document.getElementById('updateOverlay')) return;
+      if (updateCheckInFlight || installationRepair.needsRepair() || document.getElementById('updateOverlay')) return;
       updateCheckInFlight = true;
       lastUpdateCheckAt = Date.now();
       const checkBtn = document.getElementById('checkUpdatesBtn');
@@ -6615,6 +6630,10 @@
 
     async function startMonitoringFull() {
       if (setupInProgress) return;
+      if (!(await installationCheckPromise)) {
+        installationRepair.show();
+        return;
+      }
       setupInProgress = true;
       const btn = document.getElementById('playTimerBtn');
       btn.disabled = true;
@@ -6779,21 +6798,26 @@
         localServerConfirmedOnline = true;
         await checkLocalServerHealth();
       } catch (e) {
-        setupFailed = true;
-        console.error("Start Failed:", e);
-        progress.style.width = '100%';
-        statusText.textContent = 'Local AI is not ready';
-        subtext.textContent = String(e).slice(0, 360);
-        actions.hidden = false;
-        document.getElementById('setupRetryBtn').onclick = () => {
+        console.warn('[Local AI] Start failed; checking installation.');
+        installationCheckPromise = installationRepair.check();
+        if (!(await installationCheckPromise)) {
           overlay.hidden = true;
-          startMonitoringFull();
-        };
-        document.getElementById('setupDismissBtn').onclick = () => {
-          overlay.hidden = true;
-          actions.hidden = true;
-        };
-        overlay.hidden = false;
+        } else {
+          setupFailed = true;
+          progress.style.width = '100%';
+          statusText.textContent = 'Local AI is not ready';
+          subtext.textContent = 'FlowSight could not prepare local AI. Please try again, or restart the app.';
+          actions.hidden = false;
+          document.getElementById('setupRetryBtn').onclick = () => {
+            overlay.hidden = true;
+            startMonitoringFull();
+          };
+          document.getElementById('setupDismissBtn').onclick = () => {
+            overlay.hidden = true;
+            actions.hidden = true;
+          };
+          overlay.hidden = false;
+        }
       } finally {
         if (aiWaitTimer) clearInterval(aiWaitTimer);
         unlistenAiProgress?.();
@@ -7870,7 +7894,11 @@
       if (!document.hidden) checkWeeklyReportOnReturn();
     });
 
-    startAutomaticUpdateChecks();
+    installationCheckPromise = installationRepair.check();
+    listen('installation-repair-required', () => {
+      installationCheckPromise = installationRepair.check();
+    }).catch(() => {});
+    installationCheckPromise.finally(() => startAutomaticUpdateChecks());
     init();
 
     async function refreshTasks() {

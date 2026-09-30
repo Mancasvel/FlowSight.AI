@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "5.0.8"
+version = "5.0.9"
 default-run = "app"
 description = "FlowSight Agent — Understand your own Workflows"
 authors = ["you"]
@@ -17,6 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "=2.6.3", features = [] }
+sha2 = "0.10"
 
 [dev-dependencies]
 temp-env = "0.3"
