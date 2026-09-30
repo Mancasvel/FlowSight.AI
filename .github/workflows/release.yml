@@ -172,8 +172,15 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
           RELEASE_BODY: ${{ github.event.release.body }}
           REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # workflow_dispatch against a draft has no release payload; keep the
+          # updater notes in sync with the notes that will be published.
+          if [ -z "$RELEASE_BODY" ]; then
+            RELEASE_BODY="$(gh release view "$RELEASE_TAG" --repo "$REPO" --json body --jq .body)"
+            export RELEASE_BODY
+          fi
           NSIS_DIR="apps/agent/src-tauri/target/release/bundle/nsis"
           EXE="$(ls "$NSIS_DIR"/*-setup.exe | head -n1)"
           SIG="$(ls "$NSIS_DIR"/*-setup.exe.sig | head -n1)"

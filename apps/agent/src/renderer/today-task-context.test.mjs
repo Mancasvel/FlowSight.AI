@@ -43,7 +43,7 @@ test('without one calendar event, linked and manually entered tasks remain avail
 test('the event is inside the main timer, with editable context before daily-goal settings', () => {
   const timer = markup.indexOf('class="today-timer-ring"');
   const event = markup.indexOf('id="todayCalendarContext"');
-  const progress = markup.indexOf('id="todayGoalProgressTrack"');
+  const progress = markup.indexOf('id="todayCalendarProgressTrack"');
   const detail = markup.indexOf('id="todayManualTaskWrap"');
   const linked = markup.indexOf('id="todayIntegrationControls"');
   const goal = markup.indexOf('id="dailyGoalSelect"');

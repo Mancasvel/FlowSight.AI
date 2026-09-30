@@ -214,9 +214,6 @@ html[data-theme="dark"] .theme-icon-sun { display: block; }
 .today-tracking-state.is-paused::before { background: #e6a731; }
 .timer-inner { position: static; inset: auto; display: block; padding: 22px 0 20px; text-align: center; }
 .timer-display { color: #3e4759; font-size: 46px; font-weight: 800; line-height: 1.12; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.today-goal-progress { display: block; height: 7px; border-radius: 999px; overflow: hidden; background: #e2f8f6; }
-.today-goal-progress[hidden] { display: none; }
-.today-goal-progress > span { display: block; height: 100%; width: 100%; border-radius: inherit; background: #30bdb4; transform: scaleX(0); transform-origin: left center; transition: transform 0.3s ease-out; }
 .timer-meta-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 0 16px; }
 .timer-meta-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .timer-meta-item:last-child { text-align: right; align-items: flex-end; }
@@ -565,6 +562,5 @@ input[type="checkbox"] { accent-color: #14b5a9; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .play-timer-btn,
-  .today-goal-progress > span { transition: none; }
+  .play-timer-btn { transition: none; }
 }

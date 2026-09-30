@@ -103,8 +103,15 @@ pub fn get_coach_chat_messages() -> Result<Vec<CoachChatMessage>, String> {
     Ok(messages)
 }
 
+// The usage endpoint can wait on the network; never hold the Tauri UI thread.
 #[tauri::command]
-pub fn get_coach_chat_usage() -> Result<serde_json::Value, String> {
+pub async fn get_coach_chat_usage() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(get_coach_chat_usage_blocking)
+        .await
+        .map_err(|error| format!("Coach usage worker failed: {error}"))?
+}
+
+fn get_coach_chat_usage_blocking() -> Result<serde_json::Value, String> {
     let db_path = crate::paths::db_path()?;
     crate::entitlements::require_feature(&db_path, "cloud_ai")?;
     crate::privacy::require_cloud_ai(&db_path)?;
@@ -152,8 +159,16 @@ pub fn get_coach_chat_usage() -> Result<serde_json::Value, String> {
     Ok(body)
 }
 
+// Local report assembly and the cloud reply are blocking work. Keep navigation
+// responsive while the Coach is thinking, including on slow or failed requests.
 #[tauri::command]
-pub fn send_coach_chat_message(message: String) -> Result<serde_json::Value, String> {
+pub async fn send_coach_chat_message(message: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || send_coach_chat_message_blocking(message))
+        .await
+        .map_err(|error| format!("Coach message worker failed: {error}"))?
+}
+
+fn send_coach_chat_message_blocking(message: String) -> Result<serde_json::Value, String> {
     let trimmed = message.trim();
     if trimmed.is_empty() {
         return Err("Message cannot be empty".to_string());

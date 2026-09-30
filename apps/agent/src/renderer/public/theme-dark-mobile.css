@@ -87,9 +87,10 @@ body,
 .task-bar-time,
 .summary-focus-head,
 #tabProfile .consent-toggle-row { color: #d4e3e6; }
-.today-goal-progress,
 .summary-goal-track,
 .summary-focus-track { background: #265450; }
+.today-calendar-progress-track { background: #294d50; }
+.today-calendar-progress-track > span { background: #6cdfd0; }
 .bottom-nav,
 .card,
 .card-flat,

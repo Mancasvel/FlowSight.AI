@@ -3627,18 +3627,23 @@
             </div>
             <div class="today-calendar-status" aria-live="polite">
               <div class="today-calendar-context" id="todayCalendarContext" hidden>
-                <div>
-                  <span class="today-task-source" id="todayTaskSource"></span>
-                  <strong id="todayCalendarTitle"></strong>
-                  <small id="todayCalendarTime"></small>
+                <div class="today-calendar-heading">
+                  <div>
+                    <span class="today-task-source" id="todayTaskSource"></span>
+                    <strong id="todayCalendarTitle"></strong>
+                    <small id="todayCalendarTime"></small>
+                  </div>
+                  <button type="button" class="button button-ghost" id="todayCalendarOpenBtn" aria-label="Open current calendar event">Open</button>
                 </div>
-                <button type="button" class="button button-ghost" id="todayCalendarOpenBtn" aria-label="Open current calendar event">Open</button>
+                <div class="today-calendar-progress-block" id="todayCalendarProgressBlock" aria-live="off" hidden>
+                  <div class="today-calendar-progress-meta"><span>Calendar time elapsed</span><span id="todayCalendarProgressLabel">0m / 0m</span></div>
+                  <div class="today-calendar-progress-track" role="progressbar" aria-label="Calendar event elapsed time" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="todayCalendarProgressTrack">
+                    <span id="todayCalendarProgress"></span>
+                  </div>
+                </div>
               </div>
               <p class="today-calendar-idle" id="todayCalendarIdle" hidden></p>
               <p class="today-calendar-overlap" id="todayCalendarOverlap" hidden>Several events overlap right now. Describe the task below; FlowSight will not guess which event is yours.</p>
-            </div>
-            <div class="today-goal-progress" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="todayGoalProgressTrack">
-              <span id="todayGoalProgress"></span>
             </div>
             <div class="timer-meta-row">
               <div class="timer-meta-item"><span class="timer-meta-label">Daily goal</span><span class="timer-goal-label" id="timerGoalLabel">No goal</span></div>
@@ -4235,6 +4240,7 @@
       signOutWorker,
     } from './auth-service.js';
     import { hasPaidCalendarEntitlement } from './calendar-license.mjs';
+    import { calendarEventElapsedProgress, formatCompactDuration } from './today-progress.mjs';
     import {
       clearTrackingCheckpoint,
       loadTrackingCheckpoint,
@@ -4388,6 +4394,7 @@
     let calendarConnectPending = null;
     let calendarConnectionPoll = null;
     let calendarViewPoll = null;
+    let calendarProgressInterval = null;
     let lastCalendarTaskKey = null;
     const taskDetailsByContext = new Map();
     let notionIntegrationState = null;
@@ -4415,6 +4422,24 @@
 
     function activeCalendarTask() {
       return canUseCalendarCompanion() ? calendarStatus?.current || null : null;
+    }
+
+    function updateCalendarEventProgress() {
+      const progress = calendarEventElapsedProgress(activeCalendarTask());
+      const block = document.getElementById('todayCalendarProgressBlock');
+      if (block) block.hidden = !progress;
+      if (!progress) return;
+      const elapsed = formatCompactDuration(progress.elapsedSeconds);
+      const total = formatCompactDuration(progress.totalSeconds);
+      const label = document.getElementById('todayCalendarProgressLabel');
+      if (label) label.textContent = `${elapsed} / ${total}`;
+      const fill = document.getElementById('todayCalendarProgress');
+      if (fill) fill.style.transform = `scaleX(${progress.fraction})`;
+      const track = document.getElementById('todayCalendarProgressTrack');
+      if (track) {
+        track.setAttribute('aria-valuenow', String(progress.percent));
+        track.setAttribute('aria-valuetext', `${elapsed} elapsed of ${total} scheduled`);
+      }
     }
 
     function syncTodayTaskFields() {
@@ -4480,6 +4505,7 @@
         document.getElementById('todayCalendarTime').textContent = `${time(event.startAt)}–${time(event.endAt)}`;
       }
       const todayOpenButton = document.getElementById('todayCalendarOpenBtn');
+      updateCalendarEventProgress();
       if (todayOpenButton) todayOpenButton.hidden = !event?.webLink;
       const accountKey = currentUser?.id || 'local';
       const eventKey = event
@@ -5282,8 +5308,6 @@
       const hours = getDailyGoalHours();
       const label = document.getElementById('timerGoalLabel');
       if (label) label.textContent = hours > 0 ? `${hours} hours` : 'No goal';
-      const track = document.getElementById('todayGoalProgressTrack');
-      if (track) track.hidden = hours <= 0;
       syncDailyGoalSelect();
     }
 
@@ -5291,10 +5315,6 @@
       const ring = document.getElementById('timerProgressRing');
       const p = Math.min(Math.max(progress, 0), 1);
       if (ring) ring.setAttribute('stroke-dashoffset', String(TIMER_RING_CIRC * (1 - p)));
-      const rail = document.getElementById('todayGoalProgress');
-      if (rail) rail.style.transform = `scaleX(${p})`;
-      const track = document.getElementById('todayGoalProgressTrack');
-      if (track) track.setAttribute('aria-valuenow', String(Math.round(p * 100)));
     }
 
     function getDisplayTotalSeconds() {
@@ -6849,6 +6869,8 @@
       await loadCalendarStatus().catch((error) => console.warn('[Calendar] Status unavailable:', error));
       if (calendarViewPoll) clearInterval(calendarViewPoll);
       calendarViewPoll = setInterval(() => loadCalendarStatus().catch(() => {}), 30000);
+      if (calendarProgressInterval) clearInterval(calendarProgressInterval);
+      calendarProgressInterval = setInterval(updateCalendarEventProgress, 1000);
 
       // If logged in with Jira on a paid plan, fetch tasks
       if (currentEntitlements?.can_integrations && authSession && authSession.provider === 'jira') {
