@@ -87,12 +87,12 @@ pub fn specs() -> Vec<ToolSpec> {
             "end_at": {"type":"string","format":"date-time"}
         }), &["start_at","end_at"], false),
         spec("calendar.list_events", "calendar_list_events", "List FlowSight-owned local and connected calendar events with their IDs.", json!({}), &[], false),
-        spec("calendar.create_event", "calendar_create_event", "Create a focus event in the connected calendar. Confirm before writing.", json!({
+        spec("calendar.create_event", "calendar_create_event", "Create a focus event in FlowSight's local calendar. Connected calendar writes are unavailable in this release.", json!({
             "title": {"type":"string","maxLength":200},
             "start_at": {"type":"string","format":"date-time"},
             "end_at": {"type":"string","format":"date-time"}
         }), &["title","start_at","end_at"], true),
-        spec("calendar.move_event", "calendar_move_event", "Move an owned event; never reschedule another person's meeting without explicit confirmation.", json!({
+        spec("calendar.move_event", "calendar_move_event", "Move a FlowSight-owned local event. Connected calendar writes are unavailable in this release.", json!({
             "event_id": {"type":"string","maxLength":160},
             "start_at": {"type":"string","format":"date-time"},
             "end_at": {"type":"string","format":"date-time"}
@@ -165,6 +165,29 @@ pub const TOOL_FAMILIES: &[&str] = &[
     "chat",
 ];
 
+/// External writes are implemented behind this release gate until their
+/// provider-specific behavior has been verified with scoped test accounts.
+const DISABLED_EXTERNAL_WRITES: &[&str] = &[
+    "messages.send",
+    "project.update_status",
+    "project.create_subtask",
+];
+
+pub fn is_enabled_name(name: &str) -> bool {
+    !DISABLED_EXTERNAL_WRITES.contains(&name)
+}
+
+pub fn enabled_specs() -> Vec<ToolSpec> {
+    specs()
+        .into_iter()
+        .filter(|spec| is_enabled_name(spec.name))
+        .collect()
+}
+
+pub fn enabled_by_public_name(name: &str) -> Option<ToolSpec> {
+    enabled_specs().into_iter().find(|spec| spec.name == name)
+}
+
 pub const TOOL_FAMILY_PROMPT: &str = "Classify the latest user request by the ACTION VERB, not by nouns inside its content. Always call select_tool_family exactly once; never act during routing. Priority for overlapping words: remember/forget a rule (recuerda/olvida) = memory, even if about YouTube; run a named playbook or routine (ejecuta rutina) = automation, even if it starts focus; draft/send an email, Slack or Teams message (redacta/envia) = messages, even if its text mentions focus; open a file, folder, app or URL (abre) = desktop, even if it is a project folder. Example: 'Run the end-of-day playbook to close my focus session and plan tomorrow' MUST be automation, not focus. 'What is an end-of-day playbook?' is chat. Other families: focus = start/pause/end a timed focus session; system = toggle Windows notification banners or DND; browser = block a site or list/close/restore a tab; tasks = create/update/complete/reprioritize a task; calendar = availability or events; notifications = held reminder digest; project = read/update GitHub/Jira/Linear/Notion work items; chat = informational questions, ambiguity, or no clear action. Select chat if more than one unrelated action is requested.";
 
 pub fn family_router_definition() -> Value {
@@ -181,12 +204,13 @@ pub fn specs_for_family(family: &str) -> Vec<ToolSpec> {
     if !TOOL_FAMILIES.contains(&family) || family == "chat" {
         return Vec::new();
     }
-    specs()
+    enabled_specs()
         .into_iter()
         .filter(|spec| spec.name.split('.').next() == Some(family))
         .collect()
 }
 
+#[cfg(test)]
 pub fn by_public_name(name: &str) -> Option<ToolSpec> {
     specs().into_iter().find(|spec| spec.name == name)
 }
@@ -313,7 +337,7 @@ mod tests {
 
     #[test]
     fn every_tool_has_a_bounded_family_and_chat_has_no_tools() {
-        let all = specs();
+        let all = enabled_specs();
         assert!(specs_for_family("chat").is_empty());
         assert!(specs_for_family("unknown").is_empty());
         for spec in &all {
@@ -327,6 +351,18 @@ mod tests {
             .iter()
             .filter(|family| **family != "chat")
             .all(|family| specs_for_family(family).len() < all.len()));
+    }
+
+    #[test]
+    fn unverified_external_writes_are_not_offered() {
+        assert_eq!(enabled_specs().len(), 29);
+        for name in DISABLED_EXTERNAL_WRITES {
+            assert!(by_public_name(name).is_some());
+            assert!(enabled_by_public_name(name).is_none());
+            assert!(!specs_for_family(name.split('.').next().unwrap())
+                .iter()
+                .any(|spec| spec.name == *name));
+        }
     }
 
     #[test]

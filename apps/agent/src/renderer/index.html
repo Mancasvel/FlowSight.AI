@@ -4028,7 +4028,7 @@
       <div id="tabLocalAgent" class="tab-panel local-agent-panel">
         <div class="local-agent-heading">
           <h1>Local agent</h1>
-          <p>Ask Qwen to help with focus, tasks, and connected apps. Changes wait for your approval.</p>
+          <p>Ask local Qwen to help with focus, tasks, your browser, and work plans. Changes wait for your approval.</p>
           <p id="localAgentFocusStatus" class="local-agent-focus-status">No active focus block.</p>
         </div>
         <div class="card local-agent-card">
@@ -4059,6 +4059,9 @@
             <div><span>Port</span><output id="localAgentBrowserPort">—</output></div>
             <div><span>Pairing key</span><code id="localAgentBrowserToken">—</code></div>
           </div>
+          <p class="local-agent-helper">Sending messages and changing connected calendars or project services will become available after connector testing. For now, drafts, plans, focus actions, browser actions, and the FlowSight local calendar stay on your device.</p>
+          <button type="button" id="localAgentUseLocalCalendarBtn" class="button button-secondary" hidden>Use local calendar</button>
+          <div id="localAgentExternalConnections" hidden>
           <h2>External connections</h2>
           <p class="local-agent-helper">Add a scoped access token only for a service you want the agent to use. Tokens stay encrypted for your Windows account. Calendar and email use the selected Google or Microsoft connection; without a calendar connection, FlowSight uses its local calendar.</p>
           <form id="localAgentConnectionForm" class="local-agent-connection-form">
@@ -4087,6 +4090,7 @@
             <button type="button" id="localAgentSaveProvidersBtn" class="button button-secondary">Save providers</button>
           </div>
           <p id="localAgentConfigured" class="local-agent-helper"></p>
+          </div>
           <h2>Available actions</h2>
           <div id="localAgentTools" class="local-agent-tools"></div>
           <h2>What FlowSight remembers</h2>
@@ -8416,6 +8420,7 @@
         if (connections && document.activeElement !== document.getElementById('localAgentCalendarProvider')) {
           document.getElementById('localAgentCalendarProvider').value = connections.calendarProvider || '';
         }
+        document.getElementById('localAgentUseLocalCalendarBtn').hidden = !connections?.calendarProvider;
         if (connections && document.activeElement !== document.getElementById('localAgentEmailProvider')) {
           document.getElementById('localAgentEmailProvider').value = connections.emailProvider || '';
         }
@@ -8526,6 +8531,16 @@
         status.textContent = 'Calendar and email providers saved.';
         await loadLocalAgentDetails();
       } catch (error) { status.textContent = String(error); }
+    });
+
+    document.getElementById('localAgentUseLocalCalendarBtn')?.addEventListener('click', async () => {
+      try {
+        await invoke('set_local_agent_providers', { calendarProvider: null, emailProvider: null });
+        appendLocalAgentMessage('agent', 'FlowSight local calendar is now selected. Connected-service writes remain unavailable.');
+        await loadLocalAgentDetails();
+      } catch (error) {
+        appendLocalAgentMessage('error', String(error));
+      }
     });
 
     document.getElementById('localAgentConfirmBtn')?.addEventListener('click', async () => {

@@ -15,6 +15,10 @@ const schemas = JSON.parse(execFileSync('cargo', ['run', '--quiet', '--bin', 'du
   encoding: 'utf8',
 }));
 const tools = schemas.tools;
+const disabledWrites = ['messages_send', 'project_update_status', 'project_create_subtask'];
+if (tools.length !== 29 || disabledWrites.some((name) => tools.some((tool) => tool.function.name === name))) {
+  throw new Error('Unverified external writes were offered to the local model.');
+}
 const port = await new Promise((resolve) => {
   const server = createServer();
   server.listen(0, '127.0.0.1', () => {

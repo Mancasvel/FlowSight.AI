@@ -242,13 +242,13 @@ pub fn preview(name: &str, args: &Value) -> Result<String, String> {
             integer_arg(args, "priority")?
         )),
         "calendar.create_event" => Ok(format!(
-            "Create '{}' from {} to {}",
+            "Create '{}' in the FlowSight local calendar from {} to {}",
             text_arg(args, "title")?,
             text_arg(args, "start_at")?,
             text_arg(args, "end_at")?
         )),
         "calendar.move_event" => Ok(format!(
-            "Move event {} to {}–{}",
+            "Move FlowSight local event {} to {}–{}",
             text_arg(args, "event_id")?,
             text_arg(args, "start_at")?,
             text_arg(args, "end_at")?
@@ -352,12 +352,23 @@ pub fn preview(name: &str, args: &Value) -> Result<String, String> {
     }
 }
 
+fn require_local_calendar_write(provider: Option<&str>) -> Result<(), String> {
+    if provider.is_some() {
+        Err("Connected-calendar writes are unavailable in this release. Select the FlowSight local calendar first.".into())
+    } else {
+        Ok(())
+    }
+}
+
 pub fn execute(
     name: &str,
     args: &Value,
     app: AppHandle,
     agent_state: State<'_, AgentState>,
 ) -> Result<Value, String> {
+    if !super::registry::is_enabled_name(name) {
+        return Err("Connected-service writes are unavailable in this release.".into());
+    }
     let _focus_guard = if name.starts_with("focus.") {
         Some(
             FOCUS_ACTION_LOCK
@@ -595,6 +606,7 @@ pub fn execute(
         "calendar.create_event" => {
             let (start, end) = interval(args)?;
             let data = state::read()?;
+            require_local_calendar_write(data.calendar_provider.as_deref())?;
             if data.events.iter().any(|existing| {
                 parse_time(&existing.start_at).is_ok_and(|at| at < end)
                     && parse_time(&existing.end_at).is_ok_and(|at| at > start)
@@ -659,6 +671,7 @@ pub fn execute(
                 .find(|event| event.id == id)
                 .cloned()
                 .ok_or("Event not found or not owned by FlowSight.")?;
+            require_local_calendar_write(existing.provider.as_deref())?;
             if data.events.iter().any(|event| {
                 event.id != id
                     && parse_time(&event.start_at).is_ok_and(|at| at < end)
@@ -991,6 +1004,13 @@ pub fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn calendar_writes_are_local_only_until_connectors_are_verified() {
+        assert!(require_local_calendar_write(None).is_ok());
+        assert!(require_local_calendar_write(Some("google")).is_err());
+        assert!(require_local_calendar_write(Some("microsoft")).is_err());
+    }
 
     #[test]
     fn availability_merges_overlapping_events() {

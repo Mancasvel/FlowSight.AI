@@ -69,11 +69,16 @@ Available tools are `focus.start`, `focus.pause`, `focus.resume`, `focus.end`,
 `tasks.update`, `tasks.complete`, `tasks.reprioritize`,
 `calendar.get_availability`, `calendar.list_events`, `calendar.create_event`,
 `calendar.move_event`, `notifications.digest`, `messages.draft`,
-`messages.list_drafts`, `messages.send`, `project.get_current_work`,
-`project.update_status`, `project.create_subtask`,
+`messages.list_drafts`, `project.get_current_work`,
 `project.prepare_pr_description`, `desktop.open_resource`, `automation.run_playbook`,
 `memory.save_preference`, `memory.forget_preference`, and
 `memory.list_preferences`.
+
+The code for `messages.send`, `project.update_status`, and
+`project.create_subtask` is present but disabled in this release until scoped
+provider tests pass. Calendar creation and changes are limited to FlowSight's
+local calendar; connected-calendar writes are also disabled. These tools are
+not offered to Qwen or shown as available actions.
 
 - **Focus:** Gentle starts tracking; standard also silences Windows app
   notification banners; strict additionally blocks the browser patterns you
@@ -88,27 +93,15 @@ Available tools are `focus.start`, `focus.pause`, `focus.resume`, `focus.end`,
   only over `127.0.0.1` and requires the pairing key. Temporary blocks expire
   in the extension and are released if FlowSight disconnects. Closing a tab
   saves its URL so it can be restored.
-- **Calendar:** Without an external connection, availability and focus events
-  use FlowSight's local calendar. Google Calendar and Microsoft Calendar can be
-  selected after saving an access token with calendar read/write permission.
-  FlowSight moves only events it created and recorded locally. A missing or
-  expired token produces an error instead of claiming the time is free.
-- **Messages:** Drafts are local. Email uses a selected Gmail or Microsoft Mail
-  connection; Slack uses a channel/user ID; Teams uses a chat ID. `messages.send`
-  always shows the recipient and full body for confirmation. A draft is marked
-  uncertain if delivery times out, so it cannot be sent again silently.
-- **Projects and playbooks:** Jira and Linear use FlowSight's existing account
-  connections (reconnect to grant write scope); GitHub and Notion use tokens
-  saved in Local agent. GitHub status changes support open/closed issues;
-  Notion pages need a Status property. Status updates can include a handoff note.
-  Creating a subtask uses the chosen provider's child issue or child page API
-  and requires confirmation. A PR description is returned as local text for
-  review; FlowSight does not publish it. Deep work, end of day and recover
-  focus playbooks return their individual steps and results for review.
-
-The optional Google, Microsoft, Slack, Teams, GitHub and Notion tokens are saved
-with Windows DPAPI. Grant only the scopes needed for the tools you select.
-Provider access tokens may expire and then need to be replaced in Local agent.
+- **Calendar:** Availability and focus events use FlowSight's local calendar.
+  Connected calendars are not changed by this release, even if a provider was
+  configured in a development build.
+- **Messages:** Drafts are saved locally and never sent by this release.
+- **Projects and playbooks:** `project.get_current_work` can read existing
+  FlowSight Jira/Linear connections. A PR description is returned as local text
+  for review; FlowSight does not publish it. Deep work, end of day and recover
+  focus playbooks return their individual steps and results for review. They
+  cannot update external project services in this release.
 
 ## Status
 

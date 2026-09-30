@@ -3,7 +3,7 @@
 mod registry;
 
 fn main() {
-    let definitions = registry::specs()
+    let definitions = registry::enabled_specs()
         .iter()
         .map(registry::model_definition)
         .collect::<Vec<_>>();

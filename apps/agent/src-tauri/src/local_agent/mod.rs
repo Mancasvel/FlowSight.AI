@@ -293,7 +293,7 @@ fn request_model(
     let offered = registry::specs_for_family(family);
     let context = context_for_family(family, &data);
     let mut messages = vec![
-        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. Do not send messages or change external calendars without the user's confirmation. Never set retry_if_uncertain unless the user says they checked that the first delivery did not happen. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
+        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. In this release, messages cannot be sent and connected calendars or projects cannot be changed; offer a local draft or plan instead. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
         json!({"role":"system","content":format!("Current FlowSight context: {context}")}),
     ];
     messages.extend(recent_messages(&data, 350));
@@ -317,7 +317,7 @@ fn request_model(
 
 #[tauri::command]
 pub fn get_local_agent_tools() -> Vec<Value> {
-    registry::specs()
+    registry::enabled_specs()
         .iter()
         .map(|spec| {
             json!({
@@ -343,7 +343,8 @@ fn propose_local_agent_tool_blocking(
     name: String,
     arguments: Value,
 ) -> Result<ActionProposal, String> {
-    let spec = registry::by_public_name(&name).ok_or("Unknown local agent tool.")?;
+    let spec = registry::enabled_by_public_name(&name)
+        .ok_or("This local agent tool is unavailable in this release.")?;
     if !spec.confirmation {
         return Err("This tool does not need a confirmation proposal.".into());
     }
@@ -420,8 +421,8 @@ fn confirm_local_agent_action_blocking(app: AppHandle, id: String) -> Result<Val
     if pending.expires_at <= Instant::now() {
         return Err("That action expired. Ask the local agent again.".into());
     }
-    let spec =
-        registry::by_public_name(&pending.tool).ok_or("That action is no longer supported.")?;
+    let spec = registry::enabled_by_public_name(&pending.tool)
+        .ok_or("That action is unavailable in this release.")?;
     if !spec.confirmation {
         return Err("That action does not require confirmation.".into());
     }
