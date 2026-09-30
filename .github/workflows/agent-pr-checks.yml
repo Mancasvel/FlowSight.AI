@@ -9,6 +9,49 @@ permissions:
   contents: read
 
 jobs:
+  windows-runtime-staging:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage signed Microsoft Visual C++ runtime
+        shell: pwsh
+        run: ./scripts/stage-msvc-runtime.ps1
+
+      - name: Verify both executable runtime directories
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $resources = (Get-Content apps/agent/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).bundle.resources
+          if ($resources.'../../../local_llm/bin/*.dll' -ne 'local_llm/bin/') {
+            throw 'Tauri no longer places DLLs beside llama-server.exe.'
+          }
+          if (-not (Test-Path -LiteralPath 'local_llm/bin/llama-server.exe' -PathType Leaf)) {
+            throw 'llama-server.exe is missing from the checkout.'
+          }
+          foreach ($name in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
+            if ($resources."../../../local_llm/app_runtime/$name" -ne $name) {
+              throw "Tauri no longer places $name beside app.exe."
+            }
+            $appCopy = Join-Path 'local_llm/app_runtime' $name
+            $sidecarCopy = Join-Path 'local_llm/bin' $name
+            foreach ($path in @($appCopy, $sidecarCopy)) {
+              if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "Staged runtime file missing: $path"
+              }
+              $signature = Get-AuthenticodeSignature -LiteralPath $path
+              if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
+                throw "Staged runtime file is not signed by Microsoft: $path"
+              }
+            }
+            if ((Get-FileHash -LiteralPath $appCopy -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $sidecarCopy -Algorithm SHA256).Hash) {
+              throw "Runtime copies differ: $name"
+            }
+            Write-Host "Verified signed $name beside app.exe and llama-server.exe."
+          }
+
   renderer-and-format:
     runs-on: windows-latest
     timeout-minutes: 25
