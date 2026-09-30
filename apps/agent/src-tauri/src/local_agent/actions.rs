@@ -708,10 +708,10 @@ pub fn execute(
             }
             updated
         }
-        "notifications.digest" => state::update(|data| {
-            let items = std::mem::take(&mut data.notification_digest);
+        "notifications.digest" => {
+            let items = state::read()?.notification_digest;
             Ok(json!({"count":items.len(),"items":items}))
-        }),
+        }
         "messages.draft" => {
             let channel = text_arg(args, "channel")?;
             let recipient = text_arg(args, "recipient")?.trim();

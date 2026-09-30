@@ -150,8 +150,41 @@ pub fn specs() -> Vec<ToolSpec> {
     ]
 }
 
-pub fn by_model_name(name: &str) -> Option<ToolSpec> {
-    specs().into_iter().find(|spec| spec.model_name == name)
+pub const TOOL_FAMILIES: &[&str] = &[
+    "focus",
+    "system",
+    "browser",
+    "tasks",
+    "calendar",
+    "notifications",
+    "messages",
+    "project",
+    "desktop",
+    "automation",
+    "memory",
+    "chat",
+];
+
+pub const TOOL_FAMILY_PROMPT: &str = "Classify the latest user request by the ACTION VERB, not by nouns inside its content. Always call select_tool_family exactly once; never act during routing. Priority for overlapping words: remember/forget a rule (recuerda/olvida) = memory, even if about YouTube; run a named playbook or routine (ejecuta rutina) = automation, even if it starts focus; draft/send an email, Slack or Teams message (redacta/envia) = messages, even if its text mentions focus; open a file, folder, app or URL (abre) = desktop, even if it is a project folder. Example: 'Run the end-of-day playbook to close my focus session and plan tomorrow' MUST be automation, not focus. 'What is an end-of-day playbook?' is chat. Other families: focus = start/pause/end a timed focus session; system = toggle Windows notification banners or DND; browser = block a site or list/close/restore a tab; tasks = create/update/complete/reprioritize a task; calendar = availability or events; notifications = held reminder digest; project = read/update GitHub/Jira/Linear/Notion work items; chat = informational questions, ambiguity, or no clear action. Select chat if more than one unrelated action is requested.";
+
+pub fn family_router_definition() -> Value {
+    json!({"type":"function","function":{
+        "name":"select_tool_family",
+        "description":"Select the one family relevant to this request; chat means no action.",
+        "parameters":{"type":"object","properties":{"family":{"type":"string","enum":TOOL_FAMILIES}},"required":["family"],"additionalProperties":false}
+    }})
+}
+
+/// Expose only the tools relevant to one request. All tools remain available
+/// across turns, but their schemas no longer crowd the local model context.
+pub fn specs_for_family(family: &str) -> Vec<ToolSpec> {
+    if !TOOL_FAMILIES.contains(&family) || family == "chat" {
+        return Vec::new();
+    }
+    specs()
+        .into_iter()
+        .filter(|spec| spec.name.split('.').next() == Some(family))
+        .collect()
 }
 
 pub fn by_public_name(name: &str) -> Option<ToolSpec> {
@@ -245,7 +278,10 @@ pub fn validate(spec: &ToolSpec, args: &Value) -> Result<(), String> {
     }
     if spec.name == "focus.start"
         && args["protection"] == "strict"
-        && args["block_patterns"].as_array().is_none_or(Vec::is_empty)
+        && match args["block_patterns"].as_array() {
+            Some(patterns) => patterns.is_empty(),
+            None => true,
+        }
     {
         return Err("Strict protection needs one or more browser patterns to block.".into());
     }
@@ -273,6 +309,24 @@ mod tests {
             assert!(!spec.model_name.contains('.'));
         }
         assert_eq!(public.len(), 32);
+    }
+
+    #[test]
+    fn every_tool_has_a_bounded_family_and_chat_has_no_tools() {
+        let all = specs();
+        assert!(specs_for_family("chat").is_empty());
+        assert!(specs_for_family("unknown").is_empty());
+        for spec in &all {
+            let family = spec.name.split('.').next().unwrap();
+            assert!(TOOL_FAMILIES.contains(&family));
+            assert!(specs_for_family(family)
+                .iter()
+                .any(|candidate| candidate.name == spec.name));
+        }
+        assert!(TOOL_FAMILIES
+            .iter()
+            .filter(|family| **family != "chat")
+            .all(|family| specs_for_family(family).len() < all.len()));
     }
 
     #[test]

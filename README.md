@@ -60,6 +60,8 @@ change is shown with its concrete target and waits for confirmation for five
 minutes; cancelled and expired proposals do nothing. Local tasks, events,
 drafts, preferences and an action audit stay encrypted for the current Windows
 user and are included in the local data export (access tokens are excluded).
+The model first chooses one tool family; only that family's definitions enter
+the action turn, and calls outside the offered family are refused.
 
 Available tools are `focus.start`, `focus.pause`, `focus.resume`, `focus.end`,
 `system.set_dnd`, `browser.list_tabs`, `browser.block`, `browser.unblock`,

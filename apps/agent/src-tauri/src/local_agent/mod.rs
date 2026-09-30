@@ -101,6 +101,7 @@ fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionPro
 
 fn decide_from_model(
     response: &Value,
+    offered: &[registry::ToolSpec],
 ) -> Result<(String, Option<(registry::ToolSpec, Value)>), String> {
     let message = &response["choices"][0]["message"];
     if !message.is_object() {
@@ -120,75 +121,138 @@ fn decide_from_model(
     let name = call["name"]
         .as_str()
         .ok_or("The local model omitted the tool name.")?;
-    let spec = registry::by_model_name(name)
-        .ok_or("The local model requested a tool FlowSight does not support.")?;
+    let spec = offered
+        .iter()
+        .find(|spec| spec.model_name == name)
+        .cloned()
+        .ok_or("The local model requested a tool that was not offered for this request.")?;
     let arguments = parse_arguments(&call["arguments"])?;
     registry::validate(&spec, &arguments)?;
     Ok((content, Some((spec, arguments))))
 }
 
-fn request_model(
-    message: &str,
-    app: AppHandle,
-    state: State<'_, AgentState>,
-) -> Result<Value, String> {
-    crate::agent::ensure_local_llm_ready(app, state)?;
-    let url = crate::llama_port::managed_chat_completions_url()
-        .ok_or("The local AI server is unavailable.")?;
-    let definitions: Vec<Value> = registry::specs()
-        .iter()
-        .map(registry::model_definition)
-        .collect();
-    let data = state::read()?;
-    let mut recent_preferences: Vec<_> = data.preferences.iter().collect();
-    recent_preferences.sort_by(|a, b| b.1.updated_at.cmp(&a.1.updated_at));
-    let context = json!({
-        "now": chrono::Local::now().to_rfc3339(),
-        "currentIntention": crate::telemetry::selected_task_for_reminder(),
-        "focus": data.focus,
-        "tasks": data.tasks.iter().rev().take(12).map(|task| json!({
-            "id":task.id,"title":task.title.chars().take(120).collect::<String>(),
-            "status":task.status,"priority":task.priority,"dueAt":task.due_at,
-        })).collect::<Vec<_>>(),
-        "events": data.events.iter().rev().take(12).map(|event| json!({
-            "id":event.id,"title":event.title.chars().take(120).collect::<String>(),
-            "startAt":event.start_at,"endAt":event.end_at,"provider":event.provider,
-        })).collect::<Vec<_>>(),
-        "drafts": data.drafts.iter().rev().take(6).map(|draft| json!({
-            "id":draft.id,"channel":draft.channel,"recipient":draft.recipient,
-            "subject":draft.subject,"sentAt":draft.sent_at,
-        })).collect::<Vec<_>>(),
-        "preferences": recent_preferences.into_iter().take(12).map(|(key,value)| json!({
-            "key":key,"value":value.value.chars().take(160).collect::<String>()
-        })).collect::<Vec<_>>(),
-        "calendarProvider": data.calendar_provider,
-        "emailProvider": data.email_provider,
-    });
-    let mut messages = vec![
-        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. Do not send messages or change external calendars without the user's confirmation. Never set retry_if_uncertain unless the user says they checked that the first delivery did not happen. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
-        json!({"role":"system","content":format!("Current FlowSight context: {context}")}),
-    ];
-    for item in data.conversation.iter().rev().take(4).rev() {
-        if item.role == "user" || item.role == "assistant" {
-            messages.push(json!({"role":item.role,"content":item.content.chars().take(650).collect::<String>()}));
-        }
+fn routed_family(response: &Value) -> Result<&'static str, String> {
+    let calls = response["choices"][0]["message"]["tool_calls"]
+        .as_array()
+        .ok_or("The local model could not identify the request type. Please rephrase it.")?;
+    if calls.len() != 1 || calls[0]["function"]["name"] != "select_tool_family" {
+        return Err("The local model could not identify one request type. Please ask for one action at a time.".into());
     }
-    messages.push(json!({"role":"user","content":message}));
-    let body = json!({
-        "model": LLAMA_CHAT_MODEL_ID,
-        "messages": messages,
-        "tools": definitions,
-        "tool_choice": "auto",
-        "temperature": 0,
-        "max_tokens": 700,
-        "stream": false
+    let args = parse_arguments(&calls[0]["function"]["arguments"])?;
+    let family = args["family"]
+        .as_str()
+        .ok_or("The local model did not choose a request type.")?;
+    registry::TOOL_FAMILIES
+        .iter()
+        .copied()
+        .find(|candidate| *candidate == family)
+        .ok_or("The local model chose an unsupported request type.".into())
+}
+
+fn recent_messages(data: &state::AgentData, max_chars: usize) -> Vec<Value> {
+    data.conversation
+        .iter()
+        .rev()
+        .take(4)
+        .rev()
+        .filter(|item| item.role == "user" || item.role == "assistant")
+        .map(|item| {
+            json!({"role": item.role, "content": item.content.chars().take(max_chars).collect::<String>()})
+        })
+        .collect()
+}
+
+fn context_for_family(family: &str, data: &state::AgentData) -> Value {
+    let mut context = json!({
+        "now": chrono::Local::now().to_rfc3339(),
+        "currentIntention": crate::telemetry::selected_task_for_reminder()
+            .map(|value| value.chars().take(160).collect::<String>()),
     });
-    let response = Client::builder()
-        .timeout(Duration::from_secs(90))
-        .build()
-        .map_err(|error| error.to_string())?
+    let fields = context.as_object_mut().expect("context is an object");
+    if matches!(family, "focus" | "system" | "notifications" | "automation") {
+        fields.insert(
+            "focus".into(),
+            json!(data.focus.as_ref().map(|focus| json!({
+                "intention":focus.intention,
+                "durationMinutes":focus.duration_minutes,
+                "protection":focus.protection,
+                "startedAt":focus.started_at,
+                "status":focus.status,
+                "pausedAt":focus.paused_at,
+                "blockedPatternCount":focus.blocked_patterns.len(),
+            }))),
+        );
+    }
+    if matches!(family, "tasks" | "focus" | "automation") {
+        let count = if family == "tasks" { 10 } else { 5 };
+        fields.insert(
+            "tasks".into(),
+            json!(data
+                .tasks
+                .iter()
+                .rev()
+                .take(count)
+                .map(|task| json!({
+                    "id":task.id,"title":task.title.chars().take(120).collect::<String>(),
+                    "status":task.status,"priority":task.priority,"dueAt":task.due_at,
+                }))
+                .collect::<Vec<_>>()),
+        );
+    }
+    if family == "calendar" {
+        fields.insert(
+            "events".into(),
+            json!(data
+                .events
+                .iter()
+                .rev()
+                .take(8)
+                .map(|event| json!({
+                    "id":event.id,"title":event.title.chars().take(120).collect::<String>(),
+                    "startAt":event.start_at,"endAt":event.end_at,"provider":event.provider,
+                }))
+                .collect::<Vec<_>>()),
+        );
+        fields.insert("calendarProvider".into(), json!(data.calendar_provider));
+    }
+    if family == "messages" {
+        fields.insert(
+            "drafts".into(),
+            json!(data
+                .drafts
+                .iter()
+                .rev()
+                .take(6)
+                .map(|draft| json!({
+                    "id":draft.id,"channel":draft.channel,"recipient":draft.recipient,
+                    "subject":draft.subject,"sentAt":draft.sent_at,
+                }))
+                .collect::<Vec<_>>()),
+        );
+        fields.insert("emailProvider".into(), json!(data.email_provider));
+    }
+    if matches!(family, "memory" | "focus" | "automation") {
+        let mut recent_preferences: Vec<_> = data.preferences.iter().collect();
+        recent_preferences.sort_by(|a, b| b.1.updated_at.cmp(&a.1.updated_at));
+        let count = if family == "memory" { 10 } else { 5 };
+        fields.insert(
+            "preferences".into(),
+            json!(recent_preferences
+                .into_iter()
+                .take(count)
+                .map(|(key, value)| json!({
+                    "key":key,"value":value.value.chars().take(120).collect::<String>()
+                }))
+                .collect::<Vec<_>>()),
+        );
+    }
+    context
+}
+
+fn send_model_request(client: &Client, url: &str, body: &Value) -> Result<Value, String> {
+    let response = client
         .post(url)
-        .json(&body)
+        .json(body)
         .send()
         .map_err(|error| format!("Could not reach local Qwen: {error}"))?;
     if !response.status().is_success() {
@@ -197,6 +261,58 @@ fn request_model(
     response
         .json()
         .map_err(|_| "Local Qwen returned invalid JSON.".into())
+}
+
+fn request_model(
+    message: &str,
+    app: AppHandle,
+    state: State<'_, AgentState>,
+) -> Result<(Value, Vec<registry::ToolSpec>), String> {
+    crate::agent::ensure_local_llm_ready(app, state)?;
+    let url = crate::llama_port::managed_chat_completions_url()
+        .ok_or("The local AI server is unavailable.")?;
+    let data = state::read()?;
+    let client = Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let mut route_messages = vec![json!({"role":"system","content":registry::TOOL_FAMILY_PROMPT})];
+    route_messages.extend(recent_messages(&data, 250));
+    route_messages.push(json!({"role":"user","content":message}));
+    let route_body = json!({
+        "model": LLAMA_CHAT_MODEL_ID,
+        "messages": route_messages,
+        "tools": [registry::family_router_definition()],
+        "tool_choice": "required",
+        "temperature": 0,
+        "max_tokens": 96,
+        "stream": false
+    });
+    let family = routed_family(&send_model_request(&client, &url, &route_body)?)?;
+    let offered = registry::specs_for_family(family);
+    let context = context_for_family(family, &data);
+    let mut messages = vec![
+        json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. Do not send messages or change external calendars without the user's confirmation. Never set retry_if_uncertain unless the user says they checked that the first delivery did not happen. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
+        json!({"role":"system","content":format!("Current FlowSight context: {context}")}),
+    ];
+    messages.extend(recent_messages(&data, 350));
+    messages.push(json!({"role":"user","content":message}));
+    let mut body = json!({
+        "model": LLAMA_CHAT_MODEL_ID,
+        "messages": messages,
+        "temperature": 0,
+        "max_tokens": 700,
+        "stream": false
+    });
+    if !offered.is_empty() {
+        body["tools"] = json!(offered
+            .iter()
+            .map(registry::model_definition)
+            .collect::<Vec<_>>());
+        body["tool_choice"] = json!("auto");
+    }
+    Ok((send_model_request(&client, &url, &body)?, offered))
 }
 
 #[tauri::command]
@@ -247,8 +363,8 @@ fn ask_local_agent_blocking(app: AppHandle, message: String) -> Result<AgentTurn
         return Err("Write a request of up to 1,200 characters.".into());
     }
     let state = app.state::<AgentState>();
-    let response = request_model(message, app.clone(), state.clone())?;
-    let (text, choice) = decide_from_model(&response)?;
+    let (response, offered) = request_model(message, app.clone(), state.clone())?;
+    let (text, choice) = decide_from_model(&response, &offered)?;
     state::append_conversation("user", message)?;
     let Some((spec, arguments)) = choice else {
         let reply = if text.is_empty() {
@@ -457,15 +573,35 @@ mod tests {
     #[test]
     fn unknown_or_multiple_model_calls_never_execute() {
         let unknown = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"shell_run","arguments":"{}"}}]}}]});
-        assert!(decide_from_model(&unknown).is_err());
+        assert!(decide_from_model(&unknown, &registry::specs_for_family("focus")).is_err());
         let two = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"focus_pause","arguments":"{}"}},{"function":{"name":"focus_end","arguments":"{}"}}]}}]});
-        assert!(decide_from_model(&two).is_err());
+        assert!(decide_from_model(&two, &registry::specs_for_family("focus")).is_err());
+    }
+
+    #[test]
+    fn routing_rejects_missing_multiple_and_unknown_families() {
+        let good = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"select_tool_family","arguments":"{\"family\":\"focus\"}"}}]}}]});
+        assert_eq!(routed_family(&good).unwrap(), "focus");
+        let missing = json!({"choices":[{"message":{"content":"focus"}}]});
+        assert!(routed_family(&missing).is_err());
+        let multiple = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"select_tool_family","arguments":"{\"family\":\"focus\"}"}},{"function":{"name":"select_tool_family","arguments":"{\"family\":\"tasks\"}"}}]}}]});
+        assert!(routed_family(&multiple).is_err());
+        let unknown = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"select_tool_family","arguments":"{\"family\":\"shell\"}"}}]}}]});
+        assert!(routed_family(&unknown).is_err());
+    }
+
+    #[test]
+    fn model_cannot_call_a_tool_outside_the_selected_family() {
+        let response = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"messages_send","arguments":"{\"draft_id\":\"known\"}"}}]}}]});
+        assert!(decide_from_model(&response, &registry::specs_for_family("tasks")).is_err());
+        assert!(decide_from_model(&response, &registry::specs_for_family("chat")).is_err());
     }
 
     #[test]
     fn a_valid_mutation_is_held_for_confirmation() {
         let response = json!({"choices":[{"message":{"tool_calls":[{"function":{"name":"tasks_create","arguments":"{\"title\":\"Review PR\"}"}}]}}]});
-        let (_, choice) = decide_from_model(&response).unwrap();
+        let (_, choice) =
+            decide_from_model(&response, &registry::specs_for_family("tasks")).unwrap();
         let (spec, args) = choice.unwrap();
         assert!(spec.confirmation);
         let proposal = proposal_for(&spec, args).unwrap();

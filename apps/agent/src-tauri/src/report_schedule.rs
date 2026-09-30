@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 const SCHEDULE_FILE: &str = "weekly-report-schedule.json";
+const MAX_REPORT_BYTES: usize = 20 * 1024 * 1024;
 static SCHEDULE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +100,13 @@ fn validate_folder(folder: &str) -> Result<String, String> {
     Ok(path.to_string_lossy().to_string())
 }
 
+fn validate_pdf_bytes(bytes: &[u8]) -> Result<(), String> {
+    if !bytes.starts_with(b"%PDF-") || bytes.len() > MAX_REPORT_BYTES {
+        return Err("The generated report is missing a PDF header or exceeds 20 MB.".into());
+    }
+    Ok(())
+}
+
 fn is_due(schedule: &WeeklyReportSchedule, now: NaiveDateTime) -> bool {
     if !schedule.enabled || schedule.weekday != now.weekday().num_days_from_sunday() as u8 {
         return false;
@@ -179,16 +187,34 @@ pub fn save_scheduled_report_pdf(
     filename: String,
     bytes: Vec<u8>,
 ) -> Result<String, String> {
+    validate_pdf_bytes(&bytes)?;
     let _guard = SCHEDULE_LOCK.lock().map_err(|error| error.to_string())?;
     let path = schedule_path()?;
-    let mut schedule = read_schedule(&path)?;
+    save_due_report(
+        &path,
+        revision,
+        &started_at,
+        &filename,
+        &bytes,
+        Local::now(),
+    )
+}
+
+fn save_due_report(
+    path: &Path,
+    revision: u64,
+    started_at: &str,
+    filename: &str,
+    bytes: &[u8],
+    now: DateTime<Local>,
+) -> Result<String, String> {
+    let mut schedule = read_schedule(path)?;
     if schedule.revision != revision {
         return Err(
             "The weekly report settings changed during generation. Please try again.".into(),
         );
     }
-    let now = Local::now();
-    let started_at = DateTime::parse_from_rfc3339(&started_at)
+    let started_at = DateTime::parse_from_rfc3339(started_at)
         .map_err(|_| "Invalid weekly report start time.".to_string())?
         .with_timezone(&Local);
     if !can_save_started_run(
@@ -201,10 +227,10 @@ pub fn save_scheduled_report_pdf(
         );
     }
     let folder = validate_folder(&schedule.folder)?;
-    let saved_path = crate::paths::save_pdf_to_directory(Path::new(&folder), &filename, &bytes)?;
+    let saved_path = crate::paths::save_pdf_to_directory(Path::new(&folder), filename, bytes)?;
     schedule.last_generated_date = Some(started_at.format("%Y-%m-%d").to_string());
     schedule.last_saved_path = Some(saved_path.clone());
-    if let Err(error) = write_schedule(&path, &schedule) {
+    if let Err(error) = write_schedule(path, &schedule) {
         let _ = std::fs::remove_file(&saved_path);
         return Err(error);
     }
@@ -225,7 +251,7 @@ pub fn start_check_loop(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, TimeZone};
 
     fn at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(year, month, day)
@@ -303,5 +329,59 @@ mod tests {
             ..Default::default()
         };
         assert!(!is_due(&schedule, at(2026, 10, 2, 17, 0)));
+    }
+
+    #[test]
+    fn scheduled_report_rejects_non_pdf_or_oversized_content() {
+        assert!(validate_pdf_bytes(b"not a pdf").is_err());
+        assert!(validate_pdf_bytes(b"%PDF-1.7\ncontent").is_ok());
+        let mut oversized = vec![0; MAX_REPORT_BYTES + 1];
+        oversized[..5].copy_from_slice(b"%PDF-");
+        assert!(validate_pdf_bytes(&oversized).is_err());
+    }
+
+    #[test]
+    fn due_report_saves_in_chosen_folder_once_and_records_its_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("chosen-reports");
+        std::fs::create_dir(&destination).unwrap();
+        let schedule_path = directory.path().join(SCHEDULE_FILE);
+        let schedule = WeeklyReportSchedule {
+            enabled: true,
+            weekday: 5,
+            time: "17:00".into(),
+            folder: destination.to_string_lossy().to_string(),
+            revision: 1,
+            ..Default::default()
+        };
+        write_schedule(&schedule_path, &schedule).unwrap();
+        let now = Local
+            .from_local_datetime(&at(2026, 10, 2, 17, 0))
+            .single()
+            .unwrap();
+        let bytes = b"%PDF-1.7\nweekly report";
+        let saved = save_due_report(
+            &schedule_path,
+            1,
+            &now.to_rfc3339(),
+            "FlowSight_Weekly.pdf",
+            bytes,
+            now,
+        )
+        .unwrap();
+        assert!(Path::new(&saved).starts_with(std::fs::canonicalize(&destination).unwrap()));
+        assert_eq!(std::fs::read(&saved).unwrap(), bytes);
+        let updated = read_schedule(&schedule_path).unwrap();
+        assert_eq!(updated.last_saved_path.as_deref(), Some(saved.as_str()));
+        assert_eq!(updated.last_generated_date.as_deref(), Some("2026-10-02"));
+        assert!(save_due_report(
+            &schedule_path,
+            1,
+            &now.to_rfc3339(),
+            "FlowSight_Weekly.pdf",
+            bytes,
+            now,
+        )
+        .is_err());
     }
 }
