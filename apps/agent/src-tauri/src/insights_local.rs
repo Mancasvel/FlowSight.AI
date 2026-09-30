@@ -2,14 +2,16 @@ use chrono::Local;
 use reqwest::blocking::Client;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 use tauri::Emitter;
 
 use crate::vision_model::LLAMA_CHAT_MODEL_ID;
 
-/// Per-section LLM context from SQLite aggregates (separate calls, richer than a single snapshot).
+/// Per-section LLM context from SQLite aggregates. Keep the single local model's
+/// memory footprint fixed while preserving evidence from the whole period.
 const LLM_SECTION_STATS_MAX_CHARS: usize = 2800;
+const LLM_PROFILE_MAX_CHARS: usize = 420;
 
 const REPORT_SYSTEM_PROMPT: &str = "You are a privacy-first local report editor. \
 Return valid JSON only. Select zero-based indices from the provided verified candidates. \
@@ -1099,7 +1101,10 @@ fn build_section_stats_snapshot(
 ) -> String {
     let mut lines = build_stats_header_lines(local_data);
     if !prefs_block.is_empty() {
-        lines.push(prefs_block.to_string());
+        lines.push(clamp_line(
+            &prefs_block.split_whitespace().collect::<Vec<_>>().join(" "),
+            LLM_PROFILE_MAX_CHARS,
+        ));
         lines.push(
             "Personalize insights for USER_PROFILE roles, activities, and improvement goals."
                 .to_string(),
@@ -1139,16 +1144,16 @@ fn build_section_stats_snapshot(
         }
         "potential_risks" => {
             append_health_metrics(&mut lines, local_data);
-            append_prior_period(&mut lines, local_data);
             append_daily_detail(&mut lines, local_data);
+            append_prior_period(&mut lines, local_data);
             append_top_tickets(&mut lines, local_data, 5);
         }
         "progress_tasks" => {
-            append_top_tickets(&mut lines, local_data, 12);
-            append_longest_sessions(&mut lines, local_data, 10);
-            append_work_themes(&mut lines, local_data, 8);
             append_daily_detail(&mut lines, local_data);
-            append_activity_samples(&mut lines, local_data, 14, 140);
+            append_activity_samples(&mut lines, local_data, 10, 80);
+            append_top_tickets(&mut lines, local_data, 8);
+            append_longest_sessions(&mut lines, local_data, 5);
+            append_work_themes(&mut lines, local_data, 5);
         }
         _ => {
             append_health_metrics(&mut lines, local_data);
@@ -1161,7 +1166,7 @@ fn build_section_stats_snapshot(
         }
     }
 
-    truncate_stats_text(lines.join("\n"), LLM_SECTION_STATS_MAX_CHARS)
+    pack_stats_lines(lines, LLM_SECTION_STATS_MAX_CHARS)
 }
 
 fn deep_threshold_minutes(local_data: &serde_json::Value) -> i64 {
@@ -1284,24 +1289,45 @@ fn append_top_tickets(lines: &mut Vec<String>, local_data: &serde_json::Value, l
 
 fn append_daily_detail(lines: &mut Vec<String>, local_data: &serde_json::Value) {
     if let Some(days_arr) = local_data["daily_totals"].as_array() {
-        for d in days_arr {
-            let date = d["date"].as_str().unwrap_or("?");
-            let h = d["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
-            let n = d["activity_count"].as_i64().unwrap_or(0);
-            lines.push(format!("- DAY {}: {:.1}h, {} activities", date, h, n));
+        if !days_arr.is_empty() {
+            let daily = days_arr
+                .iter()
+                .map(|d| {
+                    format!(
+                        "{} {:.1}h/{}obs",
+                        d["date"].as_str().unwrap_or("?"),
+                        d["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0,
+                        d["activity_count"].as_i64().unwrap_or(0)
+                    )
+                })
+                .collect::<Vec<_>>();
+            lines.push(format!(
+                "DAILY_TOTALS (observed days): {}",
+                daily.join(" | ")
+            ));
         }
     }
 }
 
 fn append_day_categories(lines: &mut Vec<String>, local_data: &serde_json::Value) {
     if let Some(days) = local_data["day_category_breakdown"].as_array() {
-        for d in days {
+        let sampled = temporal_coverage_indices(days.len(), 8)
+            .into_iter()
+            .map(|index| {
+                let d = &days[index];
+                format!(
+                    "{} {} {:.1}/{:.1}h",
+                    d["date"].as_str().unwrap_or("?"),
+                    clamp_line(d["top_category"].as_str().unwrap_or("?"), 24),
+                    d["top_hours"].as_f64().unwrap_or(0.0),
+                    d["total_hours"].as_f64().unwrap_or(0.0),
+                )
+            })
+            .collect::<Vec<_>>();
+        if !sampled.is_empty() {
             lines.push(format!(
-                "- DAY {} dominant: {} ({:.1}h of {:.1}h)",
-                d["date"].as_str().unwrap_or("?"),
-                d["top_category"].as_str().unwrap_or("?"),
-                d["top_hours"].as_f64().unwrap_or(0.0),
-                d["total_hours"].as_f64().unwrap_or(0.0),
+                "DAY_TOP_CATEGORIES (sample): {}",
+                sampled.join(" | ")
             ));
         }
     }
@@ -1344,7 +1370,11 @@ fn append_work_themes(lines: &mut Vec<String>, local_data: &serde_json::Value, l
 
 fn append_longest_sessions(lines: &mut Vec<String>, local_data: &serde_json::Value, limit: usize) {
     if let Some(sessions) = local_data["focus_semantics"]["sessions"].as_array() {
-        for s in sessions.iter().take(limit) {
+        let mut ranked = sessions.iter().collect::<Vec<_>>();
+        ranked.sort_by_key(|session| {
+            std::cmp::Reverse(session["focus_seconds"].as_i64().unwrap_or(0))
+        });
+        for s in ranked.into_iter().take(limit) {
             let theme = s["theme"].as_str().unwrap_or("");
             let theme_part = if theme.is_empty() {
                 String::new()
@@ -1457,11 +1487,17 @@ fn append_distraction_detail(lines: &mut Vec<String>, local_data: &serde_json::V
     }
 }
 
-fn truncate_stats_text(text: String, max_chars: usize) -> String {
-    if text.chars().count() <= max_chars {
-        return text;
+fn pack_stats_lines(lines: Vec<String>, max_chars: usize) -> String {
+    let mut selected = Vec::new();
+    let mut used = 0;
+    for line in lines {
+        let cost = line.chars().count() + usize::from(!selected.is_empty());
+        if used + cost <= max_chars {
+            used += cost;
+            selected.push(line);
+        }
     }
-    text.chars().take(max_chars).collect::<String>() + "…"
+    selected.join("\n")
 }
 
 fn extract_json_block(raw: &str) -> String {
@@ -1972,7 +2008,8 @@ fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
     let mut progress = Vec::new();
 
     if let Some(days) = local_data["day_category_breakdown"].as_array() {
-        for d in days.iter().rev().take(7) {
+        for index in temporal_coverage_indices(days.len(), 7) {
+            let d = &days[index];
             progress.push(format!(
                 "{} — {:.1}h total, largest category {} ({:.1}h)",
                 d["date"].as_str().unwrap_or(""),
@@ -1982,7 +2019,8 @@ fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
             ));
         }
     } else if let Some(days) = local_data["daily_totals"].as_array() {
-        for d in days.iter().rev().take(5) {
+        for index in temporal_coverage_indices(days.len(), 5) {
+            let d = &days[index];
             let date = d["date"].as_str().unwrap_or("");
             let hours = d["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
             let count = d["activity_count"].as_i64().unwrap_or(0);
@@ -2214,6 +2252,33 @@ fn build_diverse_activity_samples(
     let mut seen_dates: HashMap<String, bool> = HashMap::new();
     let mut seen_keys: HashMap<String, bool> = HashMap::new();
 
+    // The first ten samples feed the smallest section prompt. Reserve those
+    // slots for representative dates across the entire period, not whichever
+    // captures happened to be longest or newest.
+    let mut by_date: BTreeMap<&str, &ActivitySample> = BTreeMap::new();
+    for sample in all {
+        let rank = |item: &ActivitySample| {
+            (
+                item.duration_seconds,
+                item.ticket.is_some(),
+                !item.description.trim().is_empty(),
+            )
+        };
+        let entry = by_date.entry(&sample.date).or_insert(sample);
+        if rank(sample) > rank(entry) {
+            *entry = sample;
+        }
+    }
+    let representative_days = by_date.into_values().collect::<Vec<_>>();
+    for index in temporal_coverage_indices(representative_days.len(), 10) {
+        try_push_activity_sample(
+            representative_days[index],
+            &mut picked,
+            &mut seen_dates,
+            &mut seen_keys,
+        );
+    }
+
     for s in longest.iter().take(8) {
         try_push_activity_sample(
             &ActivitySample {
@@ -2246,6 +2311,41 @@ fn build_diverse_activity_samples(
     }
 
     picked
+}
+
+/// Prioritize the newest, middle, and earliest observations; then repeatedly
+/// fill the largest uncovered temporal gap. This keeps a small prompt useful
+/// for 1–30-day reports without implying that unselected days had no activity.
+fn temporal_coverage_indices(len: usize, limit: usize) -> Vec<usize> {
+    let target = len.min(limit);
+    if target == 0 {
+        return Vec::new();
+    }
+    let mut selected = vec![len - 1];
+    if target >= 3 {
+        selected.push((len - 1) / 2);
+    }
+    if target >= 2 {
+        selected.push(0);
+    }
+    while selected.len() < target {
+        let next = (0..len)
+            .filter(|index| !selected.contains(index))
+            .max_by_key(|index| {
+                let nearest = selected
+                    .iter()
+                    .map(|chosen| index.abs_diff(*chosen))
+                    .min()
+                    .unwrap_or(0);
+                (nearest, std::cmp::Reverse(*index))
+            });
+        if let Some(index) = next {
+            selected.push(index);
+        } else {
+            break;
+        }
+    }
+    selected
 }
 
 fn try_push_activity_sample(
@@ -2286,6 +2386,119 @@ fn clamp_line(s: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn month_report_context_keeps_full_timeline_and_spread_samples() {
+        let start = chrono::NaiveDate::from_ymd_opt(2026, 8, 1).unwrap();
+        let mut daily = Vec::new();
+        let mut categories = Vec::new();
+        let mut activities = Vec::new();
+        for offset in 0..30 {
+            let date = (start + chrono::Duration::days(offset))
+                .format("%Y-%m-%d")
+                .to_string();
+            daily.push(serde_json::json!({
+                "date": date, "total_seconds": 3600 + offset * 60, "activity_count": 3
+            }));
+            categories.push(serde_json::json!({
+                "date": date, "top_category": "Analysis", "top_hours": 1.0, "total_hours": 1.0
+            }));
+            activities.push(ActivitySample {
+                date,
+                category: "Analysis".to_string(),
+                description: format!("verified-day-{offset:02}"),
+                duration_seconds: 60 + offset as i32,
+                ticket: None,
+            });
+        }
+        let longest = activities
+            .iter()
+            .rev()
+            .take(8)
+            .map(|sample| ActivityCandidateRow {
+                date: sample.date.clone(),
+                category: sample.category.clone(),
+                description: sample.description.clone(),
+                duration_seconds: sample.duration_seconds,
+                ticket: sample.ticket.clone(),
+            })
+            .collect::<Vec<_>>();
+        let samples = build_diverse_activity_samples(&activities, &longest);
+        let sample_dates = samples
+            .iter()
+            .take(10)
+            .map(|s| s.date.as_str())
+            .collect::<Vec<_>>();
+        assert!(sample_dates.contains(&"2026-08-01"));
+        assert!(sample_dates.contains(&"2026-08-15"));
+        assert!(sample_dates.contains(&"2026-08-30"));
+
+        let local_data = serde_json::json!({
+            "period_start": "2026-08-01", "period_end": "2026-08-30", "period_days": 30,
+            "total_hours": 30.0, "deep_focus_hours": 0.0, "activity_count": 90,
+            "distraction_events": 0, "distraction_hours": 0.0,
+            "daily_totals": daily, "day_category_breakdown": categories,
+            "sample_activities": samples,
+            "focus_semantics": {"deep_threshold_seconds": 1500, "sessions": [], "hourly_deep_focus": []}
+        });
+        let profile = format!("USER_PROFILE: {}", "work goals ".repeat(100));
+        let timeline = build_section_stats_snapshot("timeline_insights", &local_data, &profile);
+        let progress = build_section_stats_snapshot("progress_tasks", &local_data, &profile);
+        for snapshot in [&timeline, &progress] {
+            assert!(snapshot.chars().count() <= LLM_SECTION_STATS_MAX_CHARS);
+            assert!(snapshot.contains("2026-08-01"));
+            assert!(snapshot.contains("2026-08-15"));
+            assert!(snapshot.contains("2026-08-30"));
+            assert!(snapshot.contains("DAILY_TOTALS (observed days):"));
+        }
+        for offset in 0..30 {
+            let date = (start + chrono::Duration::days(offset))
+                .format("%Y-%m-%d")
+                .to_string();
+            assert!(timeline.contains(&date), "timeline omitted {date}");
+        }
+        assert!(progress.contains("verified-day-00"));
+        assert!(progress.contains("verified-day-14"));
+        assert!(progress.contains("verified-day-29"));
+
+        let visible_progress = build_work_progress(&local_data);
+        assert!(visible_progress
+            .iter()
+            .any(|item| item.contains("2026-08-01")));
+        assert!(visible_progress
+            .iter()
+            .any(|item| item.contains("2026-08-15")));
+        assert!(visible_progress
+            .iter()
+            .any(|item| item.contains("2026-08-30")));
+    }
+
+    #[test]
+    fn session_evidence_uses_actual_longest_blocks() {
+        let data = serde_json::json!({"focus_semantics": {"sessions": [
+            {"start":"short", "focus_seconds":300, "tier":"fragment"},
+            {"start":"long", "focus_seconds":3600, "tier":"deep"},
+            {"start":"middle", "focus_seconds":1800, "tier":"deep"}
+        ]}});
+        let mut lines = Vec::new();
+        append_longest_sessions(&mut lines, &data, 2);
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("long"));
+        assert!(lines[1].contains("middle"));
+    }
+
+    #[test]
+    fn stats_budget_never_cuts_a_verified_line() {
+        let packed = pack_stats_lines(
+            vec![
+                "PERIOD: Aug".into(),
+                "very long evidence line".into(),
+                "TAIL".into(),
+            ],
+            16,
+        );
+        assert_eq!(packed, "PERIOD: Aug\nTAIL");
+    }
 
     fn utc_storage_timestamp(local: chrono::NaiveDateTime) -> String {
         Local
