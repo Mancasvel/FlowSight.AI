@@ -72,7 +72,7 @@ pub(crate) fn check_installation(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(windows)]
+#[cfg(all(windows, not(debug_assertions)))]
 pub(crate) fn verify_before_local_ai(app: &AppHandle) -> Result<(), String> {
     use tauri::Emitter;
 
