@@ -12,10 +12,12 @@
 
 FlowSight is a desktop application that helps distributed engineering
 teams understand how their work flows, without the surveillance baggage of
-traditional productivity tools. **All sensitive processing happens on the
+traditional productivity tools. **Core work-context processing happens on the
 developer's machine**: screen context, git metadata, and activity summaries
-are analyzed by a bundled local LLM. Cloud sync is opt-in; connecting an
-external AI through MCP can also send the requested report data to that AI.
+are analyzed by a bundled local LLM. The tracker and reports work
+locally. Optional cloud features, such as calendar connections and the Coach,
+require a separate sign-in and consent; connecting an external AI through MCP
+can also send the requested report data to that AI.
 
 ---
 
@@ -25,7 +27,8 @@ external AI through MCP can also send the requested report data to that AI.
   weights downloaded once and verified on the device. No cloud roundtrips for
   sensitive data; inference works offline after the model is present.
 - **Desktop-native** — Tauri 2 (Rust) shell, Vite frontend, SQLite for local
-  state. Installs as a single `.msi` on Windows.
+  state. Windows releases offer an `.exe` installer and an `.msi`; in-app
+  updates are signature-verified.
 - **Activity-oriented, not surveillance-oriented** — the agent surfaces
   meaningful work units (branches, PRs, focus windows) rather than keystroke
   counts.
@@ -44,6 +47,20 @@ external AI through MCP can also send the requested report data to that AI.
   backend only for users who join a team.
 - **Self-hostable backend** — the Community Edition can run against your own
   Supabase instance.
+
+## Current release: v5.0.8 (Windows)
+
+- The optional cloud Coach runs its reply and usage requests off the UI thread,
+  so the rest of the app remains responsive while a request is pending.
+- In Today, a connected Google or Microsoft Calendar event shows a progress
+  bar for elapsed **scheduled event time**. It is independent of recorded work
+  time; the daily goal remains a separate text value without a duplicate bar.
+- The Windows release provides an NSIS installer and `latest.json` with its
+  update signature. The `.msi` is also offered when packaging succeeds; see
+  [GitHub Releases](../../releases).
+
+The calendar connection is part of the eligible paid cloud plan described
+below; these changes do not make calendar access a local-only feature.
 
 ## Bring your own AI (MCP)
 
@@ -139,7 +156,9 @@ All-day, cancelled and free events are ignored. If more than one event overlaps,
 FlowSight does not choose one or publish a report.
 
 The live event title and time appear in Today above the tracking controls,
-with a link that opens the event in its calendar. Manual task detail stays
+with a link that opens the event in its calendar. The bar beneath it shows
+elapsed scheduled time for that event, not tracked work time or daily-goal
+completion. Manual task detail stays
 below as an optional supplement; Settings shows connection and consent status
 without repeating the event. With the separate **Add a mini work report** switch
 on, FlowSight appends a short recap only after a timed event it observed while
@@ -184,8 +203,8 @@ announcing the integration as live.
 
 ## Status
 
-FlowSight is in **active development**. Expect breaking changes until
-v1.0. Track progress on the [Releases](../../releases) page.
+FlowSight is in **active development**. The current Windows version is
+**v5.0.8**; check the [Releases](../../releases) page for installers and notes.
 
 ---
 
@@ -193,7 +212,8 @@ v1.0. Track progress on the [Releases](../../releases) page.
 
 ### Prerequisites
 
-- **Windows 10/11** (Linux and macOS are on the roadmap).
+- **Windows 10/11** for this repository's installer; macOS and Linux have
+  separate repositories and release pipelines.
 - **Rust** stable (for building the Tauri shell).
 - **Node.js** 18+ and **pnpm** 8+.
 - **Python** 3.11+ (optional: run local review-queue tests and future model evaluation tools).
@@ -245,10 +265,10 @@ prepares optional, human-checked labels for a future model iteration.
      (logs, db, cache — local only)
 ```
 
-The heavy lifting (context summarization, PII filtering, intent inference)
-runs in-process against the local `llama-server.exe`. Only already-filtered
-aggregates reach the cloud backend, and only when the user belongs to a
-team.
+The core context summarization and local-agent inference use the bundled
+`llama-server.exe` on loopback. Team aggregation, connected calendars and the
+optional cloud Coach have separate consent and network requirements; see the
+feature-specific documentation above before enabling them.
 
 ## Repository layout
 
@@ -284,7 +304,7 @@ model assets from a private release.
 
 **We're hiring our first engineer.**
 
-FlowSight is a privacy-first productivity tool that runs locally on your machine. No surveillance, no cloud dependency, no compromise. Backed by Microsoft for Startups, incubated at Xiji (Shanghai), part of AltaLab's accelerator.
+FlowSight is a privacy-first productivity tool whose core tracker and reports run locally on your machine. Optional cloud integrations require consent. Backed by Microsoft for Startups, incubated at Xiji (Shanghai), part of AltaLab's accelerator.
 
 ### The problem we're solving
 - Teams waste hours in meetings that could be a message
