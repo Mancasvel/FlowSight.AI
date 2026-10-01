@@ -48,7 +48,15 @@ can also send the requested report data to that AI.
 - **Self-hostable backend** — the Community Edition can run against your own
   Supabase instance.
 
-## Current release: v5.0.8 (Windows)
+## Current release: v5.0.10 (Windows)
+
+- **Let's plan today's session** in Today uses the bundled local model to suggest
+  time blocks from your available hours, task estimates and saved context. Review
+  or revise the draft before adding blocks to the private FlowSight calendar.
+- The shorter first-run setup introduces the main features while configuring
+  daily goals, reminders, reports and optional calendar connections.
+- The Windows installer includes signed Visual C++ runtime files and checks
+  their integrity when the app starts and before local AI starts.
 
 - The optional cloud Coach runs its reply and usage requests off the UI thread,
   so the rest of the app remains responsive while a request is pending.
@@ -59,8 +67,9 @@ can also send the requested report data to that AI.
   update signature. The `.msi` is also offered when packaging succeeds; see
   [GitHub Releases](../../releases).
 
-The calendar connection is part of the eligible paid cloud plan described
-below; these changes do not make calendar access a local-only feature.
+The FlowSight local calendar used by session planning stays on this device.
+Connecting Google or Microsoft Calendar is part of the eligible paid cloud plan
+described below.
 
 ## Bring your own AI (MCP)
 
@@ -204,7 +213,7 @@ announcing the integration as live.
 ## Status
 
 FlowSight is in **active development**. The current Windows version is
-**v5.0.8**; check the [Releases](../../releases) page for installers and notes.
+**v5.0.10**; check the [Releases](../../releases) page for installers and notes.
 
 ---
 

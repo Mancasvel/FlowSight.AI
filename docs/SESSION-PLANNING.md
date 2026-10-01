@@ -77,4 +77,4 @@ their order in response to feedback. The model requires string `tool_choice:
 Host validation still allows exactly one `propose_session_blocks` call.
 
 The independent visual review scored all five reported material fixes resolved.
-This code is separate from the 5.0.9 Windows runtime repair release.
+This feature is included from the 5.0.10 Windows release.
