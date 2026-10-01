@@ -123,6 +123,64 @@ fn explicit_commitments(text: &str) -> Vec<ModelCommitment> {
 
 // Recover explicitly enumerated topics, not a guessed semantic interpretation.
 // The model must supply a separate, anchored task for each of these items.
+fn counted_spanish_exercise_list(intention: &str) -> Option<&str> {
+    let lower = intention.to_ascii_lowercase();
+    for (index, marker) in lower.match_indices(" ejercicios ") {
+        let count = lower[..index].split_whitespace().next_back()?;
+        let count = match count {
+            "dos" => 2,
+            "tres" => 3,
+            "cuatro" => 4,
+            "cinco" => 5,
+            "seis" => 6,
+            "siete" => 7,
+            "ocho" => 8,
+            "nueve" => 9,
+            "diez" => 10,
+            "once" => 11,
+            "doce" => 12,
+            _ => count.parse().unwrap_or(0),
+        };
+        if !(2..=12).contains(&count) {
+            continue;
+        }
+        let tail = &intention[index + marker.len()..];
+        let tail_lower = tail.to_ascii_lowercase();
+        let Some(prefix) = ["de ", "con ", "sobre "]
+            .iter()
+            .find(|prefix| tail_lower.starts_with(**prefix))
+        else {
+            continue;
+        };
+        let mut list = &tail[prefix.len()..];
+        // A course acronym may precede a second topic introducer:
+        // "4 ejercicios de ADDA de/con/sobre ...". Do not interpret every
+        // occurrence of "de" or "con" in ordinary prose as a task list.
+        if *prefix == "de " {
+            if let Some((course, remainder)) = list.split_once(' ') {
+                if course.len() <= 40
+                    && course.chars().all(|c| c.is_alphanumeric() || c == '-')
+                    && course.chars().any(|c| c.is_uppercase())
+                    && course
+                        .chars()
+                        .filter(|c| c.is_alphabetic())
+                        .all(|c| c.is_uppercase())
+                {
+                    let remainder_lower = remainder.to_ascii_lowercase();
+                    if let Some(prefix) = ["de ", "con ", "sobre "]
+                        .iter()
+                        .find(|prefix| remainder_lower.starts_with(**prefix))
+                    {
+                        list = &remainder[prefix.len()..];
+                    }
+                }
+            }
+        }
+        return Some(list);
+    }
+    None
+}
+
 fn requested_topics(intention: &str) -> Vec<String> {
     let text = intention.to_ascii_lowercase();
     let markers = [
@@ -134,10 +192,13 @@ fn requested_topics(intention: &str) -> Vec<String> {
         "relacionadas con ",
         "temas: ",
     ];
-    let list = markers.iter().find_map(|marker| {
-        text.find(marker)
-            .map(|index| &intention[index + marker.len()..])
-    });
+    let list = markers
+        .iter()
+        .find_map(|marker| {
+            text.find(marker)
+                .map(|index| &intention[index + marker.len()..])
+        })
+        .or_else(|| counted_spanish_exercise_list(intention));
     if let Some(list) = list {
         let list = list.split(['.', ';', '\n']).next().unwrap_or(list);
         let separated = list.replace(" and ", ",").replace(" y ", ",");
@@ -246,7 +307,12 @@ fn explicit_break_minutes(text: &str) -> Option<i64> {
             let from = index.saturating_sub(4);
             let to = (index + 5).min(words.len());
             let mut units: Vec<_> = (from..to)
-                .filter(|&i| matches!(words[i], "minute" | "minutes" | "min" | "minutos"))
+                .filter(|&i| {
+                    matches!(
+                        words[i],
+                        "minute" | "minutes" | "min" | "minuto" | "minutos"
+                    )
+                })
                 .collect();
             units.sort_by_key(|&i| i.abs_diff(index));
             units
@@ -255,13 +321,19 @@ fn explicit_break_minutes(text: &str) -> Option<i64> {
         })
 }
 
+fn topic_is_requested_first(topic: &str, text: &str) -> bool {
+    !topic.is_empty()
+        && (text.contains(&format!("{topic} first"))
+            || text.contains(&format!("first {topic}"))
+            || text.contains(&format!("{topic} primero"))
+            || text.contains(&format!("primero {topic}")))
+}
+
 fn apply_explicit_task_changes(tasks: &mut Vec<Value>, feedback: &str) {
     let text = feedback.to_lowercase();
     if let Some(index) = tasks.iter().position(|task| {
         let topic = task["source_text"].as_str().unwrap_or("").to_lowercase();
-        text.contains(&format!("{topic} first"))
-            || text.contains(&format!("first {topic}"))
-            || text.contains(&format!("{topic} primero"))
+        topic_is_requested_first(&topic, &text)
     }) {
         let first = tasks.remove(index);
         tasks.insert(0, first);
@@ -276,7 +348,7 @@ fn apply_explicit_task_changes(tasks: &mut Vec<Value>, feedback: &str) {
                 .take(5)
                 .collect();
             for (index, pair) in words.windows(2).enumerate() {
-                if matches!(pair[1], "minute" | "minutes" | "min" | "minutos") {
+                if matches!(pair[1], "minute" | "minutes" | "min" | "minuto" | "minutos") {
                     if matches!(
                         words.get(index + 2),
                         Some(&"break" | &"breaks" | &"rest" | &"descanso" | &"descansos")
@@ -328,10 +400,15 @@ fn fallback_plan(
     }
     // Fallback is deliberately limited to explicit lists and simple revisions;
     // unsupported requests are left visible for the user to clarify.
+    let feedback_lower = feedback.to_lowercase();
     if !feedback.trim().is_empty()
         && explicit_break_minutes(feedback).is_none()
-        && !feedback.to_lowercase().contains("first")
-        && !feedback.to_lowercase().contains("minutes")
+        && !topics
+            .iter()
+            .any(|topic| topic_is_requested_first(&topic.to_lowercase(), &feedback_lower))
+        && !feedback_lower
+            .split(|character: char| !character.is_alphanumeric())
+            .any(|word| matches!(word, "minute" | "minutes" | "min" | "minuto" | "minutos"))
     {
         return Err("The local AI could not apply that revision. Specify a topic first, task minutes, or break minutes and try again.".into());
     }
@@ -1024,6 +1101,117 @@ mod tests {
             "title":topic,"source_text":topic,"duration_minutes":75,"rationale":"Assumed estimate; review before confirmation."
         })).collect::<Vec<_>>();
         json!({"summary":"Four estimated ADDA exercises","tasks":tasks,"break_minutes":10,"focus_minutes":75,"commitments":[]})
+    }
+
+    fn spanish_adda_request() -> SessionRequest {
+        let mut request = adda_request();
+        request.intention = "Quiero hacer 4 ejercicios de ADDA de grafos virtuales, algoritmos genéticos, tipos recursivos y PLE".into();
+        request
+    }
+
+    fn spanish_adda_model() -> Value {
+        let tasks = [
+            "grafos virtuales",
+            "algoritmos genéticos",
+            "tipos recursivos",
+            "PLE",
+        ]
+        .iter()
+        .map(|topic| {
+            json!({"title":topic,"source_text":topic,"duration_minutes":75,
+                "rationale":"Estimación de 75 minutos; revisar antes de confirmar."})
+        })
+        .collect::<Vec<_>>();
+        json!({"summary":"Cuatro ejercicios de ADDA","tasks":tasks,"break_minutes":10,"focus_minutes":75,"commitments":[]})
+    }
+
+    #[test]
+    fn spanish_counted_exercises_preserve_topics_and_reject_omissions() {
+        let request = spanish_adda_request();
+        let expected = [
+            "grafos virtuales",
+            "algoritmos genéticos",
+            "tipos recursivos",
+            "PLE",
+        ];
+        assert_eq!(requested_topics(&request.intention), expected);
+        for intention in [
+            "Quiero hacer 4 ejercicios de ADDA con grafos virtuales, algoritmos genéticos, tipos recursivos y PLE",
+            "Quiero hacer 4 ejercicios con grafos virtuales, algoritmos genéticos, tipos recursivos y PLE",
+            "Quiero hacer 4 ejercicios sobre grafos virtuales, algoritmos genéticos, tipos recursivos y PLE",
+            "Quiero hacer 4 ejercicios de ADDA relacionados con grafos virtuales, algoritmos genéticos, tipos recursivos y PLE",
+        ] {
+            assert_eq!(requested_topics(intention), expected);
+        }
+        assert!(requested_topics("Quiero estudiar de mañana y descansar después").is_empty());
+        assert!(requested_topics("Quiero hacer ejercicios de ADDA y leer un libro").is_empty());
+        assert_eq!(
+            requested_topics("Quiero hacer 3 ejercicios de tipos de datos, grafos y PLE"),
+            ["tipos de datos", "grafos", "PLE"]
+        );
+        let data = AgentData::default();
+        let proposal = decode_plan(spanish_adda_model(), &request, &data).unwrap();
+        assert_eq!(proposal.blocks.len(), 7);
+        assert_eq!(proposal.blocks[0].start_at, request.start_at);
+        assert_eq!(proposal.blocks[6].end_at, "2026-10-01T16:05:00+02:00");
+        assert_eq!(
+            proposal
+                .blocks
+                .iter()
+                .step_by(2)
+                .map(|block| block.title.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        let mut missing = spanish_adda_model();
+        missing["tasks"].as_array_mut().unwrap().pop();
+        assert!(decode_plan(missing, &request, &data).is_err());
+        let mut merged = spanish_adda_model();
+        merged["tasks"] = json!([{"title":"ejercicios de ADDA","source_text":request.intention,
+            "duration_minutes":75,"rationale":"Estimación por revisar."}]);
+        assert!(decode_plan(merged, &request, &data).is_err());
+        assert!(data.events.is_empty());
+    }
+
+    #[test]
+    fn spanish_feedback_keeps_task_estimates_and_schedules_requested_breaks() {
+        let request = spanish_adda_request();
+        let data = AgentData::default();
+        let feedback = "Pon PLE primero y deja 15 minutos de descanso entre tareas";
+        let proposal =
+            decode_plan_with_feedback(spanish_adda_model(), &request, &data, feedback).unwrap();
+        assert_eq!(proposal.blocks[0].title, "PLE");
+        assert_eq!(proposal.blocks[0].end_at, "2026-10-01T11:50:00+02:00");
+        assert_eq!(proposal.blocks[6].end_at, "2026-10-01T16:20:00+02:00");
+        assert!(proposal.unscheduled.is_empty());
+        for block in proposal.blocks.iter().skip(1).step_by(2) {
+            assert_eq!(block.title, "Break");
+            assert_eq!(
+                (DateTime::parse_from_rfc3339(&block.end_at).unwrap()
+                    - DateTime::parse_from_rfc3339(&block.start_at).unwrap())
+                .num_minutes(),
+                15
+            );
+        }
+        for feedback in [feedback, "Pon PLE primero", "Pon primero PLE"] {
+            let fallback = fallback_plan(&request, &data, Some(&proposal), feedback).unwrap();
+            let revised = decode_plan_with_feedback(fallback, &request, &data, feedback).unwrap();
+            assert_eq!(revised.blocks[0].title, "PLE");
+            assert_eq!(revised.blocks[0].end_at, "2026-10-01T11:50:00+02:00");
+        }
+        let feedback =
+            "Pon PLE primero durante 45 minutos y deja 15 minutos de descanso entre tareas";
+        let proposal =
+            decode_plan_with_feedback(spanish_adda_model(), &request, &data, feedback).unwrap();
+        assert_eq!(proposal.blocks[0].end_at, "2026-10-01T11:20:00+02:00");
+        assert!(fallback_plan(
+            &request,
+            &data,
+            None,
+            "Cancela el segundo ejercicio y mueve los demás después de comer"
+        )
+        .is_err());
+        assert!(data.events.is_empty());
     }
 
     #[test]
