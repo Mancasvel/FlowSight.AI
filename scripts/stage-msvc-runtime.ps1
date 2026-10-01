@@ -32,6 +32,20 @@ $minimumVersion = [version] '14.40.0.0'
 $destination = Join-Path $PSScriptRoot '../local_llm/bin'
 $appDestination = Join-Path $PSScriptRoot '../local_llm/app_runtime'
 
+function Get-RuntimeSha256([string] $Path) {
+    # Get-FileHash is a Utility module function, which may not be exported when
+    # Tauri's cmd.exe launches Windows PowerShell with an inherited pwsh module
+    # path. Use .NET directly in both hosts and close the file before replacing it.
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-RuntimeVersion([System.IO.FileInfo] $File) {
     $match = [regex]::Match($File.VersionInfo.FileVersion, '^\d+\.\d+\.\d+\.\d+')
     if (-not $match.Success) { throw "No file version on $($File.FullName)" }
@@ -151,7 +165,7 @@ if (-not $validation.Valid) {
 Write-Host "Selected Microsoft redistributable CRT $($validation.Version): $SourceDirectory"
 foreach ($name in $dllNames) {
     $file = Join-Path $SourceDirectory $name
-    Write-Host "  $name SHA-256 $((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash)"
+    Write-Host "  $name SHA-256 $(Get-RuntimeSha256 $file)"
 }
 
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
@@ -163,8 +177,7 @@ foreach ($name in $dllNames) {
         $temporary = "$target.staging-$([guid]::NewGuid().ToString('N'))"
         try {
             Copy-Item -LiteralPath $source -Destination $temporary
-            if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne
-                (Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash) {
+            if ((Get-RuntimeSha256 $source) -ne (Get-RuntimeSha256 $temporary)) {
                 throw "Visual C++ runtime copy failed verification: $name"
             }
             Move-Item -LiteralPath $temporary -Destination $target -Force
