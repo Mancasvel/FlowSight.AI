@@ -4440,7 +4440,7 @@
       const track = document.getElementById('todayCalendarProgressTrack');
       if (track) {
         track.setAttribute('aria-valuenow', String(progress.percent));
-        track.setAttribute('aria-valuetext', `${elapsed} elapsed of ${total} scheduled`);
+        track.setAttribute('aria-valuetext', formatMessage`${elapsed} elapsed of ${total} scheduled`);
       }
     }
 
@@ -6636,7 +6636,7 @@
       let aiAttemptPercent = 20;
 
       const showStep = (status, sub = tr("Initializing..."), pct = 0) => {
-        setText(statusText, () => (status));
+        setText(statusText, () => localizeStatus(status));
         setText(subtext, () => (sub));
         progress.style.width = pct + '%';
         overlay.hidden = false;

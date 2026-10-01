@@ -699,6 +699,8 @@ We could not load your profile.|No se pudo cargar tu perfil.
 This Team license account is not assigned to a team yet. Ask your PM for an invitation code.|Esta cuenta Team aún no está asignada a un equipo. Pide un código de invitación al responsable.
 We could not load your team membership.|No se pudo cargar tu pertenencia al equipo.
 Language|Idioma
+Today, {p0}|Hoy, {p0}
+{p0} elapsed of {p1} scheduled|{p0} transcurridos de {p1} previstos
 Startup & focus reminders|Inicio y recordatorios de concentración
 App language|Idioma de la aplicación
 Use system language|Usar idioma del sistema

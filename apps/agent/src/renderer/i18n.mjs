@@ -38,10 +38,14 @@ export function setAttributeText(node,attribute,value) {
  const last=String(render()??'');record.attributes.set(attribute,{render,last});node.setAttribute(attribute,last);
 }
 function translateMarkupFragment(fragment){
- return fragment.replace(/>([^<>]*)</g,(whole,source)=>{
+ const translate=(whole,source,prefix='>',suffix='<')=>{
   const normalized=source.replace(/\s+/g,' ').trim();if(!spanish[normalized])return whole;
-  const translated=t(normalized),leading=source.match(/^\s*/)[0],trailing=source.match(/\s*$/)[0];return`><!--fs-i18n:${encodeURIComponent(normalized)}-->${leading}${translated}${trailing}<!--/fs-i18n--><`;
- }).replace(/(placeholder|title|aria-label|alt|data-coach-prompt)="([^"<>]*)"/g,(whole,attr,key)=>spanish[key]?`${attr}="${t(key)}" data-i18n-${attr}="${encodeURIComponent(key)}"`:whole);
+  const translated=t(normalized),leading=source.match(/^\s*/)[0],trailing=source.match(/\s*$/)[0];return`${prefix}<!--fs-i18n:${encodeURIComponent(normalized)}-->${leading}${translated}${trailing}<!--/fs-i18n-->${suffix}`;
+ };
+ return fragment.replace(/>([^<>]*)</g,(whole,source)=>translate(whole,source))
+ .replace(/^([^<>]+)</,(whole,source)=>translate(whole,source,'','<'))
+ .replace(/>([^<>]+)$/,(whole,source)=>translate(whole,source,'>',''))
+ .replace(/(placeholder|title|aria-label|alt|data-coach-prompt)="([^"<>]*)"/g,(whole,attr,key)=>spanish[key]?`${attr}="${t(key)}" data-i18n-${attr}="${encodeURIComponent(key)}"`:whole);
 }
 // Translate only source-owned markup before values are interpolated. Values can never become translation keys.
 export function html(strings,...values){return strings.reduce((s,part,i)=>s+translateMarkupFragment(part)+(i<values.length?values[i]:''),'');}
