@@ -109,6 +109,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $stdout = Join-Path $env:RUNNER_TEMP 'flowsight-renderer.stdout.log'
           $stderr = Join-Path $env:RUNNER_TEMP 'flowsight-renderer.stderr.log'
+          $env:FLOWSIGHT_RENDERER_URL = 'http://127.0.0.1:1420'
           $server = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', 'corepack pnpm --filter @flowsight/agent exec vite --host 127.0.0.1 --port 1420 --strictPort' -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           try {
             $ready = $false
