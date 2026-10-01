@@ -163,6 +163,26 @@ body,
 .onboarding-footer { background: linear-gradient(to top, #101d25 75%, rgb(16 29 37 / 0)); }
 .sr-next { background: #213e3d; }
 
+/* Match the interactive selector specificity of the light renderer rules.
+   A hover keeps the current dark surface and only adds a little light. */
+html[data-theme="dark"] .button-secondary:hover:not(:disabled),
+html[data-theme="dark"] .summary-download-btn:hover:not(:disabled),
+html[data-theme="dark"] .summary-download-btn:focus-visible:not(:disabled),
+html[data-theme="dark"] .coach-quick-btn:hover:not(:disabled) {
+  background: #294e4b;
+  color: #b2efe4;
+}
+html[data-theme="dark"] .button-ghost:hover:not(:disabled) { background: #213741; }
+html[data-theme="dark"] .titlebar-btn:hover:not(:disabled),
+html[data-theme="dark"] .titlebar-btn.maximize:hover:not(:disabled) { background: #20343e; color: #bed1d7; }
+html[data-theme="dark"] .titlebar-btn.close:hover:not(:disabled),
+html[data-theme="dark"] .stop-timer-btn:hover:not(:disabled) { background: #4d373b; color: #ffc4bf; }
+html[data-theme="dark"] .titlebar-btn:disabled:hover { background: transparent; color: #bed1d7; }
+html[data-theme="dark"] .stop-timer-btn:disabled:hover { background: #412d31; color: #ffc4bf; }
+html[data-theme="dark"] .session-planner .button-primary:hover:not(:disabled),
+html[data-theme="dark"] .onboarding-footer .onboarding-continue:hover:not(:disabled),
+html[data-theme="dark"] .pdf-download-dialog__actions .button-primary:hover:not(:disabled) { background: #0c837c; border-color: #0c837c; }
+
 @media (prefers-contrast: more) {
   :root { --muted-foreground: 195 18% 88%; --border: 194 21% 55%; }
 }
