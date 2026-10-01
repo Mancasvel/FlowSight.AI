@@ -70,7 +70,7 @@ try {
     await page.goto(process.env.FLOWSIGHT_RENDERER_URL || 'http://127.0.0.1:1420',{waitUntil:'networkidle'});
     await page.locator('#onboardingOverlay.visible').waitFor();
     await page.evaluate(()=>document.fonts.ready);
-    await page.screenshot({path:new URL(`onboarding-${viewport.name}.png`,output).pathname.replace(/^\/(C:)/,'$1')});
+    await page.screenshot({path:fileURLToPath(new URL(`onboarding-${viewport.name}.png`,output))});
     assert.equal(await page.locator('#onboardingContinueBtn').isEnabled(),true);
     if(viewport.name==='small') {
       await page.setViewportSize({width:342,height:402});await page.setViewportSize({width:340,height:400});
@@ -104,7 +104,7 @@ try {
       });
     });
     assert.equal(planLabelsFit,true,'Every plan label must fit inside its own block.');
-    await page.screenshot({path:new URL(`onboarding-plan-${viewport.name}.png`,output).pathname.replace(/^\/(C:)/,'$1')});
+    await page.screenshot({path:fileURLToPath(new URL(`onboarding-plan-${viewport.name}.png`,output))});
     await page.locator('#onboardingOpenPlan').check();
     await page.locator('#onboardingContinueBtn').click();
     assert.equal(await page.locator('#onboardingFocusReminders').isChecked(),false);
@@ -140,7 +140,7 @@ try {
     await page.locator('#onboardingChooseFolder').click();
     await page.locator('#onboardingContinueBtn').click();
     await page.locator('#onboardingStepLabel').filter({hasText:'5 of 5'}).waitFor();
-    await page.screenshot({path:new URL(`onboarding-calendar-${viewport.name}.png`,output).pathname.replace(/^\/(C:)/,'$1')});
+    await page.screenshot({path:fileURLToPath(new URL(`onboarding-calendar-${viewport.name}.png`,output))});
     await page.locator('#onboardingContinueBtn').click();
     await page.locator('#onboardingOverlay').waitFor({state:'hidden'});
     await page.locator('#sessionPlanForm').waitFor({state:'visible'});
@@ -161,7 +161,7 @@ try {
     await page.getByText('2 blocks added to your FlowSight calendar.',{exact:true}).waitFor();
     assert.equal((await page.evaluate(()=>window.testCalls)).filter(c=>c.command==='confirm_session_plan').length,1);
     await page.locator('#sessionCalendar').scrollIntoViewIfNeeded();
-    await page.screenshot({path:new URL(`session-calendar-${viewport.name}.png`,output).pathname.replace(/^\/(C:)/,'$1')});
+    await page.screenshot({path:fileURLToPath(new URL(`session-calendar-${viewport.name}.png`,output))});
     const calls=await page.evaluate(()=>window.testCalls);
     assert.equal(calls.find(c=>c.command==='set_focus_alerts_enabled').args.enabled,true);
     assert.equal(calls.find(c=>c.command==='save_weekly_report_schedule').args.schedule.enabled,true);

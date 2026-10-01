@@ -124,6 +124,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Setup and planner renderer checks failed.' }
             node scripts/verify-dark-button-hovers.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Dark hover renderer checks failed.' }
+            node scripts/verify-adda-renderer.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Measured ADDA proposal renderer replay failed.' }
           } finally {
             if (-not $server.HasExited) { & taskkill.exe /PID $server.Id /T /F | Out-Null }
           }

@@ -122,6 +122,22 @@ $env:FLOWSIGHT_PLAN_REVISE = '1'
 node scripts/probe-session-suggestions.mjs
 ```
 
+The checked-in synthetic fixture preserves the measured local Qwen task/estimate
+output and host schedule (draft IDs replaced with descriptive fixture IDs).
+Replay it in the actual renderer at 370×700 and 340×400 without running a native
+agent or reading any local state:
+
+```powershell
+$env:FLOWSIGHT_RENDERER_URL = 'http://127.0.0.1:1421'
+node scripts/verify-adda-renderer.mjs
+```
+
+The browser check verifies the seven visible work/rest blocks, PLE-first revision
+with fifteen-minute rests, no horizontal overflow, and no native writes. The
+additional unscheduled-copy capture is synthetic layout data, clearly labelled
+in its filename; the complete initial/revised captures replay actual measured
+model responses.
+
 This semantic check improves enumerated requests; it is not a claim of universal
 natural-language planning correctness. All proposals still require user review.
 
