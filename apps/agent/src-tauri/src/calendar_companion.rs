@@ -108,6 +108,10 @@ fn current_owner_id() -> Result<String, String> {
         .ok_or("Sign in to FlowSight before connecting a calendar.".into())
 }
 
+pub(crate) fn session_owner() -> Option<String> {
+    current_owner_id().ok()
+}
+
 fn has_paid_calendar_access(
     entitlements: &crate::entitlements::Entitlements,
     owner_user_id: &str,
@@ -346,6 +350,74 @@ fn access_token_for(owner_user_id: &str, provider: &str) -> Result<String, Strin
 
 pub fn access_token(provider: &str) -> Result<String, String> {
     access_token_for(&current_owner_id()?, provider)
+}
+
+/// Select the connected provider's default calendar for a reviewed session.
+/// Tokens and calendar identity stay bound to the signed-in FlowSight owner.
+pub(crate) fn session_target(
+    preferred: Option<&str>,
+) -> Result<Option<crate::local_agent::session_calendar::CalendarTarget>, String> {
+    let Some(owner) = current_owner_id().ok() else {
+        return Ok(None);
+    };
+    let google = load_tokens_for(&owner, "google")?.is_some();
+    let microsoft = load_tokens_for(&owner, "microsoft")?.is_some();
+    let provider = match preferred {
+        Some("google") if google => Some("google"),
+        Some("microsoft") if microsoft => Some("microsoft"),
+        Some("google" | "microsoft") => {
+            return Err(
+                "Reconnect your selected calendar in Settings before planning a session.".into(),
+            )
+        }
+        _ if google => Some("google"),
+        _ if microsoft => Some("microsoft"),
+        _ => None,
+    };
+    let Some(provider) = provider else {
+        return Ok(None);
+    };
+    let token = access_token_for(&owner, provider)?;
+    let client = http()?;
+    let calendar_id = if provider == "google" {
+        calendar_ids(&owner, provider, &token, &client, Utc::now())?
+            .account_id
+            .ok_or("Google Calendar did not identify an owned primary calendar.")?
+    } else {
+        let response = client
+            .get("https://graph.microsoft.com/v1.0/me/calendar?$select=id,canEdit")
+            .bearer_auth(token)
+            .send()
+            .map_err(|_| "Microsoft Calendar could not identify your default calendar.")?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "Microsoft Calendar could not identify your default calendar (HTTP {}).",
+                response.status()
+            ));
+        }
+        let value: Value = response
+            .json()
+            .map_err(|_| "Invalid default calendar response.")?;
+        if value["canEdit"] == false {
+            return Err("Your default Microsoft calendar is not editable.".into());
+        }
+        value["id"]
+            .as_str()
+            .filter(|id| !id.is_empty())
+            .ok_or("Microsoft Calendar did not identify your default calendar.")?
+            .to_string()
+    };
+    Ok(Some(crate::local_agent::session_calendar::CalendarTarget {
+        owner_user_id: owner,
+        provider: provider.into(),
+        calendar_id,
+    }))
+}
+
+pub(crate) fn session_token(
+    target: &crate::local_agent::session_calendar::CalendarTarget,
+) -> Result<String, String> {
+    access_token_for(&target.owner_user_id, &target.provider)
 }
 
 #[tauri::command]

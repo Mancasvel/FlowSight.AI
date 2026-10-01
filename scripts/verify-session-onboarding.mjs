@@ -62,7 +62,7 @@ try {
               {title:args.feedback?'Write proposal':'Review proposal',startAt:new Date(start+4200000).toISOString(),endAt:new Date(start+6600000).toISOString(),rationale:'Estimated; allow ten minutes for a break.'}
             ]};
           }
-          if(command==='confirm_session_plan'){events=[{title:'Review proposal',startAt:'2026-10-01T09:00:00+02:00',endAt:'2026-10-01T10:00:00+02:00'},{title:'Write proposal',startAt:'2026-10-01T10:10:00+02:00',endAt:'2026-10-01T10:50:00+02:00'}];return events;}
+          if(command==='confirm_session_plan'){events=[{title:'Review proposal',startAt:'2026-10-01T09:00:00+02:00',endAt:'2026-10-01T10:00:00+02:00'},{title:'Write proposal',startAt:'2026-10-01T10:10:00+02:00',endAt:'2026-10-01T10:50:00+02:00'}];return {events,calendarDestination:null};}
           return command in responses?structuredClone(responses[command]):null;
         }
       };
@@ -158,7 +158,7 @@ try {
     await page.locator('#sessionProposal').evaluate((element) => element.scrollIntoView({block:'start'}));
     await page.screenshot({path:fileURLToPath(new URL(`session-proposal-${viewport.name}.png`,output))});
     await page.locator('#sessionConfirm').click();
-    await page.getByText('2 blocks added to your FlowSight calendar.',{exact:true}).waitFor();
+    await page.getByText('2 blocks added to FlowSight.',{exact:true}).waitFor();
     assert.equal((await page.evaluate(()=>window.testCalls)).filter(c=>c.command==='confirm_session_plan').length,1);
     await page.locator('#sessionCalendar').scrollIntoViewIfNeeded();
     await page.screenshot({path:fileURLToPath(new URL(`session-calendar-${viewport.name}.png`,output))});

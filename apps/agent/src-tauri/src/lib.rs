@@ -111,6 +111,7 @@ pub fn run() {
             local_agent::session_plan::propose_session_plan,
             local_agent::session_plan::confirm_session_plan,
             local_agent::session_plan::cancel_session_plan,
+            local_agent::session_plan::abandon_session_plan,
             local_agent::control_local_focus_block,
             local_agent::browser_bridge::get_browser_pairing,
             local_agent::browser_bridge::open_browser_extension_store,

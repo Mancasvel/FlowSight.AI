@@ -1,5 +1,24 @@
 // Explicit application copy. User-authored task names, messages and activity are never translated.
 export const spanish = Object.fromEntries(`
+Planning runs on this device. Review and confirm to add the blocks to your linked calendar, or to FlowSight if none is connected.|La planificación se ejecuta en este dispositivo. Revisa y confirma para añadir los bloques a tu calendario vinculado, o a FlowSight si no hay ninguno conectado.
+Draft ready. Review the times and estimates before adding the blocks to {calendar}.|Borrador listo. Revisa las horas y estimaciones antes de añadir los bloques a {calendar}.
+{count} block added to {calendar}.|{count} bloque añadido a {calendar}.
+{count} blocks added to {calendar}.|{count} bloques añadidos a {calendar}.
+Saving the reviewed blocks to your calendar…|Guardando los bloques revisados en tu calendario…
+Reviewed session awaiting calendar saving|Sesión revisada pendiente de guardar en el calendario
+Finish saving your session|Termina de guardar tu sesión
+Retry saving reviewed blocks|Reintentar el guardado de los bloques revisados
+Stop saving remaining blocks|Detener el guardado de los bloques restantes
+Stop saving the remaining blocks? Events already sent will stay in your linked calendar. An interrupted request may also have created an event there. Check your calendar before planning again.|¿Detener el guardado de los bloques restantes? Los eventos ya enviados se conservarán en tu calendario vinculado. Una petición interrumpida también puede haber creado un evento allí. Revisa tu calendario antes de planificar otra sesión.
+Remaining save stopped. Existing linked-calendar events have been kept.|Se ha detenido el guardado restante. Se han conservado los eventos del calendario vinculado.
+Your local calendar overlaps this reviewed session. Resolve the overlap before retrying its save.|Tu calendario local coincide con esta sesión revisada. Resuelve la coincidencia antes de reintentar su guardado.
+The reviewed session is not fully saved to {calendar}: {saved} of {total} blocks confirmed. Retry to finish saving these same blocks.|La sesión revisada no está completamente guardada en {calendar}: {saved} de {total} bloques confirmados. Reintenta para terminar de guardar estos mismos bloques.
+Finish saving your reviewed session before suggesting another one.|Termina de guardar tu sesión revisada antes de solicitar otra propuesta.
+Finish saving your reviewed session before confirming another one.|Termina de guardar tu sesión revisada antes de confirmar otra.
+Your linked calendar changed. Suggest a fresh session before confirming.|Tu calendario vinculado ha cambiado. Solicita una nueva propuesta antes de confirmar.
+Your linked calendar now overlaps this proposal. Adjust the session and suggest it again.|Ahora hay eventos en tu calendario vinculado que coinciden con esta propuesta. Ajusta la sesión y solicita otra propuesta.
+Reconnect the calendar used for this reviewed session before retrying its save.|Vuelve a conectar el calendario de esta sesión revisada antes de reintentar su guardado.
+Your linked calendar overlaps this reviewed session. Resolve the overlap in your calendar, then retry saving.|Tu calendario vinculado coincide con esta sesión revisada. Resuelve la coincidencia en tu calendario y reintenta el guardado.
 Understand your own Workflows|Comprende tu forma de trabajar
 Understand your own workflows.|Comprende tu forma de trabajar.
 More settings below|Más opciones abajo

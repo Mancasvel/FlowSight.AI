@@ -24,6 +24,12 @@ export function sessionWindow(startTime, endTime, now = new Date()) {
 const clock = (value) => new Date(value).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
 const get = (id) => document.getElementById(id);
 
+export const calendarDestinationLabel = destination => destination?.provider === 'google' ? 'Google Calendar' : destination?.provider === 'microsoft' ? 'Microsoft Calendar' : 'FlowSight';
+export function sessionConfirmationText(result) {
+  const count = result.events.length, calendar = calendarDestinationLabel(result.calendarDestination);
+  return tr(count === 1 ? '{count} block added to {calendar}.' : '{count} blocks added to {calendar}.', {count, calendar});
+}
+
 function renderBlocks(host, blocks) {
   host.replaceChildren();
   for (const block of blocks) {
@@ -38,14 +44,16 @@ function renderBlocks(host, blocks) {
 }
 
 export function mountSessionPlanner({ invoke }) {
-  let proposal = null, busy = false, expiryTimer;
+  let proposal = null, recoverySave = null, busy = false, expiryTimer;
   const panel = get('sessionPlanner'), form = get('sessionPlanForm'), status = get('sessionPlanStatus');
   const intention = get('sessionIntention'), start = get('sessionStart'), end = get('sessionEnd'), feedback = get('sessionFeedback');
   function message(text, error = false) { setText(status, () => typeof text==='function'?text():localizeStatus(text)); status.dataset.state = error ? 'error' : ''; }
   function lock(value) {
     busy = value;
-    for (const id of ['sessionIntention', 'sessionStart', 'sessionEnd', 'sessionFeedback', 'sessionGenerate', 'sessionRevise', 'sessionConfirm', 'sessionCancel']) get(id).disabled = value;
+    for (const id of ['sessionIntention', 'sessionStart', 'sessionEnd', 'sessionFeedback', 'sessionGenerate', 'sessionRevise', 'sessionConfirm', 'sessionCancel']) get(id).disabled = value || Boolean(recoverySave);
     get('sessionConfirm').disabled = value || !proposal;
+    get('sessionRetrySave').disabled = value || !recoverySave;
+    get('sessionAbandonSave').disabled = value || !recoverySave;
     setText(get('sessionGenerate'), () => ((value ? tr('Planning on this device…') : tr('Suggest my session'))));
     form.setAttribute('aria-busy', String(value));
   }
@@ -56,7 +64,7 @@ export function mountSessionPlanner({ invoke }) {
     if (old) await invoke('cancel_session_plan', { id: old.id });
   }
   async function plan(revise) {
-    if (busy) return;
+    if (busy || recoverySave) return;
     if (revise && (!proposal || !feedback.value.trim())) { message('Describe what you want to change.', true); feedback.focus(); return; }
     try {
       const request = { intention: intention.value.trim(), ...sessionWindow(start.value, end.value) };
@@ -72,7 +80,7 @@ export function mountSessionPlanner({ invoke }) {
         const heading = document.createElement('strong'); setText(heading, () => (tr('Work that needs more time'))); overflow.append(heading);
         proposal.unscheduled.forEach((text,index) => { const p = document.createElement('p'); setText(p, () => currentProposal.localizedUnscheduled?.[getLanguage()]?.[index] || text); overflow.append(p); });
       }
-      feedback.value = ''; message('Draft ready. Review the times and estimates before adding it to your local calendar.');
+      feedback.value = ''; message(() => tr('Draft ready. Review the times and estimates before adding the blocks to {calendar}.', {calendar:calendarDestinationLabel(currentProposal.calendarDestination)}));
       clearTimeout(expiryTimer);
       expiryTimer = setTimeout(() => { proposal = null; get('sessionConfirm').disabled = true; message('This draft expired. Suggest a fresh session.', true); }, proposal.expiresInSeconds * 1000);
     } catch (error) { message(()=>formatMessage`${localizeStatus(String(error))} Edit the request and try again.`, true); }
@@ -88,15 +96,27 @@ export function mountSessionPlanner({ invoke }) {
     try { await discard(); message('Draft discarded. Edit your request to make another plan.'); }
     catch (error) { message(String(error), true); }
   });
-  get('sessionConfirm').addEventListener('click', async () => {
-    if (busy || !proposal) return;
+  async function confirm(id) {
+    if (busy || !id) return;
     lock(true);
+    message('Saving the reviewed blocks to your calendar…');
     try {
-      const events = await invoke('confirm_session_plan', { id: proposal.id });
+      const result = await invoke('confirm_session_plan', { id });
       proposal = null; clearTimeout(expiryTimer); get('sessionProposal').hidden = true;
-      message(()=>formatMessage`${events.length} blocks added to your FlowSight calendar.`); await refreshCalendar();
-    } catch (error) { message(String(error), true); }
+      message(() => sessionConfirmationText(result)); await refreshCalendar();
+    } catch (error) { message(String(error), true); await refreshCalendar(); }
     finally { lock(false); }
+  }
+  get('sessionConfirm').addEventListener('click', () => confirm(proposal?.id));
+  get('sessionRetrySave').addEventListener('click', () => confirm(recoverySave?.id));
+  get('sessionAbandonSave').addEventListener('click', async () => {
+    if (busy || !recoverySave) return;
+    if (!window.confirm(tr('Stop saving the remaining blocks? Events already sent will stay in your linked calendar. An interrupted request may also have created an event there. Check your calendar before planning again.'))) return;
+    const id = recoverySave.id;
+    lock(true);
+    try { await invoke('abandon_session_plan', {id}); await refreshCalendar(); message('Remaining save stopped. Existing linked-calendar events have been kept.'); }
+    catch (error) { message(String(error),true); }
+    finally {lock(false);}
   });
   function open() {
     panel.open = true;
@@ -114,7 +134,16 @@ export function mountSessionPlanner({ invoke }) {
   async function refreshCalendar() {
     try {
       const data = await invoke('get_local_agent_data'), now = new Date();
-      const events = (data.events || []).filter((e) => !e.provider && new Date(e.startAt).toDateString() === now.toDateString() && new Date(e.endAt) > now)
+      recoverySave = (data.sessionSaves || []).find(save => !save.complete && !save.abandoned) || null;
+      get('sessionRecovery').hidden = !recoverySave;
+      if (recoverySave) {
+        proposal = null; clearTimeout(expiryTimer); get('sessionProposal').hidden = true;
+        const save = recoverySave;
+        setText(get('sessionRecoveryStatus'), () => tr('The reviewed session is not fully saved to {calendar}: {saved} of {total} blocks confirmed. Retry to finish saving these same blocks.', {calendar:calendarDestinationLabel(save.target),saved:save.events.filter(event => event.externalId).length,total:save.events.length}));
+        renderBlocks(get('sessionRecoveryBlocks'), save.events);
+      }
+      lock(busy);
+      const events = (data.events || []).filter((e) => new Date(e.startAt).toDateString() === now.toDateString() && new Date(e.endAt) > now)
         .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
       get('sessionCalendar').hidden = !events.length; renderBlocks(get('sessionCalendarBlocks'), events);
     } catch (_) { /* Refresh again when the agent becomes available. */ }

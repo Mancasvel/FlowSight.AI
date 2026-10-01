@@ -8,6 +8,7 @@ mod external_calendar;
 mod messaging;
 mod projects;
 mod registry;
+pub mod session_calendar;
 pub mod session_plan;
 pub mod state;
 mod system_quiet;
@@ -494,7 +495,8 @@ pub fn cancel_local_agent_action(id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn get_local_agent_data() -> Result<state::AgentData, String> {
-    state::read()
+    let owner = crate::calendar_companion::session_owner();
+    Ok(session_plan::owner_view(state::read()?, owner.as_deref()))
 }
 
 #[tauri::command]
