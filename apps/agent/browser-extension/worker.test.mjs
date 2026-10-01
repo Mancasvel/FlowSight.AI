@@ -12,7 +12,7 @@ function harness() {
   const listeners = { addListener() {} };
   const chrome = {
     action: { onClicked: listeners },
-    alarms: { create() {}, onAlarm: listeners },
+    alarms: { create() {}, clear() {}, onAlarm: listeners },
     runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, openOptionsPage() {} },
     storage: { local: {
       async get(names) {
@@ -21,11 +21,15 @@ function harness() {
       },
       async set(value) { Object.assign(stored, value); },
     } },
-    declarativeNetRequest: { async updateDynamicRules(change) { changes.push(change); } },
+    tabs: { async query() { return []; }, async update() {} },
+    declarativeNetRequest: {
+      async getDynamicRules() { return changes.reduce((rules, change) => [...rules.filter(rule => !change.removeRuleIds?.includes(rule.id)), ...(change.addRules || [])], []); },
+      async updateDynamicRules(change) { changes.push(change); }
+    },
   };
   const context = { chrome, URL, crypto: webcrypto, fetch: async () => { throw new Error('offline'); },
     AbortSignal, console, setTimeout, clearTimeout };
-  runInNewContext(`${source}\nglobalThis.__test = { ruleFor, runCommand, expireBlocks };`, context);
+  runInNewContext(`${source}\nglobalThis.__test = { ruleFor, runCommand, expireBlocks, reconcileFocus, focusStatus, cancelFocus, releaseBlocksAfterDisconnect };`, context);
   return { ...context.__test, stored, changes };
 }
 
@@ -53,4 +57,48 @@ test('temporary blocks can be removed and do not survive their expiry', async ()
   await expireBlocks();
   assert.equal(stored.blocks.length, 0);
   assert.equal(changes.at(-1).removeRuleIds.length, 1);
+});
+
+const policy = (overrides = {}) => ({id:'focus-1',intention:'ADDA exercise',expiresAt:new Date(Date.now()+300000).toISOString(),patterns:['youtube.com','instagram.com'],exceptions:['youtube.com/watch'],...overrides});
+
+test('total focus uses owned rules, exceptions take priority, and legacy unblocking preserves it', async () => {
+  const h=harness(); await h.reconcileFocus(policy());
+  const rules=h.changes.at(-1).addRules;
+  assert.equal(rules[0].action.type,'redirect');assert.equal(rules[2].action.type,'allow');
+  assert.ok(rules[2].priority>rules[0].priority);
+  assert.equal(new RegExp(rules[0].condition.regexFilter).test('https://m.youtube.com/shorts/1'),true);
+  assert.equal(new RegExp(rules[0].condition.regexFilter).test('https://notyoutube.com'),false);
+  await h.runCommand('browser.block',{patterns:['reddit.com'],duration_minutes:1});
+  await h.runCommand('browser.unblock_all',{});
+  assert.equal((await h.focusStatus()).applied,true);
+  await h.reconcileFocus(null);assert.equal((await h.focusStatus()).applied,false);
+});
+
+test('focus persists on disconnect, reconciles restart, and expires independently',async()=>{
+  const h=harness();const p=policy();await h.reconcileFocus(p);
+  h.stored.lastConnectedAt=0;await h.releaseBlocksAfterDisconnect();
+  assert.equal((await h.focusStatus()).sessionId,p.id);
+  const before=h.changes.length;await h.reconcileFocus(p);assert.equal(h.changes.length,before);
+  // Simulate rule loss while extension storage survives a restart.
+  h.changes.push({removeRuleIds:[1000,1001,1020]});await h.reconcileFocus(p);
+  assert.equal((await h.focusStatus()).applied,true);
+  h.stored.focus.expiresAt=new Date(Date.now()-1).toISOString();await h.expireBlocks();
+  assert.equal((await h.focusStatus()).applied,false);
+});
+
+test('emergency end cannot be undone by a stale native policy',async()=>{
+  const h=harness();const p=policy();await h.reconcileFocus(p);await h.cancelFocus();
+  await h.reconcileFocus(p);assert.equal((await h.focusStatus()).applied,false);
+  assert.equal((await h.focusStatus()).cancelledSessionId,p.id);
+  await h.reconcileFocus(null);await h.reconcileFocus(policy({id:'focus-2'}));
+  assert.equal((await h.focusStatus()).applied,true);
+});
+
+test('invalid focus policy changes no rules and does not send messages',async()=>{
+  const h=harness();
+  for(const patterns of [[],['127.0.0.1'],['file:///etc/passwd'],['https://example.com?secret=1']]) {
+    await assert.rejects(()=>h.reconcileFocus(policy({patterns})));
+  }
+  assert.equal(h.changes.length,0);
+  await assert.rejects(()=>h.runCommand('messages.auto_reply',{}),/Unsupported/);
 });

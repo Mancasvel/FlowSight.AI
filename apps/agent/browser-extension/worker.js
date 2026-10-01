@@ -1,7 +1,15 @@
 // The native app is the authority. The extension performs only commands that
 // arrive through the loopback bridge after the user confirms them in FlowSight.
 const POLL_ALARM = 'flowsight-poll';
+const FOCUS_ALARM = 'flowsight-focus-expiry';
+const FOCUS_RULE_IDS = Array.from({ length: 40 }, (_, index) => 1000 + index);
 let polling = false;
+let focusQueue = Promise.resolve();
+const focusMutation = run => {
+  const result = focusQueue.then(run);
+  focusQueue = result.catch(() => {});
+  return result;
+};
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -32,12 +40,98 @@ function ruleFor(pattern, id) {
 }
 
 async function expireBlocks() {
+  const { focus } = await chrome.storage.local.get('focus');
+  if (focus && Date.parse(focus.expiresAt) <= Date.now()) await focusMutation(async () => {
+    const current = (await chrome.storage.local.get('focus')).focus;
+    if (current && Date.parse(current.expiresAt) <= Date.now()) await clearFocus();
+  });
   const { blocks = [] } = await chrome.storage.local.get('blocks');
   const now = Date.now();
   const expired = blocks.filter((block) => block.expiresAt <= now);
   if (!expired.length) return;
   await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: expired.map((block) => block.id) });
   await chrome.storage.local.set({ blocks: blocks.filter((block) => block.expiresAt > now) });
+}
+
+function focusPattern(pattern) {
+  const rule = ruleFor(pattern, 1);
+  const url = new URL(/^https?:\/\//i.test(pattern) ? pattern : `https://${pattern}`);
+  if (url.port || !url.hostname.includes('.') || url.hostname.endsWith('.') || /^\d+\.\d+\.\d+\.\d+$/.test(url.hostname)) {
+    throw new Error('Use a public domain or HTTP(S) path without a port.');
+  }
+  return rule.condition;
+}
+
+async function clearFocus() {
+  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: FOCUS_RULE_IDS });
+  await chrome.storage.local.set({ focus: null });
+  await chrome.alarms.clear(FOCUS_ALARM);
+}
+
+async function reconcileFocus(policy) {
+  return focusMutation(() => applyFocusPolicy(policy));
+}
+
+async function applyFocusPolicy(policy) {
+  const { focus, cancelledFocusId } = await chrome.storage.local.get(['focus', 'cancelledFocusId']);
+  if (!policy || policy.id === cancelledFocusId || Date.parse(policy.expiresAt) <= Date.now()) {
+    if (focus) await clearFocus();
+    if (!policy && cancelledFocusId) await chrome.storage.local.set({ cancelledFocusId: null });
+    return;
+  }
+  const expiresAt = Date.parse(policy.expiresAt);
+  if (!policy.id || !Number.isFinite(expiresAt) || expiresAt > Date.now() + 181 * 60000
+      || !Array.isArray(policy.patterns) || !policy.patterns.length || policy.patterns.length > 20
+      || !Array.isArray(policy.exceptions) || policy.exceptions.length > 20) throw new Error('Invalid total focus policy.');
+  const rules = [
+    ...policy.patterns.map((pattern, i) => ({ id: 1000 + i, priority: 10,
+      action: { type: 'redirect', redirect: { extensionPath: '/blocked.html' } }, condition: focusPattern(pattern) })),
+    ...policy.exceptions.map((pattern, i) => ({ id: 1020 + i, priority: 100,
+      action: { type: 'allow' }, condition: focusPattern(pattern) })),
+  ];
+  const installed = (await chrome.declarativeNetRequest.getDynamicRules()).filter(rule => FOCUS_RULE_IDS.includes(rule.id));
+  const changed = JSON.stringify(focus) !== JSON.stringify(policy)
+    || installed.length !== rules.length || !rules.every(rule => installed.some(item => item.id === rule.id
+      && item.priority === rule.priority && item.action.type === rule.action.type
+      && item.condition.regexFilter === rule.condition.regexFilter));
+  if (changed) {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: FOCUS_RULE_IDS, addRules: rules });
+    await chrome.storage.local.set({ focus: policy });
+    await chrome.alarms.create(FOCUS_ALARM, { when: expiresAt });
+    // Replace already open distractions with a local page. No URLs or tab titles leave the browser.
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!/^https?:\/\//i.test(tab.url || '')) continue;
+      const blocked = rules.some(rule => rule.action.type === 'redirect' && new RegExp(rule.condition.regexFilter, 'i').test(tab.url));
+      const allowed = rules.some(rule => rule.action.type === 'allow' && new RegExp(rule.condition.regexFilter, 'i').test(tab.url));
+      if (blocked && !allowed) await chrome.tabs.update(tab.id, { url: chrome.runtime.getURL('blocked.html') }).catch(() => {});
+    }
+  }
+}
+
+async function focusStatus() {
+  await expireBlocks();
+  const { focus, cancelledFocusId } = await chrome.storage.local.get(['focus', 'cancelledFocusId']);
+  const installed = await chrome.declarativeNetRequest.getDynamicRules();
+  return { sessionId: focus?.id || null, applied: Boolean(focus && installed.some(rule => rule.id === 1000)),
+    cancelledSessionId: cancelledFocusId || null };
+}
+
+async function cancelFocus() {
+  return focusMutation(async () => {
+    const { focus } = await chrome.storage.local.get('focus');
+    if (focus) await chrome.storage.local.set({ cancelledFocusId: focus.id });
+    await clearFocus();
+    return { ended: true };
+  });
+}
+
+async function publishFocusStatus(port, token) {
+  const response = await fetch(`http://127.0.0.1:${port}/focus_status`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlowSight-Token': token },
+    body: JSON.stringify(await focusStatus()), signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error('FlowSight did not accept browser status.');
 }
 
 async function releaseBlocksAfterDisconnect() {
@@ -48,6 +142,7 @@ async function releaseBlocksAfterDisconnect() {
 }
 
 async function runCommand(name, args) {
+  if (name === 'browser.focus_status') return focusStatus();
   if (name === 'browser.unblock_all') {
     const { blocks = [] } = await chrome.storage.local.get('blocks');
     if (blocks.length) {
@@ -143,7 +238,9 @@ async function poll() {
     });
     if (!response.ok) { await releaseBlocksAfterDisconnect(); return; }
     await chrome.storage.local.set({ lastConnectedAt: Date.now() });
-    const { command } = await response.json();
+    const { command, focus = null } = await response.json();
+    await reconcileFocus(focus);
+    await publishFocusStatus(port, token);
     if (!command) return;
     let result;
     try {
@@ -169,7 +266,13 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
 });
 chrome.runtime.onStartup.addListener(() => { chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 }); poll(); });
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === POLL_ALARM) poll(); });
-chrome.runtime.onMessage.addListener((message) => { if (message?.type === 'poll-now') poll(); });
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === POLL_ALARM || alarm.name === FOCUS_ALARM) poll(); });
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message?.type === 'poll-now') poll();
+  if (message?.type === 'end-focus' && sender.url?.startsWith(chrome.runtime.getURL(''))) {
+    cancelFocus().then(result => { reply(result); poll(); }, error => reply({ error: error.message }));
+    return true;
+  }
+});
 chrome.alarms.create(POLL_ALARM, { periodInMinutes: 0.5 });
 poll();
