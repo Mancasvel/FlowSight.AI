@@ -9,11 +9,7 @@ pub fn is_spanish() -> bool {
     SPANISH.load(Ordering::Relaxed)
 }
 pub fn copy<'a>(english: &'a str, spanish: &'a str) -> &'a str {
-    if is_spanish() {
-        spanish
-    } else {
-        english
-    }
+    copy_for(if is_spanish() { "es" } else { "en" }, english, spanish)
 }
 pub fn copy_for<'a>(language: &str, english: &'a str, spanish: &'a str) -> &'a str {
     if language == "es" {
