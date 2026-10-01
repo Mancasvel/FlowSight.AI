@@ -42,6 +42,7 @@ pub struct ActionProposal {
     id: String,
     tool: String,
     summary: String,
+    localized_summary: Value,
     arguments: Value,
     expires_in_seconds: u64,
 }
@@ -66,7 +67,7 @@ fn parse_arguments(value: &Value) -> Result<Value, String> {
 fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionProposal, String> {
     registry::validate(spec, &arguments)?;
     let id = uuid::Uuid::new_v4().to_string();
-    let mut summary = actions::preview(spec.name, &arguments)?;
+    let (mut summary, mut summary_es) = actions::preview(spec.name, &arguments)?;
     let tab_id = if spec.name == "browser.close_tab"
         || (spec.name == "automation.run_playbook" && arguments["playbook"] == "recover_focus")
     {
@@ -77,6 +78,7 @@ fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionPro
     let browser_tab_url = tab_id.map(actions::browser_tab_url).transpose()?;
     if let Some(ref url) = browser_tab_url {
         summary.push_str(&format!(". Target URL: {url}"));
+        summary_es.push_str(&format!(". URL de destino: {url}"));
     }
     let mut pending = PENDING.lock().map_err(|error| error.to_string())?;
     pending.retain(|item| item.expires_at > Instant::now());
@@ -94,6 +96,7 @@ fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionPro
     Ok(ActionProposal {
         id,
         tool: spec.name.to_string(),
+        localized_summary: json!({"en": summary, "es": summary_es}),
         summary,
         arguments,
         expires_in_seconds: PROPOSAL_LIFETIME.as_secs(),
