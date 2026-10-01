@@ -198,7 +198,7 @@ Today centers within 640px; Insights and Settings center within 760px. At 520px,
 
 The four-tab dock floats 14px above the window bottom, spans the available width with 12px outer margins, and stops growing at 540px. In the narrow variant it sits 8px above the bottom. Consent dialogs remain bounded by viewport height; the monitoring notice leaves its action row fixed while details scroll.
 
-The five-step onboarding overlay uses a vertical flex layout: the progress header and footer keep their space, and the middle body shrinks and scrolls. The footer is a static flex child with an opaque theme background, rather than an overlay over the last setting. A remaining-content button advances the body by roughly four fifths of its visible height and becomes “Back to top” at the end; its row stays reserved for any step that overflows. Save and connection feedback occupies a persistent live region in the footer so messages remain visible while the body scrolls.
+The five-step onboarding overlay uses a vertical flex layout: the progress header and footer keep their space, and the middle body shrinks and scrolls. The footer is a static flex child with an opaque theme background and its own reserved space. A remaining-content button advances the body by roughly four fifths of its visible height and becomes “Back to top” at the end; its row stays reserved for any step that overflows. Save and connection feedback occupies a persistent live region in the footer so messages remain visible while the body scrolls.
 
 The Today planner remains an expandable section in the existing reading column at 370 × 700px, 340 × 400px, and 900px wide. Its form uses a 14px rhythm, two equal-width time fields, a full-width intention field, and a chronological proposal list with a 96px time column. Confirmation and discard actions wrap from a 120px basis instead of forcing a narrow window to scroll horizontally.
 
@@ -251,7 +251,7 @@ A bounded dialog keeps its heading and action row visible at 340 × 400px. The d
 
 The disclosure opens a labelled intention textarea and start/finish fields for today. The draft separates a summary, chronological blocks, and work that needs more time; feedback and revision sit below the blocks, followed by solid teal confirmation and a quiet discard action. A local calendar list reuses the same time-and-title geometry after confirmation. Status copy remains in a live region between the request form and draft. Labels use the actual theme foreground, with muted foreground reserved for explanations and rationale.
 
-Planner textareas use the existing cool border and 11px corner family, 12px padding, and a 100px minimum height. Scoped affirmative actions use Session Action Teal rather than the tracking gradient. Buttons, inputs, selects, textareas, and disclosure summaries in the planner and onboarding use a solid 3px focus outline with a 3px offset in the appearance-specific focus color.
+Planner textareas use the existing cool border and 11px corner family, 12px padding, and a 100px minimum height. Scoped affirmative actions use solid Session Action Teal. Buttons, inputs, selects, textareas, and disclosure summaries in the planner and onboarding use a solid 3px focus outline with a 3px offset in the appearance-specific focus color.
 
 ### Optional first-run setup
 
