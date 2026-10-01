@@ -41,7 +41,7 @@ try {
           if(command.startsWith('plugin:window|'))return command.endsWith('is_maximized')?false:null;
           if(command==='plugin:event|listen')return args.handler;
           if(command.startsWith('plugin:event|')||command.startsWith('plugin:updater|'))return null;
-          if(command==='plugin:app|version')return '5.0.9';
+          if(command==='plugin:app|version')return '5.0.10';
           if(command==='get_local_agent_data')return {events,preferences:{},tasks:[]};
           if(command==='get_user_preferences')return prefs;
           if(command==='save_user_preferences_command'){prefs=args.prefs;return prefs;}
