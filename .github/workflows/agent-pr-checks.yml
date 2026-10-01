@@ -129,6 +129,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Measured ADDA proposal renderer replay failed.' }
             node scripts/verify-localization.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Production localization and state preservation checks failed.' }
+            node scripts/verify-coach-conversation.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Saved Pro Coach conversation and reply checks failed.' }
+            node scripts/verify-linked-session.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Linked calendar session recovery and destination checks failed.' }
           } finally {
             if (-not $server.HasExited) { & taskkill.exe /PID $server.Id /T /F | Out-Null }
           }

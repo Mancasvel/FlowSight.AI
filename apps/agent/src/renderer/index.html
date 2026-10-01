@@ -3638,7 +3638,7 @@
             <p class="session-help">Add estimates and fixed commitments if you know them. The local agent uses your tasks, saved preferences and recorded task time to suggest blocks. Include meetings from other calendars here.</p>
             <button class="button button-primary" type="submit" id="sessionGenerate">Suggest my session</button>
           </form>
-          <p class="session-status" id="sessionPlanStatus" role="status" aria-live="polite">Your plan stays on this device. Review and confirm before it is added to the FlowSight calendar.</p>
+          <p class="session-status" id="sessionPlanStatus" role="status" aria-live="polite">Planning runs on this device. Review and confirm to add the blocks to your linked calendar, or to FlowSight if none is connected.</p>
           <section class="session-proposal" id="sessionProposal" aria-label="Session proposal" hidden>
             <h3>Your proposed session</h3><p id="sessionPlanSummary"></p>
             <ol class="session-blocks" id="sessionPlanBlocks"></ol><div id="sessionUnscheduled" hidden></div>
@@ -3651,6 +3651,13 @@
             </div>
           </section>
         </details>
+        <section class="session-proposal" id="sessionRecovery" aria-label="Reviewed session awaiting calendar saving" hidden>
+          <h3>Finish saving your session</h3>
+          <p id="sessionRecoveryStatus" role="status"></p>
+          <ol class="session-blocks" id="sessionRecoveryBlocks"></ol>
+          <button class="button button-primary" type="button" id="sessionRetrySave">Retry saving reviewed blocks</button>
+          <button class="button button-ghost" type="button" id="sessionAbandonSave">Stop saving remaining blocks</button>
+        </section>
         <section class="session-calendar" id="sessionCalendar" aria-label="Local session calendar" hidden>
           <h3>Your remaining blocks today</h3><ol class="session-blocks" id="sessionCalendarBlocks"></ol>
         </section>
@@ -4222,6 +4229,7 @@
     import { invoke } from '@tauri-apps/api/core';
     import { createInstallationRepairController } from './installation-repair.mjs';
     import { mountSessionPlanner } from './session-planner.mjs';
+    import { renderCoachMarkdown } from './coach-markdown.mjs';
     import './session-planner.css';
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -6091,24 +6099,6 @@
         setText(message, () => (tr('Enable cloud AI in You → Privacy & data before sharing messages or work context.')));
         setText(button, () => (tr('Review privacy settings')));
       }
-    }
-
-    function renderCoachMarkdown(value) {
-      let html = escapeHtml(value || '');
-      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
-        .replace(/^-\s+(.+)$/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, (block) => html`<ul>${block}</ul>`)
-        .replace(/\n\n/g, '</p><p>');
-      html = html`<p>${html}</p>`;
-      return html.replace(/<p>\s*<\/p>/g, '')
-        .replace(/<p>(<h[123]>)/g, '$1')
-        .replace(/(<\/h[123]>)<\/p>/g, '$1')
-        .replace(/<p>(<ul>)/g, '$1')
-        .replace(/(<\/ul>)<\/p>/g, '$1');
     }
 
     function renderCoachMessages() {
