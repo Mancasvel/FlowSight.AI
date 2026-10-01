@@ -25,12 +25,15 @@ Sensitive screen-context analysis runs on the user's device. The user chooses wh
 - A narrow desktop window defaults to 370 × 700 px and can be resized down to 340 × 400 px.
 - The main tasks are Today (start/pause tracking and set a goal or task), Insights (inspect activity and generate a local work report), and Settings/You (account, privacy, integrations, and app preferences). The local agent works proactively in the background and uses tools according to the user's permissions; it has no chat tab.
 - Closing the window hides it in the system tray; quitting is a separate action.
+- Today includes an expandable session planner: describe an intention and today's availability, review a local draft, request changes, and explicitly confirm the proposed blocks. Its compact reading order carries through the default window, the minimum window, and a 900px-wide window.
 
 ## Capabilities and Constraints
 
 - Preserve the working commands, IDs, consent flows, optional cloud gates, local report/PDF export, and light/dark appearance during visual redesigns.
 - A local report can use AI or a clearly identified rule-based fallback. Do not present either as a verified judgment of the person's productivity.
 - Tracking, data sharing, analytics, and window-title storage have distinct consent controls; optional sharing is off by default.
+- Session planning runs locally from the user's request, saved preferences, tasks, and recorded task time. Suggestions and revisions are drafts; only confirmation adds blocks to the encrypted local FlowSight calendar. This flow does not export blocks to external calendars. Meetings from other calendars can be included in the request as fixed commitments.
+- The first-run wizard has five optional steps: name, daily goal, and work context; an example session plan and an option to open the planner; focus reminders and their separate context setting; a weekly local PDF report schedule and folder; and existing cloud calendar integrations with independent recap consent. New installations start with focus reminders, contextual reminders, and automatic weekly reports off. Enabling weekly reports requires a local destination folder; automatic reports run while FlowSight is running.
 - The source is available under AGPL-3.0. Individual distribution and monthly cloud plans are separate commercial matters; the interface must not imply a purchase or entitlement it has not verified.
 
 ## Brand Commitments
@@ -43,6 +46,8 @@ Sensitive screen-context analysis runs on the user's device. The user chooses wh
 
 - Product behavior and positioning: `README.md`, `apps/agent/src/renderer/index.html`, and `apps/agent/src-tauri/tauri.conf.json`.
 - No user research, independent usability results, or verified productivity benchmarks were supplied for this redesign.
+- Onboarding and session planning completed two builder rounds and scoped reviewer corrections. The independent implementation review marked all five material fixes resolved and recommended shipping. A real local Qwen smoke check produced three valid proposed blocks and three revised blocks without calendar writes.
+- Screenshot previews for these surfaces used a synthetic Tauri environment. They establish renderer evidence; native Tauri UI behavior was not verified by those captures.
 
 ## Product Principles
 

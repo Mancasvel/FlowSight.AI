@@ -18,6 +18,8 @@ colors:
   teal-progress: "#25b9ad"
   teal-soft: "#e8f8f5"
   teal-active-dark: "#6cdfd0"
+  session-action: "#087f78"
+  session-action-hover: "#066b65"
   action-indigo: "#7a7cf1"
   action-teal: "#2cbdb4"
 typography:
@@ -119,6 +121,11 @@ components:
     rounded: "{rounded.dialog}"
     padding: "24px"
     width: "min(100%, 470px)"
+  button-session:
+    backgroundColor: "{colors.session-action}"
+    textColor: "{colors.surface-light}"
+    rounded: "{rounded.control}"
+    padding: "8px 13px"
 ---
 
 # Design System: FlowSight Desktop Renderer
@@ -130,6 +137,8 @@ components:
 The desktop renderer belongs to the FlowSight mobile family. A pale technical grid, slate reading text, teal signals, softly raised white panels, and one indigo-to-teal tracking action make the compact Tauri window feel related to the Android app without stretching a phone screen into desktop proportions.
 
 The visual language carries through Today, Insights, Settings, first run, and consent. It puts a clear tracking decision beside measured time, then uses quieter cards and rails for supporting evidence. This contract describes the desktop WebView and its shared interface patterns.
+
+Onboarding and session planning follow the Operate direction within this incumbent family: compact labelled controls, useful examples, visible progress and status, and an explicit primary action at each decision. Their dark teal actions support white labels while the existing lighter teal continues to carry state and progress.
 
 **Key Characteristics:**
 
@@ -146,6 +155,7 @@ The system is light first, with a complete deep-slate appearance for system dark
 
 - **Signal Teal** (teal-primary / teal-progress): regular affirmative controls, live state, week marks, charts, and progress rails.
 - **Soft Teal** (teal-soft): selected navigation and other quiet active surfaces. **Dark Active Teal** (teal-active-dark) keeps that signal legible on the dark dock.
+- **Session Action Teal** (session-action / session-action-hover): solid affirmative controls in the session planner and onboarding footer. The scoped focus treatment uses Session Action Teal in light appearance and Dark Active Teal in dark appearance.
 
 ### Secondary
 
@@ -187,6 +197,10 @@ The default Tauri window is 370 × 700px and remains usable at 340 × 400px. A 4
 Today centers within 640px; Insights and Settings center within 760px. At 520px, these surfaces retain their single-column reading order. At 600px and wider, content padding grows to 30px vertically and 28px horizontally, goal and task cards can sit in two columns, and Settings gains a two-column arrangement. At 380px and narrower, padding contracts to 18px top and 15px sides, while the timer, dock, and actions reduce their dimensions.
 
 The four-tab dock floats 14px above the window bottom, spans the available width with 12px outer margins, and stops growing at 540px. In the narrow variant it sits 8px above the bottom. Consent dialogs remain bounded by viewport height; the monitoring notice leaves its action row fixed while details scroll.
+
+The five-step onboarding overlay uses a vertical flex layout: the progress header and footer keep their space, and the middle body shrinks and scrolls. The footer is a static flex child with an opaque theme background, rather than an overlay over the last setting. A remaining-content button advances the body by roughly four fifths of its visible height and becomes “Back to top” at the end; its row stays reserved for any step that overflows. Save and connection feedback occupies a persistent live region in the footer so messages remain visible while the body scrolls.
+
+The Today planner remains an expandable section in the existing reading column at 370 × 700px, 340 × 400px, and 900px wide. Its form uses a 14px rhythm, two equal-width time fields, a full-width intention field, and a chronological proposal list with a 96px time column. Confirmation and discard actions wrap from a 120px basis instead of forcing a narrow window to scroll horizontally.
 
 ## Elevation & Depth
 
@@ -232,6 +246,18 @@ The Today surface centers status and tabular time above a linear goal rail, goal
 ### Monitoring consent
 
 A bounded dialog keeps its heading and action row visible at 340 × 400px. The details occupy an independently scrollable middle region. A “Read remaining details” cue appears while hidden text remains, advances the text when activated, and disappears at the end; the actions stay anchored in light and dark appearances.
+
+### Session planner
+
+The disclosure opens a labelled intention textarea and start/finish fields for today. The draft separates a summary, chronological blocks, and work that needs more time; feedback and revision sit below the blocks, followed by solid teal confirmation and a quiet discard action. A local calendar list reuses the same time-and-title geometry after confirmation. Status copy remains in a live region between the request form and draft. Labels use the actual theme foreground, with muted foreground reserved for explanations and rationale.
+
+Planner textareas use the existing cool border and 11px corner family, 12px padding, and a 100px minimum height. Scoped affirmative actions use Session Action Teal rather than the tracking gradient. Buttons, inputs, selects, textareas, and disclosure summaries in the planner and onboarding use a solid 3px focus outline with a 3px offset in the appearance-specific focus color.
+
+### Optional first-run setup
+
+Each of the five steps pairs a compact heading (22px, 700, 1.25) with explanatory copy (13px), labelled controls, and a numbered progress indicator. Optional work context sits behind a disclosure. Reminder choices and calendar recap consent remain separate labelled toggles; a disabled context choice explains its relationship through the adjacent focus-reminder control. The footer's solid teal Continue/Finish action, quiet Skip setup action, and visible save errors retain the same positions as step content changes.
+
+Inline SVG examples have purposeful geometry: staggered work, break, and review blocks explain a session; activity lines leading to a document explain a local report. Examples stop growing at 300px, carry accessible descriptions, and use foreground text for their labels. Work blocks reveal through clipping over 650ms with the existing restrained ease (cubic-bezier(0.16, 1, 0.3, 1)) and small staged delays; reduced motion removes the animation and leaves the complete example visible.
 
 ## Do's and Don'ts
 

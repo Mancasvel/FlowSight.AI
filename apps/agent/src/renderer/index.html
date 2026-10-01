@@ -3303,10 +3303,11 @@
 
   <div class="app-viewport">
   <!-- ONBOARDING WIZARD (first-run work preferences) -->
-  <div class="onboarding-overlay" id="onboardingOverlay" aria-hidden="true">
+  <div class="onboarding-overlay" id="onboardingOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Set up FlowSight">
     <div class="onboarding-top">
       <div class="onboarding-top-row">
         <button type="button" class="onboarding-back" id="onboardingBackBtn" aria-label="Back">‹</button>
+        <span class="onboarding-step-label" id="onboardingStepLabel">1 of 5</span>
         <div class="onboarding-progress-track">
           <div class="onboarding-progress-fill" id="onboardingProgressFill" style="width:20%"></div>
         </div>
@@ -3314,10 +3315,12 @@
     </div>
     <div class="onboarding-body" id="onboardingBody"></div>
     <div class="onboarding-footer">
+      <button type="button" class="onboarding-more" id="onboardingMoreSettings" hidden>More settings below</button>
+      <p id="onboardingSetupStatus" class="onboarding-setup-status" role="status" aria-live="polite"></p>
       <button type="button" class="button button-primary onboarding-continue" id="onboardingContinueBtn" disabled>
         Continue
       </button>
-      <button type="button" class="button button-ghost onboarding-skip-calendar" id="onboardingSkipCalendarBtn" hidden>Skip calendar for now</button>
+      <button type="button" class="button button-ghost onboarding-skip-calendar" id="onboardingSkipCalendarBtn" hidden>Skip setup</button>
     </div>
   </div>
 
@@ -3677,6 +3680,35 @@
             </div>
           </div>
         </div>
+
+        <details class="session-planner" id="sessionPlanner">
+          <summary id="sessionPlannerToggle">Let’s plan today’s session</summary>
+          <form id="sessionPlanForm">
+            <div><label class="label" for="sessionIntention">What would you like to get done?</label>
+              <textarea id="sessionIntention" maxlength="3000" placeholder="Finish the proposal (about 90 min), review feedback, then prepare tomorrow’s meeting…" required></textarea></div>
+            <div class="session-time-fields">
+              <div><label class="label" for="sessionStart">Start today</label><input class="input" id="sessionStart" type="time" required></div>
+              <div><label class="label" for="sessionEnd">Finish today</label><input class="input" id="sessionEnd" type="time" required></div>
+            </div>
+            <p class="session-help">Add estimates and fixed commitments if you know them. The local agent uses your tasks, saved preferences and recorded task time to suggest blocks. Include meetings from other calendars here.</p>
+            <button class="button button-primary" type="submit" id="sessionGenerate">Suggest my session</button>
+          </form>
+          <p class="session-status" id="sessionPlanStatus" role="status" aria-live="polite">Your plan stays on this device. Review and confirm before it is added to the FlowSight calendar.</p>
+          <section class="session-proposal" id="sessionProposal" aria-label="Session proposal" hidden>
+            <h3>Your proposed session</h3><p id="sessionPlanSummary"></p>
+            <ol class="session-blocks" id="sessionPlanBlocks"></ol><div id="sessionUnscheduled" hidden></div>
+            <label class="label" for="sessionFeedback">What would you change?</label>
+            <textarea id="sessionFeedback" maxlength="2000" placeholder="Move the review earlier, allow 15 minutes for a break…"></textarea>
+            <button type="button" class="button button-secondary" id="sessionRevise">Adjust proposal</button>
+            <div class="session-actions">
+              <button type="button" class="button button-primary" id="sessionConfirm" disabled>Confirm and add blocks</button>
+              <button type="button" class="button button-ghost" id="sessionCancel">Discard draft</button>
+            </div>
+          </section>
+        </details>
+        <section class="session-calendar" id="sessionCalendar" aria-label="Local session calendar" hidden>
+          <h3>Your remaining blocks today</h3><ol class="session-blocks" id="sessionCalendarBlocks"></ol>
+        </section>
 
         <div class="today-preferences">
         <div class="today-task-card" id="todayTaskCard">
@@ -4232,6 +4264,8 @@
 
     import { invoke } from '@tauri-apps/api/core';
     import { createInstallationRepairController } from './installation-repair.mjs';
+    import { mountSessionPlanner } from './session-planner.mjs';
+    import './session-planner.css';
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { getVersion } from '@tauri-apps/api/app';
@@ -5629,6 +5663,7 @@
     }
 
     async function refreshTodayView() {
+      sessionPlanner.refreshCalendar();
       updateTodayGreeting();
       updateGoalUI();
       try {
@@ -6271,6 +6306,12 @@
     }
 
     function showToast(message, type = 'success', duration = 3000) {
+      if (document.getElementById('onboardingOverlay')?.classList.contains('visible')) {
+        const status = document.getElementById('onboardingSetupStatus');
+        status.dataset.state = type;
+        status.textContent = String(message ?? '') + (type === 'error' ? '. Check your choices and try again.' : '');
+        return;
+      }
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -6954,6 +6995,15 @@
       improvementGoals: [],
       dailyGoalHours: 6,
       reopening: false,
+      openPlanner: false,
+      focusReminders: false,
+      contextReminders: false,
+      reportsEnabled: false,
+      reportDay: 5,
+      reportTime: '17:00',
+      reportFolder: '',
+      saving: false,
+      previousFocus: null,
     };
 
     function onboardingRoleLabel(id, customJob) {
@@ -7034,41 +7084,18 @@
     }
 
     function onboardingCanContinue() {
-      switch (onboardingState.step) {
-        case 0: return onboardingState.displayName.trim().length >= 2;
-        case 1: {
-          if (onboardingState.workRoles.length === 0) return false;
-          if (onboardingState.workRoles.includes('other')) {
-            return onboardingState.customJob.trim().length >= 2;
-          }
-          return true;
-        }
-        case 2: return onboardingState.workActivities.length > 0;
-        case 3: return onboardingState.improvementGoals.length > 0;
-        case 4: return onboardingState.dailyGoalHours != null;
-        case 5: return true;
-        default: return false;
-      }
+      return onboardingState.step !== 3 || !onboardingState.reportsEnabled || Boolean(onboardingState.reportFolder);
     }
 
-    function onboardingToggleWorkRole(id) {
-      const arr = onboardingState.workRoles;
-      const idx = arr.indexOf(id);
-      if (idx >= 0) {
-        arr.splice(idx, 1);
-        if (id === 'other') onboardingState.customJob = '';
-      } else {
-        arr.push(id);
-      }
-      renderOnboardingStep();
-    }
-
-    function onboardingToggleMulti(key, id) {
-      const arr = onboardingState[key];
-      const idx = arr.indexOf(id);
-      if (idx >= 0) arr.splice(idx, 1);
-      else arr.push(id);
-      renderOnboardingStep();
+    function onboardingDemo(kind) {
+      if (kind === 'plan') return `<figure class="onboarding-demo"><svg viewBox="0 0 300 116" role="img" aria-label="Example session: write, break, then review">
+        <g fill="currentColor"><rect class="demo-block" x="12" y="18" width="162" height="24" rx="5" opacity=".25"/><rect class="demo-block" x="176" y="54" width="22" height="18" rx="4" opacity=".15"/><rect class="demo-block" x="200" y="80" width="86" height="24" rx="5" opacity=".4"/></g>
+        <g class="demo-labels" font-size="11" font-family="inherit"><text x="22" y="34">Write · 60 min</text><text x="150" y="67">Break</text><text x="209" y="96">Review</text></g>
+      </svg><figcaption>Example plan · your tasks set the schedule</figcaption></figure>`;
+      if (kind === 'report') return `<figure class="onboarding-demo"><svg viewBox="0 0 300 96" role="img" aria-label="Recorded work becomes a local report">
+        <g stroke="currentColor" fill="none" stroke-width="2"><path d="M22 26h80M22 46h58M22 66h68M122 46h48m-9-7 9 7-9 7"/><rect x="190" y="10" width="82" height="76" rx="8"/><path d="M204 28h52M204 42h42M204 56h48M204 70h30"/></g>
+      </svg><figcaption>Recorded evidence → a report saved on your computer</figcaption></figure>`;
+      return '';
     }
 
     function renderOnboardingStep() {
@@ -7077,109 +7104,72 @@
       const backBtn = document.getElementById('onboardingBackBtn');
       const fill = document.getElementById('onboardingProgressFill');
       if (!body || !continueBtn) return;
-
       const step = onboardingState.step;
-      fill.style.width = `${((step + 1) / 6) * 100}%`;
+      fill.style.width = `${((step + 1) / 5) * 100}%`;
+      document.getElementById('onboardingStepLabel').textContent = `${step + 1} of 5`;
       backBtn.style.visibility = step === 0 ? 'hidden' : 'visible';
-      document.getElementById('onboardingSkipCalendarBtn').hidden = step !== 5;
-
+      backBtn.disabled = step === 0;
+      document.getElementById('onboardingSetupStatus').textContent = '';
+      document.getElementById('onboardingSkipCalendarBtn').hidden = false;
+      document.getElementById('onboardingSkipCalendarBtn').textContent = 'Skip setup';
+      continueBtn.textContent = step === 4 ? 'Finish setup' : 'Continue';
       if (step === 0) {
-        body.innerHTML = `
-          <h1 class="onboarding-title">Welcome to FlowSight</h1>
-          <p class="onboarding-subtitle">Let's personalize your experience. What should we call you?</p>
-          <input type="text" class="onboarding-name-input" id="onboardingNameInput"
-            placeholder="Your first name" maxlength="40" value="${escapeHtml(onboardingState.displayName)}" autocomplete="name">`;
-        const input = document.getElementById('onboardingNameInput');
-        input?.focus();
-        input?.addEventListener('input', (e) => {
-          onboardingState.displayName = e.target.value;
-          continueBtn.disabled = !onboardingCanContinue();
-        });
-        continueBtn.textContent = 'Continue';
+        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">Make room for your work</h1>
+          <p class="onboarding-subtitle">Start tracking when you choose. FlowSight helps you review your time and work patterns on this computer.</p>
+          <label for="onboardingNameInput">What should we call you? <span class="session-help">Optional</span></label>
+          <input type="text" class="onboarding-name-input" id="onboardingNameInput" maxlength="40" autocomplete="given-name" placeholder="Your first name" value="${escapeHtml(onboardingState.displayName)}">
+          <label for="onboardingDailyGoal">Daily tracking goal</label>
+          <select class="select" id="onboardingDailyGoal">${[0,1,2,3,4,5,6,7,8,9,10,12].map((h) => `<option value="${h}" ${onboardingState.dailyGoalHours === h ? 'selected' : ''}>${h ? `${h} hours` : 'No goal'}</option>`).join('')}</select>
+          <p class="session-help">A reference for your day. You can pause or stop tracking at any time.</p>
+          <details class="onboarding-extra"><summary>Add work context (optional)</summary><label for="onboardingCustomJobInput">Your role or area of work</label>
+          <input type="text" class="input" id="onboardingCustomJobInput" maxlength="80" placeholder="For example, research or software development" value="${escapeHtml(onboardingState.customJob)}"></details>`;
+        document.getElementById('onboardingNameInput').oninput = (e) => { onboardingState.displayName = e.target.value; };
+        document.getElementById('onboardingCustomJobInput').oninput = (e) => {
+          onboardingState.customJob = e.target.value;
+          if (e.target.value.trim() && !onboardingState.workRoles.includes('other')) onboardingState.workRoles.push('other');
+          if (!e.target.value.trim()) onboardingState.workRoles = onboardingState.workRoles.filter((role) => role !== 'other');
+        };
+        document.getElementById('onboardingDailyGoal').onchange = (e) => { onboardingState.dailyGoalHours = Number(e.target.value); };
       } else if (step === 1) {
-        const showOtherJob = onboardingState.workRoles.includes('other');
-        body.innerHTML = `
-          <h1 class="onboarding-title">What kind of work do you do, ${escapeHtml(onboardingFirstName())}?</h1>
-          <p class="onboarding-subtitle">Pick one or more that describe your role.</p>
-          <div class="onboarding-options">${ONBOARDING_ROLE_OPTIONS.map((o) => `
-            <button type="button" class="onboarding-option ${onboardingState.workRoles.includes(o.id) ? 'selected' : ''}"
-              data-onboard-role="${o.id}">
-              <span class="onboarding-check">${onboardingState.workRoles.includes(o.id) ? '✓' : ''}</span>
-              <span class="onboarding-option-text">${escapeHtml(o.label)}</span>
-              <span class="onboarding-option-icon">${o.icon}</span>
-            </button>`).join('')}</div>
-          ${showOtherJob ? `
-          <div class="onboarding-other-job">
-            <label for="onboardingCustomJobInput">Describe your job</label>
-            <input type="text" class="onboarding-name-input" id="onboardingCustomJobInput"
-              placeholder="e.g. Technical writer, QA engineer, Founder…" maxlength="80"
-              value="${escapeHtml(onboardingState.customJob)}" autocomplete="organization-title">
-          </div>` : ''}`;
-        body.querySelectorAll('[data-onboard-role]').forEach((btn) => {
-          btn.onclick = () => onboardingToggleWorkRole(btn.dataset.onboardRole);
-        });
-        const jobInput = document.getElementById('onboardingCustomJobInput');
-        if (jobInput) {
-          jobInput.focus();
-          jobInput.addEventListener('input', (e) => {
-            onboardingState.customJob = e.target.value;
-            continueBtn.disabled = !onboardingCanContinue();
-          });
-        }
-        if (showOtherJob && !onboardingState.customJob.trim()) {
-          continueBtn.textContent = 'Enter your job to continue';
-        } else {
-          continueBtn.textContent = onboardingState.workRoles.length ? 'Continue' : 'Pick at least one';
-        }
+        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">A plan you can change</h1>
+          <p class="onboarding-subtitle">Tell the local agent what you want to do and when you are available. It suggests time blocks using your estimates and the context you have saved.</p>
+          ${onboardingDemo('plan')}
+          <p class="onboarding-subtitle">Ask for changes, then confirm. Your blocks are added to the FlowSight calendar only after you approve them.</p>
+          <label class="consent-toggle-row"><input type="checkbox" id="onboardingOpenPlan" ${onboardingState.openPlanner ? 'checked' : ''}><span>Open the session planner after setup</span></label>
+          <p class="session-help">Planning is optional. You can also start tracking directly from Today.</p>`;
+        document.getElementById('onboardingOpenPlan').onchange = (e) => { onboardingState.openPlanner = e.target.checked; };
       } else if (step === 2) {
-        body.innerHTML = `
-          <h1 class="onboarding-title">What fills your workday?</h1>
-          <p class="onboarding-subtitle">Select the activities you spend the most time on.</p>
-          <div class="onboarding-options">${ONBOARDING_ACTIVITY_OPTIONS.map((o) => `
-            <button type="button" class="onboarding-option ${onboardingState.workActivities.includes(o.id) ? 'selected' : ''}"
-              data-onboard-activity="${o.id}">
-              <span class="onboarding-check">${onboardingState.workActivities.includes(o.id) ? '✓' : ''}</span>
-              <span class="onboarding-option-text">${escapeHtml(o.label)}</span>
-              <span class="onboarding-option-icon">${o.icon}</span>
-            </button>`).join('')}</div>`;
-        body.querySelectorAll('[data-onboard-activity]').forEach((btn) => {
-          btn.onclick = () => onboardingToggleMulti('workActivities', btn.dataset.onboardActivity);
-        });
-        continueBtn.textContent = onboardingState.workActivities.length ? 'Continue' : 'Pick at least one';
+        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">Find your way back to focus</h1>
+          <p class="onboarding-subtitle">While tracking, FlowSight can show a local reminder when your activity drifts from the task you selected.</p>
+          <label class="consent-toggle-row"><input type="checkbox" id="onboardingFocusReminders" ${onboardingState.focusReminders ? 'checked' : ''}><span>Enable focus reminders</span></label>
+          <label class="consent-toggle-row"><input type="checkbox" id="onboardingContextReminders" ${onboardingState.contextReminders ? 'checked' : ''} ${!onboardingState.focusReminders ? 'disabled' : ''}><span>Include recent work context in reminders</span></label>
+          <p class="session-help">Context may include task or activity details in a desktop notification. Both choices can be changed in Settings.</p>`;
+        document.getElementById('onboardingFocusReminders').onchange = (e) => {
+          onboardingState.focusReminders = e.target.checked;
+          const contextual = document.getElementById('onboardingContextReminders'); contextual.disabled = !e.target.checked;
+          if (!e.target.checked) { contextual.checked = false; onboardingState.contextReminders = false; }
+        };
+        document.getElementById('onboardingContextReminders').onchange = (e) => { onboardingState.contextReminders = e.target.checked; };
       } else if (step === 3) {
-        body.innerHTML = `
-          <h1 class="onboarding-title">What do you want to improve?</h1>
-          <p class="onboarding-subtitle">Pick one or more goals — we'll tailor insights and reports to these.</p>
-          <div class="onboarding-options">${ONBOARDING_GOAL_OPTIONS.map((o) => `
-            <button type="button" class="onboarding-option ${onboardingState.improvementGoals.includes(o.id) ? 'selected' : ''}"
-              data-onboard-goal="${o.id}">
-              <span class="onboarding-check">${onboardingState.improvementGoals.includes(o.id) ? '✓' : ''}</span>
-              <span class="onboarding-option-text">${escapeHtml(o.label)}</span>
-              <span class="onboarding-option-icon">${o.icon}</span>
-            </button>`).join('')}</div>`;
-        body.querySelectorAll('[data-onboard-goal]').forEach((btn) => {
-          btn.onclick = () => onboardingToggleMulti('improvementGoals', btn.dataset.onboardGoal);
-        });
-        continueBtn.textContent = onboardingState.improvementGoals.length ? 'Continue' : 'Pick at least one';
+        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">See what your week contained</h1>
+          <p class="onboarding-subtitle">Generate a work report from recorded activity in Insights. You can also save a weekly PDF automatically while FlowSight is running.</p>
+          ${onboardingDemo('report')}
+          <label class="consent-toggle-row"><input type="checkbox" id="onboardingWeeklyEnabled" ${onboardingState.reportsEnabled ? 'checked' : ''}><span>Save a weekly report automatically</span></label>
+          <div class="session-time-fields"><div><label for="onboardingReportDay">Day</label><select class="select" id="onboardingReportDay">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day,i) => `<option value="${i}" ${onboardingState.reportDay === i ? 'selected' : ''}>${day}</option>`).join('')}</select></div>
+          <div><label for="onboardingReportTime">Local time</label><input type="time" class="input" id="onboardingReportTime" value="${escapeHtml(onboardingState.reportTime)}"></div></div>
+          <label>Save on this computer</label><p class="session-help" id="onboardingReportFolder">${escapeHtml(onboardingState.reportFolder || 'Choose a folder to enable automatic reports.')}</p>
+          <button type="button" class="button button-secondary" id="onboardingChooseFolder">Choose report folder</button>
+          <p class="session-help">The report is an interpretation of recorded evidence. It is not a productivity score.</p>`;
+        document.getElementById('onboardingWeeklyEnabled').onchange = (e) => { onboardingState.reportsEnabled = e.target.checked; continueBtn.disabled = !onboardingCanContinue(); };
+        document.getElementById('onboardingReportDay').onchange = (e) => { onboardingState.reportDay = Number(e.target.value); };
+        document.getElementById('onboardingReportTime').onchange = (e) => { onboardingState.reportTime = e.target.value; };
+        document.getElementById('onboardingChooseFolder').onclick = async () => {
+          try {
+            const selected = await openFolderDialog({ directory: true, multiple: false, title: 'Choose where to save weekly reports' });
+            if (typeof selected === 'string' && selected) { onboardingState.reportFolder = selected; document.getElementById('onboardingReportFolder').textContent = selected; continueBtn.disabled = !onboardingCanContinue(); }
+          } catch (error) { showToast('Could not choose a folder: ' + error, 'error'); }
+        };
       } else if (step === 4) {
-        body.innerHTML = `
-          <h1 class="onboarding-title">Set your daily tracking goal</h1>
-          <p class="onboarding-subtitle">How many focused hours do you want to track on a typical day?</p>
-          <div class="onboarding-options">${ONBOARDING_GOAL_HOURS.map((h) => `
-            <button type="button" class="onboarding-option ${onboardingState.dailyGoalHours === h ? 'selected' : ''}"
-              data-onboard-hours="${h}">
-              <span class="onboarding-check">${onboardingState.dailyGoalHours === h ? '✓' : ''}</span>
-              <span class="onboarding-option-text">${h} hours per day</span>
-              <span class="onboarding-option-icon">⏱️</span>
-            </button>`).join('')}</div>`;
-        body.querySelectorAll('[data-onboard-hours]').forEach((btn) => {
-          btn.onclick = () => {
-            onboardingState.dailyGoalHours = Number(btn.dataset.onboardHours);
-            renderOnboardingStep();
-          };
-        });
-        continueBtn.textContent = 'Continue';
-      } else if (step === 5) {
         body.innerHTML = `
           <h1 class="onboarding-title">Bring your calendar into focus</h1>
           <p class="onboarding-subtitle">Optional for cloud plans. See your current event and, if you choose, add a short work recap after it ends.</p>
@@ -7201,17 +7191,26 @@
             <span>Add a mini report to events I organize</span>
           </label>
           <p class="onboarding-calendar-note">If guests are invited, they may see the recap or receive a calendar update. No window titles or private descriptions are included. You can change this later in Settings.</p>`;
-        continueBtn.textContent = 'Finish setup';
-        renderCalendarStatus();
-        loadCalendarStatus().catch(() => {});
-      }
 
+        body.querySelector('h1').setAttribute('tabindex', '-1');
+        renderCalendarStatus(); loadCalendarStatus().catch(() => {});
+      }
+      body.scrollTop = 0;
+      requestAnimationFrame(updateOnboardingOverflow);
+      body.querySelector('h1')?.focus({ preventScroll: true });
       continueBtn.disabled = !onboardingCanContinue();
     }
 
     function showOnboardingWizard(fromProfile = false) {
       onboardingState.reopening = fromProfile;
       onboardingState.step = 0;
+      onboardingState.previousFocus = document.activeElement;
+      onboardingState.focusReminders = Boolean(desktopPreferences?.focusAlertsEnabled);
+      onboardingState.contextReminders = Boolean(desktopPreferences?.contextualFocusAlertsEnabled);
+      onboardingState.reportsEnabled = Boolean(weeklyReportSchedule?.enabled);
+      onboardingState.reportDay = weeklyReportSchedule?.weekday ?? 5;
+      onboardingState.reportTime = weeklyReportSchedule?.time || '17:00';
+      onboardingState.reportFolder = weeklyReportSchedule?.folder || '';
       if (userPreferences) {
         onboardingState.displayName = userPreferences.displayName || '';
         onboardingState.workRoles = [...(userPreferences.workRoles || [])];
@@ -7227,53 +7226,66 @@
       const overlay = document.getElementById('onboardingOverlay');
       overlay?.classList.add('visible');
       overlay?.setAttribute('aria-hidden', 'false');
+      document.getElementById('mainApp').inert = true;
       renderOnboardingStep();
       loadCalendarStatus().catch(() => {});
     }
 
     function hideOnboardingWizard() {
       const overlay = document.getElementById('onboardingOverlay');
-      overlay?.classList.remove('visible');
-      overlay?.setAttribute('aria-hidden', 'true');
+      overlay?.classList.remove('visible'); overlay?.setAttribute('aria-hidden', 'true');
+      document.getElementById('mainApp').inert = false;
+      onboardingState.previousFocus?.focus?.();
+    }
+
+    async function finishOnboarding() {
+      await persistUserPreferences({}, true);
+      hideOnboardingWizard();
+      if (!onboardingState.reopening) {
+        showMainApp(); await restoreCloudSession(); await initMainApp();
+      } else { showToast('Setup updated', 'success'); }
+      if (onboardingState.openPlanner) sessionPlanner.open();
     }
 
     async function onboardingContinue() {
-      if (!onboardingCanContinue()) return;
-      if (onboardingState.step < 5) {
-        await persistUserPreferences({}, false);
-        onboardingState.step += 1;
-        renderOnboardingStep();
-        return;
-      }
-      const continueBtn = document.getElementById('onboardingContinueBtn');
-      if (continueBtn) {
-        continueBtn.disabled = true;
-        continueBtn.textContent = 'Saving…';
-      }
+      if (onboardingState.saving || !onboardingCanContinue()) return;
+      onboardingState.saving = true;
+      const btn = document.getElementById('onboardingContinueBtn');
+      const back = document.getElementById('onboardingBackBtn');
+      const skip = document.getElementById('onboardingSkipCalendarBtn');
+      btn.disabled = back.disabled = skip.disabled = true; btn.textContent = 'Saving…';
+      const fields = [...document.getElementById('onboardingBody').querySelectorAll('input, select, button')];
+      const disabledStates = fields.map((field) => field.disabled);
+      fields.forEach((field) => { field.disabled = true; });
       try {
-        await persistUserPreferences({}, true);
-        hideOnboardingWizard();
-        if (!onboardingState.reopening) {
-          showMainApp();
-          await restoreCloudSession();
-          await initMainApp();
-          maybeShowDesktopPresencePrompt();
-        } else {
-          showToast('Work preferences updated', 'success');
+        if (onboardingState.step === 2) {
+          await invoke('set_focus_alerts_enabled', { enabled: onboardingState.focusReminders });
+          await invoke('set_contextual_focus_alerts_enabled', { enabled: onboardingState.contextReminders && onboardingState.focusReminders });
+          await loadDesktopPreferences();
         }
-      } catch (e) {
-        showToast('Could not save preferences: ' + e, 'error');
+        if (onboardingState.step === 3) {
+          weeklyReportSchedule = await invoke('save_weekly_report_schedule', { schedule: {
+            enabled: onboardingState.reportsEnabled, weekday: onboardingState.reportDay,
+            time: onboardingState.reportTime, folder: onboardingState.reportFolder,
+          }});
+          renderWeeklyReportForm(weeklyReportSchedule);
+        }
+        if (onboardingState.step === 4) await finishOnboarding();
+        else {
+          await persistUserPreferences({}, Boolean(userPreferences?.onboardingCompleted));
+          onboardingState.step++; renderOnboardingStep();
+        }
+      } catch (error) {
+        const status = document.getElementById('onboardingSetupStatus');
+        if (status) status.textContent = 'Could not save this step: ' + error + '. Check your choices and try again.';
       } finally {
-        const btn = document.getElementById('onboardingContinueBtn');
-        if (btn) {
-          btn.disabled = !onboardingCanContinue();
-          btn.textContent = onboardingState.step === 5 ? 'Finish setup' : 'Continue';
-        }
+        fields.forEach((field, index) => { if (field.isConnected) field.disabled = disabledStates[index]; });
+        onboardingState.saving = false; back.disabled = onboardingState.step === 0; skip.disabled = false;
+        btn.disabled = !onboardingCanContinue(); btn.textContent = onboardingState.step === 4 ? 'Finish setup' : 'Continue';
       }
     }
 
     async function promptOnboardingIfNeeded() {
-      if (!authSession && !currentUser) return false;
       await loadUserPreferences();
       if (userPreferences?.onboardingCompleted) return false;
       showOnboardingWizard(false);
@@ -7283,14 +7295,50 @@
     document.getElementById('onboardingContinueBtn')?.addEventListener('click', () => {
       onboardingContinue().catch((e) => showToast(String(e), 'error'));
     });
-    document.getElementById('onboardingSkipCalendarBtn')?.addEventListener('click', () => {
-      onboardingContinue().catch((e) => showToast(String(e), 'error'));
+    document.getElementById('onboardingSkipCalendarBtn')?.addEventListener('click', async () => {
+      if (onboardingState.saving) return;
+      onboardingState.saving = true;
+      try { await finishOnboarding(); }
+      catch (error) { showToast('Could not finish setup: ' + error, 'error'); }
+      finally { onboardingState.saving = false; }
+    });
+    document.getElementById('onboardingOverlay')?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Tab') return;
+      const focusable = [...event.currentTarget.querySelectorAll('button, input, select, summary, a[href]')].filter((el) => !el.disabled && !el.hidden && el.getClientRects().length && getComputedStyle(el).visibility === 'visible');
+      const first = focusable[0], last = focusable.at(-1);
+      if (event.shiftKey && (document.activeElement === first || document.activeElement.tagName === 'H1')) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     });
     document.getElementById('onboardingBackBtn')?.addEventListener('click', () => {
-      if (onboardingState.step > 0) {
+      if (!onboardingState.saving && onboardingState.step > 0) {
         onboardingState.step -= 1;
         renderOnboardingStep();
       }
+    });
+
+    function updateOnboardingOverflow() {
+      const body = document.getElementById('onboardingBody');
+      const cue = document.getElementById('onboardingMoreSettings');
+      // Keep the cue's row reserved while this step overflows to avoid resizing
+      // the scroll area when the user reaches its last setting.
+      const overflowing = body.scrollHeight > body.clientHeight + 8;
+      if (cue.hidden === overflowing) cue.hidden = !overflowing;
+      const label = body.scrollTop + body.clientHeight < body.scrollHeight - 8 ? 'More settings below' : 'Back to top';
+      if (cue.textContent !== label) cue.textContent = label;
+    }
+    document.getElementById('onboardingBody').addEventListener('scroll', updateOnboardingOverflow);
+    let onboardingOverflowFrame = null;
+    new ResizeObserver(() => {
+      if (onboardingOverflowFrame !== null) return;
+      onboardingOverflowFrame = requestAnimationFrame(() => {
+        onboardingOverflowFrame = null;
+        updateOnboardingOverflow();
+      });
+    }).observe(document.getElementById('onboardingBody'));
+    document.getElementById('onboardingMoreSettings').addEventListener('click', () => {
+      const body = document.getElementById('onboardingBody');
+      const atEnd = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
+      body.scrollTo({top: atEnd ? 0 : body.scrollTop + body.clientHeight * .8, behavior: 'auto'});
     });
     document.getElementById('editWorkPreferencesBtn')?.addEventListener('click', () => {
       showOnboardingWizard(true);
@@ -8188,6 +8236,8 @@
       })().finally(() => { scheduledReportCheckPromise = null; });
       return scheduledReportCheckPromise;
     }
+
+    const sessionPlanner = mountSessionPlanner({ invoke });
 
     const REPORT_GEN_STEP_LABELS = [
       'Starting local AI engine…',
