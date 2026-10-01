@@ -4,7 +4,7 @@ param([string]$OutputPath)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $source = Join-Path $repo 'apps\agent\browser-extension'
-$names = @('manifest.json', 'worker.js', 'options.html', 'options.js', 'icon16.png', 'icon48.png', 'icon128.png')
+$names = @('manifest.json', 'worker.js', 'options.html', 'options.js', 'blocked.html', 'blocked.js', 'focus.css', 'icon16.png', 'icon48.png', 'icon128.png')
 $files = foreach ($name in $names) {
     $path = Join-Path $source $name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {

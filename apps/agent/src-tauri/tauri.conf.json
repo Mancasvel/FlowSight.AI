@@ -58,7 +58,10 @@
       "../browser-extension/worker.js": "browser-extension/worker.js",
       "../browser-extension/icon16.png": "browser-extension/icon16.png",
       "../browser-extension/icon48.png": "browser-extension/icon48.png",
-      "../browser-extension/icon128.png": "browser-extension/icon128.png"
+      "../browser-extension/icon128.png": "browser-extension/icon128.png",
+      "../browser-extension/blocked.html": "browser-extension/blocked.html",
+      "../browser-extension/blocked.js": "browser-extension/blocked.js",
+      "../browser-extension/focus.css": "browser-extension/focus.css"
     }
   },
   "plugins": {
