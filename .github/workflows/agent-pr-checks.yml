@@ -103,7 +103,7 @@ jobs:
       - name: Install browser for actual renderer checks
         run: pnpm exec playwright install chromium
 
-      - name: Check setup, planner, Notion availability, and dark button states
+      - name: Check setup, planner, localization, Notion availability, and dark button states
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -127,6 +127,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Dark hover renderer checks failed.' }
             node scripts/verify-adda-renderer.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Measured ADDA proposal renderer replay failed.' }
+            node scripts/verify-localization.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Production localization and state preservation checks failed.' }
           } finally {
             if (-not $server.HasExited) { & taskkill.exe /PID $server.Id /T /F | Out-Null }
           }

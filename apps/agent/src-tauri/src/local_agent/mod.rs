@@ -315,6 +315,10 @@ fn request_model(
     let mut messages = vec![
         json!({"role":"system","content":"You are FlowSight's on-device action assistant. Suggest at most one function call per turn. Use only the user's explicit request and the available tools. Never claim an action happened before FlowSight confirms its result. Ask a short clarification if arguments are missing. In this release, messages cannot be sent and connected calendar events cannot be changed by agent tools; FlowSight's separately consented mini-report automation may append a recap after an event. Use exact IDs from local context. Browser tab IDs require browser.list_tabs first. All times need an explicit timezone offset. Keep replies brief."}),
         json!({"role":"system","content":format!("Current FlowSight context: {context}")}),
+        json!({"role":"system","content":crate::language::copy(
+            "Write replies in English. Preserve user text, task titles, message bodies, IDs, paths and tool argument enum values exactly as supplied.",
+            "Write replies in Spanish. Preserve user text, task titles, message bodies, IDs, paths and tool argument enum values exactly as supplied.",
+        )}),
     ];
     messages.extend(recent_messages(&data, 350));
     messages.push(json!({"role":"user","content":message}));
