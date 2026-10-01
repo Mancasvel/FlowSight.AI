@@ -26,6 +26,14 @@
 .onboarding-demo .demo-block { animation: session-demo-reveal 650ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 .onboarding-demo .demo-block:nth-child(2) { animation-delay: 100ms; }
 .onboarding-demo .demo-block:nth-child(3) { animation-delay: 180ms; }
+.onboarding-notification-preview { width: min(100%, 360px); margin: 22px auto; }
+.onboarding-notification { padding: 16px; border-radius: 14px; background: hsl(var(--card)); box-shadow: 0 6px 20px hsl(var(--foreground) / 0.08); color: hsl(var(--foreground)); }
+.onboarding-notification-header { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 12px; font-size: 12px; font-weight: 600; }
+.onboarding-notification-header img { flex: none; object-fit: contain; }
+.onboarding-notification-example { margin-left: auto; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 400; }
+.onboarding-notification-title { display: block; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.onboarding-notification-message { margin-top: 4px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.onboarding-notification-preview figcaption { margin-top: 10px; color: hsl(var(--muted-foreground)); font-size: 11px; line-height: 1.6; }
 @keyframes session-demo-reveal { from { clip-path: inset(0 80% 0 0); } to { clip-path: inset(0 0 0 0); } }
 .onboarding-body .onboarding-options { margin: 20px 0; }
 .onboarding-body .onboarding-option { min-height: 44px; }

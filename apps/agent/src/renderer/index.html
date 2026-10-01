@@ -3406,7 +3406,7 @@
         <li><strong>Activity sync:</strong> sends locally generated aggregate summaries, categories, durations, ticket references and team/account IDs to FlowSight's Supabase service.</li>
         <li><strong>Cloud AI:</strong> if you enable it and explicitly use a cloud AI feature, selected work context may be processed by FlowSight and its AI providers, including Azure OpenAI or OpenRouter. The proactive local agent does not use cloud AI.</li>
         <li><strong>Product analytics:</strong> sends a random installation ID, seven daily usage totals and the week's primary category. No account ID or email is included.</li>
-        <li><strong>Integrations:</strong> Jira, Linear and Notion receive only data needed for actions you request under their own privacy terms.</li>
+        <li><strong>Integrations:</strong> Jira and Linear receive only data needed for actions you request under their own privacy terms.</li>
       </ul>
       <h3>Your choices and rights</h3>
       <p>Optional sharing is off by default and can be withdrawn here without affecting local tracking. You can export your data, erase local data, or delete your cloud account. You may also request access, correction, restriction, objection, portability, or complain to your supervisory authority by contacting manuel@flowsight.site.</p>
@@ -3550,61 +3550,6 @@
         <button type="button" class="report-modal-close" id="closeStatusReportModal" aria-label="Close report">&times;</button>
       </div>
       <div class="report-modal-body" id="statusReportModalBody"></div>
-    </div>
-  </div>
-
-  <!-- NOTION PRO INTEGRATION MODAL -->
-  <div class="report-modal-overlay" id="notionIntegrationModal" aria-hidden="true">
-    <div class="report-modal" role="dialog" aria-labelledby="notionIntegrationTitle">
-      <div class="report-modal-header">
-        <h2 id="notionIntegrationTitle">Publish to Notion</h2>
-        <button type="button" class="report-modal-close" id="closeNotionIntegrationModal" aria-label="Close Notion integration">&times;</button>
-      </div>
-      <div class="report-modal-body">
-        <div id="notionIntegrationMessage" class="notion-status-copy" role="status" aria-live="polite">Checking connection…</div>
-
-        <div id="notionDisconnectedPanel" class="notion-panel-section" style="display:none;margin-top:10px;">
-          <strong>Connect your workspace</strong>
-          <div class="notion-status-copy">Notion will ask which pages FlowSight may access. The OAuth token stays encrypted in Supabase and is never stored in this app.</div>
-          <button type="button" class="button button-primary" id="connectNotionBtn">Connect Notion</button>
-        </div>
-
-        <div id="notionConnectedPanel" style="display:none;margin-top:10px;">
-          <div class="notion-panel-section">
-            <strong id="notionWorkspaceName">Notion connected</strong>
-            <div id="notionLastPublication" class="notion-status-copy">No report published yet.</div>
-            <button type="button" class="button button-ghost" id="refreshNotionStatusBtn">Refresh connection</button>
-            <button type="button" class="button button-ghost" id="disconnectNotionBtn" style="color:hsl(var(--destructive));">Disconnect and erase Notion connection</button>
-          </div>
-
-          <div class="notion-panel-section">
-            <strong>Report destination</strong>
-            <div id="notionCurrentDestination" class="notion-status-copy">Choose a page or data source shared during authorization.</div>
-            <div class="notion-panel-row">
-              <input type="search" class="input" id="notionDestinationQuery" placeholder="Search shared Notion pages…">
-              <button type="button" class="button button-ghost" id="searchNotionDestinationsBtn">Search</button>
-            </div>
-            <select class="select" id="notionDestinationSelect">
-              <option value="">Search to load accessible destinations</option>
-            </select>
-            <label class="label" for="notionReportMode">Publication mode</label>
-            <select class="select" id="notionReportMode">
-              <option value="period_page">One page per period</option>
-              <option value="live_page">One live page, updated in place</option>
-            </select>
-            <div class="notion-panel-row">
-              <button type="button" class="button button-primary" id="saveNotionDestinationBtn" disabled>Use selected destination</button>
-              <button type="button" class="button button-ghost" id="createNotionReportPageBtn" disabled>Create FlowSight Reports page</button>
-            </div>
-          </div>
-
-          <div class="notion-panel-section">
-            <strong>Canonical 7-day report</strong>
-            <div class="notion-status-copy">Publishes the same Focused / Deep / Extended metrics used by FlowSight, including context work and measurement uncertainty. No screenshots are sent.</div>
-            <button type="button" class="button button-primary" id="publishNotionReportBtn" disabled>Publish report in Notion</button>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -4441,8 +4386,11 @@
     let notionIntegrationState = null;
     let notionSearchResults = [];
     let notionConnectionPoll = null;
+    // Temporarily unavailable in this desktop release. Keep provider state intact.
+    const NOTION_INTEGRATION_ENABLED = false;
 
     function isNotionPro() {
+      if (!NOTION_INTEGRATION_ENABLED) return false;
       const plan = currentEntitlements?.plan;
       return Boolean(
         currentEntitlements?.status === 'active' &&
@@ -4699,6 +4647,7 @@
     }
 
     function openNotionIntegrationModal() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       if (!isNotionPro()) {
         requirePaidFeature('integrations', 'Notion publishing requires an active FlowSight Pro plan.');
         return;
@@ -4720,6 +4669,7 @@
     }
 
     async function startNotionConnection() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       const button = document.getElementById('connectNotionBtn');
       button.disabled = true;
       setNotionIntegrationMessage('Opening Notion authorization in your browser…');
@@ -4745,6 +4695,7 @@
     }
 
     async function disconnectNotion() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       if (!window.confirm('Disconnect Notion and erase the stored OAuth token, destinations, and publication history?')) return;
       const button = document.getElementById('disconnectNotionBtn');
       if (button) button.disabled = true;
@@ -4762,6 +4713,7 @@
     }
 
     async function searchNotionDestinations() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       const button = document.getElementById('searchNotionDestinationsBtn');
       const select = document.getElementById('notionDestinationSelect');
       button.disabled = true;
@@ -4796,6 +4748,7 @@
     }
 
     async function saveNotionDestination() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       const selected = selectedNotionObject();
       if (!selected) return;
       const button = document.getElementById('saveNotionDestinationBtn');
@@ -4817,6 +4770,7 @@
     }
 
     async function createNotionReportPage() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       const selected = selectedNotionObject();
       if (!selected || selected.type !== 'page') return;
       const button = document.getElementById('createNotionReportPageBtn');
@@ -4837,6 +4791,7 @@
     }
 
     async function publishCurrentNotionReport() {
+      if (!NOTION_INTEGRATION_ENABLED) return;
       const destination = (notionIntegrationState?.destinations || []).find((item) => item.is_default);
       if (!destination) return;
       const button = document.getElementById('publishNotionReportBtn');
@@ -7089,13 +7044,36 @@
 
     function onboardingDemo(kind) {
       if (kind === 'plan') return `<figure class="onboarding-demo"><svg viewBox="0 0 300 116" role="img" aria-label="Example session: write, break, then review">
-        <g fill="currentColor"><rect class="demo-block" x="12" y="18" width="162" height="24" rx="5" opacity=".25"/><rect class="demo-block" x="176" y="54" width="22" height="18" rx="4" opacity=".15"/><rect class="demo-block" x="200" y="80" width="86" height="24" rx="5" opacity=".4"/></g>
-        <g class="demo-labels" font-size="11" font-family="inherit"><text x="22" y="34">Write · 60 min</text><text x="150" y="67">Break</text><text x="209" y="96">Review</text></g>
+        <g fill="currentColor"><rect class="demo-block" x="12" y="18" width="162" height="24" rx="5" opacity=".25"/><rect class="demo-block" x="140" y="50" width="62" height="24" rx="5" opacity=".15"/><rect class="demo-block" x="200" y="80" width="86" height="24" rx="5" opacity=".4"/></g>
+        <g class="demo-labels" font-size="11" font-family="inherit"><text x="22" y="34">Write · 60 min</text><text x="150" y="66">Break</text><text x="209" y="96">Review</text></g>
       </svg><figcaption>Example plan · your tasks set the schedule</figcaption></figure>`;
       if (kind === 'report') return `<figure class="onboarding-demo"><svg viewBox="0 0 300 96" role="img" aria-label="Recorded work becomes a local report">
         <g stroke="currentColor" fill="none" stroke-width="2"><path d="M22 26h80M22 46h58M22 66h68M122 46h48m-9-7 9 7-9 7"/><rect x="190" y="10" width="82" height="76" rx="8"/><path d="M204 28h52M204 42h42M204 56h48M204 70h30"/></g>
       </svg><figcaption>Recorded evidence → a report saved on your computer</figcaption></figure>`;
       return '';
+    }
+
+    function onboardingFocusNotificationPreview() {
+      // Use the shipped reminder templates with a fictional task. This figure
+      // never requests notification permission or sends a desktop notification.
+      const contextual = onboardingState.focusReminders && onboardingState.contextReminders;
+      const title = contextual ? 'Keep your focus' : 'A moment to refocus';
+      const message = contextual
+        ? 'You\'ve switched apps several times. Choose “Write proposal” for the next few minutes.'
+        : 'You\'ve switched among several apps. Could you choose one task for the next few minutes?';
+      return `<figure class="onboarding-notification-preview" id="onboardingNotificationPreview" aria-label="Example FlowSight desktop notification">
+        <div class="onboarding-notification">
+          <div class="onboarding-notification-header"><img src="/flowsight_sinfondo.png" alt="" width="24" height="24"><span>FlowSight</span><span class="onboarding-notification-example">Example</span></div>
+          <strong class="onboarding-notification-title">${title}</strong>
+          <p class="onboarding-notification-message">${message}</p>
+        </div>
+        <figcaption>${contextual ? 'Example with a fictional task. Your selected task can appear when context is enabled.' : 'Example desktop notification. Task and activity details stay out by default.'}</figcaption>
+      </figure>`;
+    }
+
+    function refreshOnboardingFocusNotificationPreview() {
+      const preview = document.getElementById('onboardingNotificationPreview');
+      if (preview) preview.outerHTML = onboardingFocusNotificationPreview();
     }
 
     function renderOnboardingStep() {
@@ -7141,6 +7119,7 @@
       } else if (step === 2) {
         body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">Find your way back to focus</h1>
           <p class="onboarding-subtitle">While tracking, FlowSight can show a local reminder when your activity drifts from the task you selected.</p>
+          ${onboardingFocusNotificationPreview()}
           <label class="consent-toggle-row"><input type="checkbox" id="onboardingFocusReminders" ${onboardingState.focusReminders ? 'checked' : ''}><span>Enable focus reminders</span></label>
           <label class="consent-toggle-row"><input type="checkbox" id="onboardingContextReminders" ${onboardingState.contextReminders ? 'checked' : ''} ${!onboardingState.focusReminders ? 'disabled' : ''}><span>Include recent work context in reminders</span></label>
           <p class="session-help">Context may include task or activity details in a desktop notification. Both choices can be changed in Settings.</p>`;
@@ -7148,8 +7127,12 @@
           onboardingState.focusReminders = e.target.checked;
           const contextual = document.getElementById('onboardingContextReminders'); contextual.disabled = !e.target.checked;
           if (!e.target.checked) { contextual.checked = false; onboardingState.contextReminders = false; }
+          refreshOnboardingFocusNotificationPreview();
         };
-        document.getElementById('onboardingContextReminders').onchange = (e) => { onboardingState.contextReminders = e.target.checked; };
+        document.getElementById('onboardingContextReminders').onchange = (e) => {
+          onboardingState.contextReminders = e.target.checked;
+          refreshOnboardingFocusNotificationPreview();
+        };
       } else if (step === 3) {
         body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">See what your week contained</h1>
           <p class="onboarding-subtitle">Generate a work report from recorded activity in Insights. You can also save a weekly PDF automatically while FlowSight is running.</p>
@@ -8710,10 +8693,6 @@
           <div class="summary-header">
             <h1 class="summary-title">Insights</h1>
             <div class="summary-header-actions">
-              <button class="summary-download-btn" id="notionReportBtn" style="display:none;width:96px;" title="Configure Notion publishing" aria-label="Configure Notion publishing">
-                <span class="summary-download-label">Notion</span>
-                <span class="summary-download-icon">N</span>
-              </button>
               <button class="summary-download-btn" id="generateReportBtn" title="Generate AI work report" aria-label="Generate AI work report">
                 <span class="summary-download-label">Work report</span>
                 <span class="summary-download-icon">
@@ -8731,7 +8710,6 @@
         document.getElementById('generateReportBtn').onclick = () => {
           generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
         };
-        document.getElementById('notionReportBtn').onclick = openNotionIntegrationModal;
         updateNotionControls();
         return;
       }
@@ -8760,10 +8738,6 @@
         <div class="summary-header">
           <h1 class="summary-title">Insights</h1>
           <div class="summary-header-actions">
-            <button class="summary-download-btn" id="notionReportBtn" style="display:none;width:96px;" title="Configure Notion publishing" aria-label="Configure Notion publishing">
-              <span class="summary-download-label">Notion</span>
-              <span class="summary-download-icon">N</span>
-            </button>
             <button class="summary-download-btn" id="generateReportBtn" title="Generate AI work report" aria-label="Generate AI work report">
               <span class="summary-download-label">Work report</span>
               <span class="summary-download-icon">
@@ -8820,7 +8794,6 @@
       document.getElementById('generateReportBtn').onclick = () => {
         generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
       };
-      document.getElementById('notionReportBtn').onclick = openNotionIntegrationModal;
       updateNotionControls();
     }
 
