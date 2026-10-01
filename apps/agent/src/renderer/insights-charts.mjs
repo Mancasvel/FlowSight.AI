@@ -1,3 +1,4 @@
+import {getLanguage} from './i18n.mjs';
 const TASK_COLOR_KEYS = Object.freeze({
   analysis: 'analysis',
   coding: 'coding',
@@ -107,7 +108,7 @@ export function focusChartSlots(byHour) {
 }
 
 export function formatChartHour(hour) {
-  return `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`;
+  return getLanguage()==='es' ? `${String(hour).padStart(2,'0')}:00` : `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`;
 }
 
 // Each column is one clock hour, so a full column always means 60 minutes.

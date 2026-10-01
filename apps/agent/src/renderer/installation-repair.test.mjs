@@ -1,3 +1,5 @@
+import { setLanguagePreference } from './i18n.mjs';
+setLanguagePreference('en',{persist:false});
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createInstallationRepairController } from './installation-repair.mjs';

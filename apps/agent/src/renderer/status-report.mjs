@@ -1,17 +1,13 @@
+import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, getLocale, getLanguage, initializeLocalization, categoryLabel } from './i18n.mjs';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function cleanReportText(value) {
   if (value == null) return '';
-  const cleaned = String(value).replace(/[\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u30FF\uAC00-\uD7AF]/g, ' ');
+  const cleaned = String(value);
   const segments = cleaned
     .split(/(?<=[.!?])\s+|\n+/)
     .map((part) => part.trim())
-    .filter(Boolean)
-    .filter((part) => {
-      const englishLetters = part.replace(/[^A-Za-z]/g, '').length;
-      const latinLetters = part.replace(/[^A-Za-z\u00C0-\u024F]/g, '').length;
-      return latinLetters === 0 || englishLetters / latinLetters >= 0.55;
-    });
+    .filter(Boolean);
   return (segments.length ? segments.join(' ') : cleaned).replace(/\s+/g, ' ').trim();
 }
 
@@ -49,7 +45,7 @@ function reportDays(local) {
   const max = Math.max(1, ...dates.map((date) => totals.get(date) || 0));
   return dates.map((date) => ({
     date,
-    label: new Intl.DateTimeFormat('en', { weekday: 'short', timeZone: 'UTC' })
+    label: new Intl.DateTimeFormat(getLocale(), { weekday: 'short', timeZone: 'UTC' })
       .format(new Date(`${date}T12:00:00Z`)),
     seconds: totals.get(date) || 0,
     hours: ((totals.get(date) || 0) / 3600).toFixed(1),
@@ -62,8 +58,8 @@ function reportDays(local) {
 
 function reportTone(status) {
   const normalized = status.toLowerCase();
-  if (/risk|attention|fragment/.test(normalized)) return 'attention';
-  if (/sustained blocks observed/.test(normalized)) return 'positive';
+  if (/risk|attention|fragment|riesgo|atenci[oó]n/.test(normalized)) return 'attention';
+  if (/sustained blocks observed|bloques sostenidos observados|se observaron bloques sostenidos/.test(normalized)) return 'positive';
   return 'neutral';
 }
 
@@ -83,27 +79,27 @@ function reportLessons(report, { categories, days, totalSeconds, focusSeconds, f
   const top = categories[0];
   if (top) {
     lessons.push({
-      title: 'The work mix had a clear centre',
-      body: `${top.displayDuration} (${top.percent}% of tracked time) was categorised as ${top.label}. Compare that mix with your intended priorities; time distribution alone is not an outcome measure.`,
+      title: tr('The work mix had a clear centre'),
+      body: formatMessage`${top.displayDuration} (${top.percent}% of tracked time) was categorised as ${top.label}. Compare that mix with your intended priorities; time distribution alone is not an outcome measure.`,
     });
   }
   if (focusSeconds > 0) {
-    const blocks = focusSessions > 0 ? ` across ${focusSessions} sustained ${focusSessions === 1 ? 'block' : 'blocks'}` : '';
+    const blocks = focusSessions > 0 ? formatMessage` across ${focusSessions} sustained blocks` : '';
     lessons.push({
-      title: 'Sustained work was visible',
-      body: `${(focusSeconds / 3600).toFixed(1)}h of sustained focus was recorded${blocks}. Use the recorded block boundaries to identify conditions worth repeating, without treating duration as a productivity score.`,
+      title: tr('Sustained work was visible'),
+      body: formatMessage`${(focusSeconds / 3600).toFixed(1)}h of sustained focus was recorded${blocks}. Use the recorded block boundaries to identify conditions worth repeating, without treating duration as a productivity score.`,
     });
   }
   if (days.length > 0 && activeDays > 0 && activeDays < days.length) {
     lessons.push({
-      title: 'Coverage limits the conclusion',
-      body: `Activity was recorded on ${activeDays} of ${days.length} days. Days without recorded activity do not prove that no work happened.`,
+      title: tr('Coverage limits the conclusion'),
+      body: formatMessage`Activity was recorded on ${activeDays} of ${days.length} days. Days without recorded activity do not prove that no work happened.`,
     });
   }
   if (!lessons.length) {
     lessons.push({
-      title: 'Recorded time is a starting point',
-      body: `${(totalSeconds / 3600).toFixed(1)}h was recorded, but category and focus signals are too limited for a specific workflow conclusion. Add task context or compare another period before changing plans.`,
+      title: tr('Recorded time is a starting point'),
+      body: formatMessage`${(totalSeconds / 3600).toFixed(1)}h was recorded, but category and focus signals are too limited for a specific workflow conclusion. Add task context or compare another period before changing plans.`,
     });
   }
   return lessons;
@@ -119,16 +115,16 @@ function durationLabel(seconds) {
 function distractionAdvice(appName, kind, workInterleavedRevisits) {
   if (kind === 'music') {
     return workInterleavedRevisits
-      ? `Choose a playlist in ${appName} before the next work block, leave playback running, and batch track changes into one break. Check whether you return less often next session.`
-      : `Choose a playlist in ${appName} before the work block and leave playback in the background; save track changes for a break.`;
+      ? formatMessage`Choose a playlist in ${appName} before the next work block, leave playback running, and batch track changes into one break. Check whether you return less often next session.`
+      : formatMessage`Choose a playlist in ${appName} before the work block and leave playback in the background; save track changes for a break.`;
   }
   if (kind === 'video') {
-    return `Queue or save what you want to watch in ${appName} for a planned break, then close it during the work block.`;
+    return formatMessage`Queue or save what you want to watch in ${appName} for a planned break, then close it during the work block.`;
   }
   if (kind === 'communication') {
-    return `If ${appName} is not needed for live collaboration, mute it for the next focus block and check it at a chosen interval; keep urgent contacts available.`;
+    return formatMessage`If ${appName} is not needed for live collaboration, mute it for the next focus block and check it at a chosen interval; keep urgent contacts available.`;
   }
-  return `Decide whether ${appName} belongs to the current task. If not, close it for one focus block and move optional checks to a planned break.`;
+  return formatMessage`Decide whether ${appName} belongs to the current task. If not, close it for one focus block and move optional checks to a planned break.`;
 }
 
 function reportDistractionApps(local) {
@@ -137,8 +133,8 @@ function reportDistractionApps(local) {
     return {
       state: 'unavailable', apps: [],
       message: analysis?.unavailable
-        ? 'Foreground destination analysis could not be completed. Try generating the report again.'
-        : 'This report predates app and site context analysis. Generate a new report to see it.',
+        ? tr('Foreground destination analysis could not be completed. Try generating the report again.')
+        : tr('This report predates app and site context analysis. Generate a new report to see it.'),
       caveat: '',
     };
   }
@@ -165,20 +161,20 @@ function reportDistractionApps(local) {
         .sort((left, right) => left.date.localeCompare(right.date));
       const repeatedDay = daily.find((day) => day.date === isoDay(local.period_end) && day.visits >= 2)
         || [...daily].reverse().find((day) => day.visits >= 2);
-      const dayLabel = repeatedDay?.date === isoDay(local.period_end) ? 'Today' : repeatedDay?.date;
+      const dayLabel = repeatedDay?.date === isoDay(local.period_end) ? tr('Today') : repeatedDay?.date;
       const observedTimes = repeatedDay?.observedAt.slice(0, 4) || [];
       const timeList = observedTimes.length < 2 ? ''
-        : observedTimes.length === 2 ? observedTimes.join(' and ')
-          : `${observedTimes.slice(0, -1).join(', ')} and ${observedTimes.at(-1)}`;
+        : observedTimes.length === 2 ? observedTimes.join(tr(' and '))
+          : formatMessage`${observedTimes.slice(0, -1).join(', ')} and ${observedTimes.at(-1)}`;
       const repeated = repeatedDay
-        ? `${dayLabel}: ${repeatedDay.visits} foreground sightings${timeList ? ` around ${timeList}` : ''} (${durationLabel(repeatedDay.seconds)} sampled).`
+        ? formatMessage`${dayLabel}: ${repeatedDay.visits} foreground sightings${timeList ? formatMessage` around ${timeList}` : ''} (${durationLabel(repeatedDay.seconds)} sampled).`
           + (repeatedDay.workInterleavedRevisits
-            ? ` Work screens appeared between sightings; ${appName} reappeared ${repeatedDay.workInterleavedRevisits === 1 ? 'once' : `${repeatedDay.workInterleavedRevisits} times`}${repeatedDay.shortestRevisitMinutes ? `, with the shortest interval ${repeatedDay.shortestRevisitMinutes} min` : ''}.`
+            ? formatMessage` Work screens appeared between sightings; ${appName} reappeared ${repeatedDay.workInterleavedRevisits === 1 ? tr('once') : formatMessage`${repeatedDay.workInterleavedRevisits} times`}${repeatedDay.shortestRevisitMinutes ? formatMessage`, with the shortest interval ${repeatedDay.shortestRevisitMinutes} min` : ''}.`
             : '')
         : '';
       const periodSummary = days === 1 && repeatedDay ? ''
-        : `${visits} foreground ${visits === 1 ? 'sighting' : 'sightings'} across ${days} ${days === 1 ? 'day' : 'days'}; ${durationLabel(seconds)} on screen. `;
-      const observed = `${periodSummary}${repeated || (workInterleavedRevisits ? `${workInterleavedRevisits} revisits had work screens in between.` : '')}`.trim();
+        : formatMessage`${visits} foreground ${visits === 1 ? tr('sighting') : tr('sightings')} across ${days} ${days === 1 ? tr('day') : tr('days')}; ${durationLabel(seconds)} on screen. `;
+      const observed = `${periodSummary}${repeated || (workInterleavedRevisits ? formatMessage`${workInterleavedRevisits} revisits had work screens in between.` : '')}`.trim();
       return {
         appName, kind, seconds, visits, days, workInterleavedRevisits, daily,
         duration: durationLabel(seconds),
@@ -192,13 +188,13 @@ function reportDistractionApps(local) {
   return {
     state: apps.length ? 'ready' : 'none',
     apps,
-    message: 'No recurring work-to-app return or sustained casual-browsing destination was observed in this period.',
-    caveat: 'Based on sampled foreground screens; background playback is not included.',
+    message: tr('No recurring work-to-app return or sustained casual-browsing destination was observed in this period.'),
+    caveat: tr('Based on sampled foreground screens; background playback is not included.'),
   };
 }
 
-export function createStatusReportViewModel(payload, { userName = 'Knowledge worker', todayDate = '' } = {}) {
-  const report = payload?.report || {};
+export function createStatusReportViewModel(payload, { userName = tr('Knowledge worker'), todayDate = '' } = {}) {
+  const report = payload?.localized_report?.[getLanguage()] || payload?.report || {};
   const local = payload?.local_data || {};
   const meta = report.report_meta || {};
   const text = (value) => cleanReportText(value);
@@ -213,9 +209,9 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
   const period = text(meta.period_label)
     || (periodStart && periodStart === periodEnd ? periodStart : [periodStart, periodEnd].filter(Boolean).join(' – '))
     || todayDate;
-  const status = text(report.overall_health) || 'No assessment available';
+  const status = text(report.overall_health) || tr('No assessment available');
   const categories = asItems(local.category_breakdown)
-    .map((row) => ({ label: text(row.category) || 'Unlabelled', seconds: asSeconds(row.total_seconds) }))
+    .map((row) => ({ label: categoryLabel(text(row.category)) || tr('Unlabelled'), seconds: asSeconds(row.total_seconds) }))
     .filter((row) => row.seconds > 0)
     .sort((a, b) => b.seconds - a.seconds)
     .map((row) => ({
@@ -227,13 +223,13 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
   const distractions = reportDistractionApps(local);
 
   return {
-    title: days.length === 1 ? 'Daily work review' : 'Weekly work review',
-    evidenceTitle: days.length === 1 ? 'The day in view' : 'The week in view',
+    title: days.length === 1 ? tr('Daily work review') : tr('Weekly work review'),
+    evidenceTitle: days.length === 1 ? tr('The day in view') : tr('The week in view'),
     period,
-    userName: text(userName) || 'Knowledge worker',
+    userName: text(userName) || tr('Knowledge worker'),
     generatedAt: text(payload?.generated_at) || todayDate,
     summary: text(report.executive_overview || report.work_summary)
-      || (totalSeconds ? 'Activity was recorded in this period.' : 'No local activity was recorded in this period.'),
+      || (totalSeconds ? tr('Activity was recorded in this period.') : tr('No local activity was recorded in this period.')),
     status,
     statusTone: reportTone(status),
     healthNotes: text(report.health_notes),
@@ -250,8 +246,8 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
     distractions,
     actions: list(report.recommendations),
     breakdown: asItems(report.health_breakdown).map((row) => ({
-      element: text(row.element) || 'Work area',
-      status: text(row.status) || 'Observed',
+      element: text(row.element) || tr('Work area'),
+      status: text(row.status) || tr('Observed'),
       notes: text(row.notes),
       owner: text(row.owner_team),
     })),
@@ -260,7 +256,7 @@ export function createStatusReportViewModel(payload, { userName = 'Knowledge wor
     observedWork: list(report.observed_work),
     highlights: list(report.work_progress),
     lessons: reportLessons(report, { categories, days, totalSeconds, focusSeconds, focusSessions, activeDays }),
-    lessonEmptyMessage: 'No activity was recorded, so there is not enough evidence to draw a lesson for this period.',
+    lessonEmptyMessage: tr('No activity was recorded, so there is not enough evidence to draw a lesson for this period.'),
     aiPowered: Boolean(payload?.ai_powered),
   };
 }
@@ -276,66 +272,66 @@ function escapeHtml(value) {
 
 function reportList(items, emptyLabel) {
   return items.length
-    ? `<ul class="sr-plain-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
-    : `<p class="sr-muted">${escapeHtml(emptyLabel)}</p>`;
+    ? html`<ul class="sr-plain-list">${items.map((item) => html`<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+    : html`<p class="sr-muted">${escapeHtml(emptyLabel)}</p>`;
 }
 
 export function renderStatusReportHtml(model) {
-  const days = model.days.map((day) => `
-    <div class="sr-day" title="${escapeHtml(day.date)}: ${day.seconds ? escapeHtml(day.displayDuration) : '0.0h'}" aria-label="${escapeHtml(day.date)}: ${day.seconds ? escapeHtml(day.displayDuration) : '0.0 hours'}">
+  const days = model.days.map((day) => html`
+    <div class="sr-day" title="${escapeHtml(day.date)}: ${day.seconds ? escapeHtml(day.displayDuration) : '0.0h'}" aria-label="${escapeHtml(day.date)}: ${day.seconds ? escapeHtml(day.displayDuration) : tr('0.0 hours')}">
       <div class="sr-day-value">${day.seconds ? day.displayDuration : '—'}</div>
       <div class="sr-day-track"><span style="height:${day.seconds ? Math.max(7, day.percentOfPeak) : 0}%"></span></div>
       <div class="sr-day-label">${escapeHtml(day.label)}<small>${escapeHtml(day.date.slice(8))}</small></div>
     </div>`).join('');
   const categories = model.categories.length
-    ? model.categories.slice(0, 6).map((category) => `
+    ? model.categories.slice(0, 6).map((category) => html`
       <div class="sr-category-row">
         <span class="sr-category-name" title="${escapeHtml(category.label)}">${escapeHtml(category.label)}</span>
-        <div class="sr-category-track" aria-label="${category.percent}% of tracked time"><span style="width:${Math.max(2, category.percent)}%"></span></div>
+        <div class="sr-category-track" aria-label="${escapeHtml(formatMessage`${category.percent}% of tracked time`)}"><span style="width:${Math.max(2, category.percent)}%"></span></div>
         <strong>${category.displayDuration}</strong>
       </div>`).join('')
-    : '<p class="sr-muted">No category time recorded.</p>';
+    : markup('<p class="sr-muted">No category time recorded.</p>');
   const actions = model.actions.length
-    ? `<ol class="sr-action-list">${model.actions.map((action, index) => `
+    ? html`<ol class="sr-action-list">${model.actions.map((action, index) => html`
         <li><span class="sr-action-number">${String(index + 1).padStart(2, '0')}</span><p>${escapeHtml(action)}</p></li>`).join('')}</ol>`
-    : '<p class="sr-muted">No specific next move is supported by this period yet. Keep tracking to build a baseline.</p>';
+    : markup('<p class="sr-muted">No specific next move is supported by this period yet. Keep tracking to build a baseline.</p>');
   const breakdown = model.breakdown.length
-    ? `<div class="sr-signal-list">${model.breakdown.map((row) => `
+    ? html`<div class="sr-signal-list">${model.breakdown.map((row) => html`
         <div class="sr-signal-row"><div class="sr-signal-top"><strong>${escapeHtml(row.element)}</strong><span>${escapeHtml(row.status)}</span></div>
-          ${row.notes ? `<p>${escapeHtml(row.notes)}</p>` : ''}
-          ${row.owner && row.owner.toLowerCase() !== 'self' ? `<small>Owner: ${escapeHtml(row.owner)}</small>` : ''}
+          ${row.notes ? html`<p>${escapeHtml(row.notes)}</p>` : ''}
+          ${row.owner && row.owner.toLowerCase() !== 'self' ? html`<small>${escapeHtml(formatMessage`Owner: ${row.owner}`)}</small>` : ''}
         </div>`).join('')}</div>`
-    : '<p class="sr-muted">No work-area detail was generated.</p>';
+    : markup('<p class="sr-muted">No work-area detail was generated.</p>');
   const lessons = model.lessons.length
-    ? `<div class="sr-lessons">${model.lessons.map((lesson) => `<div><strong>${escapeHtml(lesson.title)}</strong><p>${escapeHtml(lesson.body)}</p></div>`).join('')}</div>`
-    : `<p class="sr-muted">${escapeHtml(model.lessonEmptyMessage)}</p>`;
+    ? html`<div class="sr-lessons">${model.lessons.map((lesson) => html`<div><strong>${escapeHtml(lesson.title)}</strong><p>${escapeHtml(lesson.body)}</p></div>`).join('')}</div>`
+    : html`<p class="sr-muted">${escapeHtml(model.lessonEmptyMessage)}</p>`;
   const distractions = model.distractions.apps.length
-    ? `<div class="sr-distraction-list">${model.distractions.apps.map((app) => `
+    ? html`<div class="sr-distraction-list">${model.distractions.apps.map((app) => html`
       <div class="sr-distraction-row">
         <div class="sr-distraction-measure">
           <div class="sr-distraction-top"><strong title="${escapeHtml(app.appName)}">${escapeHtml(app.appName)}</strong><span>${escapeHtml(app.duration)}</span></div>
-          <div class="sr-distraction-track" role="img" aria-label="${escapeHtml(app.appName)}: ${escapeHtml(app.duration)} in sampled foreground visits"><span style="width:${app.percentOfTop}%"></span></div>
+          <div class="sr-distraction-track" role="img" aria-label="${escapeHtml(formatMessage`${app.appName}: ${app.duration} in sampled foreground visits`)}"><span style="width:${app.percentOfTop}%"></span></div>
         </div>
         <div class="sr-distraction-detail">
           <p class="sr-distraction-observed">${escapeHtml(app.observed)}</p>
           <p class="sr-distraction-advice"><strong>Next session</strong> ${escapeHtml(app.advice)}</p>
         </div>
       </div>`).join('')}</div>`
-    : `<p class="sr-muted">${escapeHtml(model.distractions.message)}</p>`;
+    : html`<p class="sr-muted">${escapeHtml(model.distractions.message)}</p>`;
 
-  return `
+  return html`
     <article class="status-report sr-review">
       <header class="sr-review-hero">
         <div class="sr-review-heading"><div><h2>${escapeHtml(model.title)}</h2><p>${escapeHtml(model.period)}</p></div>
           <span class="sr-signal-chip sr-signal-${model.statusTone}">${escapeHtml(model.status)}</span></div>
-        <p class="sr-review-meta">${escapeHtml(model.userName)} <span aria-hidden="true">·</span> Generated ${escapeHtml(model.generatedAt)}</p>
+        <p class="sr-review-meta">${escapeHtml(model.userName)} <span aria-hidden="true">·</span> ${escapeHtml(formatMessage`Generated ${model.generatedAt}`)}</p>
       </header>
 
       <section class="sr-overview" aria-label="Review summary">
         <p>${escapeHtml(model.summary)}</p>
         <div class="sr-stat-line">
           <div><strong>${model.totalHours}<span>h</span></strong><span>Tracked time</span></div>
-          <div><strong>${model.focusHours}<span>h</span></strong><span>Sustained focus · ${model.focusSessions} blocks</span></div>
+          <div><strong>${model.focusHours}<span>h</span></strong><span>${escapeHtml(formatMessage`Sustained focus · ${model.focusSessions} blocks`)}</span></div>
           <div><strong>${model.activeDays}<span>/${model.periodDays}</span></strong><span>Days with activity</span></div>
         </div>
       </section>
@@ -348,24 +344,24 @@ export function renderStatusReportHtml(model) {
       <section class="sr-section sr-distractions" aria-labelledby="srDistractionsTitle">
         <div class="sr-section-heading"><h3 id="srDistractionsTitle">Attention detours</h3><p>Observed visits and returns between work screens</p></div>
         ${distractions}
-        ${model.distractions.caveat ? `<p class="sr-distraction-caveat" id="srDistractionCaveat">${escapeHtml(model.distractions.caveat)}</p>` : ''}
+        ${model.distractions.caveat ? html`<p class="sr-distraction-caveat" id="srDistractionCaveat">${escapeHtml(model.distractions.caveat)}</p>` : ''}
       </section>
 
       <section class="sr-section" aria-labelledby="srEvidenceTitle">
         <div class="sr-section-heading"><h3 id="srEvidenceTitle">${escapeHtml(model.evidenceTitle)}</h3><p>Recorded time, not a productivity score</p></div>
         <div class="sr-evidence-grid">
           <figure class="sr-figure"><figcaption>Activity by day</figcaption>
-            ${days ? `<div class="sr-day-chart">${days}</div>` : '<p class="sr-muted">No dated activity available.</p>'}
+            ${days ? html`<div class="sr-day-chart">${days}</div>` : markup('<p class="sr-muted">No dated activity available.</p>')}
           </figure>
           <figure class="sr-figure"><figcaption>Time by category</figcaption>${categories}</figure>
         </div>
-        ${model.timelineCaption ? `<p class="sr-evidence-note">${escapeHtml(model.timelineCaption)}</p>` : ''}
+        ${model.timelineCaption ? html`<p class="sr-evidence-note">${escapeHtml(model.timelineCaption)}</p>` : ''}
       </section>
 
       <section class="sr-section sr-context" aria-labelledby="srContextTitle">
         <div class="sr-section-heading"><h3 id="srContextTitle">How to read the signal</h3></div>
-        ${model.healthNotes ? `<p>${escapeHtml(model.healthNotes)}</p>` : '<p class="sr-muted">No additional interpretation was generated.</p>'}
-        ${model.focusTarget ? `<p class="sr-focus-target"><strong>Focus target</strong> ${escapeHtml(model.focusTarget)}</p>` : ''}
+        ${model.healthNotes ? html`<p>${escapeHtml(model.healthNotes)}</p>` : markup('<p class="sr-muted">No additional interpretation was generated.</p>')}
+        ${model.focusTarget ? html`<p class="sr-focus-target"><strong>Focus target</strong> ${escapeHtml(model.focusTarget)}</p>` : ''}
       </section>
 
       <section class="sr-section" aria-labelledby="srAreasTitle">
@@ -374,15 +370,15 @@ export function renderStatusReportHtml(model) {
       </section>
 
       <section class="sr-section sr-detail-grid" aria-label="Observed work and watchpoints">
-        <div><h3>Work observed</h3>${reportList(model.observedWork, 'No labelled work was observed.')}
-          ${model.highlights.length ? `<h4>Highlights</h4>${reportList(model.highlights, '')}` : ''}</div>
-        <div><h3>Watchpoints</h3><h4>Known issues</h4>${reportList(model.knownIssues, 'None flagged.')}
-          <h4>Potential risks</h4>${reportList(model.potentialRisks, 'None flagged.')}</div>
+        <div><h3>Work observed</h3>${reportList(model.observedWork, tr('No labelled work was observed.'))}
+          ${model.highlights.length ? html`<h4>Highlights</h4>${reportList(model.highlights, '')}` : ''}</div>
+        <div><h3>Watchpoints</h3><h4>Known issues</h4>${reportList(model.knownIssues, tr('None flagged.'))}
+          <h4>Potential risks</h4>${reportList(model.potentialRisks, tr('None flagged.'))}</div>
       </section>
 
       <section class="sr-section" aria-labelledby="srLessonsTitle"><div class="sr-section-heading"><h3 id="srLessonsTitle">What this period taught us</h3></div>${lessons}</section>
 
-      <footer class="sr-review-footer"><p>Based on activity stored on this device. ${model.aiPowered ? 'Narrative assisted by local AI.' : 'Structured, rule-based narrative.'} Interpret alongside your own context.</p>
+      <footer class="sr-review-footer"><p>${escapeHtml(formatMessage`Based on activity stored on this device. ${model.aiPowered ? tr('Narrative assisted by local AI.') : tr('Structured, rule-based narrative.')} Interpret alongside your own context.`)}</p>
         <button type="button" class="sr-download-btn" id="downloadReportPdfBtn" aria-label="Download weekly work review as PDF">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Download PDF

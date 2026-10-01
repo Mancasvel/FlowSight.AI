@@ -1,3 +1,4 @@
+import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, getLocale, getLanguage, initializeLocalization } from './i18n.mjs';
 /** Friendly, automatic repair for damaged packaged Windows installations. */
 export function createInstallationRepairController({ invoke, listen, document, isMicrosoftStoreBuild }) {
   let repairNeeded = false;
@@ -27,7 +28,7 @@ export function createInstallationRepairController({ invoke, listen, document, i
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-labelledby', 'repairDialogTitle');
     overlay.setAttribute('aria-describedby', 'repairDialogDescription');
-    overlay.innerHTML = `
+    overlay.innerHTML = html`
       <div class="modal-content update-dialog">
         <div class="update-dialog__header">
           <span class="update-dialog__icon" aria-hidden="true">
@@ -42,8 +43,8 @@ export function createInstallationRepairController({ invoke, listen, document, i
         </div>
         <div class="modal-body update-dialog__body" tabindex="0" role="region" aria-label="Repair details">
           <p class="update-dialog__description" id="repairDialogDescription">${isMicrosoftStoreBuild
-            ? 'Some app files need replacing. Reinstall FlowSight from your Microsoft Store Library to restore them.'
-            : 'Some app files need replacing. FlowSight will download a verified copy and reinstall the app automatically.'}</p>
+            ? tr('Some app files need replacing. Reinstall FlowSight from your Microsoft Store Library to restore them.')
+            : tr('Some app files need replacing. FlowSight will download a verified copy and reinstall the app automatically.')}</p>
         </div>
         <div class="update-dialog__footer">
           <p class="update-dialog__hint">Your activity history, settings and license are kept outside the app installation.</p>
@@ -56,11 +57,12 @@ export function createInstallationRepairController({ invoke, listen, document, i
           </div>
           <div class="update-dialog__actions" id="repairActions">
             <button type="button" class="button button-secondary" id="repairCloseBtn">Use app for now</button>
-            ${isMicrosoftStoreBuild ? '' : '<button type="button" class="button button-primary" id="repairRetryBtn">Retry repair</button>'}
+            ${isMicrosoftStoreBuild ? '' : markup('<button type="button" class="button button-primary" id="repairRetryBtn">Retry repair</button>')}
           </div>
         </div>
       </div>`;
     document.body.appendChild(overlay);
+    setText(overlay.querySelector('#repairDialogDescription'), () => tr(isMicrosoftStoreBuild ? 'Some app files need replacing. Reinstall FlowSight from your Microsoft Store Library to restore them.' : 'Some app files need replacing. FlowSight will download a verified copy and reinstall the app automatically.'));
 
     const closeButton = overlay.querySelector('#repairCloseBtn');
     const retryButton = overlay.querySelector('#repairRetryBtn');
@@ -88,7 +90,7 @@ export function createInstallationRepairController({ invoke, listen, document, i
       actions.hidden = true;
       errorMessage.hidden = true;
       progress.hidden = false;
-      label.textContent = 'Downloading a verified copy…';
+      setText(label, () => (tr('Downloading a verified copy…')));
       progress.focus();
       let unlistenProgress = null;
       let unlistenInstalling = null;
@@ -97,17 +99,17 @@ export function createInstallationRepairController({ invoke, listen, document, i
           const percent = Math.max(0, Math.min(100, Number(payload) || 0));
           bar.style.transform = `scaleX(${percent / 100})`;
           track.setAttribute('aria-valuenow', String(percent));
-          label.textContent = `Downloading a verified copy… ${percent}%`;
+          setText(label, () => (formatMessage`Downloading a verified copy… ${percent}%`));
         }).catch(() => null);
         unlistenInstalling = await listen('installation-repair-installing', () => {
           bar.style.transform = 'scaleX(1)';
           track.setAttribute('aria-valuenow', '100');
-          label.textContent = 'Reinstalling FlowSight… it will restart shortly.';
+          setText(label, () => (tr('Reinstalling FlowSight… it will restart shortly.')));
         }).catch(() => null);
         await invoke('repair_installation');
       } catch {
         console.warn('[Installation] Repair could not finish.');
-        errorMessage.textContent = 'The repair could not finish. Check your connection and try again.';
+        setText(errorMessage, () => (tr('The repair could not finish. Check your connection and try again.')));
         errorMessage.hidden = false;
         progress.hidden = true;
         actions.hidden = false;
@@ -121,7 +123,7 @@ export function createInstallationRepairController({ invoke, listen, document, i
 
     retryButton?.addEventListener('click', () => { repair().catch(() => {}); });
     if (isMicrosoftStoreBuild) {
-      closeButton.textContent = 'Close';
+      setText(closeButton, () => (tr('Close')));
       closeButton.focus();
     } else if (!automaticRepairAttempted) {
       automaticRepairAttempted = true;
