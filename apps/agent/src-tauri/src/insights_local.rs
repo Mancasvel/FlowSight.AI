@@ -502,8 +502,8 @@ pub fn generate_local_status_report(
         &app_handle,
         0,
         "warmup",
-        "Starting local AI engine",
-        "Preparing model…",
+        crate::language::copy("Starting local AI engine", "Iniciando la IA local"),
+        crate::language::copy("Preparing model…", "Preparando el modelo…"),
         "start",
     );
     crate::agent::ensure_local_llm_ready(app, state)?;
@@ -511,8 +511,8 @@ pub fn generate_local_status_report(
         &app_handle,
         0,
         "warmup",
-        "Starting local AI engine",
-        "Local AI ready",
+        crate::language::copy("Starting local AI engine", "Iniciando la IA local"),
+        crate::language::copy("Local AI ready", "IA local lista"),
         "done",
     );
 
@@ -530,21 +530,24 @@ pub fn generate_local_status_report(
                 "[LocalReport] Pipeline incomplete ({}), merging partial + structured fallback",
                 err
             );
-            let mut fallback = build_rule_based_report(&local_data);
-            sanitize_report_english(&mut fallback);
+            let fallback = build_rule_based_report(&local_data);
             (
                 fallback,
                 vec![serde_json::json!({
                     "id": "fallback",
-                    "label": "Structured summary",
-                    "detail": "Full AI pipeline could not finish; showing data-driven report in English."
+                    "label": crate::language::copy("Structured summary", "Resumen estructurado"),
+                    "detail": crate::language::copy(
+                        "Full AI pipeline could not finish; showing a report from verified local data.",
+                        "La IA no pudo terminar; se muestra un informe basado en datos locales verificados."
+                    )
                 })],
             )
         }
     };
 
     let mut report = report;
-    sanitize_report_english(&mut report);
+    // The model selects indices only. Host templates and user text must remain
+    // verbatim, including non-Latin names, labels, and description samples.
     repair_learning_fields(&mut report, &local_data);
 
     let ai_powered = generation_passes
@@ -576,9 +579,18 @@ pub fn generate_local_status_report(
         }
     };
 
+    let localized_report = build_localized_report(&report, &local_data);
+    let language_key = if crate::language::is_spanish() {
+        "es"
+    } else {
+        "en"
+    };
+    let visible_report = localized_report[language_key].clone();
+
     Ok(serde_json::json!({
         "local_data": local_data,
-        "report": report,
+        "report": visible_report,
+        "localized_report": localized_report,
         "user_preferences": user_prefs,
         "generated_at": Local::now().format("%Y-%m-%d %H:%M").to_string(),
         "model": "FlowSight Local Vision",
@@ -710,6 +722,33 @@ fn emit_report_progress(
     }
 }
 
+fn report_progress_label(pass_id: &str) -> Option<&'static str> {
+    let (en, es) = match pass_id {
+        "project_summary" => ("Section — project summary", "Sección: resumen del trabajo"),
+        "overall_health" => (
+            "Section — overall workflow health",
+            "Sección: estado general del trabajo",
+        ),
+        "health_breakdown" => (
+            "Section — health breakdown table",
+            "Sección: desglose del estado del trabajo",
+        ),
+        "timeline_insights" => ("Section — timeline review", "Sección: revisión del período"),
+        "known_issues" => ("Section — known issues", "Sección: problemas observados"),
+        "potential_risks" => ("Section — potential risks", "Sección: riesgos potenciales"),
+        "progress_tasks" => (
+            "Section — progress & observed work",
+            "Sección: progreso y trabajo observado",
+        ),
+        "lessons_recommendations" => (
+            "Section — lessons & recommendations",
+            "Sección: aprendizajes y recomendaciones",
+        ),
+        _ => return None,
+    };
+    Some(crate::language::copy(en, es))
+}
+
 fn section_detail(result: &serde_json::Value, pass_id: &str) -> String {
     let raw = match pass_id {
         "project_summary" => result["summary"].as_str(),
@@ -737,7 +776,7 @@ fn section_detail(result: &serde_json::Value, pass_id: &str) -> String {
             .and_then(|l| l["title"].as_str()),
         _ => None,
     };
-    extract_english_text(raw.unwrap_or("Section complete."))
+    raw.unwrap_or("Section complete.").to_string()
 }
 
 #[allow(clippy::too_many_arguments)] // each argument is an explicit generation/evidence control
@@ -753,12 +792,16 @@ fn llm_section(
     fallback: serde_json::Value,
     passes: &mut Vec<serde_json::Value>,
 ) -> serde_json::Value {
+    let label = report_progress_label(pass_id).unwrap_or(label);
     emit_report_progress(
         app,
         step,
         pass_id,
         label,
-        "Generating with local AI…",
+        crate::language::copy(
+            "Selecting from verified local data…",
+            "Seleccionando datos locales verificados…",
+        ),
         "start",
     );
     log::info!("[LocalReport] Section {} — {}", step, pass_id);
@@ -778,7 +821,11 @@ fn llm_section(
             }
         },
     };
-    let detail = section_detail(&result, pass_id);
+    let detail = if crate::language::is_spanish() {
+        "Sección completada con datos locales verificados.".to_string()
+    } else {
+        section_detail(&result, pass_id)
+    };
     emit_report_progress(app, step, pass_id, label, &detail, "done");
     passes.push(serde_json::json!({
         "id": pass_id,
@@ -898,11 +945,18 @@ fn apply_grounded_selection(
 }
 
 fn build_report_meta(local_data: &serde_json::Value) -> serde_json::Value {
+    build_report_meta_for(local_data, ReportLanguage::English)
+}
+
+fn build_report_meta_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> serde_json::Value {
     let top_category = local_data["category_breakdown"]
         .as_array()
         .and_then(|a| a.first())
         .and_then(|c| c["category"].as_str())
-        .unwrap_or("General work");
+        .unwrap_or(language.text("General work", "Trabajo general"));
 
     serde_json::json!({
         "period_label": format!(
@@ -910,7 +964,10 @@ fn build_report_meta(local_data: &serde_json::Value) -> serde_json::Value {
             local_data["period_start"].as_str().unwrap_or(""),
             local_data["period_end"].as_str().unwrap_or("")
         ),
-        "period_name": format!("Workflow · {}", top_category),
+        "period_name": match language {
+            ReportLanguage::English => format!("Workflow · {}", top_category),
+            ReportLanguage::Spanish => format!("Trabajo · {}", top_category),
+        },
         "focus_target": top_category,
         "tracked_hours": local_data["total_hours"],
         "deep_focus_hours": local_data["deep_focus_hours"],
@@ -1569,6 +1626,7 @@ fn parse_report_json(raw: &str) -> Result<serde_json::Value, String> {
     ))
 }
 
+#[cfg(test)]
 fn is_cjk_char(c: char) -> bool {
     matches!(
         c,
@@ -1579,6 +1637,7 @@ fn is_cjk_char(c: char) -> bool {
     )
 }
 
+#[cfg(test)]
 fn latin_ratio(s: &str) -> f64 {
     let mut latin = 0u32;
     let mut letters = 0u32;
@@ -1597,6 +1656,7 @@ fn latin_ratio(s: &str) -> f64 {
 }
 
 /// Keep English/Latin segments; drop CJK and low-Latin sentences from model output.
+#[cfg(test)]
 fn extract_english_text(s: &str) -> String {
     let cleaned: String = s
         .chars()
@@ -1635,25 +1695,6 @@ fn extract_english_text(s: &str) -> String {
     out
 }
 
-fn sanitize_report_english(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::String(s) => {
-            *s = extract_english_text(s);
-        }
-        serde_json::Value::Array(arr) => {
-            for item in arr.iter_mut() {
-                sanitize_report_english(item);
-            }
-        }
-        serde_json::Value::Object(map) => {
-            for (_, v) in map.iter_mut() {
-                sanitize_report_english(v);
-            }
-        }
-        _ => {}
-    }
-}
-
 fn repair_learning_fields(report: &mut serde_json::Value, local_data: &serde_json::Value) {
     let verified_lessons = build_lessons_learned(local_data);
     let mut lessons: Vec<serde_json::Value> = report["lessons_learned"]
@@ -1668,9 +1709,7 @@ fn repair_learning_fields(report: &mut serde_json::Value, local_data: &serde_jso
     if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
         lessons.clear();
     } else if lessons.is_empty() {
-        let mut fallback = serde_json::json!(verified_lessons);
-        sanitize_report_english(&mut fallback);
-        lessons = fallback.as_array().cloned().unwrap_or_default();
+        lessons = verified_lessons;
     }
     report["lessons_learned"] = serde_json::json!(lessons);
 
@@ -1693,7 +1732,148 @@ fn repair_learning_fields(report: &mut serde_json::Value, local_data: &serde_jso
     report["recommendations"] = serde_json::json!(recommendations);
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReportLanguage {
+    English,
+    Spanish,
+}
+
+impl ReportLanguage {
+    fn text(self, en: &'static str, es: &'static str) -> &'static str {
+        match self {
+            Self::English => en,
+            Self::Spanish => es,
+        }
+    }
+}
+
+// Paired literals share the same arguments and rule branches. Language never
+// changes which evidence is included, its precision, or candidate ordering.
+macro_rules! report_format {
+    ($language:expr, $en:literal, $es:literal $(, $argument:expr)* $(,)?) => {
+        match $language {
+            ReportLanguage::English => format!($en $(, $argument)*),
+            ReportLanguage::Spanish => format!($es $(, $argument)*),
+        }
+    };
+}
+
 fn build_rule_based_report(local_data: &serde_json::Value) -> serde_json::Value {
+    build_rule_based_report_for(local_data, ReportLanguage::English)
+}
+
+fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Value> {
+    build_lessons_learned_for(local_data, ReportLanguage::English)
+}
+
+fn default_recommendations(local_data: &serde_json::Value) -> Vec<String> {
+    default_recommendations_for(local_data, ReportLanguage::English)
+}
+
+#[cfg(test)]
+fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
+    build_work_progress_for(local_data, ReportLanguage::English)
+}
+
+#[cfg(test)]
+fn build_known_issues(local_data: &serde_json::Value, distraction_events: i32) -> Vec<String> {
+    build_known_issues_for(local_data, distraction_events, ReportLanguage::English)
+}
+
+#[cfg(test)]
+fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
+    build_potential_risks_for(local_data, ReportLanguage::English)
+}
+
+/// Match host-authored candidates within their own field. The model may reorder
+/// or select a subset, so array position in the final report is not sufficient.
+/// Unmatched values remain verbatim; raw user content is never translated.
+fn matching_report_copy(
+    selected: &serde_json::Value,
+    english: &serde_json::Value,
+    spanish: &serde_json::Value,
+) -> serde_json::Value {
+    if selected == english {
+        return spanish.clone();
+    }
+    match (selected, english, spanish) {
+        (
+            serde_json::Value::Array(chosen),
+            serde_json::Value::Array(en),
+            serde_json::Value::Array(es),
+        ) => serde_json::Value::Array(
+            chosen
+                .iter()
+                .map(|item| {
+                    en.iter()
+                        .position(|candidate| candidate == item)
+                        .and_then(|index| es.get(index))
+                        .cloned()
+                        .unwrap_or_else(|| item.clone())
+                })
+                .collect(),
+        ),
+        (
+            serde_json::Value::Object(chosen),
+            serde_json::Value::Object(en),
+            serde_json::Value::Object(es),
+        ) => serde_json::Value::Object(
+            chosen
+                .iter()
+                .map(|(key, value)| {
+                    let copy = match (en.get(key), es.get(key)) {
+                        (Some(en), Some(es)) => matching_report_copy(value, en, es),
+                        _ => value.clone(),
+                    };
+                    (key.clone(), copy)
+                })
+                .collect(),
+        ),
+        _ => selected.clone(),
+    }
+}
+
+fn build_localized_report(
+    selected: &serde_json::Value,
+    local_data: &serde_json::Value,
+) -> serde_json::Value {
+    let mut english = build_rule_based_report(local_data);
+    let mut spanish = build_rule_based_report_for(local_data, ReportLanguage::Spanish);
+    for (reference, language) in [
+        (&mut english, ReportLanguage::English),
+        (&mut spanish, ReportLanguage::Spanish),
+    ] {
+        let meta = build_report_meta_for(local_data, language);
+        reference["project_name"] = reference["work_summary"].clone();
+        reference["focus_target"] = meta["focus_target"].clone();
+        reference["report_meta"] = meta;
+        reference["timeline_caption"] = reference["work_progress"]
+            .as_array()
+            .and_then(|items| items.first())
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!(language.text(
+                    "Activity tracked across the period.",
+                    "Actividad registrada a lo largo del período.",
+                ))
+            });
+    }
+    // The section pipeline aliases work_summary to executive_overview. The full
+    // structured fallback uses a distinct work_summary; support both shapes.
+    if selected["work_summary"] == english["executive_overview"] {
+        english["work_summary"] = english["executive_overview"].clone();
+        spanish["work_summary"] = spanish["executive_overview"].clone();
+    }
+    serde_json::json!({
+        "en": selected,
+        "es": matching_report_copy(selected, &english, &spanish),
+    })
+}
+
+fn build_rule_based_report_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> serde_json::Value {
     let total_hours = local_data["total_hours"].as_f64().unwrap_or(0.0);
     let deep_focus_hours = local_data["deep_focus_hours"].as_f64().unwrap_or(0.0);
     let activity_count = local_data["activity_count"].as_u64().unwrap_or(0);
@@ -1703,18 +1883,18 @@ fn build_rule_based_report(local_data: &serde_json::Value) -> serde_json::Value 
     let deep_minutes = deep_threshold_minutes(local_data);
 
     let total_seconds = local_data["total_seconds"].as_i64().unwrap_or(0) as i32;
-    let overall_health = compute_overall_health(local_data);
+    let overall_health = compute_overall_health_for(local_data, language);
 
-    let health_breakdown = build_category_health_rows(local_data);
-    let observed_work = build_observed_work(local_data);
-    let known_issues = build_known_issues(local_data, distraction_events as i32);
-    let potential_risks = build_potential_risks(local_data);
-    let work_progress = build_work_progress(local_data);
-    let lessons_learned = build_lessons_learned(local_data);
+    let health_breakdown = build_category_health_rows_for(local_data, language);
+    let observed_work = build_observed_work_for(local_data, language);
+    let known_issues = build_known_issues_for(local_data, distraction_events as i32, language);
+    let potential_risks = build_potential_risks_for(local_data, language);
+    let work_progress = build_work_progress_for(local_data, language);
+    let lessons_learned = build_lessons_learned_for(local_data, language);
 
     let executive_overview = if total_seconds == 0 {
-        format!(
-            "Between {} and {} no activity was recorded in local SQLite reports. Enable monitoring to populate this report.",
+        report_format!(language,
+            "Between {} and {} no activity was recorded in local SQLite reports. Enable monitoring to populate this report.", "Entre {} y {} no se registró actividad en los informes locales de SQLite. Activa el seguimiento para completar este informe.",
             period_start, period_end
         )
     } else {
@@ -1726,11 +1906,13 @@ fn build_rule_based_report(local_data: &serde_json::Value) -> serde_json::Value 
             .as_array()
             .and_then(|a| a.first())
             .and_then(|c| c["category"].as_str())
-            .unwrap_or("General work");
-        format!(
+            .unwrap_or(language.text("General work", "Trabajo general"));
+        report_format!(language,
             "Between {} and {} you tracked {:.1}h across {} SQLite activity reports on {} active days. \
 Sustained {}+ minute blocks totalled {:.1}h. Primary category: {}. \
-Explicit task labels covered {:.0}% of tracked time.",
+Explicit task labels covered {:.0}% of tracked time.", "Entre {} y {} registraste {:.1}h en {} informes de actividad de SQLite durante {} días activos. \
+Los bloques sostenidos de {} minutos o más sumaron {:.1}h. Categoría principal: {}. \
+Las etiquetas explícitas de tareas cubrieron el {:.0}% del tiempo registrado.",
             period_start,
             period_end,
             total_hours,
@@ -1744,7 +1926,7 @@ Explicit task labels covered {:.0}% of tracked time.",
     };
 
     let health_notes = if total_seconds == 0 {
-        "No tracked activity in this period. Start monitoring to build a baseline.".to_string()
+        language.text("No tracked activity in this period. Start monitoring to build a baseline.", "No hay actividad registrada en este período. Inicia el seguimiento para obtener una referencia.").to_string()
     } else {
         let deep = local_data["deep_focus_sessions"].as_i64().unwrap_or(0);
         let fragmentation = local_data["focus_semantics"]["fragmentation_pct"]
@@ -1758,10 +1940,12 @@ Explicit task labels covered {:.0}% of tracked time.",
             .as_f64()
             .unwrap_or(0.0);
         let distraction_h = local_data["distraction_hours"].as_f64().unwrap_or(0.0);
-        format!(
+        report_format!(language,
             "Observed {} sessions of {}+ minutes; {:.0}% of focus-eligible time remained in shorter fragments. \
 Tracking consistency was {:.0}% of days in the period. Sustained non-work browsing totalled {:.1}h across {} canonical events. \
-Observed explicit theme changes averaged {:.1} per labelled focus hour.",
+Observed explicit theme changes averaged {:.1} per labelled focus hour.", "Se observaron {} sesiones de {} minutos o más; el {:.0}% del tiempo elegible para concentración quedó en fragmentos más cortos. \
+Hubo seguimiento en el {:.0}% de los días del período. La navegación sostenida ajena al trabajo sumó {:.1}h en {} eventos canónicos. \
+Los cambios explícitos de tema observados promediaron {:.1} por hora de concentración con etiquetas.",
             deep,
             deep_minutes,
             fragmentation,
@@ -1774,8 +1958,8 @@ Observed explicit theme changes averaged {:.1} per labelled focus hour.",
 
     serde_json::json!({
         "executive_overview": executive_overview,
-        "work_summary": format!(
-            "The breakdown lists observed work areas and optional task labels. {:.1} total hours were captured in the local report.",
+        "work_summary": report_format!(language,
+            "The breakdown lists observed work areas and optional task labels. {:.1} total hours were captured in the local report.", "El desglose enumera las áreas de trabajo observadas y las etiquetas opcionales de tareas. El informe local registró {:.1} horas en total.",
             total_hours
         ),
         "overall_health": overall_health,
@@ -1786,46 +1970,71 @@ Observed explicit theme changes averaged {:.1} per labelled focus hour.",
         "observed_work": observed_work,
         "work_progress": work_progress,
         "lessons_learned": lessons_learned,
-        "recommendations": default_recommendations(local_data),
+        "recommendations": default_recommendations_for(local_data, language),
     })
 }
 
-fn compute_overall_health(local_data: &serde_json::Value) -> &'static str {
+fn compute_overall_health_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> &'static str {
     let eligible = local_data["focus_eligible_seconds"].as_i64().unwrap_or(0);
     let deep_sessions = local_data["deep_focus_sessions"].as_i64().unwrap_or(0);
     if eligible == 0 {
-        "No sustained-work signal"
+        language.text("No sustained-work signal", "Sin señal de trabajo sostenido")
     } else if deep_sessions > 0 {
-        "Sustained blocks observed"
+        language.text(
+            "Sustained blocks observed",
+            "Se observaron bloques sostenidos",
+        )
     } else {
-        "Fragmented eligible work"
+        language.text("Fragmented eligible work", "Trabajo elegible fragmentado")
     }
 }
 
-fn build_category_health_rows(local_data: &serde_json::Value) -> Vec<serde_json::Value> {
+fn build_category_health_rows_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<serde_json::Value> {
     let total_seconds = local_data["total_seconds"].as_i64().unwrap_or(1).max(1) as f64;
     let mut rows = Vec::new();
 
     if let Some(cats) = local_data["category_breakdown"].as_array() {
         for cat in cats.iter().take(6) {
-            let name = cat["category"].as_str().unwrap_or("Other");
+            let name = cat["category"]
+                .as_str()
+                .unwrap_or(language.text("Other", "Otros"));
             let secs = cat["total_seconds"].as_i64().unwrap_or(0) as f64;
             let share = secs / total_seconds;
-            let status = match crate::focus_semantics::focus_role(name) {
-                crate::focus_semantics::FocusRole::Eligible => "Sustained-work eligible",
+            let status = match crate::focus_semantics::focus_role(
+                cat["category"].as_str().unwrap_or("Other"),
+            ) {
+                crate::focus_semantics::FocusRole::Eligible => {
+                    language.text("Sustained-work eligible", "Elegible para trabajo sostenido")
+                }
                 crate::focus_semantics::FocusRole::Coordination
-                | crate::focus_semantics::FocusRole::Operational => "Context work",
-                crate::focus_semantics::FocusRole::Distraction if share > 0.15 => "Review",
-                crate::focus_semantics::FocusRole::Distraction => "Observed",
-                crate::focus_semantics::FocusRole::MeasurementNoise => "Uncertain",
-                crate::focus_semantics::FocusRole::Unknown => "Unclassified",
+                | crate::focus_semantics::FocusRole::Operational => {
+                    language.text("Context work", "Trabajo de contexto")
+                }
+                crate::focus_semantics::FocusRole::Distraction if share > 0.15 => {
+                    language.text("Review", "Revisar")
+                }
+                crate::focus_semantics::FocusRole::Distraction => {
+                    language.text("Observed", "Observado")
+                }
+                crate::focus_semantics::FocusRole::MeasurementNoise => {
+                    language.text("Uncertain", "Incierto")
+                }
+                crate::focus_semantics::FocusRole::Unknown => {
+                    language.text("Unclassified", "Sin clasificar")
+                }
             };
             rows.push(serde_json::json!({
                 "element": name,
                 "status": status,
-                "owner_team": "Self",
-                "notes": format!(
-                    "{:.1}h across {} SQLite reports ({:.0}% of period).",
+                "owner_team": language.text("Self", "Yo"),
+                "notes": report_format!(language,
+                    "{:.1}h across {} SQLite reports ({:.0}% of period).", "{:.1}h en {} informes de SQLite ({:.0}% del período).",
                     secs / 3600.0,
                     cat["count"].as_i64().unwrap_or(0),
                     share * 100.0
@@ -1836,10 +2045,10 @@ fn build_category_health_rows(local_data: &serde_json::Value) -> Vec<serde_json:
 
     if rows.is_empty() {
         rows.push(serde_json::json!({
-            "element": "Tracking",
-            "status": "Attention",
-            "owner_team": "Self",
-            "notes": "No category data yet — enable monitoring during work sessions.",
+            "element": language.text("Tracking", "Seguimiento"),
+            "status": language.text("Attention", "Requiere atención"),
+            "owner_team": language.text("Self", "Yo"),
+            "notes": language.text("No category data yet — enable monitoring during work sessions.", "Aún no hay datos por categoría; activa el seguimiento durante tus sesiones de trabajo."),
         }));
     }
 
@@ -1851,9 +2060,9 @@ fn build_category_health_rows(local_data: &serde_json::Value) -> Vec<serde_json:
             if !ticket.is_empty() {
                 rows.push(serde_json::json!({
                     "element": ticket,
-                    "status": "Observed",
-                    "owner_team": "Self",
-                    "notes": format!("{:.1}h logged across {} SQLite activity observations.", secs / 3600.0, n),
+                    "status": language.text("Observed", "Observado"),
+                    "owner_team": language.text("Self", "Yo"),
+                    "notes": report_format!(language,"{:.1}h logged across {} SQLite activity observations.", "{:.1}h registradas en {} observaciones de actividad de SQLite.", secs / 3600.0, n),
                 }));
             }
         }
@@ -1862,18 +2071,33 @@ fn build_category_health_rows(local_data: &serde_json::Value) -> Vec<serde_json:
     rows
 }
 
-fn build_observed_work(local_data: &serde_json::Value) -> Vec<String> {
+fn build_observed_work_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<String> {
     let mut items: Vec<String> = Vec::new();
+    let mut english_candidates: Vec<String> = Vec::new();
 
     if let Some(tickets) = local_data["ticket_breakdown"].as_array() {
         for t in tickets.iter().take(6) {
             let ticket = t["ticket"].as_str().unwrap_or("");
             let hours = t["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
             let n = t["count"].as_i64().unwrap_or(0);
-            if !ticket.is_empty() && !items.iter().any(|i| i.contains(ticket)) {
-                items.push(format!(
+            // Preserve the existing candidate deduplication in both languages.
+            // A ticket matching localized template prose must not change which
+            // candidates exist when the language changes.
+            if !ticket.is_empty() && !english_candidates.iter().any(|i| i.contains(ticket)) {
+                english_candidates.push(format!(
                     "Ticket {} — {:.1}h logged across {} SQLite activity reports",
                     ticket, hours, n
+                ));
+                items.push(report_format!(
+                    language,
+                    "Ticket {} — {:.1}h logged across {} SQLite activity reports",
+                    "Ticket {} — {:.1}h registradas en {} informes de actividad de SQLite",
+                    ticket,
+                    hours,
+                    n
                 ));
             }
         }
@@ -1883,30 +2107,43 @@ fn build_observed_work(local_data: &serde_json::Value) -> Vec<String> {
         if let Some(samples) = local_data["sample_activities"].as_array() {
             for s in samples.iter().take(6) {
                 let desc = s["description"].as_str().unwrap_or("");
-                let cat = s["category"].as_str().unwrap_or("Work");
+                let cat = s["category"]
+                    .as_str()
+                    .unwrap_or(language.text("Work", "Trabajo"));
                 if !desc.is_empty() {
-                    items.push(format!("{} — {}", cat, clamp_line(desc, 90)));
+                    items.push(format!("{} — {}", cat, desc));
                 }
             }
         }
     }
 
     if items.is_empty() {
-        items.push("No specifically labelled work was observed in this period.".to_string());
+        items.push(
+            language
+                .text(
+                    "No specifically labelled work was observed in this period.",
+                    "No se observó trabajo con etiquetas específicas en este período.",
+                )
+                .to_string(),
+        );
     }
 
     items
 }
 
-fn build_known_issues(local_data: &serde_json::Value, distraction_events: i32) -> Vec<String> {
+fn build_known_issues_for(
+    local_data: &serde_json::Value,
+    distraction_events: i32,
+    language: ReportLanguage,
+) -> Vec<String> {
     let mut issues = Vec::new();
     if distraction_events > 0 {
         let distraction_minutes = local_data["focus_semantics"]["distraction_seconds"]
             .as_i64()
             .unwrap_or(0)
             / 60;
-        issues.push(format!(
-            "{} sustained non-work browsing events ({} minutes) were observed; inspect their timing before inferring an effect on focus blocks.",
+        issues.push(report_format!(language,
+            "{} sustained non-work browsing events ({} minutes) were observed; inspect their timing before inferring an effect on focus blocks.", "Se observaron {} eventos de navegación sostenida ajena al trabajo ({} minutos); revisa cuándo ocurrieron antes de inferir un efecto en los bloques de concentración.",
             distraction_events, distraction_minutes
         ));
     }
@@ -1915,15 +2152,15 @@ fn build_known_issues(local_data: &serde_json::Value, distraction_events: i32) -
         .as_f64()
         .unwrap_or(100.0);
     if consistency < 60.0 {
-        issues.push(format!(
-            "Tracking gaps — only {:.0}% of days in the period have SQLite activity reports.",
+        issues.push(report_format!(language,
+            "Tracking gaps — only {:.0}% of days in the period have SQLite activity reports.", "Lagunas de seguimiento: solo el {:.0}% de los días del período tienen informes de actividad de SQLite.",
             consistency
         ));
     }
 
     if issues.is_empty() {
         issues.push(
-            "No configured friction pattern crossed its threshold in the available tracked data."
+            language.text("No configured friction pattern crossed its threshold in the available tracked data.", "Ningún patrón de fricción configurado superó su umbral en los datos registrados disponibles.")
                 .to_string(),
         );
     }
@@ -1931,7 +2168,10 @@ fn build_known_issues(local_data: &serde_json::Value, distraction_events: i32) -
     issues
 }
 
-fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
+fn build_potential_risks_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<String> {
     let mut risks = Vec::new();
     let total_seconds = local_data["total_seconds"].as_i64().unwrap_or(0) as i32;
     let fragmentation = local_data["focus_semantics"]["fragmentation_pct"]
@@ -1939,8 +2179,8 @@ fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
         .unwrap_or(0.0);
     let deep_minutes = deep_threshold_minutes(local_data);
     if fragmentation > 0.0 {
-        risks.push(format!(
-            "{:.0}% of focus-eligible time remained in blocks shorter than the transparent {}-minute reference.",
+        risks.push(report_format!(language,
+            "{:.0}% of focus-eligible time remained in blocks shorter than the transparent {}-minute reference.", "El {:.0}% del tiempo elegible para concentración quedó en bloques más cortos que la referencia explícita de {} minutos.",
             fragmentation, deep_minutes
         ));
     }
@@ -1952,8 +2192,8 @@ fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
         .as_i64()
         .unwrap_or(0);
     if task_label_cov < 100.0 && focus_eligible_seconds > 0 && total_seconds > 0 {
-        risks.push(format!(
-            "Explicit task labels cover {:.0}% of focus-eligible time; same-category task switches in the unlabelled portion cannot be observed.",
+        risks.push(report_format!(language,
+            "Explicit task labels cover {:.0}% of focus-eligible time; same-category task switches in the unlabelled portion cannot be observed.", "Las etiquetas explícitas de tareas cubren el {:.0}% del tiempo elegible para concentración; no se pueden observar cambios de tarea dentro de la misma categoría en la parte sin etiquetas.",
             task_label_cov
         ));
     }
@@ -1961,8 +2201,8 @@ fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
     if let Some(prior) = local_data.get("prior_period") {
         let change = prior["change_pct"].as_f64().unwrap_or(0.0);
         if change < -15.0 {
-            risks.push(format!(
-                "Tracked hours fell {:.0}% vs prior period ({} to {}).",
+            risks.push(report_format!(language,
+                "Tracked hours fell {:.0}% vs prior period ({} to {}).", "Las horas registradas disminuyeron un {:.0}% respecto al período anterior ({} a {}).",
                 change.abs(),
                 prior["period_start"].as_str().unwrap_or("?"),
                 prior["period_end"].as_str().unwrap_or("?")
@@ -1977,8 +2217,8 @@ fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
             .count();
         let period_days = local_data["period_days"].as_i64().unwrap_or(7) as usize;
         if active_days <= 2 && period_days >= 5 {
-            risks.push(format!(
-                "Sparse tracking — only {} of {} days have SQLite reports; workload may be under-represented.",
+            risks.push(report_format!(language,
+                "Sparse tracking — only {} of {} days have SQLite reports; workload may be under-represented.", "Seguimiento escaso: solo {} de {} días tienen informes de SQLite; la carga de trabajo puede estar infrarrepresentada.",
                 active_days, period_days
             ));
         }
@@ -1988,15 +2228,15 @@ fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
         .as_f64()
         .unwrap_or(0.0);
     if switches > 0.0 {
-        risks.push(format!(
-            "Observed explicit theme changes were {:.1} per labelled focus hour; inspect their break reasons before drawing a causal conclusion.",
+        risks.push(report_format!(language,
+            "Observed explicit theme changes were {:.1} per labelled focus hour; inspect their break reasons before drawing a causal conclusion.", "Los cambios explícitos de tema observados fueron {:.1} por hora de concentración con etiquetas; revisa los motivos registrados de esas interrupciones antes de llegar a una conclusión causal.",
             switches
         ));
     }
 
     if risks.is_empty() {
         risks.push(
-            "No configured risk rule crossed its threshold; compare another similarly tracked period before changing workflow."
+            language.text("No configured risk rule crossed its threshold; compare another similarly tracked period before changing workflow.", "Ninguna regla de riesgo configurada superó su umbral; compara otro período con un seguimiento similar antes de cambiar tu forma de trabajar.")
                 .to_string(),
         );
     }
@@ -2004,17 +2244,24 @@ fn build_potential_risks(local_data: &serde_json::Value) -> Vec<String> {
     risks
 }
 
-fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
+fn build_work_progress_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<String> {
     let mut progress = Vec::new();
 
     if let Some(days) = local_data["day_category_breakdown"].as_array() {
         for index in temporal_coverage_indices(days.len(), 7) {
             let d = &days[index];
-            progress.push(format!(
+            progress.push(report_format!(
+                language,
                 "{} — {:.1}h total, largest category {} ({:.1}h)",
+                "{} — {:.1}h en total, categoría principal {} ({:.1}h)",
                 d["date"].as_str().unwrap_or(""),
                 d["total_hours"].as_f64().unwrap_or(0.0),
-                d["top_category"].as_str().unwrap_or("Work"),
+                d["top_category"]
+                    .as_str()
+                    .unwrap_or(language.text("Work", "Trabajo")),
                 d["top_hours"].as_f64().unwrap_or(0.0)
             ));
         }
@@ -2025,9 +2272,13 @@ fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
             let hours = d["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
             let count = d["activity_count"].as_i64().unwrap_or(0);
             if hours > 0.0 {
-                progress.push(format!(
+                progress.push(report_format!(
+                    language,
                     "{} — {:.1}h across {} SQLite captures",
-                    date, hours, count
+                    "{} — {:.1}h en {} capturas de SQLite",
+                    date,
+                    hours,
+                    count
                 ));
             }
         }
@@ -2038,19 +2289,35 @@ fn build_work_progress(local_data: &serde_json::Value) -> Vec<String> {
             let label = t["label"].as_str().unwrap_or("");
             let h = t["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
             if !label.is_empty() && h > 0.0 {
-                progress.push(format!("Theme: {} — {:.1}h in period", label, h));
+                progress.push(report_format!(
+                    language,
+                    "Theme: {} — {:.1}h in period",
+                    "Tema: {} — {:.1}h en el período",
+                    label,
+                    h
+                ));
             }
         }
     }
 
     if progress.is_empty() {
-        progress.push("No daily progress recorded for this period.".to_string());
+        progress.push(
+            language
+                .text(
+                    "No daily progress recorded for this period.",
+                    "No hay progreso diario registrado para este período.",
+                )
+                .to_string(),
+        );
     }
 
     progress
 }
 
-fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Value> {
+fn build_lessons_learned_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<serde_json::Value> {
     let mut lessons = Vec::new();
 
     if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
@@ -2065,17 +2332,17 @@ fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Valu
         let deep_minutes = deep_threshold_minutes(local_data);
         if fragmentation > 0.0 {
             lessons.push(serde_json::json!({
-                "title": "Inspect fragmentation",
-                "body": format!(
-                    "{:.0}% of focus-eligible time remained in shorter fragments. Review the recorded transition that ended the largest fragments before changing the schedule; {} minutes is a product reference, not a biological rule.",
+                "title": language.text("Inspect fragmentation", "Revisa la fragmentación"),
+                "body": report_format!(language,
+                    "{:.0}% of focus-eligible time remained in shorter fragments. Review the recorded transition that ended the largest fragments before changing the schedule; {} minutes is a product reference, not a biological rule.", "El {:.0}% del tiempo elegible para concentración quedó en fragmentos más cortos. Revisa la transición registrada que terminó los fragmentos más largos antes de cambiar el horario; {} minutos es una referencia del producto, no una regla biológica.",
                     fragmentation, deep_minutes
                 ),
             }));
         } else {
             lessons.push(serde_json::json!({
-                "title": "Sustained-work pattern",
-                "body": format!(
-                    "No focus-eligible time fell below the configured {}-minute reference in this tracked period. This describes observed continuity, not subjective flow or productivity.",
+                "title": language.text("Sustained-work pattern", "Patrón de trabajo sostenido"),
+                "body": report_format!(language,
+                    "No focus-eligible time fell below the configured {}-minute reference in this tracked period. This describes observed continuity, not subjective flow or productivity.", "Ningún tiempo elegible para concentración quedó por debajo de la referencia configurada de {} minutos en este período registrado. Esto describe la continuidad observada, no el estado de flow subjetivo ni la productividad.",
                     deep_minutes
                 ),
             }));
@@ -2088,12 +2355,14 @@ fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Valu
     {
         let category_seconds = top["total_seconds"].as_i64().unwrap_or(0);
         if category_seconds > 0 {
-            let cat = top["category"].as_str().unwrap_or("Work");
+            let cat = top["category"]
+                .as_str()
+                .unwrap_or(language.text("Work", "Trabajo"));
             let total_seconds = local_data["total_seconds"].as_i64().unwrap_or(0);
             lessons.push(serde_json::json!({
-                "title": format!("Review the role of {}", cat),
-                "body": format!(
-                    "{} accounted for {:.1}h ({:.0}% of tracked time). Check whether that mix matches your intended work; the category is descriptive, not a productivity score.",
+                "title": report_format!(language,"Review the role of {}", "Revisa el papel de {}", cat),
+                "body": report_format!(language,
+                    "{} accounted for {:.1}h ({:.0}% of tracked time). Check whether that mix matches your intended work; the category is descriptive, not a productivity score.", "{} representó {:.1}h ({:.0}% del tiempo registrado). Comprueba si esa distribución coincide con el trabajo que querías hacer; la categoría es descriptiva, no una puntuación de productividad.",
                     cat,
                     category_seconds as f64 / 3600.0,
                     category_seconds as f64 / total_seconds as f64 * 100.0
@@ -2105,9 +2374,9 @@ fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Valu
     if let Some(consistency) = local_data["tracking_consistency_pct"].as_f64() {
         if consistency < 100.0 {
             lessons.push(serde_json::json!({
-                "title": "Coverage limits the conclusion",
-                "body": format!(
-                    "Activity was observed on {:.0}% of days in the selected period. Treat untracked days as missing data, not as days without work.",
+                "title": language.text("Coverage limits the conclusion", "La cobertura limita la conclusión"),
+                "body": report_format!(language,
+                    "Activity was observed on {:.0}% of days in the selected period. Treat untracked days as missing data, not as days without work.", "Se observó actividad en el {:.0}% de los días del período seleccionado. Trata los días sin seguimiento como datos ausentes, no como días sin trabajo.",
                     consistency
                 ),
             }));
@@ -2117,9 +2386,9 @@ fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Valu
     if lessons.is_empty() {
         let hours = local_data["total_seconds"].as_i64().unwrap_or(0) as f64 / 3600.0;
         lessons.push(serde_json::json!({
-            "title": "Recorded time is a starting point",
-            "body": format!(
-                "{:.1}h was recorded, but category and focus signals are too limited for a specific workflow conclusion. Add task context or compare another period before changing plans.",
+            "title": language.text("Recorded time is a starting point", "El tiempo registrado es un punto de partida"),
+            "body": report_format!(language,
+                "{:.1}h was recorded, but category and focus signals are too limited for a specific workflow conclusion. Add task context or compare another period before changing plans.", "Se registraron {:.1}h, pero las señales de categoría y concentración son demasiado limitadas para una conclusión concreta sobre tu forma de trabajar. Añade contexto de tareas o compara otro período antes de cambiar tus planes.",
                 hours
             ),
         }));
@@ -2128,37 +2397,40 @@ fn build_lessons_learned(local_data: &serde_json::Value) -> Vec<serde_json::Valu
     lessons
 }
 
-fn default_recommendations(local_data: &serde_json::Value) -> Vec<String> {
+fn default_recommendations_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<String> {
     let mut recs = Vec::new();
     let focus = &local_data["focus_semantics"];
     let distraction_events = focus["distraction_events"].as_i64().unwrap_or(0);
     if distraction_events > 0 {
         let minutes = focus["distraction_seconds"].as_i64().unwrap_or(0) / 60;
-        recs.push(format!(
-            "Review the timing of the {} sustained non-work browsing event(s) ({} minutes) separately from valuable coordination and operational work.",
+        recs.push(report_format!(language,
+            "Review the timing of the {} sustained non-work browsing event(s) ({} minutes) separately from valuable coordination and operational work.", "Revisa cuándo ocurrieron los {} eventos de navegación sostenida ajena al trabajo ({} minutos) por separado del trabajo valioso de coordinación y operaciones.",
             distraction_events, minutes
         ));
     }
 
     let label_coverage = focus["explicit_theme_coverage_pct"].as_f64().unwrap_or(0.0);
     if focus["focus_eligible_seconds"].as_i64().unwrap_or(0) > 0 && label_coverage < 100.0 {
-        recs.push(format!(
-            "Explicit task labels cover {:.0}% of focus-eligible time. Use a short manual label when theme continuity matters; no issue tracker is required.",
+        recs.push(report_format!(language,
+            "Explicit task labels cover {:.0}% of focus-eligible time. Use a short manual label when theme continuity matters; no issue tracker is required.", "Las etiquetas explícitas de tareas cubren el {:.0}% del tiempo elegible para concentración. Usa una etiqueta manual breve cuando importe la continuidad del tema; no hace falta un gestor de incidencias.",
             label_coverage
         ));
     }
 
     let fragmentation = focus["fragmentation_pct"].as_f64().unwrap_or(0.0);
     if fragmentation > 0.0 {
-        recs.push(format!(
-            "Inspect the recorded break reasons behind the {:.0}% of focus-eligible time in short fragments before changing your schedule.",
+        recs.push(report_format!(language,
+            "Inspect the recorded break reasons behind the {:.0}% of focus-eligible time in short fragments before changing your schedule.", "Revisa los motivos de interrupción registrados que explican el {:.0}% del tiempo elegible para concentración en fragmentos cortos antes de cambiar tu horario.",
             fragmentation
         ));
     }
 
     if recs.is_empty() {
         recs.push(
-            "The current signal does not justify a specific workflow change; keep tracking to compare future periods."
+            language.text("The current signal does not justify a specific workflow change; keep tracking to compare future periods.", "La señal actual no justifica un cambio concreto en tu forma de trabajar; continúa el seguimiento para comparar períodos futuros.")
                 .to_string(),
         );
     }
@@ -2386,6 +2658,293 @@ fn clamp_line(s: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    fn bilingual_report_fixture() -> serde_json::Value {
+        let mut days = Vec::new();
+        for day in 1..=30 {
+            days.push(serde_json::json!({
+                "date": format!("2026-09-{day:02}"),
+                "total_hours": day as f64 / 10.0,
+                "top_category": "Research María 数据",
+                "top_hours": day as f64 / 20.0,
+            }));
+        }
+        serde_json::json!({
+            "period_start": "2026-09-01", "period_end": "2026-09-30", "period_days": 30,
+            "total_seconds": 37800, "total_hours": 10.5, "activity_count": 81,
+            "active_days": 2, "tracking_consistency_pct": 6.7, "task_label_coverage_pct": 31.2,
+            "deep_focus_hours": 3.5, "deep_focus_sessions": 4, "focus_eligible_seconds": 25200,
+            "distraction_events": 3, "distraction_hours": 0.2,
+            "category_breakdown": [
+                {"category": "Analysis", "total_seconds": 18000, "count": 21},
+                {"category": "Research María 数据", "total_seconds": 7200, "count": 8},
+                {"category": "Meeting", "total_seconds": 1800, "count": 5},
+                {"category": "Sales", "total_seconds": 1800, "count": 7},
+                {"category": "Browsing", "total_seconds": 7200, "count": 9},
+                {"category": "Idle", "total_seconds": 1800, "count": 4}
+            ],
+            "ticket_breakdown": [
+                {"ticket": "Sprint María 数据 7", "total_seconds": 3600, "count": 12},
+                {"ticket": "registradas", "total_seconds": 7200, "count": 8},
+                {"ticket": "reports", "total_seconds": 1800, "count": 4}
+            ],
+            "work_themes": [{"label": "Draft María 数据 7", "total_seconds": 9000}],
+            "day_category_breakdown": days,
+            "daily_totals": [{"date": "2026-09-01", "total_seconds": 37800, "activity_count": 81}],
+            "prior_period": {"change_pct": -21.2, "period_start": "2026-08-02", "period_end": "2026-08-31"},
+            "focus_semantics": {
+                "deep_threshold_seconds": 1500, "fragmentation_pct": 42.6,
+                "focus_eligible_seconds": 25200, "explicit_theme_coverage_pct": 46.2,
+                "explicit_theme_switches_per_labelled_focus_hour": 1.6,
+                "distraction_events": 3, "distraction_seconds": 720
+            }
+        })
+    }
+
+    fn numeric_copy_tokens(text: &str) -> Vec<String> {
+        text.split(|character: char| !character.is_ascii_digit() && character != '.')
+            .filter(|part| part.chars().any(|character| character.is_ascii_digit()))
+            .map(|part| part.trim_matches('.').to_string())
+            .collect()
+    }
+
+    fn assert_same_report_evidence(en: &serde_json::Value, es: &serde_json::Value) {
+        match (en, es) {
+            (serde_json::Value::String(en), serde_json::Value::String(es)) => {
+                assert_eq!(
+                    numeric_copy_tokens(en),
+                    numeric_copy_tokens(es),
+                    "{en} / {es}"
+                );
+            }
+            (serde_json::Value::Array(en), serde_json::Value::Array(es)) => {
+                assert_eq!(en.len(), es.len());
+                for (en, es) in en.iter().zip(es) {
+                    assert_same_report_evidence(en, es);
+                }
+            }
+            (serde_json::Value::Object(en), serde_json::Value::Object(es)) => {
+                assert_eq!(en.keys().collect::<Vec<_>>(), es.keys().collect::<Vec<_>>());
+                for (key, en) in en {
+                    assert_same_report_evidence(en, &es[key]);
+                }
+            }
+            _ => assert_eq!(en, es),
+        }
+    }
+
+    #[test]
+    fn bilingual_report_preserves_numbers_dates_category_roles_and_timeline_coverage() {
+        let data = bilingual_report_fixture();
+        let en = build_rule_based_report(&data);
+        let es = build_rule_based_report_for(&data, ReportLanguage::Spanish);
+        assert_same_report_evidence(&en, &es);
+        assert_ne!(en["executive_overview"], es["executive_overview"]);
+        assert_eq!(es["overall_health"], "Se observaron bloques sostenidos");
+        assert_eq!(
+            es["health_breakdown"][0]["status"],
+            "Elegible para trabajo sostenido"
+        );
+        assert_eq!(es["health_breakdown"][1]["status"], "Sin clasificar");
+        assert_eq!(es["health_breakdown"][2]["status"], "Trabajo de contexto");
+        assert_eq!(es["health_breakdown"][3]["status"], "Trabajo de contexto");
+        assert_eq!(es["health_breakdown"][4]["status"], "Revisar");
+        assert_eq!(es["health_breakdown"][5]["status"], "Incierto");
+        for (en, es) in en["health_breakdown"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip(es["health_breakdown"].as_array().unwrap())
+        {
+            assert_eq!(en["element"], es["element"]);
+        }
+        let progress = es["work_progress"].as_array().unwrap();
+        assert!(progress
+            .first()
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("2026-09-30"));
+        assert!(progress
+            .iter()
+            .any(|item| item.as_str().unwrap().contains("2026-09-01")));
+        assert!(progress
+            .iter()
+            .any(|item| item.as_str().unwrap().contains("Draft María 数据 7")));
+        assert_eq!(es["observed_work"].as_array().unwrap().len(), 2);
+        assert!(es["observed_work"][1]
+            .as_str()
+            .unwrap()
+            .contains("registradas"));
+    }
+
+    #[test]
+    fn bilingual_report_maps_selected_subsets_in_model_order_without_reranking() {
+        let data = bilingual_report_fixture();
+        let en = build_rule_based_report(&data);
+        let es = build_rule_based_report_for(&data, ReportLanguage::Spanish);
+        let mut indices = serde_json::Map::new();
+        for (key, value) in en.as_object().unwrap() {
+            if let Some(items) = value.as_array().filter(|items| items.len() > 1) {
+                indices.insert(key.clone(), serde_json::json!([items.len() - 1, 0]));
+            }
+        }
+        let selected =
+            apply_grounded_selection(&en, &serde_json::json!({"selected_indices": indices}))
+                .unwrap();
+        let payload = build_localized_report(&selected, &data);
+        assert_eq!(payload["en"], selected);
+        for (key, choices) in &indices {
+            let choices = choices.as_array().unwrap();
+            for (position, index) in choices.iter().enumerate() {
+                assert_eq!(
+                    payload["es"][key][position],
+                    es[key][index.as_u64().unwrap() as usize]
+                );
+            }
+        }
+        assert_same_report_evidence(&payload["en"], &payload["es"]);
+    }
+
+    #[test]
+    fn bilingual_report_localizes_pipeline_aliases_and_preserves_metadata() {
+        let data = bilingual_report_fixture();
+        let mut selected = build_rule_based_report(&data);
+        selected["project_name"] = selected["work_summary"].clone();
+        selected["work_summary"] = selected["executive_overview"].clone();
+        selected["timeline_caption"] = selected["work_progress"][0].clone();
+        selected["report_meta"] = build_report_meta(&data);
+        selected["focus_target"] = selected["report_meta"]["focus_target"].clone();
+        let payload = build_localized_report(&selected, &data);
+        let expected = build_rule_based_report_for(&data, ReportLanguage::Spanish);
+        assert_eq!(
+            payload["es"]["work_summary"],
+            expected["executive_overview"]
+        );
+        assert_eq!(payload["es"]["project_name"], expected["work_summary"]);
+        assert_eq!(
+            payload["es"]["timeline_caption"],
+            expected["work_progress"][0]
+        );
+        assert_eq!(
+            payload["es"]["report_meta"]["period_name"],
+            "Trabajo · Analysis"
+        );
+        for key in [
+            "focus_target",
+            "tracked_hours",
+            "deep_focus_hours",
+            "activity_count",
+            "period_label",
+        ] {
+            assert_eq!(
+                payload["en"]["report_meta"][key],
+                payload["es"]["report_meta"][key]
+            );
+        }
+        assert_same_report_evidence(&payload["en"], &payload["es"]);
+    }
+
+    #[test]
+    fn bilingual_report_preserves_user_content_unicode_whitespace_and_template_words() {
+        let description = format!("María  数据: Review General work.\n{}", "X".repeat(120));
+        let mut data = bilingual_report_fixture();
+        data["category_breakdown"][0]["category"] = serde_json::json!("General work");
+        data["ticket_breakdown"] = serde_json::json!([]);
+        data["sample_activities"] = serde_json::json!([
+            {"category": "Self  数据", "description": description}
+        ]);
+        let mut report = build_rule_based_report(&data);
+        repair_learning_fields(&mut report, &data);
+        report["report_meta"] = build_report_meta(&data);
+        report["focus_target"] = serde_json::json!("General work");
+        let payload = build_localized_report(&report, &data);
+        for language in ["en", "es"] {
+            assert_eq!(payload[language]["focus_target"], "General work");
+            assert_eq!(
+                payload[language]["report_meta"]["focus_target"],
+                "General work"
+            );
+            assert_eq!(
+                payload[language]["health_breakdown"][0]["element"],
+                "General work"
+            );
+            assert_eq!(
+                payload[language]["observed_work"][0],
+                format!("Self  数据 — {description}")
+            );
+            assert!(payload[language]["lessons_learned"][1]["body"]
+                .as_str()
+                .unwrap()
+                .starts_with("General work"));
+        }
+        // A field containing arbitrary user text is not matched against a
+        // different field's template, even if the text is identical.
+        assert_eq!(
+            matching_report_copy(
+                &serde_json::json!({"user_note": "Self"}),
+                &serde_json::json!({"status": "Self"}),
+                &serde_json::json!({"status": "Yo"}),
+            ),
+            serde_json::json!({"user_note": "Self"})
+        );
+    }
+
+    #[test]
+    fn bilingual_report_learning_repair_maps_only_verified_lessons_and_recommendations() {
+        let data = bilingual_report_fixture();
+        let mut selected = serde_json::json!({
+            "lessons_learned": [{"title": "Invented", "body": "Finished all work"}],
+            "recommendations": ["Invented advice"],
+        });
+        repair_learning_fields(&mut selected, &data);
+        let payload = build_localized_report(&selected, &data);
+        assert_eq!(
+            payload["en"]["lessons_learned"],
+            serde_json::json!(build_lessons_learned(&data))
+        );
+        assert_eq!(
+            payload["es"]["lessons_learned"],
+            serde_json::json!(build_lessons_learned_for(&data, ReportLanguage::Spanish))
+        );
+        assert_eq!(
+            payload["es"]["recommendations"],
+            serde_json::json!(default_recommendations_for(&data, ReportLanguage::Spanish))
+        );
+        assert!(!payload.to_string().contains("Invented"));
+    }
+
+    #[test]
+    fn bilingual_empty_report_keeps_missing_data_distinct_from_productivity() {
+        let data = serde_json::json!({
+            "period_start": "2026-09-01", "period_end": "2026-09-30",
+            "total_seconds": 0, "total_hours": 0.0,
+        });
+        let mut selected = build_rule_based_report(&data);
+        repair_learning_fields(&mut selected, &data);
+        let payload = build_localized_report(&selected, &data);
+        assert_eq!(
+            payload["es"]["overall_health"],
+            "Sin señal de trabajo sostenido"
+        );
+        assert!(payload["es"]["executive_overview"]
+            .as_str()
+            .unwrap()
+            .contains("no se registró actividad"));
+        assert!(payload["es"]["lessons_learned"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            payload["es"]["health_breakdown"][0]["element"],
+            "Seguimiento"
+        );
+        assert_eq!(
+            payload["es"]["recommendations"].as_array().unwrap().len(),
+            1
+        );
+        assert_same_report_evidence(&payload["en"], &payload["es"]);
+    }
 
     #[test]
     fn month_report_context_keeps_full_timeline_and_spread_samples() {
