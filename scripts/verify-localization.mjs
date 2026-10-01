@@ -34,7 +34,7 @@ try{for(const [system,override,expected,nativeSystem,size]of[['es-ES',null,'es',
  assert.match(await page.locator('#languageSettingsCard').innerText(),changed==='es'?/Idioma de la aplicación/:/App language/);
  assert.equal(await page.locator('#sessionFeedback').inputValue(),'Keep this unsent draft');assert.equal(await page.locator('#sessionIntention').inputValue(),'Review and User custom task: Español & English');
  assert.match(await page.locator('#sessionPlanBlocks').innerText(),/Review/);assert.match(await page.locator('#sessionPlanBlocks').innerText(),/User custom task: Español & English/);
- await page.screenshot({path:resolve(output,`settings-switch-${system}.png`)});
+ await page.locator('#languageSettingsCard').scrollIntoViewIfNeeded();await page.screenshot({path:resolve(output,`settings-switch-${system}.png`)});
  const badWrites=await page.evaluate(()=>window.testCalls.filter(c=>['confirm_session_plan','start_monitoring','stop_monitoring','cancel_session_plan'].includes(c.command)));assert.deepEqual(badWrites,[]);
  assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>performance.getEntriesByType('navigation').length),navigationBefore);assert.equal((await page.locator('#todayTrackingState').textContent()).trim(),changed==='es'?'En directo':'Live');
  await page.locator('#languageSelect').selectOption('system');assert.equal(await page.locator('html').getAttribute('lang'),nativeSystem);await page.locator('#languageSelect').selectOption(changed);
