@@ -8,6 +8,7 @@ mod external_calendar;
 mod messaging;
 mod projects;
 mod registry;
+pub mod session_plan;
 pub mod state;
 mod system_quiet;
 
@@ -578,6 +579,7 @@ pub fn restore_on_exit() {
 }
 
 pub fn clear_pending_after_data_deletion() {
+    session_plan::clear_pending();
     if let Ok(mut pending) = PENDING.lock() {
         pending.clear();
     }
