@@ -19,13 +19,21 @@ jobs:
         shell: pwsh
         run: ./scripts/stage-msvc-runtime.ps1
 
-      - name: Repeat staging with Tauri's Windows PowerShell 5.1 host
+      - name: Repeat staging through Tauri's cmd.exe and Windows PowerShell 5.1 hosts
         shell: pwsh
         working-directory: apps/agent
         run: |
-          & powershell.exe -NoProfile -File ../../scripts/stage-msvc-runtime.ps1
+          & cmd.exe /d /s /c "powershell.exe -NoProfile -File ../../scripts/stage-msvc-runtime.ps1"
           if ($LASTEXITCODE -ne 0) {
             throw "Windows PowerShell staging failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Verify staging without the Get-FileHash function
+        shell: pwsh
+        run: |
+          & powershell.exe -NoProfile -File ./scripts/check-runtime-staging.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Hash regression failed with exit code $LASTEXITCODE"
           }
 
       - name: Verify both executable runtime directories
