@@ -19,4 +19,9 @@ foreach ($name in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
         throw "NSIS does not install $name next to llama-server.exe."
     }
 }
+foreach ($name in @('manifest.json', 'worker.js', 'options.html', 'options.js', 'blocked.html', 'blocked.js', 'focus.css', 'icon16.png', 'icon48.png', 'icon128.png')) {
+    if (-not $installerScript.Contains("/oname=browser-extension\$name")) {
+        throw "NSIS does not install browser-extension/$name."
+    }
+}
 Write-Host 'NSIS includes the signed Visual C++ runtime next to app.exe and llama-server.exe.'

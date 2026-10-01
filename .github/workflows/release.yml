@@ -140,7 +140,9 @@ jobs:
         run: node scripts/check-local-vision.mjs
 
       - name: Renderer tests
-        run: pnpm --filter @flowsight/agent test:renderer
+        run: |
+          node scripts/verify-release-assets.mjs
+          pnpm --filter @flowsight/agent test:renderer
 
       - name: Local review queue privacy tests
         run: python -m unittest discover -s tools/finetune -p 'test_*.py'

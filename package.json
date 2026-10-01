@@ -1,6 +1,6 @@
 {
   "name": "flowsight-ai",
-  "version": "5.0.12",
+  "version": "5.0.13",
   "private": true,
   "description": "FlowSight AI - Privacy-first work activity monitor with local AI",
   "scripts": {
