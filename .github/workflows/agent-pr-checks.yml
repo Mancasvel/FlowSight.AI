@@ -123,6 +123,8 @@ jobs:
             if (-not $ready) { throw 'Renderer did not become available.' }
             node scripts/verify-session-onboarding.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Setup and planner renderer checks failed.' }
+            node scripts/verify-recorded-time.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Recorded time consistency checks failed.' }
             node scripts/verify-total-focus-extension.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Actual browser extension focus checks failed.' }
             node scripts/verify-dark-button-hovers.mjs
