@@ -1,3 +1,5 @@
+import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, localizeStatus, setLanguagePreference } from './i18n.mjs';
+setLanguagePreference('en',{persist:false});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -16,6 +18,7 @@ function createHarness({ monitoring = true, paused = false, invoke } = {}) {
     stopTimerBtn: { disabled: false },
   };
   const context = {
+    tr, formatMessage, html, markup, setText, setAttributeText, localizeStatus,
     isMonitoring: monitoring,
     isPaused: paused,
     trackingTransitionInProgress: false,

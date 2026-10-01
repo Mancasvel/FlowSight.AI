@@ -14,6 +14,7 @@ mod insights_local;
 #[cfg(desktop)]
 mod install_health;
 mod jira;
+mod language;
 mod linear;
 mod llama_port;
 mod llama_windows_job;
@@ -65,6 +66,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![
+            language::get_language_preference,
+            language::set_language_preference,
             initialize_agent,
             get_config,
             update_config,
@@ -163,6 +166,7 @@ pub fn run() {
             desktop_presence::dismiss_desktop_prompt,
         ])
         .setup(|app| {
+            language::initialize();
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_theme(Some(tauri::Theme::Light));
             }

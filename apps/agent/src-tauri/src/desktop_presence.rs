@@ -171,14 +171,26 @@ pub fn setup_tray(app: &mut tauri::App) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 
-    let open = MenuItem::with_id(app, "open", "Open FlowSight", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit FlowSight", true, None::<&str>)?;
+    let open = MenuItem::with_id(
+        app,
+        "open",
+        crate::language::copy("Open FlowSight", "Abrir FlowSight"),
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        crate::language::copy("Quit FlowSight", "Salir de FlowSight"),
+        true,
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
     let icon = app
         .default_window_icon()
         .ok_or(tauri::Error::WindowNotFound)?
         .clone();
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id("flowsight-tray")
         .icon(icon)
         .tooltip("FlowSight")
         .menu(&menu)

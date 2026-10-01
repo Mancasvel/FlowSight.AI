@@ -1,3 +1,4 @@
+import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, getLocale, getLanguage, initializeLocalization } from './i18n.mjs';
 const PAGE_W = 210;
 const LEFT = 18;
 const RIGHT = PAGE_W - LEFT;
@@ -61,7 +62,7 @@ function drawSection(doc, title, y, note = '', minContentHeight = 8) {
 
 function drawNumberedItems(doc, items, y) {
   if (!items.length) {
-    return drawParagraph(doc, 'No specific next move is supported by this period yet. Keep tracking to build a baseline.', y, { color: MUTED }) + 4;
+    return drawParagraph(doc, tr('No specific next move is supported by this period yet. Keep tracking to build a baseline.'), y, { color: MUTED }) + 4;
   }
   items.forEach((item, index) => {
     y = ensureSpace(doc, y, 14);
@@ -88,13 +89,13 @@ function drawDistractionApps(doc, distractions, y) {
     const headingY = y;
     const printableName = /^[\u0020-\u00FF]+$/.test(app.appName)
       ? app.appName
-      : 'App name unavailable in this PDF font - see on-screen report';
+      : tr('App name unavailable in this PDF font - see on-screen report');
     const printableAdvice = printableName === app.appName
       ? app.advice
-      : app.advice.replaceAll(app.appName, 'this app');
+      : app.advice.replaceAll(app.appName, tr('this app'));
     const printableObserved = printableName === app.appName
       ? app.observed
-      : app.observed.replaceAll(app.appName, 'this app');
+      : app.observed.replaceAll(app.appName, tr('this app'));
     y = drawParagraph(doc, printableName, y, {
       x: LEFT, width: WIDTH - 32, size: 9.5, leading: 4.9, weight: 'bold',
     });
@@ -109,7 +110,7 @@ function drawDistractionApps(doc, distractions, y) {
     doc.roundedRect(LEFT, y, Math.max(2, app.percentOfTop / 100 * WIDTH), 2.2, 1, 1, 'F');
     y += 7;
     y = drawParagraph(doc, printableObserved, y, { size: 8.5, leading: 4.4 }) + 1;
-    y = drawParagraph(doc, `Next session: ${printableAdvice}`, y, {
+    y = drawParagraph(doc, formatMessage`Next session: ${printableAdvice}`, y, {
       size: 8.5, leading: 4.4, color: MUTED,
     }) + 5;
   }
@@ -143,8 +144,8 @@ function drawMiniHeading(doc, title, y) {
 
 function drawDayChart(doc, days, y) {
   y = ensureSpace(doc, y, days.length ? 50 : 16);
-  y = drawMiniHeading(doc, 'Activity by day', y);
-  if (!days.length) return drawParagraph(doc, 'No dated activity available.', y, { color: MUTED }) + 5;
+  y = drawMiniHeading(doc, tr('Activity by day'), y);
+  if (!days.length) return drawParagraph(doc, tr('No dated activity available.'), y, { color: MUTED }) + 5;
   y = ensureSpace(doc, y, 43);
   const gap = 4;
   const barW = (WIDTH - (days.length - 1) * gap) / days.length;
@@ -178,8 +179,8 @@ function drawCategoryChart(doc, categories, y) {
   const estimatedHeight = 10 + categories.slice(0, 6).reduce((sum, category) =>
     sum + Math.max(8, textLines(doc, category.label, 45).length * 4.1 + 1) + 2, 0);
   y = ensureSpace(doc, y, Math.min(estimatedHeight, 220));
-  y = drawMiniHeading(doc, 'Time by category', y);
-  if (!categories.length) return drawParagraph(doc, 'No category time recorded.', y, { color: MUTED }) + 5;
+  y = drawMiniHeading(doc, tr('Time by category'), y);
+  if (!categories.length) return drawParagraph(doc, tr('No category time recorded.'), y, { color: MUTED }) + 5;
   for (const category of categories.slice(0, 6)) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -240,8 +241,8 @@ function drawEvidenceColumns(doc, model, y) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...INK);
-  doc.text('Activity by day', LEFT, y);
-  doc.text('Time by category', rightX, y);
+  doc.text(tr('Activity by day'), LEFT, y);
+  doc.text(tr('Time by category'), rightX, y);
 
   const chartTop = y + 10;
   const chartBottom = chartTop + 25;
@@ -268,7 +269,7 @@ function drawEvidenceColumns(doc, model, y) {
   });
 
   if (!model.categories.length) {
-    drawParagraph(doc, 'No category time recorded.', chartTop + 5, {
+    drawParagraph(doc, tr('No category time recorded.'), chartTop + 5, {
       x: rightX, width: columnW, size: 8, leading: 4.2, color: MUTED,
     });
   }
@@ -309,7 +310,7 @@ function drawReportHeader(doc, model) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text(model.period || 'Current period', LEFT, 47);
+  doc.text(model.period || tr('Current period'), LEFT, 47);
   return drawParagraph(doc, `${model.userName}  ·  ${model.status}`, 56, {
     size: 8.2, leading: 4.4, color: MUTED,
   }) + 8;
@@ -318,9 +319,9 @@ function drawReportHeader(doc, model) {
 function drawMetrics(doc, model, y) {
   y = ensureSpace(doc, y, 30);
   const values = [
-    [model.totalHours + 'h', 'TRACKED TIME'],
-    [model.focusHours + 'h', `SUSTAINED FOCUS · ${model.focusSessions} BLOCKS`],
-    [`${model.activeDays}/${model.periodDays}`, 'DAYS WITH ACTIVITY'],
+    [model.totalHours + 'h', tr('TRACKED TIME')],
+    [model.focusHours + 'h', formatMessage`SUSTAINED FOCUS · ${model.focusSessions} BLOCKS`],
+    [`${model.activeDays}/${model.periodDays}`, tr('DAYS WITH ACTIVITY')],
   ];
   const columnW = WIDTH / 3;
   values.forEach(([value, label], index) => {
@@ -342,7 +343,7 @@ function drawMetrics(doc, model, y) {
 }
 
 function drawWorkAreas(doc, rows, y) {
-  if (!rows.length) return drawParagraph(doc, 'No work-area detail was generated.', y, { color: MUTED }) + 4;
+  if (!rows.length) return drawParagraph(doc, tr('No work-area detail was generated.'), y, { color: MUTED }) + 4;
   for (const row of rows) {
     y = ensureSpace(doc, y, 15);
     doc.setFont('helvetica', 'bold');
@@ -365,7 +366,7 @@ function drawWorkAreas(doc, rows, y) {
     }
     if (row.notes) y = drawParagraph(doc, row.notes, y, { size: 8.6, leading: 4.6 });
     if (row.owner && row.owner.toLowerCase() !== 'self') {
-      y = drawParagraph(doc, `Owner: ${row.owner}`, y, { size: 7.5, leading: 4, color: MUTED });
+      y = drawParagraph(doc, formatMessage`Owner: ${row.owner}`, y, { size: 7.5, leading: 4, color: MUTED });
     }
     y += 1;
   }
@@ -387,10 +388,10 @@ function drawCompactDetails(doc, model, y) {
     doc.setFontSize(8.3);
     return list.reduce((sum, item) => sum + textLines(doc, item, columnW - 7).length * 4.3 + 2, 0);
   };
-  const leftHeight = 15 + itemHeight(model.observedWork, 'No labelled work observed.')
+  const leftHeight = 15 + itemHeight(model.observedWork, tr('No labelled work observed.'))
     + (model.highlights.length ? 7 + itemHeight(model.highlights) : 0);
-  const rightHeight = 15 + 7 + itemHeight(model.knownIssues, 'None flagged.')
-    + 7 + itemHeight(model.potentialRisks, 'None flagged.');
+  const rightHeight = 15 + 7 + itemHeight(model.knownIssues, tr('None flagged.'))
+    + 7 + itemHeight(model.potentialRisks, tr('None flagged.'));
   const height = Math.max(leftHeight, rightHeight) + 5;
   if (height > 190) return null;
   y = ensureSpace(doc, y, height);
@@ -428,17 +429,17 @@ function drawCompactDetails(doc, model, y) {
     return at;
   };
 
-  title('Work observed', LEFT);
-  title('Watchpoints', rightX);
-  let leftY = items(model.observedWork, 'No labelled work observed.', LEFT, y + 16);
+  title(tr('Work observed'), LEFT);
+  title(tr('Watchpoints'), rightX);
+  let leftY = items(model.observedWork, tr('No labelled work observed.'), LEFT, y + 16);
   if (model.highlights.length) {
-    leftY = subheading('Highlights', LEFT, leftY + 1);
+    leftY = subheading(tr('Highlights'), LEFT, leftY + 1);
     leftY = items(model.highlights, '', LEFT, leftY);
   }
-  let rightY = subheading('Known issues', rightX, y + 16);
-  rightY = items(model.knownIssues, 'None flagged.', rightX, rightY);
-  rightY = subheading('Potential risks', rightX, rightY + 1);
-  rightY = items(model.potentialRisks, 'None flagged.', rightX, rightY);
+  let rightY = subheading(tr('Known issues'), rightX, y + 16);
+  rightY = items(model.knownIssues, tr('None flagged.'), rightX, rightY);
+  rightY = subheading(tr('Potential risks'), rightX, rightY + 1);
+  rightY = items(model.potentialRisks, tr('None flagged.'), rightX, rightY);
   return Math.max(leftY, rightY) + 3;
 }
 
@@ -458,7 +459,7 @@ function drawCompactLessons(doc, lessons, y) {
   });
   const height = Math.max(...measured.map((lesson) => lesson.height));
   if (height > 40) return null;
-  y = drawSection(doc, 'What this period taught us', y, '', height);
+  y = drawSection(doc, tr('What this period taught us'), y, '', height);
   measured.forEach((lesson, index) => {
     const x = index ? rightX : LEFT;
     let lineY = y;
@@ -490,8 +491,8 @@ function addFooters(doc, model) {
     doc.setFontSize(7);
     doc.setTextColor(...MUTED);
     doc.text(model.aiPowered
-      ? 'Local data · Local AI narrative · Interpret with context'
-      : 'Local data · Rule-based narrative · Interpret with context', LEFT, 290);
+      ? tr('Local data · Local AI narrative · Interpret with context')
+      : tr('Local data · Rule-based narrative · Interpret with context'), LEFT, 290);
     doc.text(`${page} / ${pageCount}`, RIGHT, 290, { align: 'right' });
   }
 }
@@ -501,45 +502,45 @@ export function renderStatusReportPdf(doc, model) {
   y = drawParagraph(doc, model.summary, y, { size: 10, leading: 5.5 }) + 7;
   y = drawMetrics(doc, model, y);
 
-  y = drawSection(doc, 'What to do next', y, 'Actions suggested by the recorded evidence', 16);
+  y = drawSection(doc, tr('What to do next'), y, tr('Actions suggested by the recorded evidence'), 16);
   y = drawNumberedItems(doc, model.actions, y);
 
-  y = drawSection(doc, 'Attention detours', y,
-    'Observed visits and returns between work screens',
+  y = drawSection(doc, tr('Attention detours'), y,
+    tr('Observed visits and returns between work screens'),
     model.distractions.apps.length ? 35 : 8);
   y = drawDistractionApps(doc, model.distractions, y);
 
-  y = drawSection(doc, model.evidenceTitle, y, 'Recorded time, not a productivity score', 54);
+  y = drawSection(doc, model.evidenceTitle, y, tr('Recorded time, not a productivity score'), 54);
   y = drawEvidenceColumns(doc, model, y);
   if (model.timelineCaption) y = drawParagraph(doc, model.timelineCaption, y, { size: 8.5, leading: 4.5, color: MUTED }) + 6;
 
-  y = drawSection(doc, 'How to read the signal', y, '', 20);
-  y = drawParagraph(doc, model.healthNotes || 'No additional interpretation was generated.', y, { size: 9, leading: 4.8 }) + 4;
-  if (model.focusTarget) y = drawParagraph(doc, `Focus target: ${model.focusTarget}`, y, { size: 8.8, leading: 4.7 }) + 4;
+  y = drawSection(doc, tr('How to read the signal'), y, '', 20);
+  y = drawParagraph(doc, model.healthNotes || tr('No additional interpretation was generated.'), y, { size: 9, leading: 4.8 }) + 4;
+  if (model.focusTarget) y = drawParagraph(doc, formatMessage`Focus target: ${model.focusTarget}`, y, { size: 8.8, leading: 4.7 }) + 4;
 
-  y = drawSection(doc, 'Work-area detail', y, 'Specific observations behind the review', 16);
+  y = drawSection(doc, tr('Work-area detail'), y, tr('Specific observations behind the review'), 16);
   y = drawWorkAreas(doc, model.breakdown, y);
 
   const compactDetailsEnd = drawCompactDetails(doc, model, y);
   if (compactDetailsEnd == null) {
-    y = drawSection(doc, 'Work observed', y, '', 16);
-    y = drawSimpleItems(doc, model.observedWork, y, 'No labelled work was observed.');
+    y = drawSection(doc, tr('Work observed'), y, '', 16);
+    y = drawSimpleItems(doc, model.observedWork, y, tr('No labelled work was observed.'));
     if (model.highlights.length) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.8);
       const highlightHeight = 9 + model.highlights.reduce((sum, item) =>
         sum + textLines(doc, item, WIDTH - 5).length * 4.7 + 2, 0);
       y = ensureSpace(doc, y, Math.min(highlightHeight, 190));
-      y = drawMiniHeading(doc, 'Highlights', y);
+      y = drawMiniHeading(doc, tr('Highlights'), y);
       y = drawSimpleItems(doc, model.highlights, y, '');
     }
 
     y = ensureSpace(doc, y, 55);
-    y = drawSection(doc, 'Watchpoints', y, '', 30);
-    y = drawMiniHeading(doc, 'Known issues', y);
-    y = drawSimpleItems(doc, model.knownIssues, y, 'None flagged.');
-    y = drawMiniHeading(doc, 'Potential risks', y);
-    y = drawSimpleItems(doc, model.potentialRisks, y, 'None flagged.');
+    y = drawSection(doc, tr('Watchpoints'), y, '', 30);
+    y = drawMiniHeading(doc, tr('Known issues'), y);
+    y = drawSimpleItems(doc, model.knownIssues, y, tr('None flagged.'));
+    y = drawMiniHeading(doc, tr('Potential risks'), y);
+    y = drawSimpleItems(doc, model.potentialRisks, y, tr('None flagged.'));
   } else {
     y = compactDetailsEnd;
   }
@@ -557,7 +558,7 @@ export function renderStatusReportPdf(doc, model) {
       return sum + titleHeight + textLines(doc, lesson.body, WIDTH).length * 4.7 + 4;
     }, 0);
     y = ensureSpace(doc, y, Math.min(lessonHeight, 190));
-    y = drawSection(doc, 'What this period taught us', y, '', 15);
+    y = drawSection(doc, tr('What this period taught us'), y, '', 15);
     if (!model.lessons.length) {
       y = drawParagraph(doc, model.lessonEmptyMessage, y, { color: MUTED }) + 3;
     } else {

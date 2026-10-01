@@ -3770,6 +3770,17 @@
           <h1>You</h1>
           <p>Make FlowSight work the way you do.</p>
         </div>
+        <div class="card" id="languageSettingsCard">
+          <div class="card-header"><div class="card-title">Language</div></div>
+          <label class="label" for="languageSelect">App language</label>
+          <select class="select" id="languageSelect">
+            <option value="system">Use system language</option>
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+          <p class="privacy-detail profile-field-note">Language changes immediately. Your current tracking session and drafts stay open.</p>
+          <p id="languageStatus" class="profile-form-status" role="status" aria-live="polite"></p>
+        </div>
         <div class="card" id="profileAccountCard">
           <div class="card-header">
             <div class="card-header-title-row">
@@ -4184,11 +4195,11 @@
 
   <!-- SETUP OVERLAY -->
   <div id="setupOverlay" class="setup-overlay" hidden role="status" aria-live="polite">
-    <div class="setup-status" id="setupStatus">Configurando entorno de IA...</div>
+    <div class="setup-status" id="setupStatus">Preparing local AI…</div>
     <div class="progress-container">
       <div class="progress-bar" id="setupProgress"></div>
     </div>
-    <div class="setup-subtext" id="setupSubtext">Esto tomará unos minutos</div>
+    <div class="setup-subtext" id="setupSubtext">This may take a few minutes</div>
     <div class="setup-actions" id="setupActions" hidden>
       <button type="button" id="setupRetryBtn">Retry download</button>
       <button type="button" id="setupDismissBtn">Later</button>
@@ -4204,7 +4215,8 @@
     };
   </script>
 
-  <script type="module">
+  <script type="module">import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, getLocale, getLanguage, initializeLocalization, localizeStatus, connectNativeLocalization, categoryLabel } from './i18n.mjs';
+
     console.log('[FlowSight] Script starting...');
 
     import { invoke } from '@tauri-apps/api/core';
@@ -4250,6 +4262,7 @@
       taskSharePercent,
     } from './insights-charts.mjs';
 
+    initializeLocalization();
     console.log('[FlowSight] Imports loaded successfully');
 
     document.getElementById('showMcpConnectionBtn')?.addEventListener('click', async () => {
@@ -4260,7 +4273,7 @@
         if (pathField) pathField.value = connection.command || '';
         if (details) details.hidden = false;
       } catch (error) {
-        showToast('Could not find the MCP command: ' + String(error), 'error');
+        showToast(('Could not find the MCP command: ' + String(error)), 'error');
       }
     });
     document.getElementById('copyMcpCommandBtn')?.addEventListener('click', async () => {
@@ -4271,12 +4284,12 @@
           await navigator.clipboard.writeText(pathField.value);
         } else {
           pathField.select();
-          if (!document.execCommand('copy')) throw new Error('Clipboard unavailable');
+          if (!document.execCommand('copy')) throw new Error(tr('Clipboard unavailable'));
         }
-        showToast('MCP command path copied');
+        showToast(tr('MCP command path copied'));
       } catch {
         pathField.select();
-        showToast('Select and copy the command path manually', 'error');
+        showToast(tr('Select and copy the command path manually'), 'error');
       }
     });
 
@@ -4297,8 +4310,8 @@
         try {
           const maximized = await win.isMaximized();
           maximizeBtn.classList.toggle('is-maximized', maximized);
-          maximizeBtn.title = maximized ? 'Restore' : 'Maximize';
-          maximizeBtn.setAttribute('aria-label', maximized ? 'Restore' : 'Maximize');
+          setAttributeText(maximizeBtn, 'title', () => ((maximized ? tr('Restore') : tr('Maximize'))));
+          maximizeBtn.setAttribute('aria-label', (maximized ? tr('Restore') : tr('Maximize')));
         } catch (_) { /* ignore */ }
       }
 
@@ -4357,16 +4370,16 @@
       const cls = `icon-svg${spin ? ' icon-spin' : ''}`;
       const s = `width="${size}" height="${size}"`;
       const icons = {
-        flame: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.5-1.5-3-2-5-1.5 1-2.5 3-2.5 5a4 4 0 1 0 8 0c0-2-.5-4-2-5-.5 2-2 3.5-2 5a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
-        hourglass: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>`,
-        refresh: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
-        loader: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`,
-        logout: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
-        check: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><polyline points="20 6 9 17 4 12"/></svg>`,
-        x: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
-        smartphone: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
-        target: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
-        chevronRight: `<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><polyline points="9 18 15 12 9 6"/></svg>`,
+        flame: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.5-1.5-3-2-5-1.5 1-2.5 3-2.5 5a4 4 0 1 0 8 0c0-2-.5-4-2-5-.5 2-2 3.5-2 5a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+        hourglass: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>`,
+        refresh: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`,
+        loader: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`,
+        logout: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+        check: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><polyline points="20 6 9 17 4 12"/></svg>`,
+        x: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+        smartphone: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`,
+        target: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+        chevronRight: html`<svg class="${cls}" ${s} viewBox="0 0 24 24" ${SVG_STROKE}><polyline points="9 18 15 12 9 6"/></svg>`,
       };
       return icons[name] || '';
     }
@@ -4421,13 +4434,13 @@
       const elapsed = formatCompactDuration(progress.elapsedSeconds);
       const total = formatCompactDuration(progress.totalSeconds);
       const label = document.getElementById('todayCalendarProgressLabel');
-      if (label) label.textContent = `${elapsed} / ${total}`;
+      if (label) setText(label, () => (`${elapsed} / ${total}`));
       const fill = document.getElementById('todayCalendarProgress');
       if (fill) fill.style.transform = `scaleX(${progress.fraction})`;
       const track = document.getElementById('todayCalendarProgressTrack');
       if (track) {
         track.setAttribute('aria-valuenow', String(progress.percent));
-        track.setAttribute('aria-valuetext', `${elapsed} elapsed of ${total} scheduled`);
+        track.setAttribute('aria-valuetext', formatMessage`${elapsed} elapsed of ${total} scheduled`);
       }
     }
 
@@ -4438,8 +4451,8 @@
       const manualLabel = document.getElementById('todayManualTaskLabel');
       const manualInput = document.getElementById('manualTask');
       if (integration) integration.hidden = !canIntegrate;
-      if (manualLabel) manualLabel.textContent = hasEvent ? 'Add context to this event (optional)' : 'Task description';
-      if (manualInput) manualInput.placeholder = hasEvent ? 'What are you doing during this event?' : 'What are you working on?';
+      if (manualLabel) setText(manualLabel, () => ((hasEvent ? tr('Add context to this event (optional)') : tr('Task description'))));
+      if (manualInput) setAttributeText(manualInput, 'placeholder', () => ((hasEvent ? tr('What are you doing during this event?') : tr('What are you working on?'))));
     }
 
     function renderCalendarStatus() {
@@ -4450,16 +4463,12 @@
         const connected = Boolean(status[`${provider}Connected`]);
         const available = Boolean(status[`${provider}Available`]);
         document.querySelectorAll(`[data-calendar-state="${provider}"]`).forEach((node) => {
-          node.textContent = connected ? 'Connected on this device'
-            : !available ? 'Connection not configured in this build'
-              : calendarConnectPending === provider ? 'Waiting for browser authorization…'
-                : 'Not connected';
+          setText(node, () => ((connected ? tr('Connected on this device') : (!available ? tr('Connection not configured in this build') : ((calendarConnectPending === provider) ? tr('Waiting for browser authorization…') : tr('Not connected'))))));
         });
         document.querySelectorAll(`[data-calendar-connect="${provider}"]`).forEach((button) => {
           button.hidden = connected;
           button.disabled = !licensed || !available || calendarConnectPending === provider;
-          button.title = !licensed ? 'Requires an eligible FlowSight Cloud plan. The one-time local purchase does not include Calendar.'
-            : !available ? `${label} Calendar OAuth is not configured in this build.` : '';
+          setAttributeText(button, 'title', () => ((!licensed ? tr('Requires an eligible FlowSight Cloud plan. The one-time local purchase does not include Calendar.') : (!available ? formatMessage`${label} Calendar OAuth is not configured in this build.` : ''))));
         });
         document.querySelectorAll(`[data-calendar-disconnect="${provider}"]`).forEach((button) => {
           button.hidden = !connected;
@@ -4470,28 +4479,26 @@
         input.disabled = !licensed || !(status.googleConnected || status.microsoftConnected);
       });
       const licenseMessage = document.getElementById('calendarLicenseMessage');
-      if (licenseMessage) licenseMessage.textContent = licensed ? '' : 'Calendar requires an eligible active FlowSight Cloud plan with integrations. The one-time local purchase does not include Cloud integrations.';
+      if (licenseMessage) setText(licenseMessage, () => ((licensed ? '' : tr('Calendar requires an eligible active FlowSight Cloud plan with integrations. The one-time local purchase does not include Cloud integrations.'))));
       const onboardingLicenseMessage = document.getElementById('onboardingCalendarLicenseMessage');
       if (onboardingLicenseMessage) onboardingLicenseMessage.hidden = licensed;
       const event = activeCalendarTask();
       const todayContext = document.getElementById('todayCalendarContext');
       if (todayContext) todayContext.hidden = !event;
       const taskSource = document.getElementById('todayTaskSource');
-      if (taskSource) taskSource.textContent = event ? `Now · ${event.provider === 'google' ? 'Google' : 'Microsoft'} Calendar` : '';
+      if (taskSource) setText(taskSource, () => ((event ? formatMessage`Now · ${event.provider === 'google' ? 'Google' : 'Microsoft'} Calendar` : '')));
       const overlapping = licensed && !event && status.overlapCount > 1;
       const overlap = document.getElementById('todayCalendarOverlap');
       if (overlap) overlap.hidden = !overlapping;
       const idle = document.getElementById('todayCalendarIdle');
       if (idle) {
         idle.hidden = !licensed || !(status.googleConnected || status.microsoftConnected) || Boolean(event) || overlapping;
-        idle.textContent = status.lastError
-          ? 'Calendar is temporarily unavailable. Check the connection in You.'
-          : 'Calendar connected · your current event will appear here automatically.';
+        setText(idle, () => ((status.lastError ? tr('Calendar is temporarily unavailable. Check the connection in You.') : tr('Calendar connected · your current event will appear here automatically.'))));
       }
       if (event) {
-        const time = (value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        document.getElementById('todayCalendarTitle').textContent = event.title;
-        document.getElementById('todayCalendarTime').textContent = `${time(event.startAt)}–${time(event.endAt)}`;
+        const time = (value) => new Date(value).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+        setText(document.getElementById('todayCalendarTitle'), () => (event.title));
+        setText(document.getElementById('todayCalendarTime'), () => (`${time(event.startAt)}–${time(event.endAt)}`));
       }
       const todayOpenButton = document.getElementById('todayCalendarOpenBtn');
       updateCalendarEventProgress();
@@ -4508,14 +4515,9 @@
       }
       syncTodayTaskFields();
       const summary = document.getElementById('calendarSummary');
-      if (summary) summary.textContent = !licensed ? 'Cloud plan required · connect after activation'
-        : status.googleConnected || status.microsoftConnected
-            ? `${status.googleConnected ? 'Google' : ''}${status.googleConnected && status.microsoftConnected ? ' + ' : ''}${status.microsoftConnected ? 'Microsoft' : ''} connected · ${status.autoPublish ? 'mini reports on' : 'mini reports off'}`
-            : 'Connect Google or Microsoft Calendar';
+      if (summary) setText(summary, () => ((!licensed ? tr('Cloud plan required · connect after activation') : ((status.googleConnected || status.microsoftConnected) ? formatMessage`${status.googleConnected ? 'Google' : ''}${status.googleConnected && status.microsoftConnected ? ' + ' : ''}${status.microsoftConnected ? 'Microsoft' : ''} connected · ${status.autoPublish ? tr('mini reports on') : tr('mini reports off')}` : tr('Connect Google or Microsoft Calendar')))));
       const message = document.getElementById('calendarCompanionStatus');
-      if (message) message.textContent = status.lastError || status.lastReport || (status.autoPublish
-        ? 'Automatic recap is on for events you organize while FlowSight is open.'
-        : 'Automatic recap is off. Your calendar stays read-only.');
+      if (message) setText(message, () => (((status.lastError || status.lastReport) || (status.autoPublish ? tr('Automatic recap is on for events you organize while FlowSight is open.') : tr('Automatic recap is off. Your calendar stays read-only.')))));
     }
 
     async function loadCalendarStatus() {
@@ -4526,7 +4528,7 @@
 
     async function connectCalendar(provider) {
       if (!canUseCalendarCompanion()) {
-        showToast('Calendar requires an eligible FlowSight Cloud plan with integrations.', 'error');
+        showToast(tr('Calendar requires an eligible FlowSight Cloud plan with integrations.'), 'error');
         return;
       }
       if (calendarConnectPending) return;
@@ -4534,7 +4536,7 @@
       renderCalendarStatus();
       try {
         await invoke('start_calendar_oauth', { provider });
-        showToast(`Finish ${provider === 'google' ? 'Google' : 'Microsoft'} authorization in your browser.`, 'success');
+        showToast(formatMessage`Finish ${provider === 'google' ? 'Google' : 'Microsoft'} authorization in your browser.`, 'success');
         let attempts = 0;
         clearInterval(calendarConnectionPoll);
         calendarConnectionPoll = setInterval(async () => {
@@ -4546,8 +4548,8 @@
               calendarConnectionPoll = null;
               calendarConnectPending = null;
               renderCalendarStatus();
-              if (status[`${provider}Connected`]) showToast('Calendar connected', 'success');
-              else if (attempts >= 90) showToast('Calendar authorization timed out. Try connecting again.', 'error');
+              if (status[`${provider}Connected`]) showToast(tr('Calendar connected'), 'success');
+              else if (attempts >= 90) showToast(tr('Calendar authorization timed out. Try connecting again.'), 'error');
             }
           } catch (_) { /* the next poll can recover */ }
         }, 2000);
@@ -4567,7 +4569,7 @@
       try {
         await invoke('disconnect_calendar', { provider });
         await loadCalendarStatus();
-        showToast('Calendar disconnected from this device', 'success');
+        showToast(tr('Calendar disconnected from this device'), 'success');
       } catch (error) { showToast(String(error), 'error'); }
     });
 
@@ -4577,7 +4579,7 @@
       try {
         await invoke('set_calendar_auto_publish', { enabled });
         await loadCalendarStatus();
-        showToast(enabled ? 'Calendar mini reports enabled' : 'Calendar mini reports disabled', 'success');
+        showToast((enabled ? tr('Calendar mini reports enabled') : tr('Calendar mini reports disabled')), 'success');
       } catch (error) {
         renderCalendarStatus();
         showToast(String(error), 'error');
@@ -4592,7 +4594,7 @@
     function setNotionIntegrationMessage(message, isError = false) {
       const element = document.getElementById('notionIntegrationMessage');
       if (!element) return;
-      element.textContent = message || '';
+      setText(element, () => ((message || '')));
       element.style.color = isError ? 'hsl(var(--destructive))' : 'hsl(var(--muted-foreground))';
     }
 
@@ -4615,19 +4617,17 @@
       }
 
       const workspace = status.connection?.workspace_name || 'Notion workspace';
-      document.getElementById('notionWorkspaceName').textContent = `Connected to ${workspace}`;
+      setText(document.getElementById('notionWorkspaceName'), () => (formatMessage`Connected to ${workspace}`));
       const destination = (status.destinations || []).find((item) => item.is_default) || null;
       const destinationCopy = destination
         ? `${destination.title} · ${destination.destination_type === 'data_source' ? 'data source' : 'page'} · ${destination.report_mode === 'live_page' ? 'live page' : 'one page per period'}`
         : 'Choose a page or data source shared during authorization.';
-      document.getElementById('notionCurrentDestination').textContent = destinationCopy;
+      setText(document.getElementById('notionCurrentDestination'), () => (destinationCopy));
       document.getElementById('publishNotionReportBtn').disabled = !destination;
       if (destination) document.getElementById('notionReportMode').value = destination.report_mode;
 
       const last = status.last_publication;
-      document.getElementById('notionLastPublication').textContent = last
-        ? `Last published ${last.period_start} to ${last.period_end}${last.published_at ? ` · ${new Date(last.published_at).toLocaleString()}` : ''}`
-        : 'No report published yet.';
+      setText(document.getElementById('notionLastPublication'), () => ((last ? formatMessage`Last published ${last.period_start} to ${last.period_end}${last.published_at ? ` · ${new Date(last.published_at).toLocaleString(getLocale())}` : ''}` : 'No report published yet.')));
       setNotionIntegrationMessage('Notion is connected.');
     }
 
@@ -4717,24 +4717,22 @@
       const button = document.getElementById('searchNotionDestinationsBtn');
       const select = document.getElementById('notionDestinationSelect');
       button.disabled = true;
-      select.innerHTML = '<option value="">Loading accessible destinations…</option>';
+      select.innerHTML = markup('<option value="">Loading accessible destinations…</option>');
       setNotionIntegrationMessage('Loading pages and data sources shared with FlowSight…');
       try {
         const result = await invoke('search_notion_destinations', {
           query: document.getElementById('notionDestinationQuery').value.trim() || null,
         });
         notionSearchResults = result?.destinations || [];
-        select.innerHTML = notionSearchResults.length
-          ? `<option value="">Choose a destination…</option>${notionSearchResults.map((item, index) =>
-            `<option value="${index}">${escapeHtml(item.title)} · ${item.type === 'data_source' ? 'data source' : 'page'}</option>`
-          ).join('')}`
-          : '<option value="">No shared pages found</option>';
+        select.innerHTML = (notionSearchResults.length ? html`<option value="">Choose a destination…</option>${notionSearchResults.map((item, index) =>
+            html`<option value="${index}">${escapeHtml(item.title)} · ${item.type === 'data_source' ? 'data source' : 'page'}</option>`
+          ).join('')}` : markup('<option value="">No shared pages found</option>'));
         setNotionIntegrationMessage(notionSearchResults.length
           ? `${notionSearchResults.length} accessible destination(s) found.`
           : 'No accessible pages found. Share a page with the FlowSight integration in Notion.');
       } catch (error) {
         notionSearchResults = [];
-        select.innerHTML = '<option value="">Could not load destinations</option>';
+        select.innerHTML = markup('<option value="">Could not load destinations</option>');
         setNotionIntegrationMessage(String(error), true);
       } finally {
         button.disabled = false;
@@ -4849,7 +4847,7 @@
         isPaidActive()
       );
       if (allowed) return true;
-      showToast(message || 'This feature requires an Individual or Team license.', 'error', 4500);
+      showToast((message || tr('This feature requires an Individual or Team license.')), 'error', 4500);
       if (authSession) {
         switchTab('tabProfile');
         document.getElementById('profileLicenseCode')?.focus();
@@ -4862,7 +4860,7 @@
     function setLicenseActivationStatus(message, isError = false) {
       const el = document.getElementById('licenseActivationStatus');
       if (!el) return;
-      el.textContent = message || '';
+      setText(el, () => ((message || '')));
       el.style.color = isError ? 'hsl(var(--destructive))' : 'hsl(var(--muted-foreground))';
     }
 
@@ -4891,13 +4889,13 @@
     async function handleClaimLicense() {
       const code = document.getElementById('profileLicenseCode')?.value?.trim();
       if (!code) {
-        setLicenseActivationStatus('Enter your license code (FS-XXXX-XXXX).', true);
+        setLicenseActivationStatus(tr('Enter your license code (FS-XXXX-XXXX).'), true);
         return;
       }
 
       const btn = document.getElementById('claimLicenseBtn');
       btn.disabled = true;
-      setLicenseActivationStatus('Activating license...');
+      setLicenseActivationStatus(tr('Activating license...'));
 
       try {
         const supabase = getSupabaseClient();
@@ -4912,15 +4910,15 @@
         await persistEntitlements();
 
         if (!isPaidActive()) {
-          throw new Error('License could not be activated. Check your code and try again.');
+          throw new Error(tr('License could not be activated. Check your code and try again.'));
         }
 
         setLicenseActivationStatus('');
         document.getElementById('profileLicenseCode').value = '';
         await loadUserTeams();
-        showToast('License activated', 'success');
+        showToast(tr('License activated'), 'success');
       } catch (error) {
-        const message = error?.message || 'Could not activate license.';
+        const message = error?.message || tr('Could not activate license.');
         setLicenseActivationStatus(message, true);
         showToast(message, 'error', 4500);
       } finally {
@@ -4949,19 +4947,19 @@
 
       if (!isPaidActive()) {
         if (hasCloudAccountSession()) {
-          badge.textContent = 'Cloud account';
+          setText(badge, () => (tr('Cloud account')));
           badge.classList.add('plan-badge-free');
           if (activateBtn) {
             activateBtn.style.display = '';
-            activateBtn.textContent = 'Activate license';
+            setText(activateBtn, () => (tr('Activate license')));
           }
           if (logoutBtn) logoutBtn.style.display = '';
         } else {
-          badge.textContent = 'Free (Local)';
+          setText(badge, () => (tr('Free (Local)')));
           badge.classList.add('plan-badge-free');
           if (activateBtn) {
             activateBtn.style.display = '';
-            activateBtn.textContent = 'Activate cloud';
+            setText(activateBtn, () => (tr('Activate cloud')));
           }
           if (logoutBtn) logoutBtn.style.display = 'none';
         }
@@ -4978,7 +4976,7 @@
       if (licenseCard) licenseCard.style.display = 'none';
 
       const plan = currentEntitlements.plan || 'paid';
-      badge.textContent = plan === 'individual' ? 'Individual Pro' : plan === 'team' ? 'Team' : 'Licensed';
+      setText(badge, () => (((plan === 'individual') ? 'Individual Pro' : ((plan === 'team') ? tr('Team') : tr('Licensed')))));
       badge.classList.add(plan === 'individual' ? 'plan-badge-individual' : 'plan-badge-team');
       if (activateBtn) activateBtn.style.display = 'none';
       if (logoutBtn) logoutBtn.style.display = '';
@@ -5015,16 +5013,16 @@
     function resetLoginSplashCopy() {
       const title = document.getElementById('loginTitle');
       const sub = document.getElementById('loginSubtitle');
-      if (title) title.textContent = 'Welcome to FlowSight.';
-      if (sub) sub.textContent = 'Understand your own workflows.';
+      if (title) setText(title, () => (tr('Welcome to FlowSight.')));
+      if (sub) setText(sub, () => (tr('Understand your own workflows.')));
     }
 
     function showCloudActivationPanel(mode = 'cloud') {
       const title = document.getElementById('loginTitle');
       const sub = document.getElementById('loginSubtitle');
       if (mode === 'cloud') {
-        if (title) title.textContent = 'Activate cloud features';
-        if (sub) sub.textContent = 'Sign in, then activate your license in Profile.';
+        if (title) setText(title, () => (tr('Activate cloud features')));
+        if (sub) setText(sub, () => (tr('Sign in, then activate your license in Profile.')));
       } else {
         resetLoginSplashCopy();
       }
@@ -5040,8 +5038,8 @@
     function showFreeProfileState() {
       currentUser = null;
       authSession = null;
-      document.getElementById('userName').textContent = 'Guest';
-      document.getElementById('userEmail').textContent = 'Free local mode';
+      setText(document.getElementById('userName'), () => (tr('Guest')));
+      setText(document.getElementById('userEmail'), () => (tr('Free local mode')));
       const avatar = document.getElementById('userAvatar');
       if (avatar) {
         avatar.style.display = 'none';
@@ -5054,10 +5052,10 @@
 
     function reportRuntimeError(error) {
       console.error('[FlowSight] Runtime error:', error);
-      const message = error?.message || String(error || 'Unexpected app error');
+      const message = error?.message || String(error || tr('Unexpected app error'));
       const loginErrorEl = document.getElementById('workerLoginError');
       if (loginErrorEl && document.getElementById('loginScreen')?.classList.contains('visible')) {
-        loginErrorEl.textContent = message;
+        setText(loginErrorEl, () => (message));
         loginErrorEl.style.display = 'block';
       }
       if (typeof showToast === 'function') {
@@ -5116,8 +5114,8 @@
         showFreeProfileState();
         return;
       }
-      document.getElementById('userName').textContent = currentUser.display_name || currentUser.name || currentUser.email || 'User';
-      document.getElementById('userEmail').textContent = currentUser.email || 'Cloud features active';
+      setText(document.getElementById('userName'), () => ((((currentUser.display_name || currentUser.name) || currentUser.email) || tr('User'))));
+      setText(document.getElementById('userEmail'), () => ((currentUser.email || tr('Cloud features active'))));
       const avatar = document.getElementById('userAvatar');
       if (currentUser.avatar_url) {
         avatar.src = currentUser.avatar_url;
@@ -5157,20 +5155,20 @@
       const btn = document.getElementById('workerLoginBtn');
 
       if (!email || !password) {
-        setWorkerLoginError('Enter your email and password.');
+        setWorkerLoginError(tr('Enter your email and password.'));
         return;
       }
 
       setWorkerLoginError('');
       document.getElementById('workerPassword').value = '';
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Signing in...';
+      btn.innerHTML = markup('<span class="loading"></span> Signing in...');
 
       let supabaseSessionCreated = false;
       try {
         const result = await signInForCloudFeatures(email, password);
         supabaseSessionCreated = true;
-        const displayName = result.profile.display_name || result.user.email || 'User';
+        const displayName = result.profile.display_name || result.user.email || tr('User');
         const teamId = result.membership?.team_id || result.entitlements.active_team_id || null;
         const workerAuthSession = {
           provider: 'cloud',
@@ -5204,9 +5202,7 @@
         }
         await promptOnboardingIfNeeded();
         showToast(
-          isPaidActive()
-            ? 'Cloud features activated'
-            : 'Signed in — activate your license in Profile',
+          (isPaidActive() ? tr('Cloud features activated') : tr('Signed in — activate your license in Profile')),
           'success',
         );
       } catch (error) {
@@ -5222,7 +5218,7 @@
         showToast(message, 'error', 4500);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = 'Sign in';
+        btn.innerHTML = tr('Sign in');
       }
     }
 
@@ -5239,7 +5235,7 @@
       if (![...sel.options].some((o) => o.value === val)) {
         const opt = document.createElement('option');
         opt.value = val;
-        opt.textContent = dailyGoalHours === 0 ? 'No goal' : `${dailyGoalHours} hours`;
+        setText(opt, () => (((dailyGoalHours === 0) ? tr('No goal') : formatMessage`${dailyGoalHours} hours`)));
         sel.appendChild(opt);
       }
       sel.value = val;
@@ -5251,7 +5247,7 @@
         await invoke('update_config', { patch: { dailyGoalHours: hours } });
       } catch (e) {
         console.error('Failed to save daily goal:', e);
-        showToast('Could not save daily goal', 'error');
+        showToast(tr('Could not save daily goal'), 'error');
         return;
       }
       syncDailyGoalSelect();
@@ -5262,15 +5258,11 @@
     function updateTodayGreeting() {
       const el = document.getElementById('todayGreeting');
       if (!el) return;
-      el.textContent = isMonitoring ? 'In flow.' : isPaused ? 'On hold.' : "What's next?";
+      setText(el, () => ((isMonitoring ? tr('In flow.') : (isPaused ? tr('On hold.') : tr("What's next?")))));
       const intro = document.getElementById('todayIntro');
-      if (intro) intro.textContent = isMonitoring
-        ? 'Your work is being recorded locally. Pause or stop whenever you need.'
-        : isPaused
-          ? 'The clock is paused. Resume when you are ready.'
-          : 'Start a block. Activity is measured only while tracking runs.';
+      if (intro) setText(intro, () => ((isMonitoring ? tr('Your work is being recorded locally. Pause or stop whenever you need.') : (isPaused ? tr('The clock is paused. Resume when you are ready.') : tr('Start a block. Activity is measured only while tracking runs.')))));
       const date = document.getElementById('todayDate');
-      if (date) date.textContent = new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date());
+      if (date) setText(date, () => (new Intl.DateTimeFormat(getLocale(), { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())));
     }
 
     function formatTimerDisplay(totalSeconds) {
@@ -5303,7 +5295,7 @@
     function updateGoalUI() {
       const hours = getDailyGoalHours();
       const label = document.getElementById('timerGoalLabel');
-      if (label) label.textContent = hours > 0 ? `${hours} hours` : 'No goal';
+      if (label) setText(label, () => (((hours > 0) ? formatMessage`${hours} hours` : tr('No goal'))));
       syncDailyGoalSelect();
     }
 
@@ -5330,16 +5322,16 @@
       if (!btn) return;
       if (isMonitoring) {
         btn.classList.add('active');
-        btn.title = 'Pause tracking';
-        btn.setAttribute('aria-label', 'Pause tracking');
-        if (label) label.textContent = 'Pause tracking';
+        setAttributeText(btn, 'title', () => (tr('Pause tracking')));
+        btn.setAttribute('aria-label', tr('Pause tracking'));
+        if (label) setText(label, () => (tr('Pause tracking')));
         if (playIcon) playIcon.style.display = 'none';
         if (pauseIcon) pauseIcon.style.display = 'block';
       } else {
         btn.classList.remove('active');
-        btn.title = isPaused ? 'Resume tracking' : 'Start tracking';
+        setAttributeText(btn, 'title', () => ((isPaused ? tr('Resume tracking') : tr('Start tracking'))));
         btn.setAttribute('aria-label', btn.title);
-        if (label) label.textContent = btn.title;
+        if (label) setText(label, () => (btn.title));
         if (playIcon) playIcon.style.display = 'block';
         if (pauseIcon) pauseIcon.style.display = 'none';
       }
@@ -5351,36 +5343,36 @@
       const badge = document.getElementById('monitoringBadge');
       const visibleState = document.getElementById('todayTrackingState');
       if (visibleState) {
-        visibleState.textContent = isMonitoring ? 'Live' : isPaused ? 'Paused' : 'Ready';
+        setText(visibleState, () => ((isMonitoring ? tr('Live') : (isPaused ? tr('Paused') : tr('Ready')))));
         visibleState.className = `today-tracking-state${isMonitoring ? ' is-recording' : isPaused ? ' is-paused' : ''}`;
       }
       updateTodayGreeting();
 
       if (isMonitoring) {
         if (status) {
-          status.textContent = 'On';
+          setText(status, () => (tr('On')));
           status.style.color = 'hsl(142.1 76.2% 36.3%)';
         }
         if (badge) {
-          badge.textContent = 'On';
+          setText(badge, () => (tr('On')));
           badge.className = 'badge badge-success';
         }
       } else if (isPaused) {
         if (status) {
-          status.textContent = 'Paused';
+          setText(status, () => (tr('Paused')));
           status.style.color = 'hsl(var(--summary-orange))';
         }
         if (badge) {
-          badge.textContent = 'Paused';
+          setText(badge, () => (tr('Paused')));
           badge.className = 'badge badge-default';
         }
       } else {
         if (status) {
-          status.textContent = 'Off';
+          setText(status, () => (tr('Off')));
           status.style.color = '';
         }
         if (badge) {
-          badge.textContent = 'Off';
+          setText(badge, () => (tr('Off')));
           badge.className = 'badge badge-default';
         }
       }
@@ -5392,7 +5384,7 @@
       const display = document.getElementById('timerDisplay');
       if (!display) return;
       const total = getDisplayTotalSeconds();
-      display.textContent = formatTimerDisplay(total);
+      setText(display, () => (formatTimerDisplay(total)));
       const goalSec = getDailyGoalHours() * 3600;
       updateTimerRing(goalSec > 0 ? total / goalSec : 0);
     }
@@ -5539,10 +5531,10 @@
         commitSessionTime();
         renderTrackingStatus();
         persistTrackingState();
-        showToast('Tracking paused — time kept for today', 'success');
+        showToast(tr('Tracking paused — time kept for today'), 'success');
       } catch (error) {
         console.error('[Tracking] Pause failed:', error);
-        showToast('Could not pause tracking: ' + error, 'error');
+        showToast(('Could not pause tracking: ' + error), 'error');
       } finally {
         trackingTransitionInProgress = false;
         setTrackingControlsBusy(false);
@@ -5564,15 +5556,15 @@
         persistTrackingState();
         try {
           await invoke('stop_server');
-          showToast('Tracking stopped', 'success');
+          showToast(tr('Tracking stopped'), 'success');
         } catch (error) {
           console.error('[Tracking] Local server shutdown failed:', error);
-          showToast('Tracking stopped, but the local AI server could not shut down: ' + error, 'error');
+          showToast(('Tracking stopped, but the local AI server could not shut down: ' + error), 'error');
         }
         await refreshTodayView();
       } catch (error) {
         console.error('[Tracking] Stop failed:', error);
-        showToast('Could not stop tracking: ' + error, 'error');
+        showToast(('Could not stop tracking: ' + error), 'error');
       } finally {
         trackingTransitionInProgress = false;
         setTrackingControlsBusy(false);
@@ -5592,7 +5584,7 @@
           resumeSessionTimer();
           renderTrackingStatus();
           persistTrackingState();
-          showToast('Focus block resumed', 'success');
+          showToast(tr('Focus block resumed'), 'success');
           return;
         }
         const status = await invoke('check_local_server');
@@ -5606,10 +5598,10 @@
         resumeSessionTimer();
         renderTrackingStatus();
         persistTrackingState();
-        showToast('Tracking resumed', 'success');
+        showToast(tr('Tracking resumed'), 'success');
       } catch (e) {
         console.error('Resume failed:', e);
-        showToast('Error resuming: ' + e, 'error');
+        showToast(('Error resuming: ' + e), 'error');
       } finally {
         btn.disabled = false;
         btn.classList.remove('loading-state');
@@ -5625,7 +5617,7 @@
         const week = await invoke('get_week_summary').catch(() => null);
         const streak = computeStreak(week);
         const streakEl = document.getElementById('streakText');
-        if (streakEl) streakEl.textContent = `${streak} day${streak === 1 ? '' : 's'}`;
+        if (streakEl) setText(streakEl, () => (formatMessage`${streak} day${streak === 1 ? '' : 's'}`));
         if (!isMonitoring && !isPaused) {
           const history = await invoke('get_today_history');
           todayTotalSeconds = history.total_seconds || 0;
@@ -5671,7 +5663,7 @@
           linkedProviders.jira = true;
           const statusEl = document.getElementById('jiraLinkStatus');
           const btn = document.getElementById('linkJiraBtn');
-          if (statusEl) statusEl.textContent = 'Linked';
+          if (statusEl) setText(statusEl, () => (tr('Linked')));
           if (btn) btn.classList.add('button-success');
           console.log('[Jira] Restored linked session');
           loadJiraTasks();
@@ -5689,7 +5681,7 @@
           linkedProviders.linear = true;
           const statusEl = document.getElementById('linearLinkStatus');
           const btn = document.getElementById('linkLinearBtn');
-          if (statusEl) statusEl.textContent = 'Linked';
+          if (statusEl) setText(statusEl, () => (tr('Linked')));
           if (btn) btn.classList.add('button-success');
           console.log('[Linear] Restored linked session');
           loadLinearTasks();
@@ -5706,7 +5698,7 @@
       const status = document.getElementById('teamStatus');
       if (!status) return;
       const strong = document.createElement('strong');
-      strong.textContent = String(value ?? '');
+      setText(strong, () => (String(value ?? '')));
       status.replaceChildren(document.createTextNode(`${label}: `), strong);
     }
 
@@ -5747,7 +5739,7 @@
         teams.forEach(t => {
           const opt = document.createElement('option');
           opt.value = t.team_id;
-          opt.textContent = `${t.team_id.substring(0, 8)}... (${t.role})`;
+          setText(opt, () => (`${t.team_id.substring(0, 8)}... (${t.role})`));
           if (t.team_id === activeId) opt.selected = true;
           select.appendChild(opt);
         });
@@ -5755,7 +5747,7 @@
         group.style.display = 'block';
 
         // Update status
-        setTeamStatus('Active team', activeId ? activeId.substring(0, 8) + '...' : 'none');
+        setTeamStatus(tr('Active team'), activeId ? activeId.substring(0, 8) + '...' : 'none');
 
         console.log('[Team] Loaded', teams.length, 'team membership(s)');
       } catch (e) {
@@ -5770,7 +5762,7 @@
       if (!teamId) return;
       try {
         await invoke('set_active_team', { teamId });
-        setTeamStatus('Active team', teamId.substring(0, 8) + '...');
+        setTeamStatus(tr('Active team'), teamId.substring(0, 8) + '...');
         console.log('[Team] Switched the active team');
       } catch (err) {
         console.error('[Team] Failed to set active team:', err);
@@ -5779,13 +5771,13 @@
 
     function setWorkerLoginError(message) {
       const errorEl = document.getElementById('workerLoginError');
-      errorEl.textContent = message || '';
+      setText(errorEl, () => ((message || '')));
       errorEl.style.display = message ? 'block' : 'none';
     }
 
     async function handleLogin(provider) {
       if (provider === 'jira' || provider === 'linear') {
-        if (!requirePaidFeature('integrations', 'Jira and Linear require an Individual or Team license.')) {
+        if (!requirePaidFeature('integrations', tr('Jira and Linear require an Individual or Team license.'))) {
           return;
         }
       }
@@ -5793,12 +5785,12 @@
       const btnId = provider === 'google' ? 'loginGoogle' : `login${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
       const btn = document.getElementById(btnId);
       if (!btn) {
-        showToast('Login option unavailable.', 'error');
+        showToast(tr('Login option unavailable.'), 'error');
         return;
       }
       const originalText = btn.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span> Connecting...';
+      btn.innerHTML = markup('<span class="loading"></span> Connecting...');
 
       try {
         await invoke('start_auth', { provider });
@@ -5809,7 +5801,7 @@
 
         const pollAuth = async () => {
           attempts++;
-          btn.innerHTML = `<span class="loading"></span> Waiting for login... (${attempts}/${maxAttempts})`;
+          btn.innerHTML = html`<span class="loading"></span> Waiting for login... (${attempts}/${maxAttempts})`;
 
           await restoreCloudSession();
           if (authSession) {
@@ -5820,9 +5812,7 @@
             await initMainApp();
             await promptOnboardingIfNeeded();
             showToast(
-              isPaidActive()
-                ? 'Cloud features activated'
-                : 'Signed in — activate your license in Profile',
+              (isPaidActive() ? tr('Cloud features activated') : tr('Signed in — activate your license in Profile')),
               'success',
             );
             return;
@@ -5833,13 +5823,13 @@
           } else {
             btn.disabled = false;
             btn.innerHTML = originalText;
-            showToast("Login timeout - please try again", "error");
+            showToast(tr("Login timeout - please try again"), "error");
           }
         };
 
         setTimeout(pollAuth, 2000);
       } catch (e) {
-        alert("Login failed: " + e);
+        alert(("Login failed: " + e));
         btn.disabled = false;
         btn.innerHTML = originalText;
       }
@@ -5862,15 +5852,15 @@
         const linearStatus = document.getElementById('linearLinkStatus');
         const linkJiraBtn = document.getElementById('linkJiraBtn');
         const linkLinearBtn = document.getElementById('linkLinearBtn');
-        if (jiraStatus) jiraStatus.textContent = 'Link Jira';
-        if (linearStatus) linearStatus.textContent = 'Link Linear';
+        if (jiraStatus) setText(jiraStatus, () => (tr('Link Jira')));
+        if (linearStatus) setText(linearStatus, () => (tr('Link Linear')));
         if (linkJiraBtn) linkJiraBtn.classList.remove('button-success');
         if (linkLinearBtn) linkLinearBtn.classList.remove('button-success');
         hideCloudActivationPanel();
         showFreeProfileState();
-        showToast('Back to Free (Local) mode', 'success');
+        showToast(tr('Back to Free (Local) mode'), 'success');
       } catch (e) {
-        console.error("Logout failed:", e);
+        console.error(tr("Logout failed:"), e);
       }
     }
 
@@ -5885,7 +5875,7 @@
     let currentTeamCode = '';
 
     async function linkProvider(provider) {
-      if (!requirePaidFeature('integrations', 'Jira and Linear require an Individual or Team license.')) {
+      if (!requirePaidFeature('integrations', tr('Jira and Linear require an Individual or Team license.'))) {
         return;
       }
 
@@ -5894,7 +5884,7 @@
       const originalText = statusEl.textContent;
 
       btn.disabled = true;
-      statusEl.textContent = 'Connecting...';
+      setText(statusEl, () => (tr('Connecting...')));
 
       try {
         await invoke('start_auth', { provider });
@@ -5903,26 +5893,26 @@
         let attempts = 0;
         const pollLink = async () => {
           attempts++;
-          statusEl.textContent = `Linking... (${attempts}/30)`;
+          setText(statusEl, () => (formatMessage`Linking... (${attempts}/30)`));
 
           // Check if we got tokens for this provider
           try {
             if (provider === 'jira') {
               await invoke('fetch_jira_tasks');
               linkedProviders.jira = true;
-              statusEl.textContent = 'Linked';
+              setText(statusEl, () => (tr('Linked')));
               btn.classList.add('button-success');
               localStorage.setItem('flowsight_jira_linked', 'true');
-              showToast('Jira linked successfully!', 'success');
+              showToast(tr('Jira linked successfully!'), 'success');
               loadJiraTasks();
               return;
             } else if (provider === 'linear') {
               await invoke('fetch_linear_tasks');
               linkedProviders.linear = true;
-              statusEl.textContent = 'Linked';
+              setText(statusEl, () => (tr('Linked')));
               btn.classList.add('button-success');
               localStorage.setItem('flowsight_linear_linked', 'true');
-              showToast('Linear linked successfully!', 'success');
+              showToast(tr('Linear linked successfully!'), 'success');
               loadLinearTasks();
               return;
             }
@@ -5934,16 +5924,16 @@
             setTimeout(pollLink, 2000);
           } else {
             btn.disabled = false;
-            statusEl.textContent = originalText;
-            showToast('Link timeout - try again', 'error');
+            setText(statusEl, () => (originalText));
+            showToast(tr('Link timeout - try again'), 'error');
           }
         };
 
         setTimeout(pollLink, 2000);
       } catch (e) {
         btn.disabled = false;
-        statusEl.textContent = originalText;
-        showToast('Link failed: ' + e, 'error');
+        setText(statusEl, () => (originalText));
+        showToast(('Link failed: ' + e), 'error');
       }
     }
 
@@ -5952,7 +5942,7 @@
 
     // Team code handler
     document.getElementById('joinTeamBtn').onclick = async () => {
-      if (!requirePaidFeature('sync', 'Joining a team requires a Team license.')) {
+      if (!requirePaidFeature('sync', tr('Joining a team requires a Team license.'))) {
         return;
       }
 
@@ -5960,37 +5950,37 @@
       const statusEl = document.getElementById('teamStatus');
 
       if (!code) {
-        showToast('Please enter a team code', 'error');
+        showToast(tr('Please enter a team code'), 'error');
         return;
       }
 
       const btn = document.getElementById('joinTeamBtn');
       btn.disabled = true;
-      btn.textContent = 'Joining...';
-      statusEl.textContent = 'Validating code...';
+      setText(btn, () => (tr('Joining...')));
+      setText(statusEl, () => (tr('Validating code...')));
       document.getElementById('teamCodeInput').value = '';
 
       try {
         const result = await invoke('join_team', { token: code });
 
         setTeamStatus('Joined team. ID', result.team_id);
-        showToast('Successfully joined the team!', 'success');
+        showToast(tr('Successfully joined the team!'), 'success');
 
         // Refresh teams dropdown
         await loadUserTeams();
       } catch (e) {
-        statusEl.textContent = 'Failed to join: ' + e;
-        showToast('Error: ' + e, 'error');
+        setText(statusEl, () => (('Failed to join: ' + e)));
+        showToast(('Error: ' + e), 'error');
       }
 
       btn.disabled = false;
-      btn.textContent = 'Join';
+      setText(btn, () => (tr('Join')));
     };
 
     // Load saved team code on init
     if (currentTeamCode) {
       document.getElementById('teamCodeInput').value = currentTeamCode;
-      setTeamStatus('Team code', currentTeamCode);
+      setTeamStatus(tr('Team code'), currentTeamCode);
     }
 
     // ===== TASK LOADING FUNCTIONS =====
@@ -6011,13 +6001,13 @@
           tasks.forEach(task => {
             const opt = document.createElement('option');
             opt.value = task.key;
-            opt.textContent = `${task.key}: ${task.summary}`;
+            setText(opt, () => (`${task.key}: ${task.summary}`));
             select.appendChild(opt);
           });
 
           // Mark Jira as linked
           linkedProviders.jira = true;
-          document.getElementById('jiraLinkStatus').textContent = 'Linked';
+          setText(document.getElementById('jiraLinkStatus'), () => (tr('Linked')));
           document.getElementById('linkJiraBtn').classList.add('button-success');
           localStorage.setItem('flowsight_jira_linked', 'true');
         }
@@ -6038,13 +6028,13 @@
           tasks.forEach(task => {
             const opt = document.createElement('option');
             opt.value = task.id;
-            opt.textContent = `${task.identifier || task.id}: ${task.title}`;
+            setText(opt, () => (`${task.identifier || task.id}: ${task.title}`));
             select.appendChild(opt);
           });
 
           // Mark Linear as linked
           linkedProviders.linear = true;
-          document.getElementById('jiraLinkStatus').textContent = 'Linked';
+          setText(document.getElementById('jiraLinkStatus'), () => (tr('Linked')));
           document.getElementById('linkLinearBtn').classList.add('button-success');
           localStorage.setItem('flowsight_linear_linked', 'true');
         }
@@ -6085,21 +6075,21 @@
       const message = document.getElementById('coachLockText');
       const button = document.getElementById('coachUpgradeBtn');
       if (!authSession) {
-        title.textContent = 'Activate Coach';
-        message.textContent = 'Sign in and activate a cloud plan to talk with your AI Coach.';
-        button.textContent = 'Activate cloud';
+        setText(title, () => (tr('Activate Coach')));
+        setText(message, () => (tr('Sign in and activate a cloud plan to talk with your AI Coach.')));
+        setText(button, () => (tr('Activate cloud')));
       } else if (!isPaidActive()) {
-        title.textContent = 'Activate Coach';
-        message.textContent = 'Activate an eligible cloud license to use your AI Coach.';
-        button.textContent = 'Activate license';
+        setText(title, () => (tr('Activate Coach')));
+        setText(message, () => (tr('Activate an eligible cloud license to use your AI Coach.')));
+        setText(button, () => (tr('Activate license')));
       } else if (!currentEntitlements?.can_cloud_ai) {
-        title.textContent = 'Coach is not in this plan';
-        message.textContent = 'Your current plan does not include cloud AI chat.';
-        button.textContent = 'View plan';
+        setText(title, () => (tr('Coach is not in this plan')));
+        setText(message, () => (tr('Your current plan does not include cloud AI chat.')));
+        setText(button, () => (tr('View plan')));
       } else {
-        title.textContent = 'Cloud AI is off';
-        message.textContent = 'Enable cloud AI in You → Privacy & data before sharing messages or work context.';
-        button.textContent = 'Review privacy settings';
+        setText(title, () => (tr('Cloud AI is off')));
+        setText(message, () => (tr('Enable cloud AI in You → Privacy & data before sharing messages or work context.')));
+        setText(button, () => (tr('Review privacy settings')));
       }
     }
 
@@ -6111,9 +6101,9 @@
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
         .replace(/^-\s+(.+)$/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, (block) => `<ul>${block}</ul>`)
+        .replace(/(<li>.*<\/li>\n?)+/g, (block) => html`<ul>${block}</ul>`)
         .replace(/\n\n/g, '</p><p>');
-      html = `<p>${html}</p>`;
+      html = html`<p>${html}</p>`;
       return html.replace(/<p>\s*<\/p>/g, '')
         .replace(/<p>(<h[123]>)/g, '$1')
         .replace(/(<\/h[123]>)<\/p>/g, '$1')
@@ -6125,13 +6115,13 @@
       const container = document.getElementById('coachMessages');
       if (!container) return;
       if (!coachMessages.length) {
-        container.innerHTML = '<div class="coach-empty" id="coachEmptyState"><div class="coach-empty-title">What\'s next for your work?</div><div class="coach-empty-sub">Ask about focus, activity, and planning, grounded in your tracked work.</div></div>';
+        container.innerHTML = markup('<div class="coach-empty" id="coachEmptyState"><div class="coach-empty-title">What\'s next for your work?</div><div class="coach-empty-sub">Ask about focus, activity, and planning, grounded in your tracked work.</div></div>');
         return;
       }
       container.innerHTML = coachMessages.map((item) => {
         const role = item.role === 'assistant' ? 'assistant' : 'user';
         const body = role === 'assistant' ? renderCoachMarkdown(item.content) : escapeHtml(item.content);
-        return `<div class="coach-msg ${role}"><div class="coach-msg-bubble">${body}</div></div>`;
+        return html`<div class="coach-msg ${role}"><div class="coach-msg-bubble">${body}</div></div>`;
       }).join('');
       container.scrollTop = container.scrollHeight;
     }
@@ -6141,7 +6131,7 @@
       if (!bar) return;
       bar.hidden = !coachUsage?.limit;
       if (bar.hidden) return;
-      bar.textContent = `Coach: ${coachUsage.used}/${coachUsage.limit} prompts this month · ${coachUsage.remaining > 0 ? `${coachUsage.remaining} left` : 'limit reached'}`;
+      setText(bar, () => (formatMessage`Coach: ${coachUsage.used}/${coachUsage.limit} prompts this month · ${coachUsage.remaining > 0 ? formatMessage`${coachUsage.remaining} left` : tr('limit reached')}`));
       bar.classList.toggle('warn', coachUsage.remaining <= Math.ceil(coachUsage.limit * .2));
     }
 
@@ -6173,7 +6163,7 @@
         renderCoachMessages();
       } catch (error) {
         console.warn('[Coach] conversation unavailable:', error);
-        showToast('Could not load your Coach conversation.', 'error');
+        showToast(tr('Could not load your Coach conversation.'), 'error');
       }
       await loadCoachChatUsage();
     }
@@ -6182,7 +6172,7 @@
       const input = document.getElementById('coachInput');
       const counter = document.getElementById('coachCharCount');
       if (!input || !counter) return;
-      counter.textContent = `${input.value.length}/${COACH_MAX_CHARS}`;
+      setText(counter, () => (`${input.value.length}/${COACH_MAX_CHARS}`));
       counter.classList.toggle('warn', input.value.length >= COACH_MAX_CHARS);
     }
 
@@ -6264,7 +6254,7 @@
       if (document.getElementById('onboardingOverlay')?.classList.contains('visible')) {
         const status = document.getElementById('onboardingSetupStatus');
         status.dataset.state = type;
-        status.textContent = String(message ?? '') + (type === 'error' ? '. Check your choices and try again.' : '');
+        setText(status, () => ((String(message ?? '') + ((type === 'error') ? tr('. Check your choices and try again.') : ''))));
         return;
       }
       const container = document.getElementById('toastContainer');
@@ -6276,7 +6266,7 @@
       iconElement.className = 'toast-icon';
       iconElement.innerHTML = icon;
       const messageElement = document.createElement('span');
-      messageElement.textContent = String(message ?? '');
+      setText(messageElement, () => localizeStatus(message));
       toast.append(iconElement, messageElement);
 
       container.appendChild(toast);
@@ -6327,9 +6317,9 @@
       const label = document.getElementById('appVersionLabel');
       if (!label) return;
       try {
-        label.textContent = `Version ${await getVersion()}`;
+        label.textContent = formatMessage`Version ${await getVersion()}`;
       } catch {
-        label.textContent = 'Version unknown';
+        setText(label, () => (tr('Version unknown')));
       }
     }
 
@@ -6342,12 +6332,12 @@
       const checkBtn = document.getElementById('checkUpdatesBtn');
       if (checkBtn) {
         checkBtn.disabled = true;
-        checkBtn.textContent = 'Checking…';
+        setText(checkBtn, () => (tr('Checking…')));
       }
       try {
         const update = await checkAppUpdate({ timeout: UPDATE_CHECK_TIMEOUT_MS });
         if (!update) {
-          if (manual) showToast('You are on the latest version.', 'success');
+          if (manual) showToast(tr('You are on the latest version.'), 'success');
           return;
         }
         if (!manual && isUpdateSnoozed(update.version)) {
@@ -6360,16 +6350,16 @@
         if (manual) {
           const msg = String(err?.message || err || '');
           if (/404|not found|failed to fetch|network/i.test(msg)) {
-            showToast('Update server unreachable or installer missing. Try again later or download from GitHub.', 'error', 8000);
+            showToast(tr('Update server unreachable or installer missing. Try again later or download from GitHub.'), 'error', 8000);
           } else {
-            showToast('Could not check for updates. Try again later.', 'error');
+            showToast(tr('Could not check for updates. Try again later.'), 'error');
           }
         }
       } finally {
         updateCheckInFlight = false;
         if (checkBtn) {
           checkBtn.disabled = false;
-          checkBtn.textContent = 'Check for updates';
+          setText(checkBtn, () => (tr('Check for updates')));
         }
       }
     }
@@ -6407,10 +6397,10 @@
 
       const notes = (update.body || '').trim();
       const notesHtml = notes
-        ? `<p class="update-dialog__notes">${escapeHtml(notes)}</p>`
+        ? html`<p class="update-dialog__notes">${escapeHtml(notes)}</p>`
         : '';
 
-      overlay.innerHTML = `
+      overlay.innerHTML = html`
         <div class="modal-content update-dialog">
           <div class="update-dialog__header">
             <span class="update-dialog__icon" aria-hidden="true">
@@ -6502,7 +6492,7 @@
             switch (event.event) {
               case 'Started':
                 total = event.data.contentLength || 0;
-                label.textContent = 'Downloading…';
+                setText(label, () => (tr('Downloading…')));
                 if (total > 0) progressTrack.setAttribute('aria-valuenow', '0');
                 break;
               case 'Progress':
@@ -6511,13 +6501,13 @@
                   const pct = Math.min(100, Math.round((downloaded / total) * 100));
                   bar.style.transform = `scaleX(${pct / 100})`;
                   progressTrack.setAttribute('aria-valuenow', String(pct));
-                  label.textContent = `Downloading… ${pct}%`;
+                  setText(label, () => (formatMessage`Downloading… ${pct}%`));
                 }
                 break;
               case 'Finished':
                 bar.style.transform = 'scaleX(1)';
                 progressTrack.setAttribute('aria-valuenow', '100');
-                label.textContent = 'Installing… the app will restart.';
+                setText(label, () => (tr('Installing… the app will restart.')));
                 break;
             }
           });
@@ -6527,9 +6517,7 @@
           progress.hidden = true;
           actions.hidden = false;
           const msg = String(err?.message || err || '');
-          errorMessage.textContent = /404|not found/i.test(msg)
-            ? 'Installer not found. Try again later or download it from GitHub Releases.'
-            : 'The update could not be installed. Try again or use the official GitHub release.';
+          setText(errorMessage, () => ((/404|not found/i.test(msg) ? tr('Installer not found. Try again later or download it from GitHub Releases.') : tr('The update could not be installed. Try again or use the official GitHub release.'))));
           errorMessage.hidden = false;
           nowBtn.focus();
           return;
@@ -6541,13 +6529,13 @@
         } catch (err) {
           console.error('[Updater] Relaunch failed:', err);
           installing = false;
-          errorMessage.textContent = 'The update is installed, but FlowSight could not restart. Quit it from the tray, then open it again.';
+          setText(errorMessage, () => (tr('The update is installed, but FlowSight could not restart. Quit it from the tray, then open it again.')));
           errorMessage.hidden = false;
           progress.hidden = true;
           actions.hidden = false;
           nowBtn.hidden = true;
-          laterBtn.textContent = 'Close';
-          hint.textContent = 'Restart FlowSight to finish the update.';
+          setText(laterBtn, () => (tr('Close')));
+          setText(hint, () => (tr('Restart FlowSight to finish the update.')));
           laterBtn.focus();
         }
       });
@@ -6555,7 +6543,7 @@
 
     async function loadConfig() {
       const config = await invoke('get_config');
-      document.getElementById('statInterval').textContent = (config.captureInterval || 60000) / 1000 + 's';
+      setText(document.getElementById('statInterval'), () => ((((config.captureInterval || 60000) / 1000) + 's')));
 
       let hours = config.dailyGoalHours;
       if (hours == null) {
@@ -6595,8 +6583,8 @@
       if (status?.ready) return;
 
       showStep(
-        'Downloading local AI model…',
-        `One-time ${formatModelBytes(status?.totalBytes)} download. Your screen stays on this device.`,
+        tr('Downloading local AI model…'),
+        formatMessage`One-time ${formatModelBytes(status?.totalBytes)} download. Your screen stays on this device.`,
         2
       );
       const unlisten = await listen('local-model-download', ({ payload }) => {
@@ -6610,9 +6598,9 @@
             Math.max(2, Math.round(2 + overall * 16))
           );
         } else if (p.phase === 'verifying') {
-          showStep('Verifying model…', `Checking file ${p.index} of ${p.count} against SHA-256.`, 18);
+          showStep(tr('Verifying model…'), formatMessage`Checking file ${p.index} of ${p.count} against SHA-256.`, 18);
         } else if (p.phase === 'ready') {
-          showStep('Local model ready', 'Starting the local AI engine…', 19);
+          showStep(tr('Local model ready'), tr('Starting the local AI engine…'), 19);
         }
       });
       try {
@@ -6644,12 +6632,12 @@
       let setupFailed = false;
       let unlistenAiProgress = null;
       let aiWaitTimer = null;
-      let aiAttemptLabel = 'Preparing the local model';
+      let aiAttemptLabel = tr('Preparing the local model');
       let aiAttemptPercent = 20;
 
-      const showStep = (status, sub = "Initializing...", pct = 0) => {
-        statusText.textContent = status;
-        subtext.textContent = sub;
+      const showStep = (status, sub = tr("Initializing..."), pct = 0) => {
+        setText(statusText, () => localizeStatus(status));
+        setText(subtext, () => (sub));
         progress.style.width = pct + '%';
         overlay.hidden = false;
       };
@@ -6659,13 +6647,13 @@
         const startedAt = Date.now();
         const updateAiWait = () => {
           const seconds = Math.floor((Date.now() - startedAt) / 1000);
-          showStep('Starting local AI…', `${aiAttemptLabel} · ${seconds}s elapsed`, aiAttemptPercent);
+          showStep(tr('Starting local AI…'), `${aiAttemptLabel} · ${seconds}s elapsed`, aiAttemptPercent);
         };
         updateAiWait();
         unlistenAiProgress = await listen('local-ai-startup-progress', ({ payload }) => {
           const attempt = Number(payload?.attempt) || 1;
           const total = Number(payload?.total) || 1;
-          const backend = String(payload?.backend || 'local AI');
+          const backend = String(payload?.backend || tr('local AI'));
           aiAttemptLabel = `Trying ${backend} (${attempt}/${total})`;
           aiAttemptPercent = Math.min(52, 20 + Math.round((attempt - 1) / total * 32));
           updateAiWait();
@@ -6683,7 +6671,7 @@
         console.log("Server Start Result:", res);
 
         if (res.status === 'started' || res.status === 'already_running') {
-          showStep("Verifying Server...", "Waiting for health check — first start or slow disk may take several minutes…", 58);
+          showStep(tr("Verifying Server..."), tr("Waiting for health check — first start or slow disk may take several minutes…"), 58);
 
           /** @type {number|null} */
           let lastUiSec = null;
@@ -6694,7 +6682,7 @@
             lastUiSec = elapsedSec;
             const pct = Math.min(84, 56 + Math.floor(elapsedSec / 18));
             showStep(
-              "Verifying Server…",
+              tr("Verifying Server…"),
               `Waiting for health (${elapsedSec}s) — local model is loading. Antivirus or a full disk can slow this step.`,
               pct
             );
@@ -6724,10 +6712,10 @@
                 const logRef =
                   rp && typeof rp.serverLog === "string"
                     ? rp.serverLog
-                    : "your FlowSight app data folder (server.log)";
+                    : tr("your FlowSight app data folder (server.log)");
                 const hint = `The local vision server stopped. Logs: ${logRef}`;
                 throw new Error(
-                  tail ? `Local server exited during startup.\nLast log:\n${tail.slice(-600)}` : hint
+                  (tail ? formatMessage`Local server exited during startup.\nLast log:\n${tail.slice(-600)}` : hint)
                 );
               }
               if (
@@ -6741,8 +6729,8 @@
                 if (!sniff.online) {
                   cpuFallbackDone = true;
                   showStep(
-                    "Verifying Server…",
-                    "No health response yet — restarting on CPU only (slower but more compatible).",
+                    tr("Verifying Server…"),
+                    tr("No health response yet — restarting on CPU only (slower but more compatible)."),
                     64
                   );
                   await invoke("restart_llama_server_cpu_only");
@@ -6762,13 +6750,13 @@
             const logRef =
               rp && typeof rp.serverLog === "string"
                 ? rp.serverLog
-                : "FlowSight server.log under your account's local application data folder";
+                : tr("FlowSight server.log under your account's local application data folder");
             throw new Error(
-              `Server never became healthy — check antivirus, firewall, local listening port conflicts, and logs: ${logRef}`
+              formatMessage`Server never became healthy — check antivirus, firewall, local listening port conflicts, and logs: ${logRef}`
             );
           }
         } else {
-          throw new Error("Unexpected server status: " + JSON.stringify(res));
+          throw new Error(("Unexpected server status: " + JSON.stringify(res)));
         }
 
         overlay.hidden = true;
@@ -6776,7 +6764,7 @@
           typeof res.gpuLayers === 'number'
             ? ` (${res.gpuLayers} GPU layers${res.gpuAuto ? ', auto-selected' : ''})`
             : '';
-        showToast(`Local AI Server Ready${layerSuffix}`, 'success');
+        showToast(formatMessage`Local AI Server Ready${layerSuffix}`, 'success');
 
         try {
           const history = await invoke('get_today_history');
@@ -6801,8 +6789,8 @@
         } else {
           setupFailed = true;
           progress.style.width = '100%';
-          statusText.textContent = 'Local AI is not ready';
-          subtext.textContent = 'FlowSight could not prepare local AI. Please try again, or restart the app.';
+          setText(statusText, () => (tr('Local AI is not ready')));
+          setText(subtext, () => (tr('FlowSight could not prepare local AI. Please try again, or restart the app.')));
           actions.hidden = false;
           document.getElementById('setupRetryBtn').onclick = () => {
             overlay.hidden = true;
@@ -6862,12 +6850,12 @@
         const txt = document.getElementById('ollamaStatus');
         if (status.online) {
           dot.className = 'status-dot active';
-          txt.textContent = 'Local Server Ready';
+          setText(txt, () => (tr('Local Server Ready')));
           localServerConfirmedOnline = true;
           stopLocalServerHealthPolling();
         } else {
           dot.className = 'status-dot';
-          txt.textContent = 'Server Offline';
+          setText(txt, () => (tr('Server Offline')));
           localServerConfirmedOnline = false;
           pollLocalServerUntilReady();
         }
@@ -6901,42 +6889,42 @@
     let userPreferences = null;
 
     const ONBOARDING_ROLE_OPTIONS = [
-      { id: 'software_developer', label: 'Software development', icon: '💻' },
-      { id: 'design', label: 'Design & UX', icon: '🎨' },
-      { id: 'product', label: 'Product / project management', icon: '📋' },
-      { id: 'data', label: 'Data & analytics', icon: '📊' },
-      { id: 'student', label: 'Learning / student work', icon: '📚' },
-      { id: 'other', label: 'Other knowledge work', icon: '✨' },
-      { id: 'writing_content', label: 'Writing & content', icon: '✍️' },
-      { id: 'research_education', label: 'Research & education', icon: '🔬' },
-      { id: 'sales_customer', label: 'Sales & customer work', icon: '🤝' },
-      { id: 'operations_admin', label: 'Operations & administration', icon: '⚙️' },
-      { id: 'finance_legal', label: 'Finance & legal', icon: '🧾' },
+      { id: 'software_developer', get label() { return tr('Software development'); }, icon: '💻' },
+      { id: 'design', get label() { return tr('Design & UX'); }, icon: '🎨' },
+      { id: 'product', get label() { return tr('Product / project management'); }, icon: '📋' },
+      { id: 'data', get label() { return tr('Data & analytics'); }, icon: '📊' },
+      { id: 'student', get label() { return tr('Learning / student work'); }, icon: '📚' },
+      { id: 'other', get label() { return tr('Other knowledge work'); }, icon: '✨' },
+      { id: 'writing_content', get label() { return tr('Writing & content'); }, icon: '✍️' },
+      { id: 'research_education', get label() { return tr('Research & education'); }, icon: '🔬' },
+      { id: 'sales_customer', get label() { return tr('Sales & customer work'); }, icon: '🤝' },
+      { id: 'operations_admin', get label() { return tr('Operations & administration'); }, icon: '⚙️' },
+      { id: 'finance_legal', get label() { return tr('Finance & legal'); }, icon: '🧾' },
     ];
 
     const ONBOARDING_ACTIVITY_OPTIONS = [
-      { id: 'coding', label: 'Writing & shipping code', icon: '⌨️' },
-      { id: 'debugging', label: 'Debugging & fixing issues', icon: '🐛' },
-      { id: 'code_review', label: 'Code review & collaboration', icon: '👀' },
-      { id: 'meetings', label: 'Meetings & calls', icon: '📞' },
-      { id: 'planning', label: 'Planning & documentation', icon: '📝' },
-      { id: 'research', label: 'Research & learning', icon: '🔍' },
-      { id: 'design_work', label: 'Design & prototyping', icon: '🖌️' },
-      { id: 'support', label: 'Support & operations', icon: '🛠️' },
-      { id: 'analysis', label: 'Analysis & spreadsheets', icon: '📈' },
-      { id: 'writing', label: 'Writing & presentations', icon: '✍️' },
-      { id: 'communication', label: 'Email & communication', icon: '💬' },
-      { id: 'sales_client', label: 'Sales & client work', icon: '🤝' },
-      { id: 'admin_finance', label: 'Admin & finance', icon: '🧾' },
+      { id: 'coding', get label() { return tr('Writing & shipping code'); }, icon: '⌨️' },
+      { id: 'debugging', get label() { return tr('Debugging & fixing issues'); }, icon: '🐛' },
+      { id: 'code_review', get label() { return tr('Code review & collaboration'); }, icon: '👀' },
+      { id: 'meetings', get label() { return tr('Meetings & calls'); }, icon: '📞' },
+      { id: 'planning', get label() { return tr('Planning & documentation'); }, icon: '📝' },
+      { id: 'research', get label() { return tr('Research & learning'); }, icon: '🔍' },
+      { id: 'design_work', get label() { return tr('Design & prototyping'); }, icon: '🖌️' },
+      { id: 'support', get label() { return tr('Support & operations'); }, icon: '🛠️' },
+      { id: 'analysis', get label() { return tr('Analysis & spreadsheets'); }, icon: '📈' },
+      { id: 'writing', get label() { return tr('Writing & presentations'); }, icon: '✍️' },
+      { id: 'communication', get label() { return tr('Email & communication'); }, icon: '💬' },
+      { id: 'sales_client', get label() { return tr('Sales & client work'); }, icon: '🤝' },
+      { id: 'admin_finance', get label() { return tr('Admin & finance'); }, icon: '🧾' },
     ];
 
     const ONBOARDING_GOAL_OPTIONS = [
-      { id: 'distractions', label: 'Spend less time on distracting apps', icon: '🌙' },
-      { id: 'time_awareness', label: 'Understand how I spend my time and make better decisions', icon: '📊' },
-      { id: 'focus', label: 'Improve my attention and deep focus', icon: '🧩' },
-      { id: 'balance', label: 'Improve work-life balance', icon: '⚖️' },
-      { id: 'accountability', label: 'Track progress on goals and tickets', icon: '🎯' },
-      { id: 'wellbeing', label: 'Feel good about my productivity', icon: '💡' },
+      { id: 'distractions', get label() { return tr('Spend less time on distracting apps'); }, icon: '🌙' },
+      { id: 'time_awareness', get label() { return tr('Understand how I spend my time and make better decisions'); }, icon: '📊' },
+      { id: 'focus', get label() { return tr('Improve my attention and deep focus'); }, icon: '🧩' },
+      { id: 'balance', get label() { return tr('Improve work-life balance'); }, icon: '⚖️' },
+      { id: 'accountability', get label() { return tr('Track progress on goals and tickets'); }, icon: '🎯' },
+      { id: 'wellbeing', get label() { return tr('Feel good about my productivity'); }, icon: '💡' },
     ];
 
     const ONBOARDING_GOAL_HOURS = [4, 5, 6, 7, 8];
@@ -6975,9 +6963,7 @@
       const el = document.getElementById('workPreferencesSummary');
       if (!el) return;
       if (!prefs?.onboardingCompleted) {
-        el.textContent = authSession
-          ? 'Complete the setup wizard to personalize reports and greetings.'
-          : 'Sign in to cloud features to set up your work preferences.';
+        setText(el, () => ((authSession ? tr('Complete the setup wizard to personalize reports and greetings.') : tr('Sign in to cloud features to set up your work preferences.'))));
         return;
       }
       const roleLabels = (prefs.workRoles || [])
@@ -6987,12 +6973,12 @@
         .map((id) => ONBOARDING_GOAL_OPTIONS.find((o) => o.id === id)?.label || id)
         .slice(0, 2)
         .join('; ');
-      el.textContent = [
-        prefs.displayName ? `Name: ${prefs.displayName}` : null,
-        roleLabels ? `Focus: ${roleLabels}` : null,
-        goalLabels ? `Goals: ${goalLabels}` : null,
-        prefs.dailyGoalHours != null ? `Daily goal: ${prefs.dailyGoalHours}h` : null,
-      ].filter(Boolean).join(' · ');
+      setText(el, () => ([
+        prefs.displayName ? formatMessage`Name: ${prefs.displayName}` : null,
+        roleLabels ? formatMessage`Focus: ${roleLabels}` : null,
+        goalLabels ? formatMessage`Goals: ${goalLabels}` : null,
+        prefs.dailyGoalHours != null ? formatMessage`Daily goal: ${prefs.dailyGoalHours}h` : null,
+      ].filter(Boolean).join(' · ')));
     }
 
     async function loadUserPreferences() {
@@ -7043,11 +7029,11 @@
     }
 
     function onboardingDemo(kind) {
-      if (kind === 'plan') return `<figure class="onboarding-demo"><svg viewBox="0 0 300 116" role="img" aria-label="Example session: write, break, then review">
-        <g fill="currentColor"><rect class="demo-block" x="12" y="18" width="162" height="24" rx="5" opacity=".25"/><rect class="demo-block" x="140" y="50" width="62" height="24" rx="5" opacity=".15"/><rect class="demo-block" x="200" y="80" width="86" height="24" rx="5" opacity=".4"/></g>
-        <g class="demo-labels" font-size="11" font-family="inherit"><text x="22" y="34">Write · 60 min</text><text x="150" y="66">Break</text><text x="209" y="96">Review</text></g>
+      if (kind === 'plan') return html`<figure class="onboarding-demo"><svg viewBox="0 0 300 116" role="img" aria-label="Example session: write, break, then review">
+        <g fill="currentColor"><rect class="demo-block" x="12" y="18" width="162" height="24" rx="5" opacity=".25"/><rect class="demo-block" x="132" y="50" width="78" height="24" rx="5" opacity=".15"/><rect class="demo-block" x="200" y="80" width="86" height="24" rx="5" opacity=".4"/></g>
+        <g class="demo-labels" font-size="11" font-family="inherit"><text x="22" y="34">Write · 60 min</text><text x="142" y="66">Break</text><text x="209" y="96">Review</text></g>
       </svg><figcaption>Example plan · your tasks set the schedule</figcaption></figure>`;
-      if (kind === 'report') return `<figure class="onboarding-demo"><svg viewBox="0 0 300 96" role="img" aria-label="Recorded work becomes a local report">
+      if (kind === 'report') return html`<figure class="onboarding-demo"><svg viewBox="0 0 300 96" role="img" aria-label="Recorded work becomes a local report">
         <g stroke="currentColor" fill="none" stroke-width="2"><path d="M22 26h80M22 46h58M22 66h68M122 46h48m-9-7 9 7-9 7"/><rect x="190" y="10" width="82" height="76" rx="8"/><path d="M204 28h52M204 42h42M204 56h48M204 70h30"/></g>
       </svg><figcaption>Recorded evidence → a report saved on your computer</figcaption></figure>`;
       return '';
@@ -7057,17 +7043,17 @@
       // Use the shipped reminder templates with a fictional task. This figure
       // never requests notification permission or sends a desktop notification.
       const contextual = onboardingState.focusReminders && onboardingState.contextReminders;
-      const title = contextual ? 'Keep your focus' : 'A moment to refocus';
+      const title = contextual ? tr('Keep your focus') : tr('A moment to refocus');
       const message = contextual
-        ? 'You\'ve switched apps several times. Choose “Write proposal” for the next few minutes.'
-        : 'You\'ve switched among several apps. Could you choose one task for the next few minutes?';
-      return `<figure class="onboarding-notification-preview" id="onboardingNotificationPreview" aria-label="Example FlowSight desktop notification">
+        ? tr('You\'ve switched apps several times. Choose “Write proposal” for the next few minutes.')
+        : tr('You\'ve switched among several apps. Could you choose one task for the next few minutes?');
+      return html`<figure class="onboarding-notification-preview" id="onboardingNotificationPreview" aria-label="Example FlowSight desktop notification">
         <div class="onboarding-notification">
           <div class="onboarding-notification-header"><img src="/flowsight_sinfondo.png" alt="" width="24" height="24"><span>FlowSight</span><span class="onboarding-notification-example">Example</span></div>
           <strong class="onboarding-notification-title">${title}</strong>
           <p class="onboarding-notification-message">${message}</p>
         </div>
-        <figcaption>${contextual ? 'Example with a fictional task. Your selected task can appear when context is enabled.' : 'Example desktop notification. Task and activity details stay out by default.'}</figcaption>
+        <figcaption>${contextual ? tr('Example with a fictional task. Your selected task can appear when context is enabled.') : tr('Example desktop notification. Task and activity details stay out by default.')}</figcaption>
       </figure>`;
     }
 
@@ -7084,20 +7070,20 @@
       if (!body || !continueBtn) return;
       const step = onboardingState.step;
       fill.style.width = `${((step + 1) / 5) * 100}%`;
-      document.getElementById('onboardingStepLabel').textContent = `${step + 1} of 5`;
+      setText(document.getElementById('onboardingStepLabel'), () => (formatMessage`${step + 1} of 5`));
       backBtn.style.visibility = step === 0 ? 'hidden' : 'visible';
       backBtn.disabled = step === 0;
-      document.getElementById('onboardingSetupStatus').textContent = '';
+      setText(document.getElementById('onboardingSetupStatus'), () => (''));
       document.getElementById('onboardingSkipCalendarBtn').hidden = false;
-      document.getElementById('onboardingSkipCalendarBtn').textContent = 'Skip setup';
-      continueBtn.textContent = step === 4 ? 'Finish setup' : 'Continue';
+      setText(document.getElementById('onboardingSkipCalendarBtn'), () => (tr('Skip setup')));
+      setText(continueBtn, () => (((step === 4) ? tr('Finish setup') : tr('Continue'))));
       if (step === 0) {
-        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">Make room for your work</h1>
+        body.innerHTML = html`<h1 class="onboarding-title" tabindex="-1">Make room for your work</h1>
           <p class="onboarding-subtitle">Start tracking when you choose. FlowSight helps you review your time and work patterns on this computer.</p>
           <label for="onboardingNameInput">What should we call you? <span class="session-help">Optional</span></label>
           <input type="text" class="onboarding-name-input" id="onboardingNameInput" maxlength="40" autocomplete="given-name" placeholder="Your first name" value="${escapeHtml(onboardingState.displayName)}">
           <label for="onboardingDailyGoal">Daily tracking goal</label>
-          <select class="select" id="onboardingDailyGoal">${[0,1,2,3,4,5,6,7,8,9,10,12].map((h) => `<option value="${h}" ${onboardingState.dailyGoalHours === h ? 'selected' : ''}>${h ? `${h} hours` : 'No goal'}</option>`).join('')}</select>
+          <select class="select" id="onboardingDailyGoal">${[0,1,2,3,4,5,6,7,8,9,10,12].map((h) => html`<option value="${h}" ${onboardingState.dailyGoalHours === h ? 'selected' : ''}>${h ? `${h} hours` : tr('No goal')}</option>`).join('')}</select>
           <p class="session-help">A reference for your day. You can pause or stop tracking at any time.</p>
           <details class="onboarding-extra"><summary>Add work context (optional)</summary><label for="onboardingCustomJobInput">Your role or area of work</label>
           <input type="text" class="input" id="onboardingCustomJobInput" maxlength="80" placeholder="For example, research or software development" value="${escapeHtml(onboardingState.customJob)}"></details>`;
@@ -7109,7 +7095,7 @@
         };
         document.getElementById('onboardingDailyGoal').onchange = (e) => { onboardingState.dailyGoalHours = Number(e.target.value); };
       } else if (step === 1) {
-        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">A plan you can change</h1>
+        body.innerHTML = html`<h1 class="onboarding-title" tabindex="-1">A plan you can change</h1>
           <p class="onboarding-subtitle">Tell the local agent what you want to do and when you are available. It suggests time blocks using your estimates and the context you have saved.</p>
           ${onboardingDemo('plan')}
           <p class="onboarding-subtitle">Ask for changes, then confirm. Your blocks are added to the FlowSight calendar only after you approve them.</p>
@@ -7117,7 +7103,7 @@
           <p class="session-help">Planning is optional. You can also start tracking directly from Today.</p>`;
         document.getElementById('onboardingOpenPlan').onchange = (e) => { onboardingState.openPlanner = e.target.checked; };
       } else if (step === 2) {
-        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">Find your way back to focus</h1>
+        body.innerHTML = html`<h1 class="onboarding-title" tabindex="-1">Find your way back to focus</h1>
           <p class="onboarding-subtitle">While tracking, FlowSight can show a local reminder when your activity drifts from the task you selected.</p>
           ${onboardingFocusNotificationPreview()}
           <label class="consent-toggle-row"><input type="checkbox" id="onboardingFocusReminders" ${onboardingState.focusReminders ? 'checked' : ''}><span>Enable focus reminders</span></label>
@@ -7134,13 +7120,13 @@
           refreshOnboardingFocusNotificationPreview();
         };
       } else if (step === 3) {
-        body.innerHTML = `<h1 class="onboarding-title" tabindex="-1">See what your week contained</h1>
+        body.innerHTML = html`<h1 class="onboarding-title" tabindex="-1">See what your week contained</h1>
           <p class="onboarding-subtitle">Generate a work report from recorded activity in Insights. You can also save a weekly PDF automatically while FlowSight is running.</p>
           ${onboardingDemo('report')}
           <label class="consent-toggle-row"><input type="checkbox" id="onboardingWeeklyEnabled" ${onboardingState.reportsEnabled ? 'checked' : ''}><span>Save a weekly report automatically</span></label>
-          <div class="session-time-fields"><div><label for="onboardingReportDay">Day</label><select class="select" id="onboardingReportDay">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((day,i) => `<option value="${i}" ${onboardingState.reportDay === i ? 'selected' : ''}>${day}</option>`).join('')}</select></div>
+          <div class="session-time-fields"><div><label for="onboardingReportDay">Day</label><select class="select" id="onboardingReportDay">${[tr('Sunday'),tr('Monday'),tr('Tuesday'),tr('Wednesday'),tr('Thursday'),tr('Friday'),tr('Saturday')].map((day,i) => html`<option value="${i}" ${onboardingState.reportDay === i ? 'selected' : ''}>${day}</option>`).join('')}</select></div>
           <div><label for="onboardingReportTime">Local time</label><input type="time" class="input" id="onboardingReportTime" value="${escapeHtml(onboardingState.reportTime)}"></div></div>
-          <label>Save on this computer</label><p class="session-help" id="onboardingReportFolder">${escapeHtml(onboardingState.reportFolder || 'Choose a folder to enable automatic reports.')}</p>
+          <label>Save on this computer</label><p class="session-help" id="onboardingReportFolder">${escapeHtml(onboardingState.reportFolder || tr('Choose a folder to enable automatic reports.'))}</p>
           <button type="button" class="button button-secondary" id="onboardingChooseFolder">Choose report folder</button>
           <p class="session-help">The report is an interpretation of recorded evidence. It is not a productivity score.</p>`;
         document.getElementById('onboardingWeeklyEnabled').onchange = (e) => { onboardingState.reportsEnabled = e.target.checked; continueBtn.disabled = !onboardingCanContinue(); };
@@ -7148,12 +7134,12 @@
         document.getElementById('onboardingReportTime').onchange = (e) => { onboardingState.reportTime = e.target.value; };
         document.getElementById('onboardingChooseFolder').onclick = async () => {
           try {
-            const selected = await openFolderDialog({ directory: true, multiple: false, title: 'Choose where to save weekly reports' });
-            if (typeof selected === 'string' && selected) { onboardingState.reportFolder = selected; document.getElementById('onboardingReportFolder').textContent = selected; continueBtn.disabled = !onboardingCanContinue(); }
-          } catch (error) { showToast('Could not choose a folder: ' + error, 'error'); }
+            const selected = await openFolderDialog({ directory: true, multiple: false, title: tr('Choose where to save weekly reports') });
+            if (typeof selected === 'string' && selected) { onboardingState.reportFolder = selected; setText(document.getElementById('onboardingReportFolder'), () => (selected)); continueBtn.disabled = !onboardingCanContinue(); }
+          } catch (error) { showToast(('Could not choose a folder: ' + error), 'error'); }
         };
       } else if (step === 4) {
-        body.innerHTML = `
+        body.innerHTML = html`
           <h1 class="onboarding-title">Bring your calendar into focus</h1>
           <p class="onboarding-subtitle">Optional for cloud plans. See your current event and, if you choose, add a short work recap after it ends.</p>
           <p class="onboarding-calendar-note" id="onboardingCalendarLicenseMessage" hidden>Calendar requires an eligible FlowSight Cloud plan with integrations. The one-time local purchase does not include it. Sign in and activate your Cloud plan in You after setup.</p>
@@ -7226,7 +7212,7 @@
       hideOnboardingWizard();
       if (!onboardingState.reopening) {
         showMainApp(); await restoreCloudSession(); await initMainApp();
-      } else { showToast('Setup updated', 'success'); }
+      } else { showToast(tr('Setup updated'), 'success'); }
       if (onboardingState.openPlanner) sessionPlanner.open();
     }
 
@@ -7236,7 +7222,7 @@
       const btn = document.getElementById('onboardingContinueBtn');
       const back = document.getElementById('onboardingBackBtn');
       const skip = document.getElementById('onboardingSkipCalendarBtn');
-      btn.disabled = back.disabled = skip.disabled = true; btn.textContent = 'Saving…';
+      btn.disabled = back.disabled = skip.disabled = true; setText(btn, () => (tr('Saving…')));
       const fields = [...document.getElementById('onboardingBody').querySelectorAll('input, select, button')];
       const disabledStates = fields.map((field) => field.disabled);
       fields.forEach((field) => { field.disabled = true; });
@@ -7260,11 +7246,11 @@
         }
       } catch (error) {
         const status = document.getElementById('onboardingSetupStatus');
-        if (status) status.textContent = 'Could not save this step: ' + error + '. Check your choices and try again.';
+        if (status) setText(status, () => ((('Could not save this step: ' + error) + '. Check your choices and try again.')));
       } finally {
         fields.forEach((field, index) => { if (field.isConnected) field.disabled = disabledStates[index]; });
         onboardingState.saving = false; back.disabled = onboardingState.step === 0; skip.disabled = false;
-        btn.disabled = !onboardingCanContinue(); btn.textContent = onboardingState.step === 4 ? 'Finish setup' : 'Continue';
+        btn.disabled = !onboardingCanContinue(); setText(btn, () => (((onboardingState.step === 4) ? tr('Finish setup') : tr('Continue'))));
       }
     }
 
@@ -7282,7 +7268,7 @@
       if (onboardingState.saving) return;
       onboardingState.saving = true;
       try { await finishOnboarding(); }
-      catch (error) { showToast('Could not finish setup: ' + error, 'error'); }
+      catch (error) { showToast(('Could not finish setup: ' + error), 'error'); }
       finally { onboardingState.saving = false; }
     });
     document.getElementById('onboardingOverlay')?.addEventListener('keydown', (event) => {
@@ -7306,8 +7292,8 @@
       // the scroll area when the user reaches its last setting.
       const overflowing = body.scrollHeight > body.clientHeight + 8;
       if (cue.hidden === overflowing) cue.hidden = !overflowing;
-      const label = body.scrollTop + body.clientHeight < body.scrollHeight - 8 ? 'More settings below' : 'Back to top';
-      if (cue.textContent !== label) cue.textContent = label;
+      const label = body.scrollTop + body.clientHeight < body.scrollHeight - 8 ? tr('More settings below') : tr('Back to top');
+      if (cue.textContent !== label) setText(cue, () => (label));
     }
     document.getElementById('onboardingBody').addEventListener('scroll', updateOnboardingOverflow);
     let onboardingOverflowFrame = null;
@@ -7354,11 +7340,7 @@
         contextualAlerts.disabled = !prefs.focusAlertsEnabled;
       }
       if (status) {
-        status.textContent = prefs.developmentBuild
-          ? 'Install FlowSight to enable launch at sign-in. Focus reminders can be tested here.'
-          : prefs.launchAtLogin
-            ? 'FlowSight is registered to open at your next computer sign-in.'
-            : 'FlowSight will only open when you launch it yourself.';
+        setText(status, () => ((prefs.developmentBuild ? tr('Install FlowSight to enable launch at sign-in. Focus reminders can be tested here.') : (prefs.launchAtLogin ? tr('FlowSight is registered to open at your next computer sign-in.') : tr('FlowSight will only open when you launch it yourself.')))));
       }
     }
 
@@ -7389,7 +7371,7 @@
         await loadDesktopPreferences();
         hideDesktopPresencePrompt();
       } catch (error) {
-        showToast('Could not save your choice: ' + error, 'error');
+        showToast(('Could not save your choice: ' + error), 'error');
       }
     });
 
@@ -7402,7 +7384,7 @@
           try {
             await invoke('set_focus_alerts_enabled', { enabled: true });
           } catch (error) {
-            showToast('Focus reminders could not be enabled: ' + error, 'error');
+            showToast(('Focus reminders could not be enabled: ' + error), 'error');
           }
         }
         const wantsAutoMonitor = Boolean(document.getElementById('presenceAutoMonitorChoice')?.checked);
@@ -7417,9 +7399,9 @@
             showMonitoringNotice();
           }
         }
-        showToast('FlowSight will open at your next computer sign-in', 'success');
+        showToast(tr('FlowSight will open at your next computer sign-in'), 'success');
       } catch (error) {
-        showToast('Could not enable launch at sign-in: ' + error, 'error');
+        showToast(('Could not enable launch at sign-in: ' + error), 'error');
         await loadDesktopPreferences().catch(() => {});
       } finally {
         if (button) button.disabled = false;
@@ -7432,7 +7414,7 @@
         await loadDesktopPreferences();
       } catch (error) {
         renderDesktopPreferences();
-        showToast('Could not change launch at sign-in: ' + error, 'error');
+        showToast(('Could not change launch at sign-in: ' + error), 'error');
       }
     });
 
@@ -7449,7 +7431,7 @@
         await loadDesktopPreferences();
       } catch (error) {
         renderDesktopPreferences();
-        showToast('Could not change automatic tracking: ' + error, 'error');
+        showToast(('Could not change automatic tracking: ' + error), 'error');
       }
     });
 
@@ -7459,7 +7441,7 @@
         await loadDesktopPreferences();
       } catch (error) {
         renderDesktopPreferences();
-        showToast('Could not change focus reminders: ' + error, 'error');
+        showToast(('Could not change focus reminders: ' + error), 'error');
       }
     });
 
@@ -7469,7 +7451,7 @@
         await loadDesktopPreferences();
       } catch (error) {
         renderDesktopPreferences();
-        showToast('Could not change reminder details: ' + error, 'error');
+        showToast(('Could not change reminder details: ' + error), 'error');
       }
     });
 
@@ -7477,7 +7459,7 @@
       if (!desktopPreferences?.autostartLaunch || !desktopPreferences?.startMonitoringAtLogin) return;
       if (!privacySettings?.monitoringNoticeAcknowledged || privacySettings.noticeVersion !== PRIVACY_NOTICE_VERSION) return;
       if (isMonitoring || loadTrackingCheckpoint(localStorage)?.mode === 'paused') return;
-      startMonitoringFull().catch((error) => showToast('Automatic tracking could not start: ' + error, 'error'));
+      startMonitoringFull().catch((error) => showToast(('Automatic tracking could not start: ' + error), 'error'));
     }
 
     function renderPrivacySettings() {
@@ -7504,14 +7486,10 @@
       const syncStatus = document.getElementById('cloudSyncStatus');
       const aiStatus = document.getElementById('cloudAiStatus');
       if (syncStatus) {
-        syncStatus.textContent = settings.cloudSyncEnabled
-          ? 'On — aggregate summaries are sent to your FlowSight Cloud account.'
-          : 'Off — activity stays on this device.';
+        setText(syncStatus, () => ((settings.cloudSyncEnabled ? tr('On — aggregate summaries are sent to your FlowSight Cloud account.') : tr('Off — activity stays on this device.'))));
       }
       if (aiStatus) {
-        aiStatus.textContent = settings.cloudAiEnabled
-          ? 'On — Coach can process messages and selected work context in the cloud. The proactive agent stays local.'
-          : 'Off — Coach cannot receive messages or activity.';
+        setText(aiStatus, () => ((settings.cloudAiEnabled ? tr('On — Coach can process messages and selected work context in the cloud. The proactive agent stays local.') : tr('Off — Coach cannot receive messages or activity.'))));
       }
       updateCoachLockState();
     }
@@ -7553,9 +7531,7 @@
 
     function showMonitoringNotice() {
       const button = document.getElementById('monitoringNoticeAcceptBtn');
-      if (button) button.textContent = pendingAutoMonitorConsent && !pendingMonitoringStart
-        ? 'I understand — enable at sign-in'
-        : 'I understand — start';
+      if (button) setText(button, () => (((pendingAutoMonitorConsent && !pendingMonitoringStart) ? tr('I understand — enable at sign-in') : tr('I understand — start'))));
       const overlay = document.getElementById('monitoringNoticeOverlay');
       overlay?.classList.add('visible');
       overlay?.setAttribute('aria-hidden', 'false');
@@ -7608,7 +7584,7 @@
         }
         if (pendingMonitoringStart) await startMonitoringFull();
       } catch (error) {
-        showToast('Could not save the privacy acknowledgement: ' + error, 'error');
+        showToast(('Could not save the privacy acknowledgement: ' + error), 'error');
       } finally {
         pendingMonitoringStart = false;
         pendingAutoMonitorConsent = false;
@@ -7627,10 +7603,10 @@
       const enabled = event.target.checked;
       try {
         if (enabled && (!authSession || !currentEntitlements?.can_sync)) {
-          throw new Error('Sign in with a plan that includes cloud sync first.');
+          throw new Error(tr('Sign in with a plan that includes cloud sync first.'));
         }
         await applyPrivacyPatch({ cloudSyncEnabled: enabled });
-        showToast(enabled ? 'Cloud activity sync enabled' : 'Cloud activity sync disabled', 'success');
+        showToast((enabled ? tr('Cloud activity sync enabled') : tr('Cloud activity sync disabled')), 'success');
       } catch (error) {
         renderPrivacySettings();
         showToast(String(error), 'error');
@@ -7641,10 +7617,10 @@
       const enabled = event.target.checked;
       try {
         if (enabled && (!authSession || !currentEntitlements?.can_cloud_ai)) {
-          throw new Error('Sign in with a plan that includes cloud AI first.');
+          throw new Error(tr('Sign in with a plan that includes cloud AI first.'));
         }
         await applyPrivacyPatch({ cloudAiEnabled: enabled });
-        showToast(enabled ? 'Cloud AI sharing enabled' : 'Cloud AI sharing disabled', 'success');
+        showToast((enabled ? tr('Cloud AI sharing enabled') : tr('Cloud AI sharing disabled')), 'success');
       } catch (error) {
         renderPrivacySettings();
         showToast(String(error), 'error');
@@ -7654,7 +7630,7 @@
     document.getElementById('windowTitlesToggle')?.addEventListener('change', async (event) => {
       try {
         await applyPrivacyPatch({ storeWindowTitles: event.target.checked });
-        showToast(event.target.checked ? 'Window titles will be stored locally' : 'Stored window titles removed', 'success');
+        showToast((event.target.checked ? tr('Window titles will be stored locally') : tr('Stored window titles removed')), 'success');
       } catch (error) {
         renderPrivacySettings();
         showToast(String(error), 'error');
@@ -7668,7 +7644,7 @@
         .filter(Boolean);
       try {
         await applyPrivacyPatch({ excludedApplications });
-        showToast('Excluded applications updated', 'success');
+        showToast(tr('Excluded applications updated'), 'success');
       } catch (error) {
         renderPrivacySettings();
         showToast(String(error), 'error');
@@ -7678,7 +7654,7 @@
     document.getElementById('retentionDaysSelect')?.addEventListener('change', async (event) => {
       try {
         await applyPrivacyPatch({ retentionDays: Number(event.target.value) });
-        showToast('Local retention updated and enforced', 'success');
+        showToast(tr('Local retention updated and enforced'), 'success');
         await refreshTodayView();
       } catch (error) {
         renderPrivacySettings();
@@ -7691,17 +7667,17 @@
       if (button) button.disabled = true;
       try {
         const path = await invoke('export_personal_data', { includeCloud: Boolean(authSession) });
-        showToast('Data export saved to Downloads', 'success', 5000);
+        showToast(tr('Data export saved to Downloads'), 'success', 5000);
         await invoke('open_path_in_file_manager', { path }).catch(() => {});
       } catch (error) {
-        showToast('Data export failed: ' + error, 'error', 7000);
+        showToast(('Data export failed: ' + error), 'error', 7000);
       } finally {
         if (button) button.disabled = false;
       }
     });
 
     document.getElementById('deleteLocalDataBtn')?.addEventListener('click', async () => {
-      const confirmation = window.prompt('This permanently erases local activity, preferences, chat history, credentials, and logs. Type DELETE to continue.');
+      const confirmation = window.prompt(tr('This permanently erases local activity, preferences, chat history, credentials, and logs. Type DELETE to continue.'));
       if (confirmation !== 'DELETE') return;
       try {
         await stopNativeMonitoring();
@@ -7710,12 +7686,12 @@
         localStorage.clear();
         window.location.reload();
       } catch (error) {
-        showToast('Local erasure failed: ' + error, 'error', 7000);
+        showToast(('Local erasure failed: ' + error), 'error', 7000);
       }
     });
 
     document.getElementById('deleteCloudAccountBtn')?.addEventListener('click', async () => {
-      const confirmation = window.prompt('This permanently deletes your FlowSight cloud account and its personal data, then erases this device. Type DELETE to continue.');
+      const confirmation = window.prompt(tr('This permanently deletes your FlowSight cloud account and its personal data, then erases this device. Type DELETE to continue.'));
       if (confirmation !== 'DELETE') return;
       try {
         await invoke('delete_cloud_account', { confirmation });
@@ -7723,7 +7699,7 @@
         localStorage.clear();
         window.location.reload();
       } catch (error) {
-        showToast('Account deletion failed: ' + error, 'error', 8000);
+        showToast(('Account deletion failed: ' + error), 'error', 8000);
       }
     });
 
@@ -7738,15 +7714,13 @@
       if (!analyticsConsent?.decided) {
         toggle.checked = false;
         toggle.indeterminate = false;
-        status.textContent = 'You have not chosen yet. The prompt appears on first launch.';
+        setText(status, () => (tr('You have not chosen yet. The prompt appears on first launch.')));
         return;
       }
 
       toggle.checked = Boolean(analyticsConsent.consented);
       toggle.indeterminate = false;
-      status.textContent = analyticsConsent.consented
-        ? 'Pseudonymous usage data is shared to improve FlowSight. You can withdraw at any time.'
-        : 'Product analytics is not shared.';
+      setText(status, () => ((analyticsConsent.consented ? tr('Pseudonymous usage data is shared to improve FlowSight. You can withdraw at any time.') : tr('Product analytics is not shared.'))));
     }
 
     async function loadAnalyticsConsent() {
@@ -7790,17 +7764,17 @@
         if (consented) {
           invoke('sync_anonymous_analytics').catch(() => {});
           if (fromFirstLaunch) {
-            showToast('Thanks for helping improve FlowSight', 'success');
+            showToast(tr('Thanks for helping improve FlowSight'), 'success');
           }
         } else if (!fromFirstLaunch) {
-          showToast('Pseudonymous analytics turned off', 'success');
+          showToast(tr('Pseudonymous analytics turned off'), 'success');
         }
         if (fromFirstLaunch) {
           const waitingForOnboarding = await promptOnboardingIfNeeded();
           if (!waitingForOnboarding) maybeShowDesktopPresencePrompt();
         }
       } catch (e) {
-        showToast('Could not save analytics preference: ' + e, 'error');
+        showToast(('Could not save analytics preference: ' + e), 'error');
       } finally {
         analyticsConsentBusy = false;
         acceptBtn?.removeAttribute('disabled');
@@ -7834,16 +7808,16 @@
       const btn = document.getElementById('sendFeedbackBtn');
       const message = input?.value?.trim() || '';
       if (message.length < 3) {
-        showToast('Please enter at least a few words of feedback.', 'error');
+        showToast(tr('Please enter at least a few words of feedback.'), 'error');
         return;
       }
       if (btn) btn.disabled = true;
       try {
         await invoke('submit_product_feedback', { message });
         if (input) input.value = '';
-        showToast('Thanks — your feedback was saved.', 'success');
+        showToast(tr('Thanks — your feedback was saved.'), 'success');
       } catch (e) {
-        showToast('Could not send feedback: ' + e, 'error');
+        showToast(('Could not send feedback: ' + e), 'error');
       } finally {
         if (btn) btn.disabled = false;
       }
@@ -7864,13 +7838,12 @@
       try {
         console.log("[Agent] Initializing backend...");
         await invoke('initialize_agent');
+        await connectNativeLocalization(invoke);
         console.log("[Agent] Backend initialized.");
       } catch (e) {
         console.error("Failed to init agent:", e);
         showToast(
-          typeof e === "string"
-            ? e
-            : "FlowSight cannot write its data folder (check Windows Defender Controlled Folder Access or allowlisted app). Details: " + e,
+          ((typeof e === "string") ? e : ("FlowSight cannot write its data folder (check Windows Defender Controlled Folder Access or allowlisted app). Details: " + e)),
           "error",
           10000
         );
@@ -7938,7 +7911,7 @@
       }
 
       const sel = document.getElementById('jiraSelect');
-      sel.innerHTML = '<option>Loading...</option>';
+      sel.innerHTML = markup('<option>Loading...</option>');
 
       try {
         let tasks = [];
@@ -7950,7 +7923,7 @@
           tasks = tasks.concat(jiraTasks.map(t => ({
             key: t.key,
             title: t.summary,
-            status: t.status || 'Unknown',
+            status: t.status || tr('Unknown'),
             source: 'jira'
           })));
         }
@@ -7960,13 +7933,13 @@
           tasks = tasks.concat(linearTasks.map(t => ({
             key: t.identifier,
             title: t.title,
-            status: t.state || 'Unknown',
+            status: t.state || tr('Unknown'),
             source: 'linear'
           })));
         }
 
-        sel.innerHTML = '<option value="">Select Task...</option>';
-        sel.innerHTML += '<option value="General">General / No Ticket</option>';
+        sel.innerHTML = markup('<option value="">Select Task...</option>');
+        sel.insertAdjacentHTML('beforeend', markup('<option value="General">General / No Ticket</option>'));
 
         if (tasks.length > 0) {
           const groups = {};
@@ -7993,7 +7966,7 @@
             groups[status].forEach(t => {
               const opt = document.createElement('option');
               opt.value = t.key;
-              opt.textContent = `[${t.key}] ${t.title}`;
+              setText(opt, () => (`[${t.key}] ${t.title}`));
               grp.appendChild(opt);
             });
             sel.appendChild(grp);
@@ -8002,16 +7975,16 @@
 
         const other = document.createElement('option');
         other.value = "MANUAL";
-        other.textContent = "Other (Type Manual)";
+        setText(other, () => (tr("Other (Type Manual)")));
         sel.appendChild(other);
 
       } catch (e) {
         console.error('[UI] Refresh tasks failed:', e);
-        sel.innerHTML = '<option value="">Not connected</option>';
-        sel.innerHTML += '<option value="General">General / No Ticket</option>';
+        sel.innerHTML = markup('<option value="">Not connected</option>');
+        sel.insertAdjacentHTML('beforeend', markup('<option value="General">General / No Ticket</option>'));
         const manual = document.createElement('option');
         manual.value = "MANUAL";
-        manual.textContent = "Manual Task";
+        setText(manual, () => (tr("Manual Task")));
         sel.appendChild(manual);
       }
     }
@@ -8060,16 +8033,16 @@
     function setWeeklyReportStatus(message, state = '') {
       const status = document.getElementById('weeklyReportStatus');
       if (!status) return;
-      status.textContent = message;
+      setText(status, () => typeof message==='function'?message():localizeStatus(message));
       status.dataset.state = state;
     }
 
     function renderWeeklyReportStatus(schedule = weeklyReportSchedule) {
       if (!schedule) return;
-      const lastSaved = schedule.lastGeneratedDate ? ` Last saved ${schedule.lastGeneratedDate}.` : '';
+      const lastSaved = schedule.lastGeneratedDate ? formatMessage` Last saved ${schedule.lastGeneratedDate}.` : '';
       setWeeklyReportStatus(schedule.enabled
-        ? `Scheduled for ${WEEKDAY_LABELS[schedule.weekday]} at ${schedule.time}.${lastSaved}`
-        : `Automatic reports are off.${lastSaved}`);
+        ? formatMessage`Scheduled for ${tr(WEEKDAY_LABELS[schedule.weekday])} at ${schedule.time}.${lastSaved}`
+        : formatMessage`Automatic reports are off.${lastSaved}`);
       const openLast = document.getElementById('weeklyReportOpenLastBtn');
       if (openLast) openLast.hidden = !schedule.lastSavedPath;
     }
@@ -8079,7 +8052,7 @@
       document.getElementById('weeklyReportWeekday').value = String(schedule.weekday);
       document.getElementById('weeklyReportTime').value = schedule.time || '17:00';
       weeklyReportSelectedFolder = schedule.folder || '';
-      document.getElementById('weeklyReportFolder').textContent = weeklyReportSelectedFolder || 'Choose a folder';
+      setText(document.getElementById('weeklyReportFolder'), () => ((weeklyReportSelectedFolder || tr('Choose a folder'))));
       renderWeeklyReportStatus(schedule);
     }
 
@@ -8095,12 +8068,12 @@
         const selected = await openFolderDialog({
           directory: true,
           multiple: false,
-          title: 'Choose where to save weekly reports',
+          title: tr('Choose where to save weekly reports'),
           ...(weeklyReportSelectedFolder ? { defaultPath: weeklyReportSelectedFolder } : {}),
         });
         if (typeof selected === 'string' && selected) {
           weeklyReportSelectedFolder = selected;
-          document.getElementById('weeklyReportFolder').textContent = selected;
+          setText(document.getElementById('weeklyReportFolder'), () => (selected));
         }
       } catch (error) {
         setWeeklyReportStatus('Could not choose a folder: ' + error, 'error');
@@ -8119,7 +8092,7 @@
         folder: weeklyReportSelectedFolder,
       };
       if (schedule.enabled && !schedule.folder) {
-        setWeeklyReportStatus('Choose a folder before turning on automatic reports.', 'error');
+        setWeeklyReportStatus(tr('Choose a folder before turning on automatic reports.'), 'error');
         document.getElementById('weeklyReportChooseFolder').focus();
         return;
       }
@@ -8129,7 +8102,7 @@
         renderWeeklyReportForm(weeklyReportSchedule);
         scheduledReportRetryAt = 0;
         scheduledReportPendingPdf = null;
-        showToast('Weekly report schedule saved', 'success');
+        showToast(tr('Weekly report schedule saved'), 'success');
         checkScheduledReport().catch((error) => console.warn('[WeeklyReport] Check failed:', error));
       } catch (error) {
         setWeeklyReportStatus('Could not save schedule: ' + error, 'error');
@@ -8173,7 +8146,7 @@
         if (scheduledReportRetryKey === runKey && Date.now() < scheduledReportRetryAt) return;
 
         try {
-          setWeeklyReportStatus('Generating and saving this week\'s work report…');
+          setWeeklyReportStatus(tr('Generating and saving this week\'s work report…'));
           if (!scheduledReportPendingPdf || scheduledReportPendingPdf.runKey !== runKey) {
             const payload = await requestStatusReportPayload();
             lastStatusReportPayload = payload;
@@ -8197,7 +8170,7 @@
           scheduledReportLastError = '';
           weeklyReportSchedule = await invoke('get_weekly_report_schedule');
           renderWeeklyReportStatus(weeklyReportSchedule);
-          showToast('Weekly work report saved', 'success');
+          showToast(tr('Weekly work report saved'), 'success');
         } catch (error) {
           const latest = await invoke('get_weekly_report_schedule').catch(() => null);
           if (latest && latest.revision !== schedule.revision) {
@@ -8212,7 +8185,7 @@
           scheduledReportRetryKey = runKey;
           scheduledReportRetryAt = Date.now() + 10 * 60 * 1000;
           if (scheduledReportLastError !== message) {
-            showToast('Automatic work report failed: ' + message, 'error', 8000);
+            showToast(('Automatic work report failed: ' + message), 'error', 8000);
             scheduledReportLastError = message;
           }
         }
@@ -8262,7 +8235,7 @@
     function setLocalAgentStatus(role, value) {
       const status = document.getElementById('localAgentSettingsStatus');
       if (status) {
-        status.textContent = value;
+        setText(status, () => typeof value==='function'?value():localizeStatus(value));
         status.dataset.state = role;
       }
       if (role === 'error') showToast(value, 'error');
@@ -8280,7 +8253,7 @@
       pendingLocalAgentAction = proposal;
       const panel = document.getElementById('localAgentProposal');
       panel.hidden = !proposal;
-      document.getElementById('localAgentProposalSummary').textContent = proposal?.summary || '';
+      setText(document.getElementById('localAgentProposalSummary'), () => proposal?.localizedSummary?.[getLanguage()] || proposal?.summary || '');
       if (proposal) {
         document.getElementById('localAgentManageDetails').open = true;
         panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -8291,38 +8264,39 @@
       if (result?.focus) {
         const focus = result.focus;
         const warning = result.protectionWarnings?.length ? `\n${result.protectionWarnings.join('\n')}` : '';
-        return `Focus block ${focus.status}: ${focus.intention}${warning}`;
+        return formatMessage`Focus block ${localizeStatus(focus.status)}: ${focus.intention}${warning}`;
       }
       if (result?.playbook && Array.isArray(result.steps)) {
         const steps = result.steps.map((step) => {
-          if (step.tool === 'notifications.digest') return `Held reminders: ${step.result?.count || 0}`;
-          if (step.tool === 'focus.end') return `Focus block ended${step.result?.digest?.length ? `; ${step.result.digest.length} held reminder(s) delivered` : ''}`;
-          if (step.error) return `${step.tool}: ${step.error}`;
-          if (step.result?.closed?.restoreId) return `${step.tool}: restore ID ${step.result.closed.restoreId}`;
-          if (step.result?.opened) return `${step.tool}: opened ${step.result.opened}`;
-          if (step.tool) return `${step.tool}: done`;
+          if (step.tool === 'notifications.digest') return formatMessage`Held reminders: ${step.result?.count || 0}`;
+          if (step.tool === 'focus.end') return formatMessage`Focus block ended${step.result?.digest?.length ? formatMessage`; ${step.result.digest.length} held reminder(s) delivered` : ''}`;
+          if (step.error) return formatMessage`${step.tool}: ${step.error}`;
+          if (step.result?.closed?.restoreId) return formatMessage`${step.tool}: restore ID ${step.result.closed.restoreId}`;
+          if (step.result?.opened) return formatMessage`${step.tool}: opened ${step.result.opened}`;
+          if (step.tool) return formatMessage`${step.tool}: done`;
           if (step.microplan) return step.microplan.join('\n');
-          if (step.tomorrowPlan) return `Open tasks for tomorrow: ${step.tomorrowPlan.map((task) => task.title).join(', ') || 'none'}`;
+          if (step.tomorrowPlan) return formatMessage`Open tasks for tomorrow: ${step.tomorrowPlan.map((task) => task.title).join(', ') || tr('none')}`;
           return JSON.stringify(step);
         });
         return `${result.playbook}\n${steps.join('\n')}`;
       }
-      if (result?.task) return `Task ${result.task.status}: ${result.task.title}`;
-      if (result?.event) return `Calendar event: ${result.event.title} (${result.event.startAt} to ${result.event.endAt})`;
-      if (result?.draft) return `Draft saved for ${result.draft.recipient}. It has not been sent.`;
-      if (result?.childId && result?.parentId) return `Created ${result.provider} child ${result.childId} under ${result.parentId}${result.url ? `: ${result.url}` : ''}${result.linkError ? `\n${result.linkError}` : ''}`;
-      if (result?.published === false && result?.title && result?.body) return `${result.title}\n\n${result.body}\n\nDraft only; copy and review before publishing.`;
-      if (result?.opened) return `Opened ${result.opened}`;
+      if (result?.task) return formatMessage`Task ${localizeStatus(result.task.status)}: ${result.task.title}`;
+      if (result?.event) return formatMessage`Calendar event: ${result.event.title} (${result.event.startAt} to ${result.event.endAt})`;
+      if (result?.draft) return formatMessage`Draft saved for ${result.draft.recipient}. It has not been sent.`;
+      if (result?.childId && result?.parentId) return formatMessage`Created ${result.provider} child ${result.childId} under ${result.parentId}${result.url ? `: ${result.url}` : ''}${result.linkError ? `\n${result.linkError}` : ''}`;
+      if (result?.published === false && result?.title && result?.body) return formatMessage`${result.title}\n\n${result.body}\n\nDraft only; copy and review before publishing.`;
+      if (result?.opened) return formatMessage`Opened ${result.opened}`;
       if (result?.preferences) return JSON.stringify(result.preferences, null, 2);
       return JSON.stringify(result, null, 2);
     }
 
     function renderBrowserPairing(browser) {
+      const wasConnected = Boolean(localBrowserPairing?.connected);
       localBrowserPairing = browser;
       const status = document.getElementById('localAgentBrowserStatus');
-      status.textContent = !browser ? 'Unavailable' : browser.connected ? 'Connected' : 'Not connected';
+      setText(status, () => ((!browser ? tr('Unavailable') : (browser.connected ? tr('Connected') : tr('Not connected')))));
       status.dataset.state = !browser ? 'unavailable' : browser.connected ? 'connected' : 'disconnected';
-      document.getElementById('localAgentBrowserPort').textContent = browser?.port || '—';
+      setText(document.getElementById('localAgentBrowserPort'), () => ((browser?.port || '—')));
       document.getElementById('localAgentBrowserToken').value = browser?.token || '';
       document.getElementById('localAgentCopyBrowserKeyBtn').disabled = !browser?.token;
       const chromeAvailable = Boolean(browser?.chromeStoreAvailable);
@@ -8330,16 +8304,12 @@
       document.getElementById('localAgentInstallChromeBtn').hidden = !chromeAvailable;
       document.getElementById('localAgentInstallEdgeBtn').hidden = !edgeAvailable;
       document.getElementById('localAgentInstallActions').hidden = !(chromeAvailable || edgeAvailable);
-      document.getElementById('localAgentBrowserInstallStatus').textContent = !browser
-        ? 'The local browser bridge is unavailable. Restart FlowSight and try again.'
-        : chromeAvailable || edgeAvailable
-          ? 'The store controls installation. If its page is not available yet, Google or Microsoft may still be reviewing the extension.'
-          : 'The official store listing is not available in this build yet. Other local tools still work.';
+      setText(document.getElementById('localAgentBrowserInstallStatus'), () => ((!browser ? tr('The local browser bridge is unavailable. Restart FlowSight and try again.') : ((chromeAvailable || edgeAvailable) ? tr('The store controls installation. If its page is not available yet, Google or Microsoft may still be reviewing the extension.') : tr('The official store listing is not available in this build yet. Other local tools still work.')))));
       const checkStatus = document.getElementById('localAgentBrowserCheckStatus');
       if (browser?.connected) {
-        checkStatus.textContent = 'Ready. You can use browser actions from local automations.';
-      } else if (checkStatus.textContent.startsWith('Ready.')) {
-        checkStatus.textContent = 'The connection was lost. Reopen the extension and choose Save and connect.';
+        setText(checkStatus, () => (tr('Ready. You can use browser actions from local automations.')));
+      } else if (wasConnected) {
+        setText(checkStatus, () => (tr('The connection was lost. Reopen the extension and choose Save and connect.')));
       }
       document.querySelectorAll('#localAgentTools .local-agent-tool').forEach((tool) => {
         if (tool.textContent.startsWith('browser.')) {
@@ -8379,27 +8349,27 @@
         for (const tool of tools) {
           const item = document.createElement('span');
           item.className = 'local-agent-tool';
-          item.textContent = tool.name;
+          setText(item, () => (tool.name));
           const needsBrowser = tool.name.startsWith('browser.');
           if (needsBrowser && !browser?.connected) item.dataset.status = 'needs-connection';
-          item.title = `${tool.description}${needsBrowser && !browser?.connected ? ' Pair the browser extension first.' : ''}`;
+          setAttributeText(item, 'title', () => (`${localizeStatus(tool.description)}${needsBrowser && !browser?.connected ? tr(' Pair the browser extension first.') : ''}`));
           toolsHost.appendChild(item);
         }
         memoryHost.replaceChildren();
         const entries = Object.entries(data?.preferences || {});
         if (!entries.length) {
-          memoryHost.textContent = 'No saved preferences.';
+          setText(memoryHost, () => (tr('No saved preferences.')));
         } else {
           for (const [key, preference] of entries) {
             const row = document.createElement('div');
             row.className = 'local-agent-memory-item';
             const label = document.createElement('span');
-            label.textContent = `${key}: ${preference.value}`;
+            setText(label, () => (`${key}: ${preference.value}`));
             const remove = document.createElement('button');
             remove.type = 'button';
             remove.className = 'button button-secondary';
-            remove.textContent = 'Forget';
-            remove.setAttribute('aria-label', `Forget ${key}`);
+            setText(remove, () => (tr('Forget')));
+            setAttributeText(remove, 'aria-label', () => formatMessage`Forget ${key}`);
             remove.addEventListener('click', async () => {
               try {
                 showLocalAgentProposal(await invoke('propose_local_agent_tool', {
@@ -8414,8 +8384,8 @@
           }
         }
       } catch (error) {
-        toolsHost.textContent = `Tools unavailable: ${error}`;
-        memoryHost.textContent = 'Saved preferences could not be loaded.';
+        setText(toolsHost, () => (formatMessage`Tools unavailable: ${error}`));
+        setText(memoryHost, () => (tr('Saved preferences could not be loaded.')));
       }
     }
 
@@ -8439,25 +8409,23 @@
       const key = localBrowserPairing?.token;
       const status = document.getElementById('localAgentBrowserCheckStatus');
       if (!key) {
-        status.textContent = 'The pairing key is unavailable. Restart FlowSight and try again.';
+        setText(status, () => (tr('The pairing key is unavailable. Restart FlowSight and try again.')));
         return;
       }
       try {
         await navigator.clipboard.writeText(key);
-        status.textContent = 'Key copied. Paste it into the extension’s pairing page and choose Save and connect.';
+        setText(status, () => (tr('Key copied. Paste it into the extension’s pairing page and choose Save and connect.')));
       } catch (_) {
-        status.textContent = 'Could not copy automatically. Select the hidden key field above and copy it manually.';
+        setText(status, () => (tr('Could not copy automatically. Select the hidden key field above and copy it manually.')));
       }
     });
     document.getElementById('localAgentCheckBrowserBtn')?.addEventListener('click', async () => {
       const button = document.getElementById('localAgentCheckBrowserBtn');
       const status = document.getElementById('localAgentBrowserCheckStatus');
       button.disabled = true;
-      status.textContent = 'Checking the local connection…';
+      setText(status, () => (tr('Checking the local connection…')));
       const browser = await refreshBrowserPairing();
-      if (!browser?.connected) status.textContent = browser
-        ? 'Not connected yet. Choose Save and connect in the extension, then check again.'
-        : 'The local browser bridge is unavailable. Restart FlowSight and try again.';
+      if (!browser?.connected) setText(status, () => ((browser ? tr('Not connected yet. Choose Save and connect in the extension, then check again.') : tr('The local browser bridge is unavailable. Restart FlowSight and try again.'))));
       button.disabled = false;
     });
 
@@ -8468,7 +8436,7 @@
       try {
         const result = await invoke('confirm_local_agent_action', { id: proposal.id });
         showLocalAgentProposal(null);
-        setLocalAgentStatus('success', describeLocalAgentResult(result));
+        setLocalAgentStatus('success', () => describeLocalAgentResult(result));
         await loadLocalAgentDetails();
       } catch (error) {
         showLocalAgentProposal(null);
@@ -8484,7 +8452,7 @@
       showLocalAgentProposal(null);
       try { await invoke('cancel_local_agent_action', { id }); }
       catch (error) { setLocalAgentStatus('error', String(error)); }
-      setLocalAgentStatus('success', 'Action cancelled.');
+      setLocalAgentStatus('success', tr('Action cancelled.'));
     });
 
     listen('local-agent-focus-changed', ({ payload }) => {
@@ -8507,7 +8475,7 @@
     listen('local-agent-digest', ({ payload }) => {
       if (Array.isArray(payload) && payload.length) {
         setLocalAgentStatus('success', `${payload.length} held reminder(s):\n${payload.map((item) => `• ${item.title}: ${item.body}`).join('\n')}`);
-        showToast(`${payload.length} focus reminder(s) held during quiet mode`, 'success', 5000);
+        showToast(formatMessage`${payload.length} focus reminder(s) held during quiet mode`, 'success', 5000);
       }
     });
 
@@ -8538,7 +8506,7 @@
     function formatDuration(totalSeconds) {
       const hours = Math.floor(totalSeconds / 3600);
       const mins = Math.floor((totalSeconds % 3600) / 60);
-      if (hours > 0) return `${hours}hr ${mins}min`;
+      if (hours > 0) return `${hours} h ${mins} min`;
       return `${mins}min`;
     }
 
@@ -8553,8 +8521,8 @@
       const d = new Date(dateStr + 'T12:00:00');
       const today = new Date();
       const isToday = d.toDateString() === today.toDateString();
-      const formatted = d.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
-      if (isToday) return `Today, ${formatted}`;
+      const formatted = d.toLocaleDateString(getLocale(), { month: 'long', day: 'numeric' });
+      if (isToday) return formatMessage`Today, ${formatted}`;
       return formatted;
     }
 
@@ -8575,7 +8543,7 @@
         const inner = day.has_activity
           ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
           : '';
-        return `<div class="${classes.join(' ')}"><span class="week-day-label">${day.weekday}</span><div class="week-day-ring">${inner}</div></div>`;
+        return html`<div class="${classes.join(' ')}"><span class="week-day-label">${new Intl.DateTimeFormat(getLocale(), {weekday:'short'}).format(new Date(day.date+'T12:00:00'))}</span><div class="week-day-ring">${inner}</div></div>`;
       }).join('');
     }
 
@@ -8583,7 +8551,7 @@
       const r = 30;
       const circ = 2 * Math.PI * r;
       const offset = circ * (1 - Math.min(progress, 1));
-      return `
+      return html`
         <div class="progress-ring">
           <svg viewBox="0 0 72 72">
             <circle class="progress-ring-bg" cx="36" cy="36" r="${r}"/>
@@ -8602,11 +8570,11 @@
         const fillWidth = share.toFixed(1);
         const mins = Math.round(item.seconds / 60);
         const colorKey = taskColorKeyForCategory(item.category);
-        return `
+        return html`
           <div class="task-bar-row">
-            <span class="task-bar-name" title="${escapeHtml(item.label)}"><span class="task-bar-dot task-color-${colorKey}" aria-hidden="true"></span>${escapeHtml(item.label)}</span>
+            <span class="task-bar-name" title="${escapeHtml(item.label===item.category?categoryLabel(item.label):item.label)}"><span class="task-bar-dot task-color-${colorKey}" aria-hidden="true"></span>${escapeHtml(item.label===item.category?categoryLabel(item.label):item.label)}</span>
             <span class="task-bar-meta"><span class="task-bar-pct">${pct}%</span><span class="task-bar-time">${mins}m</span></span>
-            <div class="task-bar-track" role="img" aria-label="${escapeHtml(item.label)}: ${pct}% of tracked time, ${mins} minutes">
+            <div class="task-bar-track" role="img" aria-label="${escapeHtml(item.label===item.category?categoryLabel(item.label):item.label)}: ${pct}% of tracked time, ${mins} minutes">
               <svg class="task-bar-meter task-color-${colorKey}" viewBox="0 0 100 9" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="${fillWidth}" height="9" rx="1.5" ry="4.5"/></svg>
             </div>
           </div>`;
@@ -8616,11 +8584,11 @@
     function renderFocusChart(data) {
       const focus = data.focus;
       if (!focus) {
-        return '<div class="focus-chart-empty">Deep Focus is unavailable until local activity has been analyzed</div>';
+        return markup('<div class="focus-chart-empty">Deep Focus is unavailable until local activity has been analyzed</div>');
       }
       const deepMinutes = Math.round(focus.deep_threshold_seconds / 60);
       if (!focus?.deep_focus_sessions) {
-        return `<div class="focus-chart-empty">No sustained ${deepMinutes}-minute block yet today</div>`;
+        return html`<div class="focus-chart-empty">${formatMessage`No sustained ${deepMinutes}-minute block yet today`}</div>`;
       }
 
       const byHour = new Array(24).fill(0);
@@ -8633,19 +8601,19 @@
 
       const slots = focusChartSlots(byHour);
       if (!slots.length) {
-        return '<div class="focus-chart-empty">No hourly deep-focus data available yet</div>';
+        return markup('<div class="focus-chart-empty">No hourly deep-focus data available yet</div>');
       }
       const bars = slots.map(({ hour, seconds }) => {
         const pct = focusBarPercent(seconds);
-        const minutes = seconds < 60 ? 'under 1 minute' : `${Math.round(seconds / 60)} minutes`;
+        const minutes = seconds < 60 ? tr('under 1 minute') : formatMessage`${Math.round(seconds / 60)} minutes`;
         const tip = seconds > 0
-          ? `${formatChartHour(hour)} — ${minutes} of deep focus`
-          : `${formatChartHour(hour)} — no deep focus`;
+          ? formatMessage`${formatChartHour(hour)} — ${minutes} of deep focus`
+          : formatMessage`${formatChartHour(hour)} — no deep focus`;
         const cls = seconds > 0 ? 'focus-bar' : 'focus-bar focus-bar-empty';
-        return `<svg class="${cls}" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${tip}" title="${tip}"><rect x="0" y="${100 - pct}" width="100" height="${pct}" rx="20" ry="3"/></svg>`;
+        return html`<svg class="${cls}" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${tip}" title="${tip}"><rect x="0" y="${100 - pct}" width="100" height="${pct}" rx="20" ry="3"/></svg>`;
       }).join('');
 
-      return `
+      return html`
         <div class="focus-chart-wrap">
           <div class="focus-chart-scale"><span>Hourly focus</span><span>60m max</span></div>
           <div class="focus-chart">${bars}</div>
@@ -8656,20 +8624,20 @@
 
     function renderSummaryRail(percent) {
       const width = Math.max(0, Math.min(100, Number(percent) || 0));
-      return `<svg class="summary-meter" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="${width}" height="6" rx="1" ry="3"/></svg>`;
+      return html`<svg class="summary-meter" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="0" width="${width}" height="6" rx="1" ry="3"/></svg>`;
     }
 
     function renderTimeline(entries) {
       if (!entries.length) return '';
-      return `
+      return html`
         <div class="timeline-section">
           <div class="timeline-section-title">Timeline</div>
           ${entries.map(e => {
-            const time = new Date(e.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const time = new Date(e.time).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
             const dur = Math.round((e.duration_seconds || 0) / 60) + 'm';
-            const category = (e.category && String(e.category).trim()) ? String(e.category).trim() : 'General';
-            const ticket = e.ticket ? `<span class="badge badge-success" style="font-size:10px;margin-left:6px;">${escapeHtml(e.ticket)}</span>` : '';
-            return `
+            const category = (e.category && String(e.category).trim()) ? String(e.category).trim() : tr('General');
+            const ticket = e.ticket ? html`<span class="badge badge-success" style="font-size:10px;margin-left:6px;">${escapeHtml(e.ticket)}</span>` : '';
+            return html`
               <div class="timeline-item">
                 <div style="flex:1;">
                   <div style="font-size:11px;color:hsl(var(--muted-foreground));display:flex;justify-content:space-between;">
@@ -8687,9 +8655,9 @@
 
     function renderHistory(data, week) {
       const activeDays = week?.days?.filter(day => day.has_activity).length || 0;
-      const weekActivityLabel = `${activeDays} active day${activeDays === 1 ? '' : 's'}`;
+      const weekActivityLabel = formatMessage`${activeDays} active day${activeDays === 1 ? '' : 's'}`;
       if (data.entries.length === 0) {
-        summaryBody.innerHTML = `
+        summaryBody.innerHTML = html`
           <div class="summary-header">
             <h1 class="summary-title">Insights</h1>
             <div class="summary-header-actions">
@@ -8723,18 +8691,18 @@
         ? Math.min(100, Math.round(focusSeconds / data.total_seconds * 100)) : 0;
       const distractionCount = canonicalDistractionEvents(data);
       const distractionDefinition = data.focus
-        ? `At least ${Math.round(data.focus.browsing_distraction_min_seconds / 60)} observed minutes of non-work Browsing in one episode; capture gaps up to ${data.focus.sensor_grace_seconds} seconds may be joined`
-        : 'Canonical sustained non-work browsing episodes';
-      let focusInsight = 'Start tracking to see your focus insights.';
+        ? formatMessage`At least ${Math.round(data.focus.browsing_distraction_min_seconds / 60)} observed minutes of non-work Browsing in one episode; capture gaps up to ${data.focus.sensor_grace_seconds} seconds may be joined`
+        : tr('Canonical sustained non-work browsing episodes');
+      let focusInsight = tr('Start tracking to see your focus insights.');
       if (focusSeconds > 0) {
         const count = data.focus?.deep_focus_sessions || 0;
-        focusInsight = `<strong>${formatShortDuration(focusSeconds)}</strong> across ${count} sustained block${count === 1 ? '' : 's'} today.`;
+        focusInsight = escapeHtml(formatMessage`${formatShortDuration(focusSeconds)} across ${count} sustained blocks today.`);
       } else if (data.focus?.focus_eligible_seconds > 0) {
         const deepMinutes = Math.round(data.focus.deep_threshold_seconds / 60);
-        focusInsight = `Focused activity is present, but no block has reached the ${deepMinutes}-minute reference yet.`;
+        focusInsight = formatMessage`Focused activity is present, but no block has reached the ${deepMinutes}-minute reference yet.`;
       }
 
-      summaryBody.innerHTML = `
+      summaryBody.innerHTML = html`
         <div class="summary-header">
           <h1 class="summary-title">Insights</h1>
           <div class="summary-header-actions">
@@ -8759,15 +8727,15 @@
               <div class="summary-total-time">${formatDuration(data.total_seconds)}</div>
               <div class="summary-goal">
                 <span class="goal-dot ${goalMet ? '' : 'behind'}"></span>
-                ${goalSeconds > 0 ? `Daily goal ${getDailyGoalHours()} hours` : 'No daily goal set'}
+                ${goalSeconds > 0 ? formatMessage`Daily goal ${getDailyGoalHours()} hours` : tr('No daily goal set')}
               </div>
             </div>
-            ${goalSeconds > 0 ? `<div class="summary-goal-track" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(progress, 1) * 100)}">${renderSummaryRail(Math.round(Math.min(progress, 1) * 100))}</div>` : ''}
+            ${goalSeconds > 0 ? html`<div class="summary-goal-track" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(progress, 1) * 100)}">${renderSummaryRail(Math.round(Math.min(progress, 1) * 100))}</div>` : ''}
           </div>
           <div class="summary-focus-ratio">
             <div class="summary-focus-head"><span>Sustained focus share</span><strong>${focusShare}%</strong></div>
-            <div class="summary-focus-track" role="img" aria-label="${focusShare}% of tracked time in sustained focus">${renderSummaryRail(focusShare)}</div>
-            <p>${formatShortDuration(focusSeconds)} in sustained blocks · ${formatShortDuration(data.total_seconds)} tracked</p>
+            <div class="summary-focus-track" role="img" aria-label="${escapeHtml(formatMessage`${focusShare}% of tracked time in sustained focus`)}">${renderSummaryRail(focusShare)}</div>
+            <p>${formatMessage`${formatShortDuration(focusSeconds)} in sustained blocks · ${formatShortDuration(data.total_seconds)} tracked`}</p>
           </div>
           ${renderTaskBars(taskItems, data.total_seconds)}
         </div>
@@ -8804,7 +8772,7 @@
 
       const { activeStep, doneThrough, detail } = reportProgressState;
 
-      host.innerHTML = `
+      host.innerHTML = html`
         <div class="sr-generating">
           <div class="sr-gen-title"><span class="loading"></span> Building your work report</div>
           <div class="sr-gen-steps" id="srGenSteps">
@@ -8813,19 +8781,19 @@
               const isActive = i === activeStep && !isDone;
               const icon = isDone ? '✓' : isActive ? '…' : '○';
               const stepDetail = isActive && detail
-                ? `<span class="sr-gen-detail">${escapeHtml(extractEnglishText(detail))}</span>`
+                ? html`<span class="sr-gen-detail">${escapeHtml(localizeStatus(detail))}</span>`
                 : isDone && i === doneThrough && detail && i > 0
-                  ? `<span class="sr-gen-detail">${escapeHtml(extractEnglishText(detail).slice(0, 120))}</span>`
+                  ? html`<span class="sr-gen-detail">${escapeHtml(localizeStatus(detail).slice(0, 120))}</span>`
                   : '';
-              return `
+              return html`
               <div class="sr-gen-step ${isActive ? 'active' : isDone ? 'done' : ''}" data-step="${i}">
-                <span>${icon} ${escapeHtml(label)}</span>
+                <span>${icon} ${escapeHtml(tr(label))}</span>
                 ${stepDetail}
               </div>`;
             }).join('')}
           </div>
           <p style="font-size:10px;color:hsl(var(--muted-foreground));margin:14px 0 0;">
-            Step ${Math.min(doneThrough + 2, REPORT_GEN_STEP_LABELS.length)} of ${REPORT_GEN_STEP_LABELS.length}
+            ${formatMessage`Step ${Math.min(doneThrough + 2, REPORT_GEN_STEP_LABELS.length)} of ${REPORT_GEN_STEP_LABELS.length}`}
           </p>
         </div>`;
     }
@@ -8865,7 +8833,7 @@
     }
 
     function statusReportViewModel(payload) {
-      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || 'Knowledge worker';
+      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || tr('Knowledge worker');
       return createStatusReportViewModel(payload, {
         userName,
         todayDate: currentHistoryData?.date || new Date().toISOString().slice(0, 10),
@@ -8884,7 +8852,7 @@
         try {
           await exportStatusReportPdf(payload);
         } catch (error) {
-          showToast('PDF export failed: ' + error, 'error');
+          showToast(('PDF export failed: ' + error), 'error');
         } finally {
           button.disabled = false;
         }
@@ -8898,11 +8866,11 @@
 
       if (btn) {
         btn.disabled = true;
-        if (labelEl) labelEl.textContent = 'Generating…';
+        if (labelEl) setText(labelEl, () => (tr('Generating…')));
       }
 
       openStatusReportModal();
-      reportProgressState = { activeStep: 0, doneThrough: -1, detail: 'Connecting…' };
+      reportProgressState = { activeStep: 0, doneThrough: -1, detail: tr('Connecting…') };
       renderReportGeneratingUI();
       await beginReportProgressListen();
 
@@ -8912,23 +8880,23 @@
         reportProgressState = {
           activeStep: REPORT_GEN_STEP_LABELS.length - 1,
           doneThrough: REPORT_GEN_STEP_LABELS.length - 1,
-          detail: 'Complete',
+          detail: tr('Complete'),
         };
         renderReportGeneratingUI();
         await new Promise((r) => setTimeout(r, 400));
         renderStatusReportPanel(payload);
-        showToast(payload.ai_powered ? 'Work report ready' : 'Basic report ready (AI unavailable)', 'success');
+        showToast((payload.ai_powered ? tr('Work report ready') : tr('Basic report ready (AI unavailable)')), 'success');
       } catch (e) {
         const host = document.getElementById('statusReportModalBody');
         if (host) {
-          host.innerHTML = `<div class="empty-state" style="color:hsl(var(--destructive))">Report failed: ${escapeHtml(String(e))}</div>`;
+          host.innerHTML = html`<div class="empty-state" style="color:hsl(var(--destructive))">Report failed: ${escapeHtml(String(e))}</div>`;
         }
         throw e;
       } finally {
         await endReportProgressListen();
         if (btn) {
           btn.disabled = false;
-          if (labelEl && originalLabel) labelEl.textContent = originalLabel;
+          if (labelEl && originalLabel) setText(labelEl, () => (originalLabel));
         }
       }
     }
@@ -8960,7 +8928,7 @@
       const folderPath = savedPath.replace(/[/\\][^/\\]+$/, '') || savedPath;
       const displayName = savedPath.split(/[/\\]/).pop() || filename || 'report.pdf';
 
-      overlay.innerHTML = `
+      overlay.innerHTML = html`
         <div class="modal-content pdf-download-dialog" role="dialog" aria-modal="true" aria-labelledby="pdfDownloadTitle" aria-describedby="pdfDownloadDescription">
           <div class="modal-header pdf-download-dialog__header">
             <span class="pdf-download-dialog__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></span>
@@ -9006,7 +8974,7 @@
           await invoke('open_path_in_file_manager', { path: folderPath });
           close();
         } catch (err) {
-          showToast('Could not open folder: ' + err, 'error');
+          showToast(('Could not open folder: ' + err), 'error');
           openFolderBtn.disabled = false;
           openFolderBtn.focus();
         }
@@ -9016,7 +8984,7 @@
     async function exportStatusReportPdf(payload) {
       if (!payload) payload = lastStatusReportPayload;
       if (!payload) {
-        showToast('Generate a report first', 'error');
+        showToast(tr('Generate a report first'), 'error');
         return;
       }
       const { doc, filename } = await buildStatusReportPdf(payload, currentHistoryData);
@@ -9026,7 +8994,7 @@
     }
 
     async function loadHistory() {
-      summaryBody.innerHTML = '<div class="empty-state"><span class="loading"></span> Loading summary...</div>';
+      summaryBody.innerHTML = markup('<div class="empty-state"><span class="loading"></span> Loading summary...</div>');
       try {
         const [history, week] = await Promise.all([
           invoke('get_today_history'),
@@ -9039,10 +9007,24 @@
         const errorState = document.createElement('div');
         errorState.className = 'empty-state';
         errorState.style.color = 'hsl(var(--destructive))';
-        errorState.textContent = `Failed to load summary: ${String(e)}`;
+        setText(errorState, () => (formatMessage`Failed to load summary: ${String(e)}`));
         summaryBody.replaceChildren(errorState);
       }
     }
+
+    // Refresh source-owned display surfaces without replacing editable fields,
+    // restarting tracking, requesting a new plan, or generating another report.
+    document.addEventListener('flowsight:languagechange', () => {
+      updateTodayGreeting();
+      updateGoalUI();
+      updatePlayButtonState();
+      renderTrackingStatus();
+      renderWorkPreferencesSummary(userPreferences);
+      renderWeeklyReportStatus();
+      if (currentHistoryData) renderHistory(currentHistoryData, currentWeekData);
+      const reportModal = document.getElementById('statusReportModal');
+      if (reportModal?.classList.contains('visible') && lastStatusReportPayload) renderStatusReportPanel(lastStatusReportPayload);
+    });
 
     async function buildStatusReportPdf(payload, todayData) {
       const { jsPDF } = await import('jspdf');
@@ -9063,8 +9045,8 @@
       toggleManualLogin.style.display = 'none';
       document.getElementById('loginOAuthRow').style.display = 'none';
       document.getElementById('workerLoginForm').style.display = 'none';
-      document.getElementById('loginTitle').innerText = 'Manual code login';
-      document.getElementById('loginSubtitle').innerText = 'Enter your access token directly';
+      document.getElementById('loginTitle').innerText = tr('Manual code login');
+      document.getElementById('loginSubtitle').innerText = tr('Enter your access token directly');
       document.querySelector('.login-splash')?.classList.add('login-splash--manual');
     };
 
@@ -9081,17 +9063,17 @@
       const codeInput = document.getElementById('manualCodeInput');
       const code = codeInput.value.trim();
       if (!code) {
-        showToast("Please enter a valid code", "error");
+        showToast(tr("Please enter a valid code"), "error");
         return;
       }
       codeInput.value = '';
 
       manualLoginBtn.disabled = true;
-      manualLoginBtn.textContent = "Verifying...";
+      setText(manualLoginBtn, () => (tr("Verifying...")));
 
       try {
         const session = await invoke('login_with_code', { code });
-        showToast("Login Successful", "success");
+        showToast(tr("Login Successful"), "success");
         authSession = session;
         currentUser = session.user;
         hideCloudActivationPanel();
@@ -9100,9 +9082,9 @@
         await promptOnboardingIfNeeded();
       } catch (e) {
         console.error(e);
-        showToast("Login Failed: " + e, "error");
+        showToast(("Login Failed: " + e), "error");
         manualLoginBtn.disabled = false;
-        manualLoginBtn.textContent = "Login with Code";
+        setText(manualLoginBtn, () => (tr("Login with Code")));
       }
     };
   </script>

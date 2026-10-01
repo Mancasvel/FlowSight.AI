@@ -179,86 +179,183 @@ pub fn expire_focus_if_due(
     Ok(result["skipped"] != true)
 }
 
-pub fn preview(name: &str, args: &Value) -> Result<String, String> {
+fn paired(english: String, spanish: String) -> Result<(String, String), String> {
+    Ok((english, spanish))
+}
+
+// Both copies use the same arguments and, where needed, one saved-state read.
+// User titles, bodies, URLs and identifiers are always inserted verbatim.
+pub fn preview(name: &str, args: &Value) -> Result<(String, String), String> {
     match name {
         "focus.start" => {
             let protection = text_arg(args, "protection")?;
-            let protection_summary = match protection {
-                "gentle" => "tracking only".to_string(),
-                "standard" => "Windows app banners silenced".to_string(),
-                "strict" => format!(
-                    "Windows app banners silenced; browser blocks: {}",
-                    args["block_patterns"]
+            let (protection_summary, protection_es) = match protection {
+                "gentle" => ("tracking only".to_string(), "solo seguimiento".to_string()),
+                "standard" => (
+                    "Windows app banners silenced".to_string(),
+                    "avisos de aplicaciones de Windows silenciados".to_string(),
+                ),
+                "strict" => (
+                    format!(
+                        "Windows app banners silenced; browser blocks: {}",
+                        args["block_patterns"]
+                    ),
+                    format!(
+                        "avisos de aplicaciones de Windows silenciados; bloqueos del navegador: {}",
+                        args["block_patterns"]
+                    ),
                 ),
                 _ => return Err("Unknown focus protection level.".into()),
             };
-            Ok(format!(
-                "Start a {}-minute focus block on '{}' ({protection_summary})",
-                integer_arg(args, "duration_minutes")?,
-                text_arg(args, "intention")?
-            ))
+            paired(
+                format!(
+                    "Start a {}-minute focus block on '{}' ({protection_summary})",
+                    integer_arg(args, "duration_minutes")?,
+                    text_arg(args, "intention")?
+                ),
+                format!(
+                    "Iniciar un bloque de concentración de {} minutos en '{}' ({protection_es})",
+                    integer_arg(args, "duration_minutes")?,
+                    text_arg(args, "intention")?
+                ),
+            )
         }
-        "focus.pause" => Ok("Pause the active focus block and tracking".into()),
-        "focus.resume" => Ok("Resume the paused focus block and its protections".into()),
-        "focus.end" => Ok("End the active focus block and tracking".into()),
-        "system.set_dnd" => Ok(format!(
-            "{} Windows app notification banners{}",
-            if args["enabled"] == true {
-                "Silence"
-            } else {
-                "Restore"
-            },
-            args["duration_minutes"]
-                .as_i64()
-                .map(|minutes| format!(" for {minutes} minutes"))
-                .unwrap_or_default(),
-        )),
-        "browser.block" => Ok(format!(
-            "Block these browser patterns: {}",
-            args["patterns"]
-        )),
-        "browser.unblock" => Ok(format!(
-            "Unblock these browser patterns: {}",
-            args["patterns"]
-        )),
-        "browser.close_tab" => Ok(format!(
-            "Close browser tab {}",
-            integer_arg(args, "tab_id")?
-        )),
-        "browser.restore_tab" => Ok(format!(
-            "Restore tab {}",
-            browser_restore_label(text_arg(args, "restore_id")?)?
-        )),
-        "tasks.create" => Ok(format!("Create task: {}", text_arg(args, "title")?)),
-        "tasks.update" => Ok(format!(
-            "Update task {}: {}",
-            text_arg(args, "task_id")?,
-            args
-        )),
-        "tasks.complete" => Ok(format!("Complete task {}", text_arg(args, "task_id")?)),
-        "tasks.reprioritize" => Ok(format!(
-            "Set task {} to priority {}",
-            text_arg(args, "task_id")?,
-            integer_arg(args, "priority")?
-        )),
-        "calendar.create_event" => Ok(format!(
-            "Create '{}' in the FlowSight local calendar from {} to {}",
-            text_arg(args, "title")?,
-            text_arg(args, "start_at")?,
-            text_arg(args, "end_at")?
-        )),
-        "calendar.move_event" => Ok(format!(
-            "Move FlowSight local event {} to {}–{}",
-            text_arg(args, "event_id")?,
-            text_arg(args, "start_at")?,
-            text_arg(args, "end_at")?
-        )),
-        "messages.draft" => Ok(format!(
-            "Save a {} draft to {}: {}",
-            text_arg(args, "channel")?,
-            text_arg(args, "recipient")?,
-            text_arg(args, "body")?
-        )),
+        "focus.pause" => paired(
+            "Pause the active focus block and tracking".into(),
+            "Pausar el bloque de concentración activo y el seguimiento".into(),
+        ),
+        "focus.resume" => paired(
+            "Resume the paused focus block and its protections".into(),
+            "Reanudar el bloque de concentración y sus protecciones".into(),
+        ),
+        "focus.end" => paired(
+            "End the active focus block and tracking".into(),
+            "Finalizar el bloque de concentración activo y el seguimiento".into(),
+        ),
+        "system.set_dnd" => paired(
+            format!(
+                "{} Windows app notification banners{}",
+                if args["enabled"] == true {
+                    "Silence"
+                } else {
+                    "Restore"
+                },
+                args["duration_minutes"]
+                    .as_i64()
+                    .map(|minutes| format!(" for {minutes} minutes"))
+                    .unwrap_or_default(),
+            ),
+            format!(
+                "{} los avisos de aplicaciones de Windows{}",
+                if args["enabled"] == true {
+                    "Silenciar"
+                } else {
+                    "Restaurar"
+                },
+                args["duration_minutes"]
+                    .as_i64()
+                    .map(|minutes| format!(" durante {minutes} minutos"))
+                    .unwrap_or_default()
+            ),
+        ),
+        "browser.block" => paired(
+            format!("Block these browser patterns: {}", args["patterns"]),
+            format!(
+                "Bloquear estos patrones del navegador: {}",
+                args["patterns"]
+            ),
+        ),
+        "browser.unblock" => paired(
+            format!("Unblock these browser patterns: {}", args["patterns"]),
+            format!(
+                "Desbloquear estos patrones del navegador: {}",
+                args["patterns"]
+            ),
+        ),
+        "browser.close_tab" => paired(
+            format!("Close browser tab {}", integer_arg(args, "tab_id")?),
+            format!(
+                "Cerrar la pestaña {} del navegador",
+                integer_arg(args, "tab_id")?
+            ),
+        ),
+        "browser.restore_tab" => {
+            let label = browser_restore_label(text_arg(args, "restore_id")?)?;
+            paired(
+                format!("Restore tab {label}"),
+                format!("Restaurar la pestaña {label}"),
+            )
+        }
+        "tasks.create" => paired(
+            format!("Create task: {}", text_arg(args, "title")?),
+            format!("Crear tarea: {}", text_arg(args, "title")?),
+        ),
+        "tasks.update" => paired(
+            format!("Update task {}: {}", text_arg(args, "task_id")?, args),
+            format!(
+                "Actualizar la tarea {}: {}",
+                text_arg(args, "task_id")?,
+                args
+            ),
+        ),
+        "tasks.complete" => paired(
+            format!("Complete task {}", text_arg(args, "task_id")?),
+            format!("Completar la tarea {}", text_arg(args, "task_id")?),
+        ),
+        "tasks.reprioritize" => paired(
+            format!(
+                "Set task {} to priority {}",
+                text_arg(args, "task_id")?,
+                integer_arg(args, "priority")?
+            ),
+            format!(
+                "Asignar la prioridad {} a la tarea {}",
+                integer_arg(args, "priority")?,
+                text_arg(args, "task_id")?
+            ),
+        ),
+        "calendar.create_event" => paired(
+            format!(
+                "Create '{}' in the FlowSight local calendar from {} to {}",
+                text_arg(args, "title")?,
+                text_arg(args, "start_at")?,
+                text_arg(args, "end_at")?
+            ),
+            format!(
+                "Crear '{}' en el calendario local de FlowSight de {} a {}",
+                text_arg(args, "title")?,
+                text_arg(args, "start_at")?,
+                text_arg(args, "end_at")?
+            ),
+        ),
+        "calendar.move_event" => paired(
+            format!(
+                "Move FlowSight local event {} to {}–{}",
+                text_arg(args, "event_id")?,
+                text_arg(args, "start_at")?,
+                text_arg(args, "end_at")?
+            ),
+            format!(
+                "Mover el evento local {} de FlowSight a {}–{}",
+                text_arg(args, "event_id")?,
+                text_arg(args, "start_at")?,
+                text_arg(args, "end_at")?
+            ),
+        ),
+        "messages.draft" => paired(
+            format!(
+                "Save a {} draft to {}: {}",
+                text_arg(args, "channel")?,
+                text_arg(args, "recipient")?,
+                text_arg(args, "body")?
+            ),
+            format!(
+                "Guardar un borrador de {} para {}: {}",
+                text_arg(args, "channel")?,
+                text_arg(args, "recipient")?,
+                text_arg(args, "body")?
+            ),
+        ),
         "messages.send" => {
             let id = text_arg(args, "draft_id")?;
             let data = state::read()?;
@@ -273,44 +370,89 @@ pub fn preview(name: &str, args: &Value) -> Result<String, String> {
             if draft.send_claim.is_some() && args["retry_if_uncertain"] != true {
                 return Err("Delivery may have happened already. Check the provider, then request retry_if_uncertain if it did not arrive.".into());
             }
-            Ok(format!(
-                "{}Send {} message to {}{}: {}",
-                if draft.send_claim.is_some() {
-                    "POSSIBLE DUPLICATE — confirm delivery did not happen. "
-                } else {
-                    ""
-                },
-                draft.channel,
-                draft.recipient,
-                draft
-                    .subject
-                    .as_deref()
-                    .map(|subject| format!(" (subject: {subject})"))
-                    .unwrap_or_default(),
-                draft.body
-            ))
+            paired(
+                format!(
+                    "{}Send {} message to {}{}: {}",
+                    if draft.send_claim.is_some() {
+                        "POSSIBLE DUPLICATE — confirm delivery did not happen. "
+                    } else {
+                        ""
+                    },
+                    draft.channel,
+                    draft.recipient,
+                    draft
+                        .subject
+                        .as_deref()
+                        .map(|subject| format!(" (subject: {subject})"))
+                        .unwrap_or_default(),
+                    draft.body
+                ),
+                format!(
+                    "{}Enviar un mensaje de {} a {}{}: {}",
+                    if draft.send_claim.is_some() {
+                        "POSIBLE DUPLICADO — confirma que no se ha entregado. "
+                    } else {
+                        ""
+                    },
+                    draft.channel,
+                    draft.recipient,
+                    draft
+                        .subject
+                        .as_deref()
+                        .map(|subject| format!(" (asunto: {subject})"))
+                        .unwrap_or_default(),
+                    draft.body
+                ),
+            )
         }
-        "project.update_status" => Ok(format!(
-            "Update {} item {} to {}{}",
-            text_arg(args, "provider")?,
-            text_arg(args, "item_id")?,
-            text_arg(args, "status")?,
-            args["note"]
-                .as_str()
-                .map(|note| format!(". Note: {note}"))
-                .unwrap_or_default()
-        )),
-        "project.create_subtask" => Ok(format!(
-            "Create a {} child under {}: {}{}",
-            text_arg(args, "provider")?,
-            text_arg(args, "parent_id")?,
-            text_arg(args, "title")?,
-            args["description"]
-                .as_str()
-                .map(|body| format!(". Description: {body}"))
-                .unwrap_or_default(),
-        )),
-        "desktop.open_resource" => Ok(format!("Open {}", text_arg(args, "resource")?)),
+        "project.update_status" => paired(
+            format!(
+                "Update {} item {} to {}{}",
+                text_arg(args, "provider")?,
+                text_arg(args, "item_id")?,
+                text_arg(args, "status")?,
+                args["note"]
+                    .as_str()
+                    .map(|note| format!(". Note: {note}"))
+                    .unwrap_or_default()
+            ),
+            format!(
+                "Actualizar el elemento {} de {} a {}{}",
+                text_arg(args, "item_id")?,
+                text_arg(args, "provider")?,
+                text_arg(args, "status")?,
+                args["note"]
+                    .as_str()
+                    .map(|note| format!(". Nota: {note}"))
+                    .unwrap_or_default()
+            ),
+        ),
+        "project.create_subtask" => paired(
+            format!(
+                "Create a {} child under {}: {}{}",
+                text_arg(args, "provider")?,
+                text_arg(args, "parent_id")?,
+                text_arg(args, "title")?,
+                args["description"]
+                    .as_str()
+                    .map(|body| format!(". Description: {body}"))
+                    .unwrap_or_default(),
+            ),
+            format!(
+                "Crear una subtarea de {} en {}: {}{}",
+                text_arg(args, "provider")?,
+                text_arg(args, "parent_id")?,
+                text_arg(args, "title")?,
+                args["description"]
+                    .as_str()
+                    .map(|body| format!(". Descripción: {body}"))
+                    .unwrap_or_default()
+            ),
+        ),
+        "desktop.open_resource" => paired(
+            format!("Open {}", text_arg(args, "resource")?),
+            format!("Abrir {}", text_arg(args, "resource")?),
+        ),
         "automation.run_playbook" => {
             let playbook = text_arg(args, "playbook")?;
             let extra = match playbook {
@@ -340,15 +482,62 @@ pub fn preview(name: &str, args: &Value) -> Result<String, String> {
                 ),
                 _ => String::new(),
             };
-            Ok(format!("Run {playbook}{extra}"))
+            let (label_es, extra_es) = match playbook {
+                "deep_work" => (
+                    "trabajo profundo",
+                    format!(
+                        " durante {} minutos en '{}'{}{}",
+                        integer_arg(args, "duration_minutes")?,
+                        text_arg(args, "intention")?,
+                        args["block_patterns"]
+                            .as_array()
+                            .map(|items| format!(", bloqueando {}", json!(items)))
+                            .unwrap_or_default(),
+                        args["resource"]
+                            .as_str()
+                            .map(|value| format!(", abriendo {value}"))
+                            .unwrap_or_default()
+                    ),
+                ),
+                "recover_focus" => (
+                    "recuperar la concentración",
+                    format!(
+                        "{}{}",
+                        args["tab_id"]
+                            .as_i64()
+                            .map(|id| format!(", cerrar la pestaña {id}"))
+                            .unwrap_or_default(),
+                        args["resource"]
+                            .as_str()
+                            .map(|value| format!(", abrir {value}"))
+                            .unwrap_or_default()
+                    ),
+                ),
+                "end_of_day" => ("cierre del día", String::new()),
+                _ => (playbook, String::new()),
+            };
+            paired(
+                format!("Run {playbook}{extra}"),
+                format!("Ejecutar {label_es}{extra_es}"),
+            )
         }
-        "memory.save_preference" => Ok(format!(
-            "Remember {}: {}",
-            text_arg(args, "key")?,
-            text_arg(args, "value")?
-        )),
-        "memory.forget_preference" => Ok(format!("Forget {}", text_arg(args, "key")?)),
-        _ => Ok(name.to_string()),
+        "memory.save_preference" => paired(
+            format!(
+                "Remember {}: {}",
+                text_arg(args, "key")?,
+                text_arg(args, "value")?
+            ),
+            format!(
+                "Recordar {}: {}",
+                text_arg(args, "key")?,
+                text_arg(args, "value")?
+            ),
+        ),
+        "memory.forget_preference" => paired(
+            format!("Forget {}", text_arg(args, "key")?),
+            format!("Olvidar {}", text_arg(args, "key")?),
+        ),
+        _ => paired(name.to_string(), name.to_string()),
     }
 }
 
@@ -1010,6 +1199,45 @@ pub fn execute(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paired_previews_preserve_user_text_and_arguments() {
+        let title = "Review · Break · investigación 日本語";
+        let args = json!({"title":title});
+        let (en, es) = preview("tasks.create", &args).unwrap();
+        assert_eq!(en, format!("Create task: {title}"));
+        assert_eq!(es, format!("Crear tarea: {title}"));
+        assert_eq!(args, json!({"title":title}));
+        let body = "Review at 10:00. Break luego. No traducir 日本語";
+        let args = json!({"channel":"email", "recipient":"test@example.invalid", "body":body});
+        let (en, es) = preview("messages.draft", &args).unwrap();
+        for summary in [en, es] {
+            assert!(summary.ends_with(body));
+            assert!(summary.contains("test@example.invalid"));
+        }
+    }
+
+    #[test]
+    fn paired_previews_describe_the_same_protections_and_interval() {
+        let args = json!({"duration_minutes":75,"intention":"PLE · 日本語","protection":"strict","block_patterns":["example.invalid"]});
+        let (en, es) = preview("focus.start", &args).unwrap();
+        for summary in [en, es] {
+            assert!(summary.contains("75"));
+            assert!(summary.contains("PLE · 日本語"));
+            assert!(summary.contains("Windows"));
+            assert!(summary.contains("example.invalid"));
+        }
+        let args = json!({"title":"Review", "start_at":"2026-10-01T10:35:00+02:00", "end_at":"2026-10-01T11:50:00+02:00"});
+        let (en, es) = preview("calendar.create_event", &args).unwrap();
+        assert!(en.contains("FlowSight local calendar"));
+        assert!(es.contains("calendario local de FlowSight"));
+        for summary in [en, es] {
+            assert!(summary.contains("Review"));
+            assert!(summary.contains("2026-10-01T10:35:00+02:00"));
+            assert!(summary.contains("2026-10-01T11:50:00+02:00"));
+        }
+        assert!(preview("focus.start", &json!({"protection":"unknown"})).is_err());
+    }
 
     #[test]
     fn calendar_writes_are_local_only_until_connectors_are_verified() {

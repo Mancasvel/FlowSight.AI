@@ -1,3 +1,5 @@
+import { setLanguagePreference } from './i18n.mjs';
+setLanguagePreference('en',{persist:false});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

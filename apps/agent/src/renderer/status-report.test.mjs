@@ -1,9 +1,23 @@
+import { setLanguagePreference } from './i18n.mjs';
+setLanguagePreference('en',{persist:false});
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { jsPDF } from 'jspdf';
 
 import { createStatusReportViewModel, renderStatusReportHtml } from './status-report.mjs';
 import { renderStatusReportPdf } from './status-report-pdf.mjs';
+
+test('Spanish screen and PDF use the paired narrative while preserving user names and metrics', () => {
+  const payload={report:{executive_overview:'Recorded work.',overall_health:'Sustained blocks observed'},localized_report:{es:{executive_overview:'Trabajo registrado.',overall_health:'Bloques sostenidos observados',recommendations:['Revisa el siguiente bloque.']}},local_data:{period_start:'2026-10-01',period_end:'2026-10-01',total_seconds:3600,deep_focus_seconds:1800,deep_focus_sessions:1,active_days:1,category_breakdown:[{category:'Coding',total_seconds:3600}]}};
+  setLanguagePreference('es',{persist:false});
+  try {
+    const model=createStatusReportViewModel(payload,{userName:'Review · María'});
+    assert.equal(model.summary,'Trabajo registrado.');assert.equal(model.statusTone,'positive');assert.equal(model.userName,'Review · María');assert.equal(model.categories[0].label,'Programación');
+    const output=renderStatusReportHtml(model);assert.match(output,/Tiempo registrado/);assert.match(output,/Review · María/);assert.doesNotMatch(output,/>Tracked time</);
+    const doc=new jsPDF(),drawn=[];const original=doc.text.bind(doc);doc.text=(value,...args)=>{drawn.push(String(value));return original(value,...args);};renderStatusReportPdf(doc,model);
+    assert.ok(drawn.some(line=>line.includes('Revisa el siguiente bloque.')));assert.ok(drawn.some(line=>line.includes('CONCENTRACIÓN SOSTENIDA')));assert.ok(drawn.some(line=>line.includes('Review · María')));
+  } finally {setLanguagePreference('en',{persist:false});}
+});
 
 // Synthetic activity only: these numbers are fixtures, not a customer report.
 function syntheticReport() {

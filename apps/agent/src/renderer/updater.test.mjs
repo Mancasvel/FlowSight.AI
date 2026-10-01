@@ -1,3 +1,5 @@
+import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, localizeStatus, setLanguagePreference } from './i18n.mjs';
+setLanguagePreference('en',{persist:false});
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -67,6 +69,7 @@ function createHarness() {
   checkButton.textContent = 'Check for updates';
   checkButton.focus();
   const context = {
+    tr, formatMessage, html, markup, setText, setAttributeText, localizeStatus,
     installationRepair: { needsRepair: () => false },
     Date: { now: () => now },
     document,

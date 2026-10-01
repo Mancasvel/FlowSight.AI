@@ -103,14 +103,14 @@ jobs:
       - name: Install browser for actual renderer checks
         run: pnpm exec playwright install chromium
 
-      - name: Check setup, planner, Notion availability, and dark button states
+      - name: Check setup, planner, localization, Notion availability, and dark button states
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $stdout = Join-Path $env:RUNNER_TEMP 'flowsight-renderer.stdout.log'
           $stderr = Join-Path $env:RUNNER_TEMP 'flowsight-renderer.stderr.log'
           $env:FLOWSIGHT_RENDERER_URL = 'http://127.0.0.1:1420'
-          $server = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', 'corepack pnpm --filter @flowsight/agent exec vite --host 127.0.0.1 --port 1420 --strictPort' -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $server = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', 'corepack pnpm --filter @flowsight/agent exec vite preview --host 127.0.0.1 --port 1420 --strictPort' -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           try {
             $ready = $false
             for ($attempt = 0; $attempt -lt 40; $attempt++) {
@@ -127,6 +127,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Dark hover renderer checks failed.' }
             node scripts/verify-adda-renderer.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Measured ADDA proposal renderer replay failed.' }
+            node scripts/verify-localization.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Production localization and state preservation checks failed.' }
           } finally {
             if (-not $server.HasExited) { & taskkill.exe /PID $server.Id /T /F | Out-Null }
           }

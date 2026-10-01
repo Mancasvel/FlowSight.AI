@@ -45,6 +45,7 @@ pub fn evaluate(input: &Value) -> Value {
       "localCalendar": data.events,"openTasks":[],"savedPreferences":[],"observedTaskTime":[],"profile":""});
     let previous = input.get("previous").filter(|value| !value.is_null()).map(|value| SessionProposal {
       id: value["id"].as_str().unwrap_or("previous").into(), summary: value["summary"].as_str().unwrap().into(),
+      localized_summary: value["localizedSummary"].clone(), localized_unscheduled: value["localizedUnscheduled"].clone(),
       blocks:serde_json::from_value(value["blocks"].clone()).unwrap(),
       unscheduled: serde_json::from_value(value["unscheduled"].clone()).unwrap(), expires_in_seconds:1800,
     });
@@ -66,6 +67,9 @@ pub fn evaluate(input: &Value) -> Value {
 ''' + '\n' + tests, encoding='utf8')
 output.joinpath('src/main.rs').write_text('''#![allow(dead_code, unused_imports)]
 mod state;
+mod language {
+ pub fn copy<'a>(english:&'a str,spanish:&'a str)->&'a str { if std::env::var("FLOWSIGHT_TEST_LANGUAGE").as_deref()==Ok("es") {spanish} else {english} }
+}
 mod vision_model { pub const LLAMA_CHAT_MODEL_ID: &str = "flowsight-qwen3vl-2b-instruct"; }
 mod local_agent {
  use serde_json::Value;
