@@ -964,7 +964,12 @@ fn add_blocks(data: &mut AgentData, pending: &PendingPlan) -> Result<Vec<LocalEv
         .iter()
         .map(|block| LocalEvent {
             id: uuid::Uuid::new_v4().to_string(),
-            title: block.title.clone(),
+            title: block
+                .localized_title
+                .as_ref()
+                .and_then(|labels| labels[crate::language::copy("en", "es")].as_str())
+                .unwrap_or(&block.title)
+                .to_string(),
             start_at: block.start_at.clone(),
             end_at: block.end_at.clone(),
             created_at: now.to_rfc3339(),
