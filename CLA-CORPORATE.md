@@ -1,153 +1,69 @@
-# FlowSight — Corporate Contributor License Agreement (CCLA)
+# FlowSight Corporate Contributor License Agreement
 
-**Version 1.0**
+Version 1.1 — prospective template, 2 October 2026.
 
-This Agreement is required when an employee or contractor of a company is
-expected to contribute to FlowSight ("the Project") **on behalf of that
-company**. It complements (and in most cases replaces) the Individual CLA
-([`CLA.md`](./CLA.md)) for those contributors.
+Complete, legally review and execute under the
+[CLA process](docs/licensing/CLA-PROCESS.md). This does not amend past agreements
+or automatically include historic submissions.
 
-By signing this Agreement, the Company (defined below) accepts and agrees to
-the following terms for all contributions submitted by its employees,
-contractors, and agents that are authorized to contribute on its behalf.
+## Parties and scope
 
----
+**Owner:** Manuel Castillejo, maintainer using the FlowSight brand; complete
+legal identity, capacity and address in the schedule.
 
-## 1. Definitions
+**Entity:** the company, university or other legal entity below. Only its
+licensable contributions made on its behalf by listed authorized contributors
+are covered. Affiliates and independent contractors are not automatically covered.
 
-- **"Company"** means the legal entity signing this Agreement and all
-  entities controlling, controlled by, or under common control with it.
-- **"Contribution"** means any original work of authorship, including any
-  modification of or addition to an existing work, submitted to the Project
-  by any employee, contractor, or authorized agent of the Company in any
-  form.
-- **"Authorized Contributors"** means the individuals listed in the schedule
-  at the end of this document (as updated from time to time by written
-  notice to the Project Owner).
+## Copyright and patent grants
 
-## 2. Grant of Copyright License
+The Entity retains ownership and grants the Owner a perpetual, worldwide,
+nonexclusive, royalty-free license to reproduce, modify, prepare derivatives,
+display, perform, distribute and sublicense covered contributions. It expressly
+authorizes GNU AGPL-3.0 and alternative proprietary commercial licensing,
+including recipient permissions, without revenue-sharing obligations. The grant
+is irrevocable to the extent permitted by law. Required notices remain.
 
-The Company hereby grants to **FlowSight** (the "Project Owner") and to
-recipients of software distributed by the Project Owner a **perpetual,
-worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright
-license** to:
+The Entity grants the Owner and recipients a worldwide, nonexclusive,
+royalty-free patent license limited to licensable claims necessarily infringed
+by covered contributions alone or their intended combination with FlowSight
+at submission. Patent rights granted to a recipient terminate, as legally
+permitted, if it files patent litigation alleging that contribution or combination
+infringes a patent.
 
-a. Reproduce, prepare derivative works of, publicly display, publicly
-   perform, sublicense, and distribute Contributions and such derivative
-   works; **and**
+## Authority and protections
 
-b. **Re-license** Contributions under **any license terms** the Project
-   Owner chooses, including without limitation the GNU AGPL-3.0, any later
-   version of the AGPL, permissive open-source licenses, or **proprietary
-   commercial licenses** offered by the Project Owner to its customers.
+The signatory can bind the Entity. The Entity holds sufficient author grants
+and discloses third-party material, generated content, restrictions and exclusions.
+An institutional signature does not acquire students' or contractors' rights;
+obtain necessary grants. Notify the Owner of changes in authority or scope.
 
-This grant is made **without any obligation to account** to the Company for
-any revenue derived from commercial licensing of Contributions.
+Nonwaivable moral rights remain protected. Supply only legally permitted
+authorizations needed for modification/integration; no blanket waiver of authors'
+inalienable rights is required. Contributions are as is without a support duty,
+subject to express statements and nonexcludable rights. The Owner need not accept
+them. Spanish law applies subject to mandatory protections; counsel must finalize
+governing-law/dispute provisions.
 
-## 3. Grant of Patent License
+## Execution schedule
 
-The Company hereby grants to the Project Owner and to recipients of software
-distributed by the Project Owner a **perpetual, worldwide, non-exclusive,
-no-charge, royalty-free, irrevocable** (except as stated in this section)
-patent license to make, have made, use, offer to sell, sell, import, and
-otherwise transfer the Contributions, where such license applies only to
-those patent claims licensable by the Company that are necessarily infringed
-by the Contributions alone or by combination of the Contributions with the
-Project.
+| Field | Completed value |
+| --- | --- |
+| Owner legal identity, capacity and notice address | To complete |
+| Entity legal name, identification and address | To complete |
+| Authorized signatory, title and authority evidence | To complete |
+| Notice contact | To complete |
+| Included earlier submissions / third-party exclusions | Explicit lists or none |
+| Agreement version and SHA-256 | 1.1; hash recorded at execution |
+| Entity signature and date | To complete |
+| Owner acceptance and date | To complete |
 
-If any entity institutes patent litigation against the Project Owner or any
-other entity alleging that the Project constitutes direct or contributory
-patent infringement, then any patent licenses granted to that entity under
-this Agreement terminate as of the date such litigation is filed.
+### Authorized contributors
 
-## 4. Moral Rights
+| Name | GitHub identity | Covered work | Authority basis |
+| --- | --- | --- | --- |
+| To complete | To complete | To complete | Employment, assignment or express grant |
 
-To the fullest extent permitted under applicable law, the Company waives and
-agrees not to assert any moral rights in Contributions against the Project
-Owner, its licensees, and transferees. The Company will procure equivalent
-waivers from each Authorized Contributor.
-
-## 5. Representations
-
-The Company represents and warrants that:
-
-a. It has the **full corporate authority** to enter into this Agreement and
-   to grant the licenses set out above.
-
-b. Each Authorized Contributor is **authorized** to make Contributions on
-   behalf of the Company, and each Contribution is the **original work** of
-   its author or lawfully licensed to the Company for further sublicensing
-   under the terms of this Agreement.
-
-c. Contributions do not, to the Company's knowledge, infringe any third
-   party's copyrights, trademarks, patents, trade secrets, or other
-   intellectual property rights.
-
-d. The Company will **notify the Project Owner** of any changes to the list
-   of Authorized Contributors and of any facts that would make the
-   representations in this Agreement inaccurate.
-
-## 6. Disclaimer
-
-Contributions are provided **"AS IS"**, without warranties or conditions of
-any kind, either express or implied, including, without limitation, any
-warranties or conditions of title, non-infringement, merchantability, or
-fitness for a particular purpose.
-
-## 7. Governing Law
-
-This Agreement shall be governed by the laws of **Spain**, without giving
-effect to its conflict of laws rules, unless a different governing law is
-agreed in writing between the parties. (Adjust to your jurisdiction before
-publishing.)
-
----
-
-## Schedule A — Authorized Contributors
-
-| # | Full name | Email | GitHub username | Role |
-|---|---|---|---|---|
-| 1 |   |   |   |   |
-| 2 |   |   |   |   |
-| 3 |   |   |   |   |
-
-Updates to this schedule must be sent by email to **manuel@flowsight.site** from
-a verified corporate address. The updated list becomes effective upon
-written acknowledgement by the Project Owner.
-
----
-
-## Signature
-
-| Field | Value |
-|---|---|
-| Company (legal name) |   |
-| Country of incorporation |   |
-| Registered address |   |
-| Tax / VAT ID |   |
-| Signatory name |   |
-| Signatory title |   |
-| Signatory email |   |
-| Date (YYYY-MM-DD) |   |
-| Signature |   |
-
----
-
-## How to submit
-
-1. Fill in Sections above and Schedule A.
-2. Sign electronically (DocuSign / Adobe Sign / qualified e-signature) or
-   with a wet signature and scan.
-3. Email the executed document to **manuel@flowsight.site** with the subject
-   line:
-
-   ```
-   CCLA signature — <Company name>
-   ```
-
-The Project Owner will counter-sign and return a copy for your records.
-
----
-
-*This document is provided in good faith as a starting point. It is not
-legal advice. Have your own legal counsel review it before relying on it.*
+Schedule changes require written acknowledgment and prospective effective dates.
+Arrange execution through **manuel@flowsight.site**; protect signatures, authority
+evidence and personal details in a restricted registry outside this public repo.

@@ -359,29 +359,37 @@ No cover letters. No culture fit essays. Show us what you've done.
 
 ## License and distribution
 
-FlowSight is distributed under a **dual licensing model**:
+FlowSight offers two licensing routes for the **same eligible base code**.
+Commercial rights require a signed agreement and a release-specific rights audit;
+third-party licenses remain applicable. Separately licensed institutional modules,
+if introduced, have a distinct product and dependency boundary.
 
 | Edition | License | Intended for |
 |---|---|---|
 | **Community** | [GNU AGPL-3.0](./LICENSE) | Anyone, including commercial users, who follows the AGPL |
 | **Enterprise / Commercial** | [Proprietary, per contract](./COMMERCIAL-LICENSE.md) | Different license terms for closed-source distribution, SaaS, OEM, or policies that forbid AGPL |
 
-> **TL;DR:** commercial use is allowed under the AGPL. You can use, modify,
-> redistribute, and self-host the Community Edition while following its terms,
-> including applicable source-sharing obligations for distributed or modified
-> network-served versions. If you need different terms, ask about a separate
-> proprietary license: **manuel@flowsight.site**. A planned €10 one-time
-> Individual purchase is for the official local distribution, not a proprietary
-> source-code license; monthly cloud plans are separate.
+AGPL permits commercial and educational use without paying FlowSight, subject
+to its terms. A modified version supporting remote network interaction must
+prominently offer its interacting users the Corresponding Source under section
+13; distribution can trigger further obligations. A separately signed commercial
+agreement may remove AGPL copyleft duties for the covered eligible code.
+Installer purchases, Pro subscriptions and commercial source rights are distinct.
+
+For universities, see the
+[commercial policy](./COMMERCIAL-LICENSE.md) and
+[agreement draft](./docs/licensing/UNIVERSITY-AGREEMENT-TEMPLATE.md), including
+support/SLA, stable updates, privacy and no individual productivity/focus rankings.
+The draft requires legal review, completed schedules and signatures.
 
 ### Contributing
 
-Contributions are very welcome. **Every contributor must sign a CLA**
-(individuals: [`CLA.md`](./CLA.md), companies: [`CLA-CORPORATE.md`](./CLA-CORPORATE.md))
-so that the project can keep the dual-licensing model working. The
-[`CLA Assistant`](https://cla-assistant.io/) bot handles signatures
-automatically on your first PR. See [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-for the full flow.
+Contributions require a verified sufficient grant before merge:
+[individual CLA](./CLA.md) or [corporate CLA](./CLA-CORPORATE.md).
+The contributor retains copyright; the grant permits alternative commercial
+licensing. Follow the [signature process](./docs/licensing/CLA-PROCESS.md) and
+[CONTRIBUTING.md](./CONTRIBUTING.md). Automated collection is not assumed.
+Historic contributions require a separate [rights audit](./docs/licensing/RIGHTS-AUDIT.md).
 
 ### Code of Conduct
 

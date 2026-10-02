@@ -1,127 +1,80 @@
-# FlowSight — Individual Contributor License Agreement (ICLA)
+# FlowSight Individual Contributor License Agreement
 
-**Version 1.0**
+Version 1.1 — prospective template, 2 October 2026.
 
-Thank you for your interest in contributing to FlowSight ("the Project")
-maintained by **FlowSight** (the "Project Owner"). By submitting a
-contribution to the Project you accept and agree to the following terms for
-Your present and future contributions.
+Complete the parties, obtain legal review, and affirmatively execute under the
+[CLA process](docs/licensing/CLA-PROCESS.md). A PR does not sign this agreement.
+This template does not amend an earlier executed agreement.
 
-This Agreement is modelled on widely used open-source CLAs (Apache ICLA and
-the Harmony CA-A-I template). It is required so that the Project Owner can
-keep the dual-licensing model described in [`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md)
-sustainable.
+## 1. Parties and contributions
 
----
+**Project Owner:** Manuel Castillejo, maintainer using the FlowSight brand.
+Complete legal identity, capacity and notice address below. If an entity becomes
+the party, identify it and verify its rights; the brand is not a legal person.
 
-## 1. Definitions
+**You:** the individual identified in the schedule.
 
-- **"You"** (or **"Your"**) means the individual copyright owner making this
-  Agreement with the Project Owner.
-- **"Contribution"** means any original work of authorship, including any
-  modification of or addition to an existing work, that You submit to the
-  Project in any form (code, documentation, design assets, tests, etc.).
+**Contribution:** original material intentionally submitted by You for inclusion
+in FlowSight, identified by PR, commit or submission. Expressly excluded or
+third-party material is not represented as Your original work. Earlier work is
+covered only when explicitly listed and granted; retrospective coverage is not
+assumed.
 
-## 2. Grant of Copyright License
+## 2. Copyright grant
 
-You hereby grant to the Project Owner and to recipients of software
-distributed by the Project Owner a **perpetual, worldwide, non-exclusive,
-no-charge, royalty-free, irrevocable copyright license** to:
+You retain ownership. You grant the Owner a perpetual, worldwide, nonexclusive,
+royalty-free license to reproduce, modify, prepare derivatives, display, perform,
+distribute and sublicense Your Contributions and derivatives. This expressly
+includes GNU AGPL-3.0 and alternative proprietary commercial terms and the
+corresponding recipient permissions, with no payment or revenue share owed
+under this agreement. The grant is irrevocable to the extent permitted by law.
 
-a. **Reproduce, prepare derivative works of, publicly display, publicly
-   perform, sublicense, and distribute** Your Contributions and such
-   derivative works; **and**
+Legally required attribution/notices remain. This grant supplies no rights in
+excluded third-party material and does not override its license.
 
-b. **Re-license** Your Contributions under **any license terms** the Project
-   Owner chooses, including (without limitation) the GNU AGPL-3.0, any later
-   version of the AGPL, permissive open-source licenses (MIT, Apache-2.0,
-   BSD), or **proprietary commercial licenses** offered by the Project Owner
-   to its customers.
+## 3. Patent grant
 
-This grant is made **without any obligation to account** to You for any
-revenue derived from commercial licensing of Your Contribution.
+You grant the Owner and its recipients a worldwide, nonexclusive, royalty-free
+patent license to make, use, sell, offer for sale, import and transfer the
+Contribution, limited to claims You can license that are necessarily infringed
+by it alone or its intended combination with FlowSight at submission. If a
+recipient files patent litigation alleging infringement by that contribution
+or combination, patent rights granted here to that recipient terminate when
+filed, to the extent permitted by law.
 
-## 3. Grant of Patent License
+## 4. Authority, provenance and support
 
-You hereby grant to the Project Owner and to recipients of software
-distributed by the Project Owner a **perpetual, worldwide, non-exclusive,
-no-charge, royalty-free, irrevocable** (except as stated in this section)
-patent license to make, have made, use, offer to sell, sell, import, and
-otherwise transfer the Contribution, where such license applies only to
-those patent claims licensable by You that are necessarily infringed by Your
-Contribution alone or by combination of Your Contribution with the Project.
+You have sufficient rights for these grants. If an employer, university or
+other party owns relevant rights, supply authorization or a covered
+[corporate CLA](CLA-CORPORATE.md). Disclose third-party code, generated material,
+restrictions and provenance issues. Submitting another person's code cannot
+grant their rights. Notify the Owner promptly if these statements change.
 
-If any entity institutes patent litigation against You or any other entity
-(including a cross-claim or counterclaim in a lawsuit) alleging that Your
-Contribution, or the Project to which You have contributed, constitutes
-direct or contributory patent infringement, then any patent licenses granted
-to that entity under this Agreement shall terminate as of the date such
-litigation is filed.
+Contributions are provided as is, without a support duty, subject to these
+express statements and nonexcludable rights. The Owner need not accept them.
 
-## 4. Moral Rights
+## 5. Moral rights and law
 
-To the fullest extent permitted under applicable law, You waive and agree
-not to assert any **moral rights** You may have in Your Contributions
-against the Project Owner, its licensees, and transferees.
+Nonwaivable moral rights remain with their holders. To the extent permitted,
+You authorize modifications, integration, distribution and attribution needed
+for the grants. No blanket waiver of inalienable rights is intended.
 
-## 5. Your Representations
+Spanish law applies subject to mandatory protections. Counsel must finalize
+governing-law and dispute terms for the completed agreement.
 
-You represent that:
+## 6. Execution schedule
 
-a. Each of Your Contributions is **Your original creation**.
+| Field | Completed value |
+| --- | --- |
+| Owner legal identity, capacity and notice address | To complete privately |
+| Contributor legal name, notice email and GitHub identity | To complete privately |
+| Employer/university authority | Evidence or not applicable |
+| Included earlier submissions | Explicit list or none |
+| Third-party exclusions and provenance disclosures | Explicit list or none |
+| Agreement version and SHA-256 | 1.1; hash recorded at execution |
+| Contributor signature and date | To complete |
+| Owner acceptance and date | To complete |
 
-b. You are legally entitled to grant the above licenses. If Your employer(s)
-   has rights to intellectual property that You create, You represent that
-   You have received **permission to make Contributions on behalf of that
-   employer**, or that Your employer has waived such rights for Your
-   Contributions to the Project, or that Your employer has executed a
-   separate **Corporate CLA** (see [`CLA-CORPORATE.md`](./CLA-CORPORATE.md))
-   with the Project Owner.
-
-c. Your Contribution does not, to Your knowledge, violate any third party's
-   copyrights, trademarks, patents, or other intellectual property rights.
-
-d. You will **notify the Project Owner** of any facts or circumstances of
-   which You become aware that would make the above representations
-   inaccurate in any respect.
-
-## 6. Disclaimer
-
-Your Contributions are provided **"AS IS"**, without warranties or
-conditions of any kind, either express or implied, including, without
-limitation, any warranties or conditions of title, non-infringement,
-merchantability, or fitness for a particular purpose.
-
-## 7. No Obligation
-
-You acknowledge that the Project Owner is **not obligated** to use Your
-Contribution as part of the Project and may decide to include any
-Contribution it considers appropriate.
-
-## 8. Governing Law
-
-This Agreement shall be governed by the laws of **Spain**, without giving
-effect to its conflict of laws rules. (Adjust to your jurisdiction before
-publishing.)
-
----
-
-## How to sign
-
-Signature is collected automatically when you open your first pull request,
-via the [**CLA Assistant**](https://cla-assistant.io/) bot. The bot will
-post a one-time comment asking you to click a link and sign in with your
-GitHub account. No paperwork, no scans.
-
-If you prefer a manual signature, email a signed PDF copy of this document
-to **manuel@flowsight.site** with the subject line:
-
-```
-ICLA signature — <Your GitHub username>
-```
-
----
-
-*This document is provided in good faith as a starting point for community
-contribution. It is not legal advice. Have your own legal counsel review it
-before relying on it in contentious matters.*
+Arrange electronic or signed-copy execution through **manuel@flowsight.site**.
+Keep signatures/personal information in a restricted registry outside this repo.
+A maintainer verifies identity, authority, version and scope before merge.
