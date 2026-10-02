@@ -1,13 +1,12 @@
 # Contributing to FlowSight
 
-Thanks for considering a contribution. FlowSight is a **dual-licensed
-open-core** project: the code in this repository is released under the
-[GNU AGPL-3.0](./LICENSE), and a separate
-[commercial license](./COMMERCIAL-LICENSE.md) is offered to customers who
-cannot comply with AGPL terms.
+FlowSight's eligible base code has two licensing routes: AGPL-3.0 and a
+separately agreed commercial license. Optional private institutional modules,
+if introduced, have a distinct boundary; they are not the reason this same-code
+licensing is called dual licensing. Third-party conditions remain applicable.
 
-To keep this model sustainable, **every contribution must be covered by a
-Contributor License Agreement**. Read below for the exact flow.
+Every contribution must have a sufficient, verified contributor grant before
+merge. Repository templates alone do not establish that grant.
 
 ---
 
@@ -39,16 +38,16 @@ You must sign **one** of these before your PR can be merged:
   its behalf): have an authorized signatory execute
   [`CLA-CORPORATE.md`](./CLA-CORPORATE.md).
 
-### How the signature is collected
+### Signature verification
 
-When you open your first pull request, the [**CLA Assistant**](https://cla-assistant.io/)
-bot will post a comment with a link. Click it, sign in with your GitHub
-account, and accept the agreement. It takes about 30 seconds and it is a
-**one-time** step — subsequent PRs are covered automatically.
+Complete and execute the applicable agreement through the
+[CLA process](docs/licensing/CLA-PROCESS.md). A maintainer verifies identity,
+authority, agreement version/hash, covered submissions and third-party exclusions
+in a restricted registry before merge. Do not attach signed documents or personal
+identification to public PRs. Contact **manuel@flowsight.site** to arrange delivery.
 
-If you prefer a manual signature, email a signed copy of the relevant
-document to **manuel@flowsight.site** before opening the PR. Mention in the
-PR description that a signed copy is on file.
+An automated bot is not assumed to be installed. Opening a PR does not sign a CLA.
+New templates do not amend old agreements or cover earlier work automatically.
 
 ### Why a CLA?
 
@@ -79,6 +78,8 @@ Before hitting **Create pull request**, confirm that:
 - [ ] Commit messages are written in English, imperative mood, and scoped
       (e.g. `agent: fix llama-server restart race`).
 - [ ] The PR description explains **why**, not just **what**.
+- [ ] The maintainer has verified a signed agreement and authority covering this
+      submission, including alternative licensing, and reviewed its provenance.
 - [ ] You are OK with your change being redistributed under both AGPL and
       the commercial license (this is what signing the CLA confirms).
 

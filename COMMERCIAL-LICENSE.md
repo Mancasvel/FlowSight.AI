@@ -1,74 +1,66 @@
-# FlowSight — Commercial License
+# FlowSight: AGPL and commercial licensing
 
-FlowSight is distributed under a **dual license model**:
+This page explains the policy. It is not a commercial license grant or contract.
 
-| Edition | License | Who is it for |
-|---|---|---|
-| Community Edition | [GNU AGPL-3.0](./LICENSE) | Anyone, including commercial users, who complies with the AGPL-3.0 |
-| Enterprise / Commercial | Proprietary (per contract) | Organizations seeking different license terms, closed-source distribution, or contracted services |
+## Two routes for the same eligible source
 
-The **same source tree** is made available under the AGPL-3.0 in this
-repository. The AGPL permits commercial use, modification, and redistribution
-when its terms are followed. A separate proprietary license can offer different
-terms for uses that cannot comply with AGPL copyleft obligations; any support,
-SLA, or white-label rights depend on the signed agreement. Buying the planned
-€10 Individual distribution does not itself grant a proprietary license.
+| Route | Rights and obligations |
+| --- | --- |
+| Community | This source is available under [GNU AGPL-3.0](LICENSE), including commercial and educational use, subject to its terms. |
+| Commercial | A paid signed agreement may license the same identified FlowSight-owned or adequately licensed source without AGPL copyleft obligations for that covered source. Scope, support and price are contractual. |
 
-## When might I need a separate proprietary license?
+AGPL does not prohibit commercial use or require payment to FlowSight. Section
+13 requires a modified version that supports remote network interaction to
+prominently offer its interacting users the Corresponding Source of that version.
+Distribution can trigger further source and notice duties. This is an offer to
+entitled users/recipients; it is not a universal duty to publish all private
+changes on a public website. Read the [license](LICENSE) for complete terms.
 
-Consider a separate license if any of the following apply and you cannot use
-FlowSight under the AGPL-3.0:
+A university may choose AGPL if it complies. A commercial source license can
+provide different rights, confidential covered modifications, a procurement
+arrangement or contracted services. An Individual installer purchase, Pro
+subscription or support package does not automatically grant commercial source
+rights.
 
-- You modify FlowSight and offer the modified version as a **SaaS** or
-  hosted product to third parties, and you do **not** want to publish your
-  modifications under AGPL-3.0.
-- You **bundle or embed** FlowSight code into a **closed-source** product
-  that you distribute.
-- You need to distribute FlowSight under **proprietary terms** to your customers.
-- Your employer's legal or procurement team prohibits AGPL code in internal
-  tooling.
-- You require **written indemnification**, SLA guarantees, or priority
-  support.
+## Rights and third-party exclusions
 
-You **do not** need a separate proprietary license merely for:
+Before offering a release commercially, verify ownership or sufficient grants
+for every covered contribution. Copyright need not be transferred when an
+executed CLA provides adequate relicensing rights. Templates are not evidence
+of signatures, employer authority or grants for historic work.
 
-- Commercial or non-commercial use that complies with the AGPL-3.0.
-- Running the unmodified Community Edition inside your organization.
-- Local development, evaluation, or contributing back to this repo.
-- Academic research and educational use.
+Third-party libraries, copied code, model weights, fonts and assets retain their
+licenses and notices. A FlowSight agreement cannot remove their conditions
+without the relevant rights. List the exact covered release and exclusions and
+complete the [rights audit](docs/licensing/RIGHTS-AUDIT.md). Existing AGPL grants
+remain available under their terms.
 
-## How to obtain a commercial license
+## Educational institution agreements
 
-1. Write to **manuel@flowsight.site** describing your use case, expected deployment size, and required support
-   level.
-2. We will send back a commercial agreement draft and pricing.
-3. Once signed, you receive a license key and access to the enterprise build
-   artifacts and/or private modules.
+The [university agreement template](docs/licensing/UNIVERSITY-AGREEMENT-TEMPLATE.md)
+provides a draft structure for:
 
-## Pricing
+- Use, deployment and modification of covered code without AGPL copyleft.
+- Support, response targets, maintenance and any agreed SLA.
+- Stable updates, specified signed installers and security patch commitments.
+- Negotiated warranties, remedies and liability limits.
+- Agreed student-data purposes, minimization, retention and no individual rankings.
+- Optional separately licensed institutional panels or integrations.
 
-Pricing is not published publicly. It depends on:
+Service levels, signed builds, indemnities and security promises apply only when
+agreed in an executed contract and operationally supported. The draft creates
+no current guarantee. Counsel should finalize it for the parties and procurement.
 
-- Number of seats / hosts monitored
-- Deployment model (self-hosted vs. managed)
-- Support tier (business hours, 24×7, dedicated CSM)
-- Redistribution vs. end-use rights
+## Dual licensing and separate modules
 
-## Why AGPL + CLA?
+Dual licensing gives two routes for the same eligible code. A separate private
+institutional module is a different product boundary. Both models may coexist;
+identify private modules outside this AGPL tree and review their dependency,
+linking and distribution obligations. A private repository alone does not remove
+AGPL duties. This policy declares no current repository file proprietary.
 
-Contributing to the Community Edition requires signing a Contributor License
-Agreement (see [`CLA.md`](./CLA.md) for individuals and
-[`CLA-CORPORATE.md`](./CLA-CORPORATE.md) for companies). The CLA grants
-FlowSight the right to continue distributing contributed code under
-**both** the AGPL and the commercial license. Without the CLA we could not
-keep the dual-licensing model sustainable.
-
-If you are uncomfortable with signing a CLA, you are still free to fork the
-project and maintain your own AGPL-3.0 derivative — the AGPL explicitly
-protects that right.
-
----
-
-*This document is informational. The AGPL-3.0 grants the rights described in
-[`LICENSE`](./LICENSE), including commercial use subject to its terms.
-Additional proprietary rights are granted only by a signed written agreement.*
+Contact **manuel@flowsight.site** with deployment, authorized users, rights and
+support requirements. A commercial offer needs a release-specific audit, agreed
+schedules and authorized signatures. Contributions follow the
+[individual CLA](CLA.md), [corporate CLA](CLA-CORPORATE.md), and
+[verification process](docs/licensing/CLA-PROCESS.md).
