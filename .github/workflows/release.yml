@@ -165,6 +165,13 @@ jobs:
       - name: Build app
         run: pnpm build
 
+      - name: Verify app loads without Visual C++ runtime DLLs
+        run: python scripts/check-windows-loader-dependencies.py apps/agent/src-tauri/target/release/app.exe
+
+      - name: Probe app startup with corrupt Visual C++ DLLs
+        shell: pwsh
+        run: ./scripts/check-windows-loader-recovery.ps1 -Executable apps/agent/src-tauri/target/release/app.exe
+
       - name: Verify installer contains both Visual C++ runtime copies
         shell: pwsh
         run: ./scripts/check-bundled-runtime.ps1

@@ -1,0 +1,4 @@
+# Keep the Windows GUI executable launchable when an app-local VC runtime DLL
+# is missing. The running app can then verify its assets and start signed repair.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
