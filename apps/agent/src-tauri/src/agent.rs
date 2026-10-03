@@ -130,6 +130,9 @@ impl FlowSightAgent {
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN window_title TEXT", []);
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN capture_source TEXT", []);
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN theme_hint TEXT", []);
+                if let Err(error) = conn.execute_batch(crate::sync_pure::PENDING_REPORT_INDEX_SQL) {
+                    log::warn!("[Agent] Could not index pending reports: {error}");
+                }
                 if let Err(error) = crate::privacy::ensure_schema(&conn) {
                     log::error!("[Privacy] SQLite privacy schema failed: {error}");
                 }
@@ -549,8 +552,7 @@ fn load_day_history_entries(conn: &Connection, day: &str) -> Result<Vec<DayHisto
             ))
         })
         .map_err(|error| error.to_string())?
-        .filter_map(Result::ok)
-        .collect::<Vec<_>>();
+        .filter_map(Result::ok);
 
     let mut entries = Vec::new();
     for (time, description, raw_category, ticket, duration, app, title, source, theme) in rows {
