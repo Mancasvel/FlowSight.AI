@@ -2,6 +2,8 @@
 
 The in-app installation check can repair a missing sidecar DLL only when the
 main process reaches main(). A DLL in the PE import table is loaded earlier.
+Windows 10/11 provide the Universal CRT and api-ms-win-crt API contracts as OS
+components; these do not depend on the app-local Visual C++ redistributable.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from pathlib import Path
 
 
 VC_RUNTIME = re.compile(
-    r"^(?:msvcp.*|msvcr.*|vcruntime.*|ucrtbase|api-ms-win-crt-.*|concrt.*|vcomp.*)\.dll$",
+    r"^(?:msvcp.*|msvcr.*|vcruntime.*|concrt.*|vcomp.*)\.dll$",
     re.IGNORECASE,
 )
 
@@ -95,7 +97,7 @@ def main() -> int:
     if blocked:
         print(f"FAIL: {args.executable} imports Visual C++ runtime DLLs before main(): {', '.join(blocked)}")
         return 1
-    print(f"PASS: {args.executable} has no Visual C++ runtime DLL in its PE import table.")
+    print(f"PASS: {args.executable} has no app-local Visual C++ redistributable DLL in its PE import table.")
     return 0
 
 

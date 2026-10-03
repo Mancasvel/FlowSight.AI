@@ -166,7 +166,9 @@ jobs:
         run: pnpm build
 
       - name: Verify app loads without Visual C++ runtime DLLs
-        run: python scripts/check-windows-loader-dependencies.py apps/agent/src-tauri/target/release/app.exe
+        run: |
+          python -m unittest discover -s scripts -p 'test_windows_loader_dependencies.py'
+          python scripts/check-windows-loader-dependencies.py apps/agent/src-tauri/target/release/app.exe
 
       - name: Probe app startup with corrupt Visual C++ DLLs
         shell: pwsh
