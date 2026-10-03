@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 
-const output = resolve(process.env.FLOWSIGHT_EVIDENCE_DIR || '.impeccable/review/daily-flow-insights');
+const output = resolve(process.env.FLOWSIGHT_EVIDENCE_DIR || '.impeccable/review/daily-flow-week-visible');
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const evidence = [];
@@ -60,12 +60,18 @@ try {
       };
     }, { locale });
     await page.goto(process.env.FLOWSIGHT_RENDERER_URL || 'http://127.0.0.1:1433', { waitUntil: 'networkidle' });
+    // Static evidence measures the settled theme; the paused clock can otherwise
+    // leave descendant color transitions between the old and new appearances.
+    await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
     assert.equal(await page.locator('#tabToday #dailyFlow').count(), 0);
     assert.equal(await page.locator('#timerStreak').count(), 0);
     await page.locator('#navSummary').click();
     await page.locator('#summaryBody #dailyFlow').waitFor();
     assert.equal(await page.locator('#dailyFlow').evaluate(node => node.open), false);
     assert.equal(await page.locator('.daily-flow-mission').isVisible(), false);
+    assert.equal(await page.locator('#dailyFlowToggle .daily-flow-week').isVisible(), true);
+    assert.equal(await page.locator('#dailyFlowToggle .daily-flow-day').count(), 7);
+    assert.equal(await page.locator('#dailyFlowToggle .daily-flow-day.is-done').count(), 3);
     assert.match(await page.locator('#dailyFlowDate').innerText(), locale === 'es-ES' ? /Hoy/ : /Today/);
     await page.locator('#dailyFlowToggle').focus();
     await page.keyboard.press('Enter');
@@ -105,7 +111,7 @@ try {
           const rect = root.getBoundingClientRect();
           const background = getComputedStyle(root).backgroundColor;
           return { width: root.clientWidth, scroll: root.scrollWidth, rect: { left: rect.left, right: rect.right }, viewport: innerWidth, background,
-            texts: [...root.querySelectorAll('h2, h3, strong, time, li > span, p')].map(node => ({ text: node.textContent, color: getComputedStyle(node).color, background: getComputedStyle(node.closest('.daily-flow-detail') || document.body).backgroundColor })) };
+            texts: [...root.querySelectorAll('h2, h3, strong, time, .daily-flow-day > span:first-child, li > span, p')].map(node => ({ text: node.textContent, color: getComputedStyle(node).color, background: getComputedStyle(node.closest('.daily-flow-detail') || document.body).backgroundColor })) };
         });
         assert.ok(layout.scroll <= layout.width + 1 && layout.rect.left >= 0 && layout.rect.right <= layout.viewport, JSON.stringify(layout));
         const luminance = color => color.match(/[0-9.]+/g).slice(0, 3).map(Number).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
@@ -117,12 +123,15 @@ try {
         await page.screenshot({ path: resolve(output, `daily-flow-expanded-${locale}-${colorScheme}-${width}.png`) });
         await page.locator('#dailyFlowToggle').click();
         assert.equal(await page.locator('.daily-flow-mission').isVisible(), false);
+        assert.equal(await page.locator('.daily-flow-week').isVisible(), true);
+        assert.equal(await page.locator('.daily-flow-week').count(), 1, 'Week appears once, including when expanded.');
+        assert.equal(await page.locator('.daily-flow-day-mark').count(), 7);
         await page.locator('.tab-content').evaluate(element => { element.scrollTop = 0; });
         await page.locator('#dailyFlowToggle').evaluate(node => node.blur());
         await page.mouse.move(0, 0);
         await page.clock.runFor(50);
         await page.screenshot({ path: resolve(output, `daily-flow-collapsed-${locale}-${colorScheme}-${width}.png`) });
-        assert.ok(await page.locator('#dailyFlow').evaluate(root => root.getBoundingClientRect().height <= 52), 'Collapsed row stays compact.');
+        assert.ok(await page.locator('#dailyFlow').evaluate(root => root.getBoundingClientRect().height <= 110), 'Collapsed date/streak and weekly dots stay compact.');
         await page.locator('#dailyFlowToggle').click();
         await page.locator('#dailyFlowToggle').evaluate(node => node.blur());
         await page.mouse.move(0, 0);
@@ -157,7 +166,8 @@ try {
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('#navSummary').click();
     await page.locator('.daily-flow--complete').waitFor();
-    assert.equal(await page.locator('#dailyFlow').evaluate(node => node.open), false, 'Fresh loads show only the day and streak.');
+    assert.equal(await page.locator('#dailyFlow').evaluate(node => node.open), false, 'Fresh loads show date, streak and weekly dots.');
+    assert.equal(await page.locator('.daily-flow-week').isVisible(), true, 'Fresh loads retain weekly dots.');
     assert.equal(await page.locator('#dailyFlowAnnouncement').textContent(), '', 'Reload is quiet and preserves the completed state.');
     await page.locator('#navProfile').click();
     await page.locator('#dailyFlowVisible').uncheck();
@@ -202,7 +212,7 @@ try {
     await page.clock.runFor(50);
     await page.screenshot({ path: resolve(output, `daily-flow-empty-${locale}.png`) });
     assert.deepEqual(errors, []);
-    evidence.push({ locale, tests: { insightsPlacement: true, collapsedByDefault: true, keyboardDisclosure: true, openStateSurvivesRefresh: true, emptyHistory: true, freeWithoutAccount: true, savedWins: true, liveWin: true, reloadQuiet: true, pause: true, hidePersists: true, retry: true, localMidnight: true }, pageErrors: errors });
+    evidence.push({ locale, tests: { insightsPlacement: true, collapsedByDefault: true, collapsedWeekVisible: true, singleWeekStrip: true, keyboardDisclosure: true, openStateSurvivesRefresh: true, emptyHistory: true, freeWithoutAccount: true, savedWins: true, liveWin: true, reloadQuiet: true, pause: true, hidePersists: true, retry: true, localMidnight: true }, pageErrors: errors });
     await page.close();
   }
   await writeFile(resolve(output, 'verification.json'), JSON.stringify(evidence, null, 2));

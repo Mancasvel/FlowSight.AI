@@ -17,7 +17,12 @@ export function mountDailyFlow({ root, preference, statusElement, invoke }) {
     const dateLabel = `${t('Today')}, ${new Intl.DateTimeFormat(getLocale(), { month: 'long', day: 'numeric' }).format(new Date())}`;
     const streakLabel = progress && !failed ? t(view.streak === 1 ? '{count} day' : '{count} days', { count: view.streak }) : '—';
     const disclosureFocused = document.activeElement === root.querySelector('#dailyFlowToggle');
-    const summary = `<summary class="daily-flow-summary" id="dailyFlowToggle"><time id="dailyFlowDate" datetime="${view.today}">${dateLabel}</time><span class="daily-flow-streak"><span>${t('Streak')}</span><strong id="streakText">${streakLabel}</strong></span><svg class="daily-flow-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></summary>`;
+    const dayLabel = day => {
+      const date = new Intl.DateTimeFormat(getLocale(), { weekday: 'long', month: 'short', day: 'numeric' }).format(day.date);
+      return progress ? t(day.done ? '{date}: daily win earned' : day.future ? '{date}: upcoming' : day.today ? '{date}: in progress' : '{date}: rest day', { date }) : date;
+    };
+    const week = `<span class="daily-flow-week" role="list" aria-label="${t('This week')}">${view.week.map(day => `<span role="listitem" class="daily-flow-day${day.done ? ' is-done' : ''}${day.today ? ' is-today' : ''}${day.future ? ' is-future' : ''}" aria-label="${dayLabel(day)}"${day.today ? ' aria-current="date"' : ''}><span>${new Intl.DateTimeFormat(getLocale(), { weekday: 'short' }).format(day.date)}</span><span class="daily-flow-day-mark" aria-hidden="true"></span></span>`).join('')}</span>`;
+    const summary = `<summary class="daily-flow-summary" id="dailyFlowToggle"><span class="daily-flow-summary-header"><time id="dailyFlowDate" datetime="${view.today}">${dateLabel}</time><span class="daily-flow-streak"><span>${t('Streak')}</span><strong id="streakText">${streakLabel}</strong></span><svg class="daily-flow-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></span>${week}</summary>`;
     if (!progress || failed) {
       const message = failed ? t('Daily Flow is unavailable. Your tracking still works.') : t('Loading your Daily Flow…');
       renderedKey = '';
@@ -32,9 +37,6 @@ export function mountDailyFlow({ root, preference, statusElement, invoke }) {
     renderedKey = key;
     const done = view.todayDone;
     root.classList.toggle('daily-flow--complete', done);
-    const dayLabel = day => t(day.done ? '{date}: daily win earned' : day.future ? '{date}: upcoming' : day.today ? '{date}: in progress' : '{date}: rest day', {
-      date: new Intl.DateTimeFormat(getLocale(), { weekday: 'long', month: 'short', day: 'numeric' }).format(day.date),
-    });
     const note = done ? t('Daily win earned. Come back when you are ready.')
       : t('Record 15 minutes today. Pauses and breaks do not count.');
     root.innerHTML = `
@@ -46,7 +48,6 @@ export function mountDailyFlow({ root, preference, statusElement, invoke }) {
         <svg viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="${view.percent}" height="4" rx="2"/></svg>
       </div>
       <div class="daily-flow-week-heading"><strong>${t('This week')}</strong><span>${t('{count} / {target} days', { count: view.weekWins, target: WEEKLY_WIN_TARGET })}${view.weekWins >= WEEKLY_WIN_TARGET ? ` · ${t('Goal reached')}` : ''}</span></div>
-      <ol class="daily-flow-week">${view.week.map(day => `<li class="daily-flow-day${day.done ? ' is-done' : ''}${day.today ? ' is-today' : ''}${day.future ? ' is-future' : ''}" aria-label="${dayLabel(day)}"${day.today ? ' aria-current="date"' : ''}><span>${new Intl.DateTimeFormat(getLocale(), { weekday: 'narrow' }).format(day.date)}</span><span class="daily-flow-day-mark">${day.done ? check : '<span></span>'}</span></li>`).join('')}</ol>
       <p class="daily-flow-rest">${t('Aim for 3 days a week. Rest days keep your milestones.')}</p>
       <section class="daily-flow-milestones"><div class="daily-flow-milestones-heading"><h3>${t('Milestones')}</h3><span>${view.milestone ? t('Next: {name} · {count}/{target} wins', { name: t(view.milestone.name), count: view.totalWins, target: view.milestone.days }) : t('All milestones earned')}</span></div>
         <ul>${MILESTONES.map(item => `<li${view.totalWins >= item.days ? ' class="is-earned"' : ''}><span>${t(item.name)}</span><span>${view.totalWins >= item.days ? t('Earned') : t(item.days === 1 ? '{count} daily win' : '{count} daily wins', { count: item.days })}</span></li>`).join('')}</ul>

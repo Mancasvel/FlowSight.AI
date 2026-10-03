@@ -35,9 +35,10 @@ The reference products were selected for relevant mechanisms, not as a market ra
    a consecutive-day streak after the day ends, but never removes earned milestones.
 
 Daily Flow lives in Reports / Insights directly below the Insights heading. Its
-native disclosure is closed on a fresh load and shows only today's localized
-date, the consecutive-day streak, and an expansion chevron. Opening the row
-reveals daily progress, the seven-day strip, and all milestones. The same panel
+native disclosure is closed on a fresh load and shows today's localized date,
+the consecutive-day streak, an expansion chevron, and the weekday dot strip.
+The weekday labels and small empty/filled circles remain visible in both states.
+Opening the row reveals daily progress, the weekly target, and all milestones. The same panel
 node preserves its open state during live updates, report refreshes, and tab
 navigation; it also appears before any activity is recorded. Today contains only
 the existing tracking and planning controls.
