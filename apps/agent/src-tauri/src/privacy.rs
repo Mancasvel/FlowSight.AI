@@ -272,6 +272,8 @@ pub fn enforce_local_retention(db_path: &Path) -> Result<usize, String> {
         )
         .map_err(|error| error.to_string())?;
     if tracking_table_exists(&conn)? {
+        // Preserve minimal earned counters and this week's marks before raw time expires.
+        crate::daily_flow::reconcile_progress(&conn, Local::now().date_naive())?;
         conn.execute(
             "DELETE FROM tracking_daily_time WHERE date < date('now', 'localtime', ?1)",
             params![modifier],
@@ -561,6 +563,8 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
         "application_settings": application_settings,
         "local_activity_reports": reports,
         "local_tracking_days": tracked_days,
+        "local_daily_flow_progress": config_value(&conn, crate::daily_flow::PROGRESS_KEY)
+            .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
         "local_coach_messages": coach_messages,
         "privacy_choice_history": privacy_events,
         "cloud_data": cloud,
@@ -617,7 +621,7 @@ fn remove_runtime_artifacts(app: &tauri::AppHandle) -> Vec<String> {
     warnings
 }
 
-fn erase_local_database(conn: &Connection) -> Result<(), String> {
+pub(crate) fn erase_local_database(conn: &Connection) -> Result<(), String> {
     let transaction = conn
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;

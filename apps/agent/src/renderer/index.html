@@ -3267,6 +3267,7 @@
   </style>
   <link rel="stylesheet" href="/theme-dark-base.css" id="themeDarkBase" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="./mobile-theme.css">
+  <link rel="stylesheet" href="./daily-flow.css">
   <link rel="stylesheet" href="/theme-dark-mobile.css" id="themeDarkMobile" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="./profile-redesign.css">
   <link rel="stylesheet" href="./local-agent.css">
@@ -3643,7 +3644,7 @@
             </div>
             <div class="timer-meta-row">
               <div class="timer-meta-item"><span class="timer-meta-label">Daily goal</span><span class="timer-goal-label" id="timerGoalLabel">No goal</span></div>
-              <div class="timer-meta-item timer-streak" id="timerStreak"><span class="timer-meta-label">Streak</span><span id="streakText">0 days</span></div>
+              <div class="timer-meta-item timer-streak" id="timerStreak"><span class="timer-meta-label">Daily Flow streak</span><span id="streakText">—</span></div>
             </div>
             <div class="timer-actions">
               <button type="button" class="play-timer-btn" id="playTimerBtn" disabled title="Start tracking" aria-label="Start tracking">
@@ -3668,6 +3669,8 @@
           </div>
         </div>
 
+        <section class="daily-flow" id="dailyFlow" aria-label="Daily Flow"></section>
+        <p id="dailyFlowAnnouncement" class="daily-flow-announcement" role="status" aria-live="polite" aria-atomic="true"></p>
         <details class="session-planner" id="sessionPlanner">
           <summary id="sessionPlannerToggle">Let’s plan today’s session</summary>
           <form id="sessionPlanForm">
@@ -3830,6 +3833,11 @@
           </select>
           <p class="privacy-detail profile-field-note">Language changes immediately. Your current tracking session and drafts stay open.</p>
           <p id="languageStatus" class="profile-form-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="card" id="dailyFlowSettings">
+          <div class="card-header"><div class="card-title">Daily Flow</div></div>
+          <label class="checkbox-wrapper" for="dailyFlowVisible"><input type="checkbox" class="checkbox" id="dailyFlowVisible" checked><span class="checkbox-label">Show Daily Flow and personal milestones</span></label>
+          <p class="privacy-detail profile-field-note">A daily win takes 15 recorded minutes. Aim for 3 days a week. Progress stays on this device and is erased with your local data.</p>
         </div>
         <div class="card" id="profileAccountCard">
           <div class="card-header">
@@ -4302,6 +4310,7 @@
       LiveTrackingClock,
     } from './tracking-session.mjs';
     import { loadTimerPreferences, saveTimerPreferences, PomodoroTimer } from './timer-modes.mjs';
+    import { mountDailyFlow } from './daily-flow-ui.mjs';
     import {
       cleanReportText as extractEnglishText,
       createStatusReportViewModel,
@@ -5329,16 +5338,13 @@
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
 
-    function computeStreak(week) {
-      if (!week?.days) return 0;
-      let streak = 0;
-      const todayIdx = week.days.findIndex(d => d.is_today);
-      for (let i = todayIdx; i >= 0; i--) {
-        if (week.days[i].has_activity) streak++;
-        else break;
-      }
-      return streak;
-    }
+    const dailyFlow = mountDailyFlow({
+      root: document.getElementById('dailyFlow'),
+      streakElement: document.getElementById('streakText'),
+      preference: document.getElementById('dailyFlowVisible'),
+      statusElement: document.getElementById('dailyFlowAnnouncement'),
+      invoke,
+    });
 
     const liveTrackingClock = new LiveTrackingClock();
     let timerPreferences = loadTimerPreferences(localStorage);
@@ -5378,6 +5384,7 @@
         clockRequest = invoke('get_tracking_clock').then(snapshot => {
           if (liveTrackingClock.sample({ ...snapshot, is_running: trackingStateHydrated ? isMonitoring : snapshot.is_running })) {
             updateTimerDisplay();
+            dailyFlow.refresh();
           }
         }).finally(() => { clockRequest = null; });
       }
@@ -5831,11 +5838,9 @@
       sessionPlanner.refreshCalendar();
       updateTodayGreeting();
       updateGoalUI();
+      dailyFlow.refresh();
       try {
         const week = await invoke('get_week_summary').catch(() => null);
-        const streak = computeStreak(week);
-        const streakEl = document.getElementById('streakText');
-        if (streakEl) setText(streakEl, () => (formatMessage`${streak} day${streak === 1 ? '' : 's'}`));
         currentWeekData = week;
         const history = await loadCurrentDayHistory();
         if (document.getElementById('tabSummary')?.classList.contains('active')) {

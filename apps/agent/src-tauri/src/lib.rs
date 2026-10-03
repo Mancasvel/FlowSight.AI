@@ -25,6 +25,7 @@ mod notion;
 mod oauth_env;
 pub mod paths;
 mod privacy;
+mod daily_flow;
 mod report_schedule;
 mod secure_config;
 mod sync;
@@ -74,6 +75,7 @@ pub fn run() {
             update_config,
             get_status,
             get_tracking_clock,
+            agent::get_daily_flow_progress,
             start_monitoring,
             stop_monitoring,
             check_local_server,

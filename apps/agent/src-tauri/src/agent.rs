@@ -400,6 +400,12 @@ pub fn get_tracking_clock(
 ) -> Result<crate::tracking_clock::TrackingClockSnapshot, String> {
     let mut guard = state.lock().map_err(|e| e.to_string())?;
     let agent = guard.as_mut().ok_or("Agent not initialized")?;
+    snapshot_tracking_clock(agent)
+}
+
+fn snapshot_tracking_clock(
+    agent: &mut FlowSightAgent,
+) -> Result<crate::tracking_clock::TrackingClockSnapshot, String> {
     let conn = Connection::open(&agent.db_path).map_err(|e| e.to_string())?;
     if agent.tracking_clock.is_none() {
         agent.tracking_clock = Some(load_tracking_clock(&conn)?);
@@ -409,6 +415,17 @@ pub fn get_tracking_clock(
         .as_mut()
         .unwrap()
         .snapshot(&conn, agent.is_running)
+}
+
+#[tauri::command]
+pub fn get_daily_flow_progress(
+    state: State<'_, AgentState>,
+) -> Result<crate::daily_flow::DailyFlowProgress, String> {
+    let mut guard = state.lock().map_err(|e| e.to_string())?;
+    let agent = guard.as_mut().ok_or("Agent not initialized")?;
+    let snapshot = snapshot_tracking_clock(agent)?;
+    let conn = Connection::open(&agent.db_path).map_err(|e| e.to_string())?;
+    crate::daily_flow::load_progress(&conn, snapshot)
 }
 
 #[tauri::command]
