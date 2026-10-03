@@ -3644,7 +3644,6 @@
             </div>
             <div class="timer-meta-row">
               <div class="timer-meta-item"><span class="timer-meta-label">Daily goal</span><span class="timer-goal-label" id="timerGoalLabel">No goal</span></div>
-              <div class="timer-meta-item timer-streak" id="timerStreak"><span class="timer-meta-label">Daily Flow streak</span><span id="streakText">—</span></div>
             </div>
             <div class="timer-actions">
               <button type="button" class="play-timer-btn" id="playTimerBtn" disabled title="Start tracking" aria-label="Start tracking">
@@ -3669,8 +3668,6 @@
           </div>
         </div>
 
-        <section class="daily-flow" id="dailyFlow" aria-label="Daily Flow"></section>
-        <p id="dailyFlowAnnouncement" class="daily-flow-announcement" role="status" aria-live="polite" aria-atomic="true"></p>
         <details class="session-planner" id="sessionPlanner">
           <summary id="sessionPlannerToggle">Let’s plan today’s session</summary>
           <form id="sessionPlanForm">
@@ -3766,6 +3763,8 @@
 
       <!-- TAB: Summary -->
       <div id="tabSummary" class="tab-panel">
+        <details class="daily-flow" id="dailyFlow" aria-label="Daily Flow" data-reading-key="daily-flow"></details>
+        <p id="dailyFlowAnnouncement" class="daily-flow-announcement" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="summaryBody">
           <div class="empty-state"><span class="loading"></span> Loading summary...</div>
         </div>
@@ -5340,7 +5339,6 @@
 
     const dailyFlow = mountDailyFlow({
       root: document.getElementById('dailyFlow'),
-      streakElement: document.getElementById('streakText'),
       preference: document.getElementById('dailyFlowVisible'),
       statusElement: document.getElementById('dailyFlowAnnouncement'),
       invoke,
@@ -8724,7 +8722,7 @@
       const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
       activeNavItem?.classList.add('active');
       activeNavItem?.setAttribute('aria-current', 'page');
-      if (tabId === 'tabSummary') loadHistory();
+      if (tabId === 'tabSummary') { dailyFlow.refresh(); loadHistory(); }
       if (tabId === 'tabCloudInsights') loadCoachChat();
       if (tabId === 'tabProfile') {
         refreshBrowserPairing();
@@ -8752,34 +8750,12 @@
       return `${mins}m`;
     }
 
-    function formatDisplayDate(dateStr) {
-      const d = new Date(dateStr + 'T12:00:00');
-      const today = new Date();
-      const isToday = d.toDateString() === today.toDateString();
-      const formatted = d.toLocaleDateString(getLocale(), { month: 'long', day: 'numeric' });
-      if (isToday) return formatMessage`Today, ${formatted}`;
-      return formatted;
-    }
-
     function canonicalDeepFocusSeconds(data) {
       return data.focus?.deep_focus_seconds || 0;
     }
 
     function canonicalDistractionEvents(data) {
       return data.focus?.distraction_events || 0;
-    }
-
-    function renderWeekRow(week) {
-      if (!week?.days) return '';
-      return week.days.map(day => {
-        const classes = ['week-day'];
-        if (day.is_today) classes.push('today');
-        if (day.has_activity) classes.push('completed');
-        const inner = day.has_activity
-          ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
-          : '';
-        return html`<div class="${classes.join(' ')}"><span class="week-day-label">${new Intl.DateTimeFormat(getLocale(), {weekday:'short'}).format(new Date(day.date+'T12:00:00'))}</span><div class="week-day-ring">${inner}</div></div>`;
-      }).join('');
     }
 
     function renderProgressRing(progress) {
@@ -8898,13 +8874,12 @@
         updateLiveSummary();
         lastHistoryRenderKey = key;
       } finally {
+        dailyFlow.attach(summaryBody.querySelector('[data-daily-flow-slot]'));
         restoreReadingPosition(summaryBody, position);
       }
     }
 
     function renderHistoryContent(data, week) {
-      const activeDays = week?.days?.filter(day => day.has_activity).length || 0;
-      const weekActivityLabel = formatMessage`${activeDays} active day${activeDays === 1 ? '' : 's'}`;
       if (data.entries.length === 0 && getDisplayTotalSeconds() === 0) {
         summaryBody.innerHTML = html`
           <div class="summary-header">
@@ -8918,11 +8893,7 @@
               </button>
             </div>
           </div>
-          <div class="summary-date">${formatDisplayDate(data.date)}</div>
-          <section class="week-card" aria-label="Activity this week">
-            <div class="week-card-heading"><span>This week</span><span>${weekActivityLabel}</span></div>
-            <div class="week-row">${renderWeekRow(week)}</div>
-          </section>
+          <div data-daily-flow-slot></div>
           <div class="empty-state">No activity recorded today. Start a tracking block to see your work patterns here.</div>`;
         document.getElementById('generateReportBtn').onclick = () => {
           generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
@@ -8963,11 +8934,7 @@
             </button>
           </div>
         </div>
-        <div class="summary-date">${formatDisplayDate(data.date)}</div>
-        <section class="week-card" aria-label="Activity this week">
-          <div class="week-card-heading"><span>This week</span><span>${weekActivityLabel}</span></div>
-          <div class="week-row">${renderWeekRow(week)}</div>
-        </section>
+        <div data-daily-flow-slot></div>
 
         <div class="summary-main-card" data-reading-key="daily-summary">
           <div class="summary-time-row">

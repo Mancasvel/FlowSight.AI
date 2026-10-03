@@ -1,6 +1,17 @@
-/* Daily Flow extends the incumbent Today surface and inherits both theme palettes. */
-.daily-flow { margin: 14px 0 20px; padding: 18px 20px; border: 1px solid hsl(var(--border)); border-radius: var(--radius); background: hsl(var(--card)); color: hsl(var(--foreground)); }
-.daily-flow[hidden], .timer-streak[hidden] { display: none; }
+/* Insights shows the day and streak first; all habit details live in the disclosure. */
+.daily-flow { margin: 4px 0 18px; color: hsl(var(--foreground)); }
+.daily-flow[hidden] { display: none; }
+.daily-flow-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto 16px; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; list-style: none; font-size: 12px; border-radius: 6px; }
+.daily-flow-summary::-webkit-details-marker { display: none; }
+.daily-flow-summary time { color: hsl(var(--muted-foreground)); }
+.daily-flow-streak { display: flex; align-items: baseline; gap: 6px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.daily-flow-streak > span { color: hsl(var(--muted-foreground)); }
+.daily-flow-streak strong { color: hsl(var(--accent-foreground)); font-weight: 700; }
+.daily-flow-chevron { width: 16px; height: 16px; color: hsl(var(--muted-foreground)); }
+.daily-flow[open] > summary .daily-flow-chevron { transform: rotate(180deg); }
+.daily-flow-summary:hover { background: hsl(var(--muted)); }
+.daily-flow-summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+.daily-flow-detail { margin-top: 8px; padding: 18px 20px; border: 1px solid hsl(var(--border)); border-radius: var(--radius); background: hsl(var(--card)); }
 .daily-flow h2 { margin: 0; font-size: 15px; font-weight: 800; }
 .daily-flow-heading, .daily-flow-mission, .daily-flow-week-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .daily-flow-heading { margin-bottom: 14px; }
@@ -24,9 +35,9 @@
 .daily-flow-day.is-future .daily-flow-day-mark { background: transparent; border: 1px solid hsl(var(--border)); }
 .daily-flow-rest { margin: 10px 0 14px; }
 .daily-flow-milestones { border-top: 1px solid hsl(var(--border)); padding-top: 12px; }
-.daily-flow-milestones summary { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; cursor: pointer; font-size: 11px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
-.daily-flow-milestones summary > span { color: hsl(var(--muted-foreground)); font-weight: 500; text-decoration: none; }
-.daily-flow-milestones summary:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 4px; border-radius: 3px; }
+.daily-flow-milestones-heading { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 11px; }
+.daily-flow-milestones-heading h3 { margin: 0; font-size: inherit; font-weight: 700; }
+.daily-flow-milestones-heading > span { color: hsl(var(--muted-foreground)); font-weight: 500; }
 .daily-flow-milestones ul { padding: 0; margin: 12px 0; list-style: none; }
 .daily-flow-milestones li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 11px; }
 .daily-flow-milestones li > span:last-child { color: hsl(var(--muted-foreground)); }
@@ -36,4 +47,4 @@
 .daily-flow-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @keyframes daily-flow-win { 0% { transform: scale(0.85); } 45% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .daily-flow--celebrate .daily-flow-day.is-today .daily-flow-day-mark { animation: none; } }
-@media (max-width: 380px) { .daily-flow { padding: 16px; } .daily-flow-mission { flex-wrap: wrap; gap: 4px; } }
+@media (max-width: 380px) { .daily-flow-summary { gap: 8px; } .daily-flow-detail { padding: 16px; } .daily-flow-mission { flex-wrap: wrap; gap: 4px; } }

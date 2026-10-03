@@ -34,9 +34,18 @@ The reference products were selected for relevant mechanisms, not as a market ra
 5. Reach cumulative milestones at 1, 3, 7, and 30 earned days. A rest day resets
    a consecutive-day streak after the day ends, but never removes earned milestones.
 
+Daily Flow lives in Reports / Insights directly below the Insights heading. Its
+native disclosure is closed on a fresh load and shows only today's localized
+date, the consecutive-day streak, and an expansion chevron. Opening the row
+reveals daily progress, the seven-day strip, and all milestones. The same panel
+node preserves its open state during live updates, report refreshes, and tab
+navigation; it also appears before any activity is recorded. Today contains only
+the existing tracking and planning controls.
+
 Daily Flow is available locally without an account or paid plan. A Settings
-checkbox hides it and its streak. It uses the renderer's existing language and
-theme choices. Reduced motion disables the celebration animation.
+checkbox hides the disclosure, including its streak. It uses the renderer's
+existing language and theme choices. Reduced motion disables the celebration
+animation.
 
 ## Data and correctness
 

@@ -5,29 +5,31 @@ const PREFERENCE_KEY = 'flowsight_daily_flow_visible_v1';
 const CELEBRATION_KEY = 'flowsight_daily_flow_celebrated_v1';
 const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4 10-10"/></svg>';
 
-export function mountDailyFlow({ root, streakElement, preference, statusElement, invoke }) {
+export function mountDailyFlow({ root, preference, statusElement, invoke }) {
   let progress = null, pending = null, renderedKey = '', visible = true, failed = false;
   try { visible = localStorage.getItem(PREFERENCE_KEY) !== 'false'; } catch { /* session preference */ }
   preference.checked = visible;
 
   function render() {
     root.hidden = !visible;
-    streakElement.closest('.timer-streak').hidden = !visible;
     if (!visible) return;
+    const view = dailyFlowView(progress);
+    const dateLabel = `${t('Today')}, ${new Intl.DateTimeFormat(getLocale(), { month: 'long', day: 'numeric' }).format(new Date())}`;
+    const streakLabel = progress && !failed ? t(view.streak === 1 ? '{count} day' : '{count} days', { count: view.streak }) : '—';
+    const disclosureFocused = document.activeElement === root.querySelector('#dailyFlowToggle');
+    const summary = `<summary class="daily-flow-summary" id="dailyFlowToggle"><time id="dailyFlowDate" datetime="${view.today}">${dateLabel}</time><span class="daily-flow-streak"><span>${t('Streak')}</span><strong id="streakText">${streakLabel}</strong></span><svg class="daily-flow-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></summary>`;
     if (!progress || failed) {
       const message = failed ? t('Daily Flow is unavailable. Your tracking still works.') : t('Loading your Daily Flow…');
       renderedKey = '';
       root.classList.remove('daily-flow--complete');
-      root.innerHTML = `<h2>${t('Daily Flow')}</h2><p>${message}</p>${failed ? `<button type="button" class="button button-ghost" data-flow-retry>${t('Retry')}</button>` : ''}`;
-      streakElement.textContent = '—';
+      root.innerHTML = `${summary}<div class="daily-flow-detail"><h2>${t('Daily Flow')}</h2><p>${message}</p>${failed ? `<button type="button" class="button button-ghost" data-flow-retry>${t('Retry')}</button>` : ''}</div>`;
+      if (disclosureFocused) root.querySelector('#dailyFlowToggle')?.focus({ preventScroll: true });
       root.querySelector('[data-flow-retry]')?.addEventListener('click', refresh);
       return;
     }
-    const view = dailyFlowView(progress);
     const key = JSON.stringify([view.today, view.percent, view.totalWins, view.streak, view.remainingMinutes, view.weekWins, getLanguage()]);
     if (key === renderedKey) return;
     renderedKey = key;
-    streakElement.textContent = t(view.streak === 1 ? '{count} day' : '{count} days', { count: view.streak });
     const done = view.todayDone;
     root.classList.toggle('daily-flow--complete', done);
     const dayLabel = day => t(day.done ? '{date}: daily win earned' : day.future ? '{date}: upcoming' : day.today ? '{date}: in progress' : '{date}: rest day', {
@@ -35,9 +37,8 @@ export function mountDailyFlow({ root, streakElement, preference, statusElement,
     });
     const note = done ? t('Daily win earned. Come back when you are ready.')
       : t('Record 15 minutes today. Pauses and breaks do not count.');
-    const expanded = root.querySelector('details')?.open;
-    const summaryFocused = document.activeElement === root.querySelector('summary');
     root.innerHTML = `
+      ${summary}<div class="daily-flow-detail">
       <div class="daily-flow-heading"><h2>${t('Daily Flow')}</h2><span class="daily-flow-private">${t('Only on this device')}</span></div>
       <div class="daily-flow-mission"><strong>${done ? t('You showed up today') : t('A small step, every day')}</strong><span class="daily-flow-count">${done ? check : ''}${done ? t('Daily win') : t('{minutes} min to go', { minutes: view.remainingMinutes })}</span></div>
       <p class="daily-flow-note">${note}</p>
@@ -47,11 +48,11 @@ export function mountDailyFlow({ root, streakElement, preference, statusElement,
       <div class="daily-flow-week-heading"><strong>${t('This week')}</strong><span>${t('{count} / {target} days', { count: view.weekWins, target: WEEKLY_WIN_TARGET })}${view.weekWins >= WEEKLY_WIN_TARGET ? ` · ${t('Goal reached')}` : ''}</span></div>
       <ol class="daily-flow-week">${view.week.map(day => `<li class="daily-flow-day${day.done ? ' is-done' : ''}${day.today ? ' is-today' : ''}${day.future ? ' is-future' : ''}" aria-label="${dayLabel(day)}"${day.today ? ' aria-current="date"' : ''}><span>${new Intl.DateTimeFormat(getLocale(), { weekday: 'narrow' }).format(day.date)}</span><span class="daily-flow-day-mark">${day.done ? check : '<span></span>'}</span></li>`).join('')}</ol>
       <p class="daily-flow-rest">${t('Aim for 3 days a week. Rest days keep your milestones.')}</p>
-      <details class="daily-flow-milestones"${expanded ? ' open' : ''}><summary>${t('Milestones')}<span>${view.milestone ? t('Next: {name} · {count}/{target} wins', { name: t(view.milestone.name), count: view.totalWins, target: view.milestone.days }) : t('All milestones earned')}</span></summary>
+      <section class="daily-flow-milestones"><div class="daily-flow-milestones-heading"><h3>${t('Milestones')}</h3><span>${view.milestone ? t('Next: {name} · {count}/{target} wins', { name: t(view.milestone.name), count: view.totalWins, target: view.milestone.days }) : t('All milestones earned')}</span></div>
         <ul>${MILESTONES.map(item => `<li${view.totalWins >= item.days ? ' class="is-earned"' : ''}><span>${t(item.name)}</span><span>${view.totalWins >= item.days ? t('Earned') : t(item.days === 1 ? '{count} daily win' : '{count} daily wins', { count: item.days })}</span></li>`).join('')}</ul>
         <p>${t('Wins come from saved tracking time, not an assessment of work quality. Changing your hours goal does not change Daily Flow.')}</p>
-      </details>`;
-    if (summaryFocused) root.querySelector('summary')?.focus({ preventScroll: true });
+      </section></div>`;
+    if (disclosureFocused) root.querySelector('#dailyFlowToggle')?.focus({ preventScroll: true });
   }
 
   function celebrate(previous, next) {
@@ -95,5 +96,5 @@ export function mountDailyFlow({ root, streakElement, preference, statusElement,
   document.addEventListener('flowsight:languagechange', () => { render(); statusElement.textContent = ''; });
   root.addEventListener('animationend', () => root.classList.remove('daily-flow--celebrate'));
   render();
-  return { refresh, render };
+  return { refresh, render, attach(slot) { if (slot) slot.replaceWith(root); } };
 }
