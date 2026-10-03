@@ -185,3 +185,13 @@ jobs:
 
       - name: Host lint
         run: cargo clippy --manifest-path apps/agent/src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+
+      - name: Build Windows executable
+        run: cargo build --manifest-path apps/agent/src-tauri/Cargo.toml --bin app
+
+      - name: Verify executable starts without Visual C++ runtime DLLs
+        run: python scripts/check-windows-loader-dependencies.py apps/agent/src-tauri/target/debug/app.exe
+
+      - name: Probe startup with corrupt app-local Visual C++ DLLs
+        shell: pwsh
+        run: ./scripts/check-windows-loader-recovery.ps1 -Executable apps/agent/src-tauri/target/debug/app.exe
