@@ -3274,6 +3274,7 @@
   <link rel="stylesheet" href="./total-focus.css">
   <link rel="stylesheet" href="./calendar-companion.css">
   <link rel="stylesheet" href="./coach.css">
+  <link rel="stylesheet" href="./online-leagues.css">
 </head>
 
 <body>
@@ -3645,6 +3646,7 @@
             <div class="timer-meta-row">
               <div class="timer-meta-item"><span class="timer-meta-label">Daily goal</span><span class="timer-goal-label" id="timerGoalLabel">No goal</span></div>
             </div>
+            <div class="timer-goal-progress" id="timerGoalProgress" role="progressbar" aria-label="Daily goal progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="timerGoalProgressFill"></span></div>
             <div class="timer-actions">
               <button type="button" class="play-timer-btn" id="playTimerBtn" disabled title="Start tracking" aria-label="Start tracking">
                 <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor">
@@ -4215,21 +4217,25 @@
         </div>
       </div>
 
+      <section class="tab-panel" id="tabOnline" aria-label="Online leagues"></section>
     </div>
 
     <!-- Bottom Navigation -->
     <nav class="bottom-nav" aria-label="Primary navigation">
-      <button class="nav-item active" data-tab="tabToday" id="navToday" aria-current="page">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-        <span class="nav-label">Today</span>
+      <button class="nav-item" data-tab="tabOnline" id="navOnline" aria-label="Online">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18M12 3c-5 5-5 13 0 18"/></svg><span class="nav-label">Online</span>
       </button>
       <button class="nav-item" data-tab="tabSummary" id="navSummary">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
         </svg>
         <span class="nav-label">Insights</span>
+      </button>
+      <button class="nav-item active" data-tab="tabToday" id="navToday" aria-current="page" aria-label="Clock">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span class="nav-label">Clock</span>
       </button>
       <button class="nav-item nav-pro nav-pro-locked" data-tab="tabCloudInsights" id="navCloudInsights" aria-label="Coach, Pro">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -4310,6 +4316,7 @@
     } from './tracking-session.mjs';
     import { loadTimerPreferences, saveTimerPreferences, PomodoroTimer } from './timer-modes.mjs';
     import { mountDailyFlow } from './daily-flow-ui.mjs';
+    import { mountOnlineLeagues } from './online-leagues-ui.mjs';
     import {
       cleanReportText as extractEnglishText,
       createStatusReportViewModel,
@@ -5343,6 +5350,7 @@
       invoke,
     });
 
+    const onlineLeagues = mountOnlineLeagues({root: document.getElementById('tabOnline'), invoke});
     const liveTrackingClock = new LiveTrackingClock();
     let timerPreferences = loadTimerPreferences(localStorage);
     const pomodoro = new PomodoroTimer(timerPreferences);
@@ -5367,6 +5375,10 @@
       const ring = document.getElementById('timerProgressRing');
       const p = Math.min(Math.max(progress, 0), 1);
       if (ring) ring.setAttribute('stroke-dashoffset', String(TIMER_RING_CIRC * (1 - p)));
+      const bar = document.getElementById('timerGoalProgress');
+      const fill = document.getElementById('timerGoalProgressFill');
+      if (bar) {bar.hidden = getDailyGoalHours() <= 0; bar.setAttribute('aria-valuenow', String(Math.round(p * 100))); bar.setAttribute('aria-label', getLanguage() === 'es' ? 'Avance del objetivo diario' : 'Daily goal progress');}
+      if (fill) fill.style.transform = `scaleX(${p})`;
     }
 
     function applyRecordedHistory(history) {
@@ -8721,6 +8733,7 @@
       const activeNavItem = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
       activeNavItem?.classList.add('active');
       activeNavItem?.setAttribute('aria-current', 'page');
+      if (tabId === 'tabOnline') onlineLeagues.refresh();
       if (tabId === 'tabSummary') { dailyFlow.refresh(); loadHistory(); }
       if (tabId === 'tabCloudInsights') loadCoachChat();
       if (tabId === 'tabProfile') {

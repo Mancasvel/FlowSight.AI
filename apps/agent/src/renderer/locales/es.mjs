@@ -975,6 +975,7 @@ Storage unavailable|Almacenamiento no disponible
 spanish['{p0}\n\n{p1}\n\nDraft only; copy and review before publishing.']='{p0}\n\n{p1}\n\nSolo borrador; copia y revisa antes de publicar.';
 
 Object.assign(spanish, {
+  'Clock': 'Reloj',
   '1 of 6':'1 de 6','{p0} of 6':'{p0} de 6',
   'Total focus':'Concentración total','Total focus active':'Concentración total activa',
   'Use a domain or HTTP(S) path without spaces.':'Escribe un dominio o una ruta HTTP(S) sin espacios.',

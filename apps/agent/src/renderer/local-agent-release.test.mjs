@@ -14,7 +14,7 @@ test('the local action agent is configured in Settings, without a chat tab or un
   assert.doesNotMatch(markup, /id="localAgentOpenExtensionBtn"|Load unpacked|Developer mode/);
   assert.deepEqual(
     [...markup.matchAll(/<button class="nav-item[^"]*" data-tab="([^"]+)"/g)].map((match) => match[1]),
-    ['tabToday', 'tabSummary', 'tabCloudInsights', 'tabProfile'],
+    ['tabOnline', 'tabSummary', 'tabToday', 'tabCloudInsights', 'tabProfile'],
   );
   assert.doesNotMatch(markup, /id="navLocalAgent"|id="tabLocalAgent"|id="localAgentForm"/);
   assert.match(markup, /id="navCloudInsights"/);

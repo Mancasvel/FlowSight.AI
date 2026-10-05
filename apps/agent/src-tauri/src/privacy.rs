@@ -565,6 +565,7 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
         "local_tracking_days": tracked_days,
         "local_daily_flow_progress": config_value(&conn, crate::daily_flow::PROGRESS_KEY)
             .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
+        "online_leagues": crate::online_leagues::export_data(&conn, include_cloud)?,
         "local_coach_messages": coach_messages,
         "privacy_choice_history": privacy_events,
         "cloud_data": cloud,
@@ -635,7 +636,7 @@ pub(crate) fn erase_local_database(conn: &Connection) -> Result<(), String> {
         .execute("DELETE FROM config", [])
         .map_err(|error| error.to_string())?;
     transaction
-        .execute_batch("DROP TABLE IF EXISTS tracking_daily_time;")
+        .execute_batch("DROP TABLE IF EXISTS tracking_daily_time; DROP TABLE IF EXISTS online_observation_owner; DROP TABLE IF EXISTS online_local_consent;")
         .map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())?;
     conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;")

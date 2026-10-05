@@ -23,6 +23,7 @@ mod local_agent;
 pub mod mcp;
 mod model_assets;
 mod notion;
+mod online_leagues;
 mod oauth_env;
 pub mod paths;
 mod privacy;
@@ -71,6 +72,9 @@ pub fn run() {
             language::get_language_preference,
             language::set_language_preference,
             initialize_agent,
+            online_leagues::get_online_leagues,
+            online_leagues::set_online_league_consent,
+            online_leagues::online_league_action,
             get_config,
             update_config,
             get_status,
