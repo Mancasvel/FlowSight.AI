@@ -15,12 +15,17 @@ try{
   await page.addInitScript(()=>{
     const original=window.__TAURI_INTERNALS__.invoke;
     window.onlineTestState={signed_in:true,enabled:false,groups:[],alias:''};
-    window.onlineFail=false;window.usernameTaken=false;
+    window.onlineFail=false;window.usernameTaken=false;window.onlineHold=false;window.onlineCloudError='';
     window.__TAURI_INTERNALS__.invoke=async(command,args={})=>{
       if(!['get_online_leagues','set_online_league_consent','online_league_action'].includes(command))return original(command,args);
       window.testCalls.push({command,args});
-      if(command==='get_online_leagues')return structuredClone(window.onlineTestState);
       if(window.onlineFail)throw 'Online leagues could not connect. Check your connection and retry';
+      if(command==='get_online_leagues'){
+        const result=structuredClone(window.onlineTestState);
+        if(window.onlineCloudError)Object.assign(result,{cloud_error:window.onlineCloudError,groups:[],today_points:undefined,week_start:undefined});
+        if(window.onlineHold)return new Promise((resolve,reject)=>{window.finishOnlineRefresh=()=>resolve(result);window.failOnlineRefresh=()=>reject('Online leagues could not connect. Check your connection and retry');});
+        return result;
+      }
       if(window.usernameTaken&&command==='set_online_league_consent')throw 'Username already taken. Choose another';
       if(command==='set_online_league_consent'){
         Object.assign(window.onlineTestState,{enabled:args.accept,alias:args.alias,today_points:0,eligible_minutes:0,week_start:'2026-10-05',withdrawal_pending:false});
@@ -67,8 +72,76 @@ try{
   assert.equal(await page.locator('.online-group b,.online-group script').count(),0);
   await page.locator('#onlineInvitationCode').waitFor();assert.equal((await page.locator('#onlineInvitationCode').inputValue()).length,64);
   await page.screenshot({path:new URL('group-simulated-native.png',out).pathname.slice(1)});
-  await page.locator('.online-sharing summary').click();await page.locator('#onlineDisable').click();
+
+  // A successful request with zero points must still visibly complete.
+  await page.evaluate(()=>window.onlineHold=true);
+  await page.locator('#onlineRefresh').click();
+  await page.locator('.online-sharing summary').focus();
+  await page.evaluate(()=>{window.finishOnlineRefresh();window.onlineHold=false;});
+  await page.locator('.online-status').filter({hasText:'Sincronizado'}).waitFor();
+  assert.match(await page.locator('.online-status').innerText(),/25 min/);
+
+  // Keep the request pending to verify loading, no duplicate request and drafts
+  // edited during the network round trip (rather than an outdated snapshot).
+  await page.evaluate(()=>{
+    window.onlineHold=true;
+    Object.assign(window.onlineTestState,{today_points:40,eligible_minutes:25});
+    window.onlineTestState.groups[0].members[0].points=40;
+  });
+  const syncCalls=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='get_online_leagues').length);
+  await page.locator('#onlineRefresh').click();
+  assert.equal(await page.locator('#onlineRefresh').innerText(),'Sincronizando…');
+  assert.equal(await page.locator('#onlineRefresh').isDisabled(),true);
+  assert.equal(await page.locator('.online-summary').getAttribute('aria-busy'),'true');
+  await page.locator('#onlineRefresh').evaluate(button=>button.click());
+  assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='get_online_leagues').length),syncCalls+1);
+  await page.locator('.online-sharing summary').click();
+  await page.locator('#onlineGroupName').fill('Mi nuevo grupo');
+  await page.locator('#onlineCode').fill('codigo-pendiente');
+  await page.locator('#onlineGroupName').focus();
+  await page.evaluate(()=>window.finishOnlineRefresh());
+  await page.locator('.online-score-line strong').filter({hasText:'40 / 100'}).waitFor();
+  assert.equal(await page.locator('.online-group li strong').innerText(),'40');
+  assert.equal(await page.locator('.online-status').getAttribute('data-state'),'success');
+  assert.equal(await page.locator('#onlineRefresh').isEnabled(),true);
+  assert.equal(await page.locator('.online-summary').getAttribute('aria-busy'),'false');
+  assert.equal(await page.locator('#onlineGroupName').inputValue(),'Mi nuevo grupo');
+  assert.equal(await page.locator('#onlineCode').inputValue(),'codigo-pendiente');
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'onlineGroupName');
+  assert.equal(await page.locator('.online-sharing').evaluate(detail=>detail.open),true);
+  for(const width of [340,370]){
+    await page.setViewportSize({width,height:700});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  }
+  await page.screenshot({path:new URL('sync-success-simulated-native.png',out).pathname.slice(1)});
+
+  // Native failures resolve with local data; preserve the last remote ranking
+  // and show an error, never a success indication. Retrying restores feedback.
+  await page.evaluate(()=>{window.onlineHold=false;window.onlineCloudError='Online leagues could not connect. Check your connection and retry';});
+  await page.locator('#onlineRefresh').click();
+  await page.locator('.online-status').filter({hasText:'No se pudo conectar'}).waitFor();
+  assert.equal(await page.locator('.online-status').getAttribute('data-state'),'error');
+  assert.equal(await page.locator('.online-group li strong').innerText(),'40');
+  assert.equal(await page.locator('.online-score-line strong').innerText(),'40 / 100');
+  assert.equal(await page.locator('#onlineRefresh').isEnabled(),true);
+  await page.evaluate(()=>{window.onlineCloudError='';window.onlineFail=true;});
+  await page.locator('#onlineRefresh').click();
+  await page.locator('.online-status').filter({hasText:'No se pudo conectar'}).waitFor();
+  assert.equal(await page.locator('#onlineRefresh').isEnabled(),true);
+  await page.evaluate(()=>window.onlineFail=false);
+  await page.locator('#onlineRefresh').click();
+  await page.locator('.online-status').filter({hasText:'Sincronizado'}).waitFor();
+  assert.equal(await page.locator('.online-status').getAttribute('data-state'),'success');
+
+  // A response from before withdrawal must not restore enabled consent.
+  await page.evaluate(()=>window.onlineHold=true);
+  await page.locator('#onlineRefresh').click();
+  await page.locator('#onlineDisable').click();
+  await page.locator('#onlineAccept').waitFor();
+  await page.evaluate(()=>window.finishOnlineRefresh());
+  await page.waitForTimeout(50);
   await page.locator('#onlineAccept').waitFor();assert.equal(await page.locator('#onlineInvitationCode').count(),0);
+  assert.equal(await page.locator('#onlineRefresh').count(),0);
   assert.deepEqual(errors,[]);
-  console.log('PASS: Online opt-in, exact alias, connection failure, group creation, invitation, HTML escaping, withdrawal; five-tab layout at 340/370/900 in light/dark. Screenshots use a simulated native service.');
+  console.log('PASS: Online opt-in, unique username, group creation, invitation, escaping, withdrawal; manual sync loading/success/zero points/error/retry, no duplicate request, updated ranking, draft/focus preservation and stale response protection; five-tab layout at 340/370/900 in light/dark. Screenshots use a simulated native service.');
 }finally{await browser.close();}

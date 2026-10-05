@@ -27,19 +27,53 @@ const consentCopy={
   en:{intro:'Private groups. Weekly ranking.',acceptTitle:'Compete with your friends',benefit:'Turn your focus blocks into points.',alias:'Your username',aliasHint:'Unique ? 3?20 letters, numbers, dots or _',pointsUnit:'points',weekly:'Your <strong>5 best days</strong> count each week.',cloudShort:'Accepting sends <strong>your username and daily focus</strong> to the cloud (max. 75 min). Friends see <strong>points and position</strong>.',privateShort:'<strong>Your work stays private:</strong> apps, tasks, titles and captures are not shared.',privacy:'Privacy and rules',startShort:'Points start when you accept. Only observed focus blocks of at least <strong>25 minutes</strong> count. Manual or imported time earns no points.',serviceShort:'The league day and up to 75 eligible minutes are sent. This choice is separate from history sync and cloud AI. You can disable leagues and erase league data at any time.'},
 };
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const syncCopy={
+  es:{syncing:'Sincronizando…',synced:'Sincronizado',noFocus:'Los puntos empiezan con un bloque de foco de 25 min.'},
+  en:{syncing:'Syncing…',synced:'Synced',noFocus:'Points start with a 25-minute focus block.'},
+};
 export function mountOnlineLeagues({root,invoke}){
-  let view={enabled:false,signed_in:false,groups:[]},busy=false,refreshing=false,revision=0,invitation='',error='',loaded=false;
-  const t=()=>{const lang=getLanguage()==='es'?'es':'en';return {...copy[lang],...consentCopy[lang]};};
+  let view={enabled:false,signed_in:false,groups:[]},busy=false,refreshTask=null,revision=0,invitation='',error='',loaded=false,lastSyncedAt=null;
+  const t=()=>{const lang=getLanguage()==='es'?'es':'en';return {...copy[lang],...consentCopy[lang],...syncCopy[lang]};};
   const scoring=c=>`<dl class="online-scoring">${[[25,40],[50,70],[75,100]].map(([minutes,points])=>`<div><dt>${minutes} min</dt><dd><strong>${points}</strong> ${c.pointsUnit}</dd></div>`).join('')}</dl><p class="online-weekly">${c.weekly}</p>`;
+  function updateSyncFeedback(){
+    const c=t(),refreshing=refreshTask?.revision===revision;
+    const button=root.querySelector('#onlineRefresh');
+    if(button){button.disabled=busy||refreshing;button.textContent=refreshing?c.syncing:c.refresh;}
+    root.querySelector('.online-summary')?.setAttribute('aria-busy',String(busy||refreshing));
+    const status=root.querySelector('.online-status');
+    if(!status)return;
+    status.dataset.state=busy||refreshing&&refreshTask.manual?'pending':error?'error':lastSyncedAt&&view.enabled?'success':'idle';
+    if(busy){status.textContent=c.pending;return;}
+    if(refreshing&&refreshTask.manual){status.textContent=c.syncing;return;}
+    if(error){status.textContent=getLanguage()==='es'?(errors[error]||error):error;return;}
+    if(lastSyncedAt&&view.enabled){
+      const time=lastSyncedAt.toLocaleTimeString(getLanguage()==='es'?'es-ES':'en-US',{hour:'2-digit',minute:'2-digit'});
+      status.innerHTML=`<strong>${c.synced}</strong> · ${escape(time)}${Number(view.today_points||0)===0&&Number(view.eligible_minutes||0)===0?`<span class="online-sync-note">${c.noFocus}</span>`:''}`;
+    }else status.textContent='';
+  }
+  function renderKeepingDrafts(){
+    const focused=root.contains(document.activeElement)?document.activeElement:null;
+    const focus=focused?.id,selection=focused?.tagName==='INPUT'?[focused.selectionStart,focused.selectionEnd]:null;
+    const drafts=[...root.querySelectorAll('input:not([readonly])')].map(input=>[input.id,input.value]);
+    const details=[...root.querySelectorAll('details')].map(detail=>[detail.className,detail.open]);
+    render();
+    for(const [id,value]of drafts){const input=root.querySelector(`#${id}`);if(input)input.value=value;}
+    for(const [className,open]of details){const detail=[...root.querySelectorAll('details')].find(item=>item.className===className);if(detail)detail.open=open;}
+    const input=focus?root.querySelector(`#${focus}`):null;
+    input?.focus({preventScroll:true});
+    if(selection&&input?.setSelectionRange)input.setSelectionRange(...selection);
+  }
   function render(){
     const c=t();
-    root.innerHTML=`<header class="online-heading"><h1>${c.title}</h1><p>${c.intro}</p></header><div class="online-status" role="status" aria-live="polite">${busy?c.pending:escape(getLanguage()==='es'?(errors[error]||error):error)}</div>${!view.enabled?`
+    root.innerHTML=`<header class="online-heading"><h1>${c.title}</h1><p>${c.intro}</p></header>${!view.enabled?`
+      <div class="online-status" role="status" aria-live="polite" aria-atomic="true"></div>
       <section class="online-consent"><h2>${c.acceptTitle}</h2><p class="online-benefit">${c.benefit}</p>${scoring(c)}
       <label for="onlineAlias">${getLanguage()==='es'?'Tu username':'Your username'}</label><input id="onlineAlias" class="input" minlength="3" maxlength="20" pattern="[a-zA-Z0-9][a-zA-Z0-9_.]{2,19}" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="onlineAliasHint" value="${escape(view.alias||'')}" placeholder="alex.foco"><p id="onlineAliasHint" class="online-alias-hint">${getLanguage()==='es'?'Único · 3–20 letras, números, puntos o _':'Unique · 3–20 letters, numbers, dots or _'}</p>
       <div class="online-consent-note"><p>${c.cloudShort}</p><p>${c.privateShort}</p></div>
       <button type="button" class="button button-primary online-accept" id="onlineAccept" ${busy||!view.signed_in?'disabled':''}>${c.accept}</button>${!view.signed_in?`<p>${c.signin}</p>`:''}
       <details class="online-consent-details"><summary>${c.privacy}</summary><p>${c.startShort}</p><p>${c.serviceShort}</p><p>${c.refreshNote}</p></details></section>`:`
-      <section class="online-summary"><div class="online-summary-head"><h2>${c.active}</h2><button type="button" class="button button-ghost" id="onlineRefresh" ${busy?'disabled':''}>${c.refresh}</button></div>
+      <section class="online-summary"><div class="online-summary-head"><h2>${c.active}</h2><button type="button" class="button button-ghost" id="onlineRefresh">${c.refresh}</button></div>
+      <div class="online-status" role="status" aria-live="polite" aria-atomic="true"></div>
       <div class="online-score-line"><span>${c.points}</span><strong>${Number(view.today_points||0)} / 100</strong></div><div class="online-score-line online-muted"><span>${c.local}</span><span>${Number(view.eligible_minutes||0)} / 75</span></div>${scoring(c)}</section>
       <div class="online-groups">${view.groups?.length?view.groups.map(g=>`<section class="online-group"><h2>${escape(g.name)}</h2><p>${c.rank} · ${escape(view.week_start||'')} · / 500</p><ol>${g.members.map(m=>`<li class="${m.mine?'online-mine':''}"><span>${Number(m.rank)}</span><span>@${escape(m.alias)}${m.mine?` <small>${c.you}</small>`:''}</span><strong>${Number(m.points)}</strong></li>`).join('')}</ol><div class="online-group-actions">${g.owner?`<button class="button button-ghost" data-action="invite" data-group="${escape(g.id)}" ${busy?'disabled':''}>${c.invite}</button>`:''}<button class="button button-ghost" data-action="leave" data-group="${escape(g.id)}" ${busy?'disabled':''}>${g.owner?c.deleteGroup:c.leave}</button></div></section>`).join(''):`<p class="online-empty">${c.empty}</p>`}</div>
       <section class="online-group-forms"><form id="onlineCreate"><label for="onlineGroupName">${c.groupName}</label><div class="online-form-line"><input class="input" id="onlineGroupName" required minlength="2" maxlength="48"><button class="button button-primary" ${busy?'disabled':''}>${c.create}</button></div></form>
@@ -48,22 +82,47 @@ export function mountOnlineLeagues({root,invoke}){
       <details class="online-sharing"><summary>${c.privacy}</summary><p>${c.cloudShort}</p><p>${c.privateShort}</p><p>${c.startShort}</p><p>${c.serviceShort}</p><p>${c.refreshNote}</p><p>${c.disableNote}</p><button class="button button-secondary" id="onlineDisable" ${busy?'disabled':''}>${c.disable}</button></details>`}`;
     root.querySelector('#onlineAccept')?.addEventListener('click',()=>{const input=root.querySelector('#onlineAlias');const alias=input.value.trim().toLowerCase();view.alias=alias;if(!/^[a-z0-9][a-z0-9_.]{2,19}$/.test(alias)){error='Use 3 to 20 letters, numbers, dots or underscores for your username';render();return;}act(()=>invoke('set_online_league_consent',{accept:true,alias}));});
     root.querySelector('#onlineDisable')?.addEventListener('click',()=>act(()=>invoke('set_online_league_consent',{accept:false,alias:''}),true));
-    root.querySelector('#onlineRefresh')?.addEventListener('click',refresh);
+    root.querySelector('#onlineRefresh')?.addEventListener('click',()=>refresh({manual:true}));
     root.querySelector('#onlineCreate')?.addEventListener('submit',e=>{e.preventDefault();const name=root.querySelector('#onlineGroupName').value.trim();act(()=>invoke('online_league_action',{request:{action:'create',name}}));});
     root.querySelector('#onlineJoin')?.addEventListener('submit',e=>{e.preventDefault();const code=root.querySelector('#onlineCode').value.trim();act(()=>invoke('online_league_action',{request:{action:'join',code}}));});
     root.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>act(()=>invoke('online_league_action',{request:{action:b.dataset.action,group_id:b.dataset.group}}))));
     root.querySelector('#onlineCopy')?.addEventListener('click',async e=>{try{await navigator.clipboard.writeText(invitation);e.target.textContent=c.done;}catch{root.querySelector('#onlineInvitationCode').select();}});
+    updateSyncFeedback();
   }
   async function act(call,withdrawing=false){
-    if(busy)return;revision++;busy=true;error='';render();
+    if(busy)return;revision++;busy=true;error='';lastSyncedAt=null;render();
     try{const result=await call();if(result?.invitation_code)invitation=result.invitation_code;view={...view,...result};if(withdrawing)invitation='';error=result?.withdrawal_pending?t().withdrawError:result?.cloud_error||'';loaded=true;}
     catch(e){error=String(e);if(withdrawing){view.enabled=false;error=t().withdrawError;}}
     finally{busy=false;render();}
   }
-  async function refresh(){
-    if(busy||refreshing)return;refreshing=true;const current=revision,priorFocus=root.contains(document.activeElement)&&document.activeElement?.id;
-    const drafts=[...root.querySelectorAll('input:not([readonly])')].map(input=>[input.id,input.value]);
-    try{const result=await invoke('get_online_leagues');if(current!==revision)return;view={...view,...result};if(!view.enabled)invitation='';error=result?.withdrawal_pending?t().withdrawError:result?.cloud_error||'';loaded=true;render();for(const [id,value]of drafts){const input=root.querySelector(`#${id}`);if(input)input.value=value;}if(priorFocus)root.querySelector(`#${priorFocus}`)?.focus();}catch(e){if(current===revision){error=String(e);render();}}finally{refreshing=false;}
+  function refresh({manual=false}={}){
+    if(busy)return Promise.resolve();
+    if(refreshTask?.revision===revision){
+      if(manual){refreshTask.manual=true;lastSyncedAt=null;updateSyncFeedback();}
+      return refreshTask.promise;
+    }
+    const task={revision,manual,promise:null};refreshTask=task;
+    if(manual){error='';lastSyncedAt=null;}
+    updateSyncFeedback();
+    task.promise=(async()=>{
+      try{
+        const result=await invoke('get_online_leagues');
+        if(task.revision!==revision)return;
+        error=result?.withdrawal_pending?t().withdrawError:result?.cloud_error||'';
+        // An offline local response has no remote ranking; keep the last known scores.
+        if(error&&result?.enabled){const {groups,today_points,week_start,...local}=result;view={...view,...local};}
+        else view={...view,...result};
+        if(!view.enabled)invitation='';
+        if(error||!view.enabled)lastSyncedAt=null;
+        else if(task.manual||lastSyncedAt)lastSyncedAt=new Date();
+        loaded=true;
+      }catch(e){if(task.revision===revision){error=String(e);lastSyncedAt=null;}}
+      finally{
+        if(refreshTask===task)refreshTask=null;
+        if(task.revision===revision)renderKeepingDrafts();
+      }
+    })();
+    return task.promise;
   }
   document.addEventListener('flowsight:languagechange',render);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&root.classList.contains('active'))refresh();});
