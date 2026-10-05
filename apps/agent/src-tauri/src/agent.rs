@@ -1740,7 +1740,7 @@ pub(crate) fn capture_and_analyze_screen(
     task_context: &str,
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let league_user_id=crate::online_leagues::capture_owner(db_path);
+    let league_user_id = crate::online_leagues::capture_owner(db_path);
     let (capture, sys) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_image_with_vision(&capture, task_context, None).unwrap_or_else(|e| {
@@ -1756,7 +1756,11 @@ pub(crate) fn capture_and_analyze_screen(
     Ok(AnalyzedCapture {
         description,
         category,
-        window: CapturedWindowContext { app_name:sys.app_name, window_title:sys.window_title, league_user_id },
+        window: CapturedWindowContext {
+            app_name: sys.app_name,
+            window_title: sys.window_title,
+            league_user_id,
+        },
         observed_at_utc,
     })
 }
@@ -1772,7 +1776,7 @@ pub(crate) fn capture_and_analyze_action(
     action_context: &str,
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    let league_user_id=crate::online_leagues::capture_owner(db_path);
+    let league_user_id = crate::online_leagues::capture_owner(db_path);
     let (capture, sys) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_action_screenshot_with_vision(&capture, task_context, action_context)
@@ -1789,7 +1793,11 @@ pub(crate) fn capture_and_analyze_action(
     Ok(AnalyzedCapture {
         description,
         category,
-        window: CapturedWindowContext { app_name:sys.app_name, window_title:sys.window_title, league_user_id },
+        window: CapturedWindowContext {
+            app_name: sys.app_name,
+            window_title: sys.window_title,
+            league_user_id,
+        },
         observed_at_utc,
     })
 }

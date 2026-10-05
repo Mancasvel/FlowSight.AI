@@ -5,7 +5,10 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::{
     path::Path,
-    sync::{mpsc::{self, Receiver, RecvTimeoutError, SyncSender}, Mutex, OnceLock},
+    sync::{
+        mpsc::{self, Receiver, RecvTimeoutError, SyncSender},
+        Mutex, OnceLock,
+    },
     time::Duration,
 };
 use tauri::Emitter;
@@ -379,7 +382,9 @@ fn merge_current_view(local: Value, cached: Option<&(String, Value)>) -> Value {
     if local["enabled"] != true && local["withdrawal_pending"] != true {
         return local;
     }
-    if let Some((_, remote)) = cached.filter(|(uid, _)| Some(uid.as_str()) == local["account_id"].as_str()) {
+    if let Some((_, remote)) =
+        cached.filter(|(uid, _)| Some(uid.as_str()) == local["account_id"].as_str())
+    {
         let mut view = remote.clone();
         if view["day"] != local["day"] {
             view["today_points"] = json!(0);
@@ -558,17 +563,26 @@ mod tests {
     }
     #[test]
     fn cached_ranking_is_account_bound_and_cannot_restore_withdrawn_consent() {
-        let cache = ("alice".into(), json!({"enabled":true,"day":"2026-10-05","today_points":40,"groups":[{"name":"Friends"}],"synced_at":"2026-10-05T10:00:00Z"}));
+        let cache = (
+            "alice".into(),
+            json!({"enabled":true,"day":"2026-10-05","today_points":40,"groups":[{"name":"Friends"}],"synced_at":"2026-10-05T10:00:00Z"}),
+        );
         let local = json!({"enabled":true,"account_id":"alice","day":"2026-10-05","today_points":0,"eligible_minutes":25,"groups":[]});
         let view = merge_current_view(local.clone(), Some(&cache));
         assert_eq!(view["today_points"], 40);
         assert_eq!(view["groups"].as_array().unwrap().len(), 1);
         let mut other_account = local.clone();
         other_account["account_id"] = json!("bob");
-        assert_eq!(merge_current_view(other_account, Some(&cache))["groups"], json!([]));
+        assert_eq!(
+            merge_current_view(other_account, Some(&cache))["groups"],
+            json!([])
+        );
         let mut withdrawn = local.clone();
         withdrawn["enabled"] = json!(false);
-        assert_eq!(merge_current_view(withdrawn, Some(&cache))["enabled"], false);
+        assert_eq!(
+            merge_current_view(withdrawn, Some(&cache))["enabled"],
+            false
+        );
         let mut next_day = local;
         next_day["day"] = json!("2026-10-06");
         let view = merge_current_view(next_day, Some(&cache));
