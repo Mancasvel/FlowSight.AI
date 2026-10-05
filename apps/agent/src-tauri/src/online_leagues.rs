@@ -3,7 +3,12 @@ use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, Tim
 use reqwest::blocking::Client;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
-use std::{path::Path, sync::Mutex, time::Duration};
+use std::{
+    path::Path,
+    sync::{mpsc::{self, Receiver, RecvTimeoutError, SyncSender}, Mutex, OnceLock},
+    time::Duration,
+};
+use tauri::Emitter;
 
 use crate::{
     focus_semantics::{self, ActivitySample},
@@ -13,6 +18,15 @@ use crate::{
 
 const NOTICE: &str = "leagues-2026-10-05";
 static REQUEST_LOCK: Mutex<()> = Mutex::new(());
+static SYNC_WAKE: OnceLock<SyncSender<()>> = OnceLock::new();
+static LAST_VIEW: Mutex<Option<(String, Value)>> = Mutex::new(None);
+
+/// Coalesce observations/consent changes without blocking the capture pipeline.
+pub fn request_sync() {
+    if let Some(sender) = SYNC_WAKE.get() {
+        let _ = sender.try_send(());
+    }
+}
 
 pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
     conn.execute_batch("CREATE TABLE IF NOT EXISTS online_local_consent (
@@ -286,7 +300,7 @@ fn local_view(path: &Path) -> Result<Value, String> {
         .unwrap_or(None)
         .unwrap_or(false);
     Ok(
-        json!({"signed_in":true,"enabled":active,"alias":alias,"day":day,"eligible_minutes":minutes,"local_points":points(minutes),"groups":[],"notice_version":NOTICE,"withdrawal_pending":pending}),
+        json!({"signed_in":true,"enabled":active,"alias":alias,"account_id":session.user_id,"day":day,"today_points":0,"synced_at":null,"eligible_minutes":minutes,"local_points":points(minutes),"groups":[],"notice_version":NOTICE,"withdrawal_pending":pending}),
     )
 }
 
@@ -339,26 +353,69 @@ fn sync_inner(path: &Path) -> Result<Value, String> {
         )?;
     }
     remote["signed_in"] = json!(true);
+    remote["account_id"] = json!(session.user_id);
     remote["eligible_minutes"] = json!(minutes);
     remote["local_points"] = json!(points(minutes));
+    remote["synced_at"] = json!(Utc::now().to_rfc3339());
     Ok(remote)
+}
+
+fn remember_view(view: &Value) {
+    if let Some(uid) = view["account_id"].as_str() {
+        if let Ok(mut cached) = LAST_VIEW.lock() {
+            *cached = Some((uid.to_string(), view.clone()));
+        }
+    }
+}
+
+/// Read the latest background result. Opening Online never controls uploading.
+fn current_view(path: &Path) -> Result<Value, String> {
+    let local = local_view(path)?;
+    let cached = LAST_VIEW.lock().map_err(|_| "League status unavailable")?;
+    Ok(merge_current_view(local, cached.as_ref()))
+}
+
+fn merge_current_view(local: Value, cached: Option<&(String, Value)>) -> Value {
+    if local["enabled"] != true && local["withdrawal_pending"] != true {
+        return local;
+    }
+    if let Some((_, remote)) = cached.filter(|(uid, _)| Some(uid.as_str()) == local["account_id"].as_str()) {
+        let mut view = remote.clone();
+        if view["day"] != local["day"] {
+            view["today_points"] = json!(0);
+            view["synced_at"] = Value::Null;
+        }
+        if let Some(object) = local.as_object() {
+            for (key, value) in object {
+                if !matches!(key.as_str(), "groups" | "today_points" | "synced_at") {
+                    view[key] = value.clone();
+                }
+            }
+        }
+        view
+    } else {
+        local
+    }
+}
+
+fn perform_sync(path: &Path) -> Result<Value, String> {
+    let view = match sync_inner(path) {
+        Ok(view) => view,
+        Err(error) => {
+            let mut view = current_view(path)?;
+            view["cloud_error"] = json!(error);
+            view
+        }
+    };
+    remember_view(&view);
+    Ok(view)
 }
 
 #[tauri::command]
 pub async fn get_online_leagues() -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let _guard = REQUEST_LOCK
-            .lock()
-            .map_err(|_| "League request unavailable")?;
         let path = crate::paths::db_path()?;
-        match sync_inner(&path) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                let mut v = local_view(&path)?;
-                v["cloud_error"] = json!(e);
-                Ok(v)
-            }
-        }
+        current_view(&path)
     })
     .await
     .map_err(|_| "League request interrupted")?
@@ -366,7 +423,7 @@ pub async fn get_online_leagues() -> Result<Value, String> {
 
 #[tauri::command]
 pub async fn set_online_league_consent(accept: bool, alias: String) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move||{
+    let result = tauri::async_runtime::spawn_blocking(move|| -> Result<Value, String> {
         let _guard=REQUEST_LOCK.lock().map_err(|_|"League request unavailable")?;
         let path=crate::paths::db_path()?;
         let (conn,session)=account(&path)?;
@@ -396,13 +453,16 @@ pub async fn set_online_league_consent(accept: bool, alias: String) -> Result<Va
         conn.execute("INSERT INTO online_local_consent(user_id,enabled,alias,accepted_at,device_id,notice_version) VALUES(?1,1,?2,?3,?4,?5)
           ON CONFLICT(user_id) DO UPDATE SET enabled=1,withdrawal_pending=0,alias=excluded.alias,accepted_at=excluded.accepted_at,device_id=excluded.device_id,notice_version=excluded.notice_version",
           params![session.user_id,alias,remote["accepted_at"].as_str().ok_or("League acceptance not confirmed")?,device,NOTICE]).map_err(|_|"Could not save league acceptance")?;
-        remote["signed_in"]=json!(true);remote["local_points"]=json!(0);remote["eligible_minutes"]=json!(0);Ok(remote)
-    }).await.map_err(|_|"League request interrupted")?
+        remote["signed_in"]=json!(true);remote["account_id"]=json!(session.user_id);remote["local_points"]=json!(0);remote["eligible_minutes"]=json!(0);Ok(remote)
+    }).await.map_err(|_|"League request interrupted")??;
+    remember_view(&result);
+    request_sync();
+    Ok(result)
 }
 
 #[tauri::command]
 pub async fn online_league_action(request: Value) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<Value, String> {
         let _guard = REQUEST_LOCK
             .lock()
             .map_err(|_| "League request unavailable")?;
@@ -420,18 +480,43 @@ pub async fn online_league_action(request: Value) -> Result<Value, String> {
         }
         let mut result = rpc(&session, request)?;
         result["signed_in"] = json!(true);
+        result["account_id"] = json!(session.user_id);
         Ok(result)
     })
     .await
-    .map_err(|_| "League request interrupted")?
+    .map_err(|_| "League request interrupted")??;
+    remember_view(&result);
+    request_sync();
+    Ok(result)
 }
 
-pub fn start_sync_thread(path: std::path::PathBuf) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(60));
-        if let Ok(_guard) = REQUEST_LOCK.lock() {
-            let _ = sync_inner(&path);
+fn run_sync_worker(receiver: Receiver<()>, interval: Duration, mut sync: impl FnMut()) {
+    sync(); // Restore accepted participation immediately after app startup.
+    loop {
+        match receiver.recv_timeout(interval) {
+            Ok(()) | Err(RecvTimeoutError::Timeout) => {
+                while receiver.try_recv().is_ok() {}
+                sync();
+            }
+            Err(RecvTimeoutError::Disconnected) => return,
         }
+    }
+}
+
+pub fn start_sync_thread(path: std::path::PathBuf, app: tauri::AppHandle) {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    if SYNC_WAKE.set(sender).is_err() {
+        return;
+    }
+    std::thread::spawn(move || {
+        run_sync_worker(receiver, Duration::from_secs(60), || {
+            if let Ok(_guard) = REQUEST_LOCK.lock() {
+                if perform_sync(&path).is_ok() {
+                    // No account or work details in events; the UI reads current status.
+                    let _ = app.emit("online-leagues-updated", ());
+                }
+            }
+        });
     });
 }
 
@@ -452,6 +537,44 @@ pub(crate) fn export_data(conn: &Connection, include_cloud: bool) -> Result<Valu
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn background_worker_starts_without_ui_and_wakes_and_retries() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let (completed, results) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            let mut attempts = 0;
+            run_sync_worker(receiver, Duration::from_millis(30), || {
+                attempts += 1;
+                // A failed first network attempt does not stop the worker.
+                completed.send(attempts > 1).unwrap();
+            });
+        });
+        assert!(!results.recv_timeout(Duration::from_secs(1)).unwrap());
+        sender.send(()).unwrap(); // New observation or accepted consent.
+        assert!(results.recv_timeout(Duration::from_secs(1)).unwrap());
+        assert!(results.recv_timeout(Duration::from_secs(1)).unwrap()); // Offline retry interval.
+        drop(sender);
+        worker.join().unwrap();
+    }
+    #[test]
+    fn cached_ranking_is_account_bound_and_cannot_restore_withdrawn_consent() {
+        let cache = ("alice".into(), json!({"enabled":true,"day":"2026-10-05","today_points":40,"groups":[{"name":"Friends"}],"synced_at":"2026-10-05T10:00:00Z"}));
+        let local = json!({"enabled":true,"account_id":"alice","day":"2026-10-05","today_points":0,"eligible_minutes":25,"groups":[]});
+        let view = merge_current_view(local.clone(), Some(&cache));
+        assert_eq!(view["today_points"], 40);
+        assert_eq!(view["groups"].as_array().unwrap().len(), 1);
+        let mut other_account = local.clone();
+        other_account["account_id"] = json!("bob");
+        assert_eq!(merge_current_view(other_account, Some(&cache))["groups"], json!([]));
+        let mut withdrawn = local.clone();
+        withdrawn["enabled"] = json!(false);
+        assert_eq!(merge_current_view(withdrawn, Some(&cache))["enabled"], false);
+        let mut next_day = local;
+        next_day["day"] = json!("2026-10-06");
+        let view = merge_current_view(next_day, Some(&cache));
+        assert_eq!(view["today_points"], 0);
+        assert!(view["synced_at"].is_null());
+    }
     #[test]
     fn limits_and_thresholds() {
         assert_eq!(points(0), 0);

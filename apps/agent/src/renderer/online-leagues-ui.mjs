@@ -5,7 +5,7 @@ const copy={
 };
 const errors={
   'The online league service is not deployed yet':'El servicio de ligas online aún no está desplegado.',
-  'Online leagues could not connect. Check your connection and retry':'No se pudo conectar a las ligas. Comprueba la conexión y reintenta.',
+  'Online leagues could not connect. Check your connection and retry':'Sin conexión con las ligas. Se reintentará automáticamente.',
   'Invitation expired or unavailable':'La invitación ha caducado o ya no está disponible.',
   'Another device is scoring. Disable leagues on that device first':'Otro dispositivo está puntuando. Desactiva allí las ligas primero.',
   'This group already has 8 friends':'Este grupo ya tiene 8 amigos.',
@@ -28,27 +28,24 @@ const consentCopy={
 };
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const syncCopy={
-  es:{syncing:'Sincronizando…',synced:'Sincronizado',noFocus:'Los puntos empiezan con un bloque de foco de 25 min.'},
-  en:{syncing:'Syncing…',synced:'Synced',noFocus:'Points start with a 25-minute focus block.'},
+  es:{automatic:'Sincronización automática',noFocus:'Los puntos empiezan con un bloque de foco de 25 min.',automaticNote:'Se envía en segundo plano. Si no hay conexión, se reintenta automáticamente.',cloudShort:'Al aceptar, envías automáticamente a la nube <strong>tu username y tu foco diario</strong> (máx. 75 min). Tus amigos ven <strong>puntos y puesto</strong>.'},
+  en:{automatic:'Automatic sync',noFocus:'Points start with a 25-minute focus block.',automaticNote:'Sent in the background. Retries automatically when the connection returns.',cloudShort:'Accepting automatically sends <strong>your username and daily focus</strong> to the cloud (max. 75 min). Friends see <strong>points and position</strong>.'},
 };
-export function mountOnlineLeagues({root,invoke}){
-  let view={enabled:false,signed_in:false,groups:[]},busy=false,refreshTask=null,revision=0,invitation='',error='',loaded=false,lastSyncedAt=null;
+export function mountOnlineLeagues({root,invoke,listen}){
+  let view={enabled:false,signed_in:false,groups:[]},busy=false,refreshTask=null,refreshAgain=false,revision=0,invitation='',error='',loaded=false;
   const t=()=>{const lang=getLanguage()==='es'?'es':'en';return {...copy[lang],...consentCopy[lang],...syncCopy[lang]};};
   const scoring=c=>`<dl class="online-scoring">${[[25,40],[50,70],[75,100]].map(([minutes,points])=>`<div><dt>${minutes} min</dt><dd><strong>${points}</strong> ${c.pointsUnit}</dd></div>`).join('')}</dl><p class="online-weekly">${c.weekly}</p>`;
   function updateSyncFeedback(){
-    const c=t(),refreshing=refreshTask?.revision===revision;
-    const button=root.querySelector('#onlineRefresh');
-    if(button){button.disabled=busy||refreshing;button.textContent=refreshing?c.syncing:c.refresh;}
-    root.querySelector('.online-summary')?.setAttribute('aria-busy',String(busy||refreshing));
+    const c=t();
     const status=root.querySelector('.online-status');
     if(!status)return;
-    status.dataset.state=busy||refreshing&&refreshTask.manual?'pending':error?'error':lastSyncedAt&&view.enabled?'success':'idle';
+    status.dataset.state=busy?'pending':error?'error':view.synced_at&&view.enabled?'success':'idle';
     if(busy){status.textContent=c.pending;return;}
-    if(refreshing&&refreshTask.manual){status.textContent=c.syncing;return;}
     if(error){status.textContent=getLanguage()==='es'?(errors[error]||error):error;return;}
-    if(lastSyncedAt&&view.enabled){
-      const time=lastSyncedAt.toLocaleTimeString(getLanguage()==='es'?'es-ES':'en-US',{hour:'2-digit',minute:'2-digit'});
-      status.innerHTML=`<strong>${c.synced}</strong> · ${escape(time)}${Number(view.today_points||0)===0&&Number(view.eligible_minutes||0)===0?`<span class="online-sync-note">${c.noFocus}</span>`:''}`;
+    if(view.enabled){
+      const date=view.synced_at?new Date(view.synced_at):null;
+      const time=date&&!Number.isNaN(date.valueOf())?date.toLocaleTimeString(getLanguage()==='es'?'es-ES':'en-US',{hour:'2-digit',minute:'2-digit'}):'';
+      status.innerHTML=`<strong>${c.automatic}</strong>${time?` · ${escape(time)}`:''}${Number(view.today_points||0)===0&&Number(view.eligible_minutes||0)===0?`<span class="online-sync-note">${c.noFocus}</span>`:''}`;
     }else status.textContent='';
   }
   function renderKeepingDrafts(){
@@ -72,17 +69,16 @@ export function mountOnlineLeagues({root,invoke}){
       <div class="online-consent-note"><p>${c.cloudShort}</p><p>${c.privateShort}</p></div>
       <button type="button" class="button button-primary online-accept" id="onlineAccept" ${busy||!view.signed_in?'disabled':''}>${c.accept}</button>${!view.signed_in?`<p>${c.signin}</p>`:''}
       <details class="online-consent-details"><summary>${c.privacy}</summary><p>${c.startShort}</p><p>${c.serviceShort}</p><p>${c.refreshNote}</p></details></section>`:`
-      <section class="online-summary"><div class="online-summary-head"><h2>${c.active}</h2><button type="button" class="button button-ghost" id="onlineRefresh">${c.refresh}</button></div>
+      <section class="online-summary"><div class="online-summary-head"><h2>${c.active}</h2><span class="online-username">@${escape(view.alias||'')}</span></div>
       <div class="online-status" role="status" aria-live="polite" aria-atomic="true"></div>
       <div class="online-score-line"><span>${c.points}</span><strong>${Number(view.today_points||0)} / 100</strong></div><div class="online-score-line online-muted"><span>${c.local}</span><span>${Number(view.eligible_minutes||0)} / 75</span></div>${scoring(c)}</section>
       <div class="online-groups">${view.groups?.length?view.groups.map(g=>`<section class="online-group"><h2>${escape(g.name)}</h2><p>${c.rank} · ${escape(view.week_start||'')} · / 500</p><ol>${g.members.map(m=>`<li class="${m.mine?'online-mine':''}"><span>${Number(m.rank)}</span><span>@${escape(m.alias)}${m.mine?` <small>${c.you}</small>`:''}</span><strong>${Number(m.points)}</strong></li>`).join('')}</ol><div class="online-group-actions">${g.owner?`<button class="button button-ghost" data-action="invite" data-group="${escape(g.id)}" ${busy?'disabled':''}>${c.invite}</button>`:''}<button class="button button-ghost" data-action="leave" data-group="${escape(g.id)}" ${busy?'disabled':''}>${g.owner?c.deleteGroup:c.leave}</button></div></section>`).join(''):`<p class="online-empty">${c.empty}</p>`}</div>
       <section class="online-group-forms"><form id="onlineCreate"><label for="onlineGroupName">${c.groupName}</label><div class="online-form-line"><input class="input" id="onlineGroupName" required minlength="2" maxlength="48"><button class="button button-primary" ${busy?'disabled':''}>${c.create}</button></div></form>
       <form id="onlineJoin"><label for="onlineCode">${c.join}</label><input class="input" id="onlineCode" required maxlength="64" placeholder="${c.code}" autocomplete="off" spellcheck="false"><button class="button button-secondary" ${busy?'disabled':''}>${c.joinButton}</button></form></section>
       ${invitation?`<section class="online-invitation"><p>${c.invitation}</p><label for="onlineInvitationCode">${c.code}</label><input id="onlineInvitationCode" class="input" readonly value="${escape(invitation)}"><button class="button button-secondary" id="onlineCopy">${c.copy}</button></section>`:''}
-      <details class="online-sharing"><summary>${c.privacy}</summary><p>${c.cloudShort}</p><p>${c.privateShort}</p><p>${c.startShort}</p><p>${c.serviceShort}</p><p>${c.refreshNote}</p><p>${c.disableNote}</p><button class="button button-secondary" id="onlineDisable" ${busy?'disabled':''}>${c.disable}</button></details>`}`;
+      <details class="online-sharing"><summary>${c.privacy}</summary><p>${c.cloudShort}</p><p>${c.privateShort}</p><p>${c.startShort}</p><p>${c.automaticNote}</p><p>${c.serviceShort}</p><p>${c.refreshNote}</p><p>${c.disableNote}</p><button class="button button-secondary" id="onlineDisable" ${busy?'disabled':''}>${c.disable}</button></details>`}`;
     root.querySelector('#onlineAccept')?.addEventListener('click',()=>{const input=root.querySelector('#onlineAlias');const alias=input.value.trim().toLowerCase();view.alias=alias;if(!/^[a-z0-9][a-z0-9_.]{2,19}$/.test(alias)){error='Use 3 to 20 letters, numbers, dots or underscores for your username';render();return;}act(()=>invoke('set_online_league_consent',{accept:true,alias}));});
     root.querySelector('#onlineDisable')?.addEventListener('click',()=>act(()=>invoke('set_online_league_consent',{accept:false,alias:''}),true));
-    root.querySelector('#onlineRefresh')?.addEventListener('click',()=>refresh({manual:true}));
     root.querySelector('#onlineCreate')?.addEventListener('submit',e=>{e.preventDefault();const name=root.querySelector('#onlineGroupName').value.trim();act(()=>invoke('online_league_action',{request:{action:'create',name}}));});
     root.querySelector('#onlineJoin')?.addEventListener('submit',e=>{e.preventDefault();const code=root.querySelector('#onlineCode').value.trim();act(()=>invoke('online_league_action',{request:{action:'join',code}}));});
     root.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>act(()=>invoke('online_league_action',{request:{action:b.dataset.action,group_id:b.dataset.group}}))));
@@ -90,40 +86,41 @@ export function mountOnlineLeagues({root,invoke}){
     updateSyncFeedback();
   }
   async function act(call,withdrawing=false){
-    if(busy)return;revision++;busy=true;error='';lastSyncedAt=null;render();
+    if(busy)return;revision++;busy=true;error='';render();
     try{const result=await call();if(result?.invitation_code)invitation=result.invitation_code;view={...view,...result};if(withdrawing)invitation='';error=result?.withdrawal_pending?t().withdrawError:result?.cloud_error||'';loaded=true;}
     catch(e){error=String(e);if(withdrawing){view.enabled=false;error=t().withdrawError;}}
-    finally{busy=false;render();}
+    finally{busy=false;render();if(refreshAgain){refreshAgain=false;refresh();}}
   }
-  function refresh({manual=false}={}){
+  function refresh(){
     if(busy)return Promise.resolve();
     if(refreshTask?.revision===revision){
-      if(manual){refreshTask.manual=true;lastSyncedAt=null;updateSyncFeedback();}
       return refreshTask.promise;
     }
-    const task={revision,manual,promise:null};refreshTask=task;
-    if(manual){error='';lastSyncedAt=null;}
-    updateSyncFeedback();
+    const task={revision,promise:null};refreshTask=task;
     task.promise=(async()=>{
       try{
         const result=await invoke('get_online_leagues');
         if(task.revision!==revision)return;
+        if(result?.account_id!==view.account_id){view={enabled:false,signed_in:false,groups:[]};invitation='';}
         error=result?.withdrawal_pending?t().withdrawError:result?.cloud_error||'';
         // An offline local response has no remote ranking; keep the last known scores.
         if(error&&result?.enabled){const {groups,today_points,week_start,...local}=result;view={...view,...local};}
         else view={...view,...result};
         if(!view.enabled)invitation='';
-        if(error||!view.enabled)lastSyncedAt=null;
-        else if(task.manual||lastSyncedAt)lastSyncedAt=new Date();
         loaded=true;
-      }catch(e){if(task.revision===revision){error=String(e);lastSyncedAt=null;}}
+      }catch(e){if(task.revision===revision)error=String(e);}
       finally{
         if(refreshTask===task)refreshTask=null;
         if(task.revision===revision)renderKeepingDrafts();
+        if(refreshAgain&&!busy){refreshAgain=false;refresh();}
       }
     })();
     return task.promise;
   }
+  listen?.('online-leagues-updated',()=>{
+    if(busy||refreshTask){refreshAgain=true;return;}
+    refresh();
+  }).catch(()=>{});
   document.addEventListener('flowsight:languagechange',render);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&root.classList.contains('active'))refresh();});
   setInterval(()=>{if(root.classList.contains('active')&&!document.hidden&&!root.contains(document.activeElement))refresh();},60000);

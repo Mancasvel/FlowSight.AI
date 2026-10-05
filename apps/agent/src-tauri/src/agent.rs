@@ -87,7 +87,7 @@ impl FlowSightAgent {
 
         // Start Background Sync (10m interval)
         crate::sync::start_sync_thread(agent.db_path.clone());
-        crate::online_leagues::start_sync_thread(agent.db_path.clone());
+        crate::online_leagues::start_sync_thread(agent.db_path.clone(), app_handle.clone());
         // Proactive Supabase JWT refresh (~every 2m when near expiry)
         crate::sync::start_token_refresh_thread(agent.db_path.clone());
         // Opt-in pseudonymous analytics sync (~every 6h when consented)
@@ -1700,6 +1700,9 @@ pub(crate) fn insert_report(
     .ok()?;
     let report_id = conn.last_insert_rowid();
     crate::online_leagues::bind_observation(&conn, report_id, system.league_user_id.as_deref());
+    if capture_source == "periodic_vision" && system.league_user_id.is_some() {
+        crate::online_leagues::request_sync();
+    }
     Some(report_id)
 }
 

@@ -5350,7 +5350,7 @@
       invoke,
     });
 
-    const onlineLeagues = mountOnlineLeagues({root: document.getElementById('tabOnline'), invoke});
+    const onlineLeagues = mountOnlineLeagues({root: document.getElementById('tabOnline'), invoke, listen});
     const liveTrackingClock = new LiveTrackingClock();
     let timerPreferences = loadTimerPreferences(localStorage);
     const pomodoro = new PomodoroTimer(timerPreferences);
