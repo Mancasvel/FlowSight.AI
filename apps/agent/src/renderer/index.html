@@ -4284,6 +4284,7 @@
     console.log('[FlowSight] Script starting...');
 
     import { invoke } from '@tauri-apps/api/core';
+    import { monitoringNoticeAccepted } from './privacy-notice.mjs';
     import { createInstallationRepairController } from './installation-repair.mjs';
     import { mountSessionPlanner } from './session-planner.mjs';
     import { mountTotalFocus, focusFields, readFocusFields, focusExample, messagingFuture } from './total-focus.mjs';
@@ -7633,7 +7634,7 @@
         await loadDesktopPreferences();
         hideDesktopPresencePrompt();
         if (wantsAutoMonitor) {
-          if (privacySettings?.monitoringNoticeAcknowledged && privacySettings?.noticeVersion === PRIVACY_NOTICE_VERSION) {
+          if (monitoringNoticeAccepted(privacySettings)) {
             await invoke('set_start_monitoring_at_login', { enabled: true });
             await loadDesktopPreferences();
           } else {
@@ -7662,7 +7663,7 @@
 
     document.getElementById('autoMonitorToggle')?.addEventListener('change', async (event) => {
       const enabled = event.target.checked;
-      if (enabled && !(privacySettings?.monitoringNoticeAcknowledged && privacySettings?.noticeVersion === PRIVACY_NOTICE_VERSION)) {
+      if (enabled && !monitoringNoticeAccepted(privacySettings)) {
         pendingAutoMonitorConsent = true;
         renderDesktopPreferences();
         showMonitoringNotice();
@@ -7699,7 +7700,7 @@
 
     function maybeStartMonitoringAtLogin() {
       if (!desktopPreferences?.autostartLaunch || !desktopPreferences?.startMonitoringAtLogin) return;
-      if (!privacySettings?.monitoringNoticeAcknowledged || privacySettings.noticeVersion !== PRIVACY_NOTICE_VERSION) return;
+      if (!monitoringNoticeAccepted(privacySettings)) return;
       if (isMonitoring || loadTrackingCheckpoint(localStorage)?.mode === 'paused') return;
       startMonitoringFull().catch((error) => showToast(('Automatic tracking could not start: ' + error), 'error'));
     }
@@ -7739,15 +7740,10 @@
     async function loadPrivacySettings() {
       try {
         privacySettings = await invoke('get_privacy_settings');
-      } catch (_) {
-        privacySettings = {
-          monitoringNoticeAcknowledged: false,
-          cloudSyncEnabled: false,
-          cloudAiEnabled: false,
-          storeWindowTitles: false,
-          excludedApplications: ['1Password', 'Bitwarden', 'KeePass', 'KeePassXC', 'CredentialUIBroker'],
-          retentionDays: 30,
-        };
+      } catch (error) {
+        // A read failure is not a new privacy decision. Keep any loaded choice
+        // and let the next explicit start retry before showing an acknowledgement.
+        console.warn('[Privacy] Saved settings could not be read:', error);
       }
       renderPrivacySettings();
       return privacySettings;
@@ -7800,8 +7796,12 @@
     });
 
     async function startMonitoringWithNotice() {
-      if (!privacySettings) await loadPrivacySettings();
-      if (privacySettings?.monitoringNoticeAcknowledged && privacySettings?.noticeVersion === PRIVACY_NOTICE_VERSION) {
+      await loadPrivacySettings();
+      if (!privacySettings) {
+        showToast(tr('Could not load saved privacy settings. Try again.'), 'error');
+        return;
+      }
+      if (monitoringNoticeAccepted(privacySettings)) {
         await startMonitoringFull();
         return;
       }

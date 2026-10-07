@@ -36,6 +36,8 @@ mod telemetry;
 mod tracking_clock;
 mod user_preferences;
 mod vision_model;
+#[cfg(windows)]
+mod windows_autostart;
 
 use tauri::Manager;
 
@@ -54,6 +56,16 @@ pub fn run() {
     // only ever take down the specific background thread that touched them,
     // never the whole process. See `crash_guard` module docs.
     crash_guard::install();
+
+    // Repair before the single-instance handoff, even if an older copy is open.
+    #[cfg(windows)]
+    if !tauri::is_dev() {
+        if let Ok(executable) = std::env::current_exe() {
+            if let Err(error) = windows_autostart::repair_existing(&executable) {
+                log::warn!("Could not refresh the existing startup entry: {error}");
+            }
+        }
+    }
 
     let builder = tauri::Builder::default();
     #[cfg(desktop)]

@@ -1,5 +1,6 @@
 // Explicit application copy. User-authored task names, messages and activity are never translated.
 export const spanish = Object.fromEntries(`
+Could not load saved privacy settings. Try again.|No se pudieron cargar tus preferencias de privacidad guardadas. Inténtalo de nuevo.
 Planning runs on this device. Review and confirm to add the blocks to your linked calendar, or to FlowSight if none is connected.|La planificación se ejecuta en este dispositivo. Revisa y confirma para añadir los bloques a tu calendario vinculado, o a FlowSight si no hay ninguno conectado.
 Draft ready. Review the times and estimates before adding the blocks to {calendar}.|Borrador listo. Revisa las horas y estimaciones antes de añadir los bloques a {calendar}.
 {count} block added to {calendar}.|{count} bloque añadido a {calendar}.
