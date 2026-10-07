@@ -1048,6 +1048,7 @@ Object.assign(spanish, {
   '{minutes} min to go': 'Quedan {minutes} min',
   'Daily win earned. Come back when you are ready.': 'Logro diario conseguido. Vuelve cuando estés listo.',
   'Record 15 minutes today. Pauses and breaks do not count.': 'Registra 15 minutos hoy. Las pausas y los descansos no cuentan.',
+  'Your streak counts consecutive days with saved tracking time.': 'Tu racha cuenta los días consecutivos con tiempo de seguimiento guardado.',
   'Daily Flow progress': 'Progreso del ritmo diario',
   'This week': 'Esta semana',
   '{count} / {target} days': '{count} / {target} días',

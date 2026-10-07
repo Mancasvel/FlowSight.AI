@@ -1,3 +1,4 @@
+mod activity_streak;
 mod agent;
 mod agent_pure;
 mod anonymous_analytics;

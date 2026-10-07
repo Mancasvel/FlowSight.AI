@@ -272,6 +272,8 @@ pub fn enforce_local_retention(db_path: &Path) -> Result<usize, String> {
         .map_err(|error| error.to_string())?;
     }
     let modifier = format!("-{} days", settings.retention_days);
+    // Capture the activity streak before either source of historical days expires.
+    crate::activity_streak::reconcile(&conn, Local::now().date_naive())?;
     let deleted = conn
         .execute(
             "DELETE FROM reports WHERE datetime(created_at) < datetime('now', ?1)",
@@ -569,6 +571,8 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
         "local_activity_reports": reports,
         "local_tracking_days": tracked_days,
         "local_daily_flow_progress": config_value(&conn, crate::daily_flow::PROGRESS_KEY)
+            .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
+        "local_activity_streak": config_value(&conn, crate::activity_streak::CHECKPOINT_KEY)
             .and_then(|value| serde_json::from_str::<Value>(&value).ok()),
         "online_leagues": crate::online_leagues::export_data(&conn, include_cloud)?,
         "local_coach_messages": coach_messages,

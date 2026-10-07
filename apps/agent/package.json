@@ -1,6 +1,6 @@
 {
   "name": "@flowsight/agent",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "private": true,
   "description": "FlowSight Agent — Understand your own Workflows",
   "scripts": {

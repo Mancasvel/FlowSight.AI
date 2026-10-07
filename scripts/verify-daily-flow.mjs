@@ -17,7 +17,7 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(({ locale }) => {
       const saved = JSON.parse(sessionStorage.getItem('daily_flow_fixture') || 'null');
-      window.flowFixture = saved || { date: '2026-10-03', total_seconds: 600, completed_dates: ['2026-09-29', '2026-10-01', '2026-10-02'] };
+      window.flowFixture = saved || { date: '2026-10-03', total_seconds: 600, completed_dates: ['2026-09-29', '2026-10-01', '2026-10-02'], total_wins: 5, streak: 13 };
       window.flowFailure = false;
       window.testCalls = [];
       let running = true, nextId = 1;
@@ -77,7 +77,7 @@ try {
     await page.keyboard.press('Enter');
     await page.locator('.daily-flow-mission').waitFor();
     assert.match(await page.locator('.daily-flow-count').innerText(), /5/);
-    assert.equal(await page.locator('#streakText').innerText(), locale === 'es-ES' ? '2 días' : '2 days');
+    assert.equal(await page.locator('#streakText').innerText(), locale === 'es-ES' ? '13 días' : '13 days');
     assert.equal(await page.locator('.daily-flow-day.is-done').count(), 3);
     assert.equal(await page.locator('.daily-flow-track').getAttribute('aria-valuenow'), '66');
     assert.equal(await page.locator('.daily-flow-milestones li.is-earned').count(), 2);
@@ -148,7 +148,7 @@ try {
     assert.equal(await page.locator('#dailyFlow').evaluate((node, previous) => node === previous, panelBefore), true);
     await page.locator('#navToday').click();
     assert.equal(await page.locator('#playTimerBtn').getAttribute('aria-label'), locale === 'es-ES' ? 'Pausar seguimiento' : 'Pause tracking');
-    await page.evaluate(() => { window.flowFixture.total_seconds = 900; window.flowFixture.completed_dates.push('2026-10-03'); });
+    await page.evaluate(() => { window.flowFixture.total_seconds = 900; window.flowFixture.total_wins = 6; window.flowFixture.completed_dates.push('2026-10-03'); });
     await page.clock.runFor(16000);
     await page.locator('#navSummary').click();
     await page.locator('.daily-flow--complete').waitFor();
@@ -196,7 +196,7 @@ try {
     await page.locator('#navProfile').click();
     await page.locator('#navSummary').click();
     await page.locator('.daily-flow-count').filter({ hasText: '15' }).waitFor();
-    assert.equal(await page.locator('#streakText').innerText(), locale === 'es-ES' ? '3 días' : '3 days');
+    assert.equal(await page.locator('#streakText').innerText(), locale === 'es-ES' ? '13 días' : '13 days');
     assert.equal(await page.locator('.daily-flow-track').getAttribute('aria-valuenow'), '0');
     // The same Insights slot also exists before any activity is recorded.
     await page.locator('#dailyFlowToggle').click();
