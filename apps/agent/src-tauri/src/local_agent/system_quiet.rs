@@ -147,39 +147,29 @@ fn write_policy_setting(value: Option<u32>) -> Result<(), String> {
     write_banner_setting(value)
 }
 
-#[cfg(windows)]
 fn confirm_silence() -> Result<(), String> {
     #[cfg(test)]
     if TEST_BANNERS.get().is_some() {
         return Ok(());
     }
-    use windows::{
-        core::HSTRING,
-        Win32::System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
-        UI::Notifications::{NotificationSetting, ToastNotificationManager},
-    };
-    let initialized = unsafe { RoInitialize(RO_INIT_MULTITHREADED) }.is_ok();
-    let result = (|| {
-        let setting = ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(
-            "ai.flowsight.agent",
-        ))
-        .and_then(|notifier| notifier.Setting())
-        .map_err(|error| error.to_string())?;
-        if setting != NotificationSetting::DisabledByGroupPolicy
-            && setting != NotificationSetting::DisabledForUser
-        {
-            return Err("Windows did not confirm notification silence.".into());
-        }
-        Ok(())
-    })();
-    if initialized {
-        unsafe { RoUninitialize() };
+    // WinRT queried through the .NET host reflects the user policy immediately;
+    // a notifier activated by the running desktop app can retain Enabled.
+    let mut command = std::process::Command::new("powershell.exe");
+    command.args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+        "[Windows.UI.Notifications.NotificationSetting, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; $focusNotifier = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]::CreateToastNotifier('ai.flowsight.agent'); if ($focusNotifier.Setting -eq 'DisabledByGroupPolicy' -or $focusNotifier.Setting -eq 'DisabledForUser') { exit 0 }; exit 1"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    result
-}
-#[cfg(not(windows))]
-fn confirm_silence() -> Result<(), String> {
-    Err("System notification control is available on Windows only.".into())
+    let status = command
+        .status()
+        .map_err(|error| format!("Could not confirm Windows notification silence: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Windows did not confirm notification silence.".into())
+    }
 }
 
 pub fn enable(duration_minutes: Option<i64>) -> Result<Value, String> {
@@ -257,7 +247,6 @@ fn enable_for(total: bool, duration_minutes: Option<i64>) -> Result<Value, Strin
 pub fn total_focus_confirmed() -> bool {
     state::read().is_ok_and(|data| data.total_focus_quiet.is_some())
         && read_policy_setting().is_ok_and(|value| value == Some(1))
-        && confirm_silence().is_ok()
 }
 
 pub fn disable() -> Result<Value, String> {
