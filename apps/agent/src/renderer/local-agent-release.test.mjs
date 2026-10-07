@@ -11,7 +11,8 @@ test('the local action agent is configured in Settings, without a chat tab or un
   assert.match(markup, /id="localAgentProposal"[^>]*hidden/);
   assert.match(markup, /id="localAgentInstallChromeBtn"/);
   assert.match(markup, /id="localAgentInstallEdgeBtn"/);
-  assert.doesNotMatch(markup, /id="localAgentOpenExtensionBtn"|Load unpacked|Developer mode/);
+  assert.match(markup, /id="localAgentOpenExtensionBtn"/);
+  assert.match(markup, /open_browser_extension_folder/);
   assert.deepEqual(
     [...markup.matchAll(/<button class="nav-item[^"]*" data-tab="([^"]+)"/g)].map((match) => match[1]),
     ['tabOnline', 'tabSummary', 'tabToday', 'tabCloudInsights', 'tabProfile'],

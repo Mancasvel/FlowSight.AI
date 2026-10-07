@@ -6,6 +6,7 @@ const FOCUS_RULE_IDS = Array.from({ length: 40 }, (_, index) => 1000 + index);
 let polling = false;
 let pendingPoll = null;
 let focusQueue = Promise.resolve();
+let focusError = null;
 const focusMutation = run => {
   const result = focusQueue.then(run);
   focusQueue = result.catch(() => {});
@@ -123,8 +124,10 @@ async function focusStatus() {
   await expireBlocks();
   const { focus, cancelledFocusId } = await chrome.storage.local.get(['focus', 'cancelledFocusId']);
   const installed = await chrome.declarativeNetRequest.getDynamicRules();
+  const siteAccess = await chrome.permissions.contains({ origins: ['http://*/*', 'https://*/*'] });
   return { extensionVersion: chrome.runtime.getManifest().version, capabilities: ['total-focus'],
-    sessionId: focus?.id || null, applied: Boolean(focus && installed.some(rule => rule.id === 1000)),
+    available: siteAccess && !focusError, error: focusError || (siteAccess ? null : 'Allow Browser Controls access to all websites in your browser extension settings.'),
+    sessionId: focus?.id || null, applied: Boolean(siteAccess && !focusError && focus && installed.some(rule => rule.id === 1000)),
     cancelledSessionId: cancelledFocusId || null };
 }
 
@@ -258,11 +261,15 @@ async function pollOnce() {
     }
     await chrome.storage.local.set({ lastConnectedAt: Date.now() });
     const { command, focus = null } = await response.json();
-    await reconcileFocus(focus);
+    focusError = null;
+    try { await reconcileFocus(focus); }
+    catch (error) { focusError = String(error.message || error); }
     await publishFocusStatus(port, token);
-    if (!command) return { connected: true };
+    const readiness = await focusStatus();
+    if (!command) return { connected: true, totalFocusAvailable: readiness.available, error: readiness.error };
     let result;
     try {
+      if (command.name === 'browser.focus_status' && focusError) throw new Error(focusError);
       result = { id: command.id, ok: true, result: await runCommand(command.name, command.arguments) };
     } catch (error) {
       result = { id: command.id, ok: false, error: String(error.message || error) };
@@ -270,7 +277,7 @@ async function pollOnce() {
     const { pendingResults = [] } = await chrome.storage.local.get('pendingResults');
     await chrome.storage.local.set({ pendingResults: [...pendingResults, result].slice(-20) });
     await flushResults(port, token);
-    return { connected: true };
+    return { connected: true, totalFocusAvailable: readiness.available, error: readiness.error };
   } catch (_) {
     // FlowSight may be closed. Never keep a site blocked indefinitely.
     await releaseBlocksAfterDisconnect().catch(() => {});

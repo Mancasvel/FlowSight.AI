@@ -39,7 +39,7 @@ try{
   await options.locator('#token').fill('synthetic-key');
   await options.locator('button[type=submit]').click();
   await options.locator('#status').filter({hasText:'Connected to FlowSight'}).waitFor();
-  assert.equal(status.extensionVersion,'1.1.1');
+  assert.equal(status.extensionVersion,'1.1.2');
   await options.screenshot({path:join(output,'browser-pairing-confirmed.png')});
   const pollNow=()=>worker.evaluate(async()=>{while(polling)await new Promise(resolve=>setTimeout(resolve,20));await poll();});
   await worker.evaluate(async(port)=>{await chrome.storage.local.set({port,token:'synthetic-key'});},server.address().port);

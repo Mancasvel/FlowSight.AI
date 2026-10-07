@@ -3955,6 +3955,8 @@
                   <button type="button" id="localAgentInstallEdgeBtn" class="button button-secondary" hidden>Open Edge Add-ons</button>
                 </div>
                 <p id="localAgentBrowserInstallStatus" class="local-agent-helper" role="status" aria-live="polite"></p>
+                <button type="button" id="localAgentOpenExtensionBtn" class="button button-secondary">Open compatible extension folder</button>
+                <p class="local-agent-helper">If the store version cannot start total focus, open your browser's extensions page, turn off the older Browser Controls, enable Developer mode, and choose Load unpacked with this folder.</p>
               </li>
               <li>
                 <div class="local-agent-browser-step-copy">
@@ -8649,6 +8651,10 @@
         catch (error) { setLocalAgentStatus('error', String(error)); }
       });
     }
+    document.getElementById('localAgentOpenExtensionBtn')?.addEventListener('click', async () => {
+      try { await invoke('open_browser_extension_folder'); }
+      catch (error) { setLocalAgentStatus('error', String(error)); }
+    });
     document.getElementById('localAgentCopyBrowserKeyBtn')?.addEventListener('click', async () => {
       const key = localBrowserPairing?.token;
       const status = document.getElementById('localAgentBrowserCheckStatus');

@@ -116,8 +116,10 @@ not grant the model general event-editing authority.
 - **Browser:** Browser actions need the separate FlowSight Browser Controls
   extension. Public users will install it from Chrome Web Store (Arc/Chrome) or
   Microsoft Edge Add-ons (Edge), with no developer mode. The app only offers a
-  store button when its official listing URL is configured; until publication,
-  browser actions are unavailable in the public build. After installation,
+  store button when its official listing URL is configured. If the store still
+  serves an older extension, **Open compatible extension folder** provides the
+  packaged version: disable the old extension, enable Developer mode in the
+  browser's extensions page, and use Load unpacked with that folder. After installation,
   users open the extension's options and enter the port and pairing key from
   **You → Local automations → Browser pairing**. The extension communicates
   only over `127.0.0.1` and requires the pairing key. Temporary blocks expire

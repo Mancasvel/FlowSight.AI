@@ -1026,6 +1026,16 @@ Object.assign(spanish, {
 
 Object.assign(spanish, {
   'Ready. Browser actions and total focus are available.': 'Listo. Las acciones del navegador y la concentración total están disponibles.',
+  'Browser connected · website protection unavailable. Check site access or use the compatible extension below.': 'Navegador conectado · bloqueo de páginas no disponible. Comprueba el acceso a los sitios o usa la extensión compatible de abajo.',
+  'Updating FlowSight does not update the browser extension. If the store still has the older version, use the compatible Browser Controls included with this app.': 'Actualizar FlowSight no actualiza la extensión del navegador. Si la tienda sigue ofreciendo la versión antigua, usa Browser Controls compatible incluida con esta app.',
+  'Open compatible extension folder': 'Abrir carpeta de la extensión compatible',
+  "Open your browser's extensions page: arc://extensions, chrome://extensions, or edge://extensions.": 'Abre la página de extensiones de tu navegador: arc://extensions, chrome://extensions o edge://extensions.',
+  'Turn off the older FlowSight Browser Controls, enable Developer mode, and choose Load unpacked. Select the folder opened above.': 'Desactiva FlowSight Browser Controls antigua, activa el Modo de desarrollador y pulsa Cargar descomprimida. Selecciona la carpeta que se ha abierto.',
+  "Open the new extension's options, paste your pairing key, and choose Save and connect.": 'Abre las opciones de la nueva extensión, pega tu clave de vinculación y pulsa Guardar y conectar.',
+  "If the store version cannot start total focus, open your browser's extensions page, turn off the older Browser Controls, enable Developer mode, and choose Load unpacked with this folder.": 'Si la versión de la tienda no permite iniciar la concentración total, abre las extensiones del navegador, desactiva Browser Controls antigua, activa el Modo de desarrollador y pulsa Cargar descomprimida con esta carpeta.',
+  'Could not open the extension folder:': 'No se pudo abrir la carpeta de la extensión:',
+  'Describe your focus task in 1–160 characters.': 'Describe tu tarea de concentración en 1–160 caracteres.',
+  'Allow Browser Controls access to all websites in your browser extension settings.': 'Permite que Browser Controls acceda a todos los sitios desde los ajustes de la extensión en tu navegador.',
   'Browser connected. Update Browser Controls to enable total focus. In Arc, open arc://extensions and update the extension; approve any requested site access.': 'Navegador conectado. Actualiza Browser Controls para activar la concentración total. En Arc, abre arc://extensions y actualiza la extensión; acepta el acceso a los sitios si te lo solicita.',
   'Block distracting websites with Browser Controls in Arc on Windows or macOS, and Chrome on Windows, macOS, or Linux.': 'Bloquea páginas que te distraen con Browser Controls en Arc para Windows o macOS, y en Chrome para Windows, macOS o Linux.',
   'Choose the websites to block during a focus session. Browser Controls works with Arc on Windows and macOS, and Chrome on Windows, macOS, and Linux.': 'Elige las páginas que quieres bloquear durante una sesión. Browser Controls funciona con Arc en Windows y macOS, y con Chrome en Windows, macOS y Linux.',

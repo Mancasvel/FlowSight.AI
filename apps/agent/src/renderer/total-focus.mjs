@@ -42,6 +42,15 @@ export function mountTotalFocus({invoke}) {
     <p class="profile-card-intro">Block distracting websites with Browser Controls in Arc on Windows or macOS, and Chrome on Windows, macOS, or Linux.</p>
     <p class="session-help">FlowSight focus reminders are held in your local digest during this session.</p>
     <p id="totalFocusStatus" class="total-focus-status" role="status" aria-live="polite">Checking browser protection…</p>
+    <div id="totalFocusRepair" hidden>
+      <p class="session-help">Updating FlowSight does not update the browser extension. If the store still has the older version, use the compatible Browser Controls included with this app.</p>
+      <button type="button" class="button button-secondary" id="totalFocusRepairOpen">Open compatible extension folder</button>
+      <ol class="session-help">
+        <li>Open your browser's extensions page: arc://extensions, chrome://extensions, or edge://extensions.</li>
+        <li>Turn off the older FlowSight Browser Controls, enable Developer mode, and choose Load unpacked. Select the folder opened above.</li>
+        <li>Open the new extension's options, paste your pairing key, and choose Save and connect.</li>
+      </ol>
+    </div>
     <p id="totalFocusActiveTask" class="total-focus-task" data-user-content></p>
     <label for="totalFocusTask">Your focus task</label><input id="totalFocusTask" class="input" type="text" maxlength="160" placeholder="What are you working on?">
     <div id="totalFocusConfig">${focusFields('totalFocus')}</div>
@@ -63,8 +72,9 @@ export function mountTotalFocus({invoke}) {
     setText(document.getElementById('totalFocusStatus'), () => acknowledged ? t('Total focus active · browser block confirmed')
       : active ? t('Session active · browser protection not confirmed. Check the extension.')
       : released ? t('Session ended · waiting for the extension to release protection.')
-      : state?.browser?.connected && !state.browser.totalFocusAvailable ? t('Browser connected. Update Browser Controls to enable total focus. In Arc, open arc://extensions and update the extension; approve any requested site access.')
+      : state?.browser?.connected && !state.browser.totalFocusAvailable ? t('Browser connected · website protection unavailable. Check site access or use the compatible extension below.')
       : state?.browser?.connected ? t('Browser connected · ready to start') : t('Connect Browser Controls to activate total focus.'));
+    document.getElementById('totalFocusRepair').hidden = active || !state?.browser?.connected || Boolean(state.browser.totalFocusAvailable);
     document.getElementById('totalFocusStatus').dataset.active = String(Boolean(acknowledged));
     setText(document.getElementById('totalFocusActiveTask'), () => active ? `${session.intention} · ${t('Until')} ${new Date(session.expiresAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'})}` : '');
     document.getElementById('totalFocusStart').hidden = Boolean(active);
@@ -97,6 +107,8 @@ export function mountTotalFocus({invoke}) {
     await invoke('save_total_focus_preferences',{preferences:readFocusFields('totalFocus')});dirty=false;feedback(() => t('Focus settings saved'));
   });
   document.getElementById('totalFocusStart').onclick = () => action(async()=>{
+    const task = document.getElementById('totalFocusTask');
+    if (!task.value.trim()) { task.focus(); throw new Error(t('Describe your focus task in 1–160 characters.')); }
     await invoke('start_total_focus',{intention:document.getElementById('totalFocusTask').value,preferences:readFocusFields('totalFocus')});
     feedback(() => t('Browser protection confirmed. Your session is ready.'));
   });
@@ -105,6 +117,10 @@ export function mountTotalFocus({invoke}) {
   });
   document.getElementById('totalFocusBrowser').onclick=()=>{
     const details=document.getElementById('localAgentBrowserSetup');details.open=true;details.scrollIntoView({block:'start'});details.querySelector('summary').focus();
+  };
+  document.getElementById('totalFocusRepairOpen').onclick = async () => {
+    try { await invoke('open_browser_extension_folder'); }
+    catch(error) { feedback(() => `${t('Could not open the extension folder:')} ${localizeStatus(error)}`); }
   };
   const open = ()=>{
     document.getElementById('navProfile').click();

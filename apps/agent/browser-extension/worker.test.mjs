@@ -11,9 +11,10 @@ function harness(fetchResponse = async () => { throw new Error('offline'); }) {
   const changes = [];
   const listeners = { addListener() {} };
   const chrome = {
+    permissions: { async contains() { return true; } },
     action: { onClicked: listeners },
     alarms: { create() {}, clear() {}, onAlarm: listeners },
-    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, getManifest() { return { version: '1.1.1' }; }, getURL(path) { return `chrome-extension://test/${path}`; }, openOptionsPage() {} },
+    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, getManifest() { return { version: '1.1.2' }; }, getURL(path) { return `chrome-extension://test/${path}`; }, openOptionsPage() {} },
     storage: { local: {
       async get(names) {
         const keys = Array.isArray(names) ? names : [names];
@@ -30,7 +31,7 @@ function harness(fetchResponse = async () => { throw new Error('offline'); }) {
   const context = { chrome, URL, crypto: webcrypto, fetch: fetchResponse,
     AbortSignal, console, setTimeout, clearTimeout };
   runInNewContext(`${source}\nglobalThis.__test = { ruleFor, runCommand, expireBlocks, reconcileFocus, focusStatus, cancelFocus, releaseBlocksAfterDisconnect, matchesFocus, poll };`, context);
-  return { ...context.__test, stored, changes };
+  return { ...context.__test, stored, changes, chrome };
 }
 
 test('a URL path block matches the chosen site and route only', () => {
@@ -122,8 +123,52 @@ test('pairing reports a rejected key and a confirmed MV3 focus handshake', async
   code = 200;
   assert.equal((await h.poll()).connected, true);
   const status = await h.focusStatus();
-  assert.equal(status.extensionVersion, '1.1.1');
+  assert.equal(status.extensionVersion, '1.1.2');
   assert.equal(status.applied, false);
+});
+
+test('missing site access keeps pairing connected without claiming focus readiness', async () => {
+  let published;
+  const h = harness(async (url, options) => {
+    if (url.endsWith('/focus_status')) published = JSON.parse(options.body);
+    return {ok:true,json:async()=>({command:null,focus:null})};
+  });
+  await h.poll();
+  Object.assign(h.stored,{port:38547,token:'fixture'});
+  h.chrome.permissions.contains = async () => false;
+  const result = await h.poll();
+  assert.equal(result.connected,true);
+  assert.equal(result.totalFocusAvailable,false);
+  assert.match(result.error,/access to all websites/);
+  assert.equal(published.available,false);
+  h.chrome.permissions.contains = async () => true;
+  assert.equal((await h.poll()).totalFocusAvailable,true);
+});
+
+test('a rule-installation failure acknowledges the command and recovers on retry', async () => {
+  let fail = true;
+  const messages = [];
+  const h = harness(async (url, options) => {
+    if(options?.body) messages.push({url,body:JSON.parse(options.body)});
+    return {ok:true,json:async()=>({command:{id:'start',name:'browser.focus_status',arguments:{}},focus:policy()})};
+  });
+  await h.poll();
+  Object.assign(h.stored,{port:38547,token:'fixture'});
+  const update = h.chrome.declarativeNetRequest.updateDynamicRules;
+  h.chrome.declarativeNetRequest.updateDynamicRules = async change => {
+    if(fail) throw new Error('Site access was denied');
+    return update(change);
+  };
+  const result = await h.poll();
+  assert.equal(result.connected,true);
+  assert.equal(result.totalFocusAvailable,false);
+  const failure = messages.find(item=>item.url.endsWith('/result')).body;
+  assert.equal(failure.ok,false);
+  assert.match(failure.error,/Site access was denied/);
+  assert.equal(h.stored.focus,undefined);
+  fail=false;messages.length=0;
+  assert.equal((await h.poll()).totalFocusAvailable,true);
+  assert.equal(messages.find(item=>item.url.endsWith('/result')).body.result.applied,true);
 });
 
 test('simultaneous pairing checks share one authenticated poll', async () => {

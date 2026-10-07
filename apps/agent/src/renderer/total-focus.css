@@ -9,6 +9,10 @@
 .total-focus-actions .button { min-height:40px; flex:1 1 120px; }
 .total-focus-settings [hidden] { display:none; }
 .total-focus-settings { min-width:0; }
+#totalFocusRepair { margin-block:12px 20px; padding-block:8px; border-block:1px solid hsl(var(--border)); }
+#totalFocusRepair ol { padding-inline-start:20px; }
+#totalFocusRepair li { margin-block:8px; overflow-wrap:anywhere; }
+#totalFocusRepairOpen { max-width:100%; height:auto; white-space:normal; }
 .total-focus-future { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 12px; margin-top:20px; padding-top:16px; border-top:1px solid hsl(var(--border)); }
 .total-focus-future strong { font-size:12px; }
 .total-focus-future span { font-size:11px; color:hsl(var(--muted-foreground)); }

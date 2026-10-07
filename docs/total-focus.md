@@ -85,3 +85,17 @@ a rejected key or unreachable local app. Options can be opened in Arc from
 `arc://extensions` → FlowSight Browser Controls → Details → Extension options.
 Store updates may request approval for HTTP(S) site access. A GitHub ZIP does not
 automatically update a Chrome Web Store installation.
+
+Desktop 6.0.5 includes Browser Controls 1.1.2 and a local recovery path when the
+store version still connects without supporting total focus. Open compatible
+extension folder from Total focus or Browser pairing, disable the older extension
+in the browser, enable Developer mode and Load unpacked with the opened folder.
+Pair the new extension using the existing local key. The folder is part of the
+installed app and receives the packaged extension on subsequent desktop updates;
+reload an unpacked extension in the browser after updates. Keep only one paired
+Browser Controls enabled on a given browser profile.
+
+Browser Controls 1.1.2 reports website-access readiness independently from pairing.
+Rule installation errors return the actual failure through the command result,
+so a failed activation clears its native policy and can be retried. Options never
+claim that total focus is ready just because loopback pairing succeeded.
