@@ -22,8 +22,21 @@ Common `www.` prefixes are normalized so blocking a site covers its main domain
 and subdomains consistently.
 
 While a session is active, FlowSight's own focus reminders are held in the local
-notification digest. This applies on all three platforms and does not change OS
-notification permissions or claim to silence other applications.
+notification digest. On Windows, the configurable notification option also
+silences ordinary app banners and restores the previous registry setting after
+explicit end, expiry or extension emergency end. Other FlowSight quiet-mode
+owners retain their silence until they too finish; user changes to the Windows
+setting are preserved. A failed browser activation rolls back notification
+silence. This is the Windows banner switch, not Focus Assist allowlists or native
+process blocking. It does not prevent opening messaging apps.
+
+Held reminders appear in Total focus after the last notification hold ends and
+remain stored across restarts until dismissed. Failed quiet-state reads suppress
+a reminder rather than interrupting focus. Maintenance clears expired native
+sessions and retries notification restoration every five seconds. On graceful
+quit, Windows banners are restored; an unexpired session resumes silence when
+the app reopens. Browser protection continues independently until its expiry or
+emergency end, even with the app closed.
 
 Windows, macOS and Linux share the same loopback protocol and MV3 extension. The
 feature requires neither a cloud plan nor a running model. Activity tracking is a

@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "6.0.5"
+version = "6.0.6"
 default-run = "app"
 description = "FlowSight Agent — Understand your own Workflows"
 authors = ["you"]
@@ -73,6 +73,8 @@ windows-sys = { version = "0.61", features = [
 # it from the consuming crate during expansion.
 windows-core = "0.61"
 windows = { version = "0.61", features = [
+    "UI_Notifications",
+    "Win32_System_WinRT",
     "Win32_Foundation",
     "Win32_System_Com",
     "Win32_System_Threading",

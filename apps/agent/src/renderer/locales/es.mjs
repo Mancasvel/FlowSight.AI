@@ -1025,6 +1025,14 @@ Object.assign(spanish, {
 });
 
 Object.assign(spanish, {
+  'Silence Windows app notification banners':'Silenciar los avisos de aplicaciones de Windows',
+  'The previous notification setting is restored when the session ends. Browser protection continues if you quit FlowSight; notification silence resumes when you reopen it.':'Al terminar se restaura el ajuste anterior de notificaciones. Si sales de FlowSight, el bloqueo del navegador continúa; el silencio se reanuda al volver a abrirlo.',
+  'Reminders saved during focus':'Recordatorios guardados durante la concentración',
+  'Dismiss saved reminders':'Descartar recordatorios guardados',
+  'Saved reminders dismissed':'Recordatorios guardados descartados',
+  'Windows app notification banners are silenced.':'Los avisos de aplicaciones de Windows están silenciados.',
+  'Notification silence is not confirmed. End the session and try again.':'El silencio de notificaciones no está confirmado. Finaliza la sesión e inténtalo de nuevo.',
+  'Could not restore notification banners:':'No se pudieron restaurar los avisos de notificaciones:',
   'Ready. Browser actions and total focus are available.': 'Listo. Las acciones del navegador y la concentración total están disponibles.',
   'Browser connected · website protection unavailable. Check site access or use the compatible extension below.': 'Navegador conectado · bloqueo de páginas no disponible. Comprueba el acceso a los sitios o usa la extensión compatible de abajo.',
   'Updating FlowSight does not update the browser extension. If the store still has the older version, use the compatible Browser Controls included with this app.': 'Actualizar FlowSight no actualiza la extensión del navegador. Si la tienda sigue ofreciendo la versión antigua, usa Browser Controls compatible incluida con esta app.',

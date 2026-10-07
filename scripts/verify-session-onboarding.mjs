@@ -21,7 +21,7 @@ try {
       let prefs={onboardingCompleted:false,displayName:'',workRoles:[],workActivities:[],improvementGoals:[],dailyGoalHours:6};
       let desktop={focusAlertsEnabled:false,contextualFocusAlertsEnabled:false,promptDecided:true};
       let schedule={enabled:false,weekday:5,time:'17:00',folder:'',revision:0};
-      let totalFocus={preferences:{patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50},session:null,browser:{connected:false,fresh:false,applied:false},messagingAvailable:false};
+      let totalFocus={preferences:{patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50,quietNotifications:true},session:null,browser:{connected:false,fresh:false,applied:false},messagingAvailable:false,systemNotificationsAvailable:true,systemNotificationsQuiet:false,digest:[]};
       const responses={
         initialize_agent:null,get_config:{captureInterval:60000,dailyGoalHours:6},
         get_auth_session:null,get_current_user:null,get_entitlements:{plan:pro?'pro':'free',status:'active',can_integrations:pro,can_cloud_ai:false,can_sync:false,team_ids:[]},
@@ -53,9 +53,11 @@ try {
           if(command==='save_total_focus_preferences'){totalFocus.preferences=args.preferences;return args.preferences;}
           if(command==='start_total_focus'){
             totalFocus.session={id:'synthetic-focus',intention:args.intention,expiresAt:'2026-10-01T09:00:00+02:00',...args.preferences};
+            totalFocus.systemNotificationsQuiet=args.preferences.quietNotifications;
             totalFocus.browser={connected:true,totalFocusAvailable:true,fresh:true,applied:true,sessionId:'synthetic-focus'};return structuredClone(totalFocus);
           }
-          if(command==='end_total_focus'){totalFocus.session=null;totalFocus.browser.applied=false;return {browserReleased:true};}
+          if(command==='end_total_focus'){totalFocus.session=null;totalFocus.browser.applied=false;totalFocus.systemNotificationsQuiet=false;totalFocus.digest=[{id:'reminder-1',title:'Return to your task',body:'Saved during focus'}];return {browserReleased:true};}
+          if(command==='dismiss_total_focus_digest'){totalFocus.digest=totalFocus.digest.filter(item=>!args.ids.includes(item.id));return null;}
           if(command==='test_focus_connection'){totalFocus.browser.connected=args.connected;totalFocus.browser.totalFocusAvailable=args.available ?? false;return null;}
           if(command==='save_user_preferences_command'){prefs=args.prefs;return prefs;}
           if(command==='get_desktop_preferences')return desktop;
@@ -146,6 +148,8 @@ try {
     await page.locator('#onboardingFocusSites').fill('youtube.com\ninstagram.com');
     await page.locator('#onboardingFocusExceptions').fill('youtube.com/watch');
     await page.locator('#onboardingFocusMinutes').fill('50');
+    assert.equal(await page.locator('#onboardingFocusQuiet').isChecked(),true);
+    await page.locator('#onboardingFocusQuiet').uncheck();
     await page.locator('#onboardingBody').evaluate(element=>{element.scrollTop=0;});
     await page.screenshot({path:fileURLToPath(new URL(`onboarding-total-focus-${viewport.name}.png`,output))});
     await page.locator('#onboardingBody .total-focus-future').scrollIntoViewIfNeeded();
@@ -203,6 +207,7 @@ try {
     const calls=await page.evaluate(()=>window.testCalls);
     assert.equal(calls.some(c=>c.command==='start_total_focus'),false,'Wizard must save settings without activating protection.');
     assert.deepEqual(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.exceptions,['youtube.com/watch']);
+    assert.equal(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.quietNotifications,false);
     assert.equal(calls.find(c=>c.command==='set_focus_alerts_enabled').args.enabled,true);
     assert.equal(calls.find(c=>c.command==='save_weekly_report_schedule').args.schedule.enabled,true);
     assert.equal(calls.some(c=>c.command==='start_monitoring'||c.command==='set_calendar_auto_publish'||c.command==='set_analytics_consent'),false);
@@ -224,12 +229,18 @@ try {
     await page.locator('#totalFocusFeedback').filter({hasText:'Describe your focus task'}).waitFor();
     assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
     await page.locator('#totalFocusTask').fill('ADDA · exercise 1');
+    await page.locator('#totalFocusQuiet').check();
     await page.locator('#totalFocusStart').click();
     await page.locator('#totalFocusStatus').filter({hasText:'browser block confirmed'}).waitFor();
+    await page.locator('#totalFocusQuietStatus').filter({hasText:'notification banners are silenced'}).waitFor();
+    assert.equal(await page.locator('#totalFocusDigest').isVisible(),false);
     await page.locator('#totalFocusSettings').evaluate(element=>element.scrollIntoView({block:'start'}));
     await page.screenshot({path:fileURLToPath(new URL(`total-focus-active-${viewport.name}.png`,output))});
     await page.locator('#totalFocusEnd').click();
     await page.locator('#totalFocusFeedback').filter({hasText:'Total focus ended'}).waitFor();
+    await page.locator('#totalFocusDigestItems').filter({hasText:'Saved during focus'}).waitFor();
+    await page.locator('#totalFocusDigestDismiss').click();
+    await page.locator('#totalFocusDigest').waitFor({state:'hidden'});
     assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>/start_monitoring|messages.*send/.test(c.command)),false);
     // Notion is absent for both free and paid entitlements and in both report
     // branches. No provider calls or erasure occur when visiting Insights.

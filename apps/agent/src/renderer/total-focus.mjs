@@ -1,7 +1,7 @@
 import { html, t, setText, getLocale, localizeStatus } from './i18n.mjs';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const defaults = {patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50};
+const defaults = {patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50,quietNotifications:true};
 const sites = value => value.split(/[\n,]+/).map(item => item.trim()).filter(Boolean);
 
 export function focusFields(prefix, preferences = defaults) {
@@ -14,13 +14,16 @@ export function focusFields(prefix, preferences = defaults) {
     <p class="session-help">Exceptions take priority. Keep the pages you need for your work.</p>
     <label for="${prefix}Minutes">Session duration (minutes)</label>
     <input id="${prefix}Minutes" class="input" type="number" min="5" max="180" step="1" value="${preferences.durationMinutes}">
+    <label class="total-focus-quiet" for="${prefix}Quiet"><input id="${prefix}Quiet" type="checkbox" ${preferences.quietNotifications !== false ? 'checked' : ''}> Silence Windows app notification banners</label>
+    <p class="session-help">The previous notification setting is restored when the session ends. Browser protection continues if you quit FlowSight; notification silence resumes when you reopen it.</p>
   </div>`;
 }
 
 export function readFocusFields(prefix) {
   return {patterns:sites(document.getElementById(`${prefix}Sites`).value),
     exceptions:sites(document.getElementById(`${prefix}Exceptions`).value),
-    durationMinutes:Number(document.getElementById(`${prefix}Minutes`).value)};
+    durationMinutes:Number(document.getElementById(`${prefix}Minutes`).value),
+    quietNotifications:document.getElementById(`${prefix}Quiet`).checked};
 }
 
 export function focusExample() {
@@ -42,6 +45,12 @@ export function mountTotalFocus({invoke}) {
     <p class="profile-card-intro">Block distracting websites with Browser Controls in Arc on Windows or macOS, and Chrome on Windows, macOS, or Linux.</p>
     <p class="session-help">FlowSight focus reminders are held in your local digest during this session.</p>
     <p id="totalFocusStatus" class="total-focus-status" role="status" aria-live="polite">Checking browser protection…</p>
+    <p id="totalFocusQuietStatus" class="session-help" role="status"></p>
+    <div id="totalFocusDigest" hidden>
+      <strong>Reminders saved during focus</strong>
+      <div id="totalFocusDigestItems" data-user-content></div>
+      <button type="button" class="button button-secondary" id="totalFocusDigestDismiss">Dismiss saved reminders</button>
+    </div>
     <div id="totalFocusRepair" hidden>
       <p class="session-help">Updating FlowSight does not update the browser extension. If the store still has the older version, use the compatible Browser Controls included with this app.</p>
       <button type="button" class="button button-secondary" id="totalFocusRepairOpen">Open compatible extension folder</button>
@@ -61,7 +70,7 @@ export function mountTotalFocus({invoke}) {
     <button type="button" class="button button-ghost" id="totalFocusBrowser">Connect your browser</button>
     <p class="session-help">Protection lasts until the chosen end time, even if FlowSight closes. You can end it from a blocked page. Tracking remains a separate choice.</p>
     ${messagingFuture()}`;
-  let state = null, busy = false, dirty = false;
+  let state = null, busy = false, dirty = false, digestKey = '';
   const feedback = value => setText(document.getElementById('totalFocusFeedback'), value);
   const buttons = ['totalFocusStart','totalFocusEnd','totalFocusSave'];
   function render() {
@@ -76,6 +85,17 @@ export function mountTotalFocus({invoke}) {
       : state?.browser?.connected ? t('Browser connected · ready to start') : t('Connect Browser Controls to activate total focus.'));
     document.getElementById('totalFocusRepair').hidden = active || !state?.browser?.connected || Boolean(state.browser.totalFocusAvailable);
     document.getElementById('totalFocusStatus').dataset.active = String(Boolean(acknowledged));
+    setText(document.getElementById('totalFocusQuietStatus'), () => state?.systemNotificationsQuiet
+      ? t('Windows app notification banners are silenced.')
+      : active && session.quietNotifications && state?.systemNotificationsAvailable
+      ? t('Notification silence is not confirmed. End the session and try again.') : '');
+    const digest=state?.digest || [];
+    document.getElementById('totalFocusDigest').hidden=!digest.length;
+    const key=JSON.stringify(digest);
+    if (key!==digestKey) {
+      digestKey=key;const items=document.getElementById('totalFocusDigestItems');items.replaceChildren();
+      for(const item of digest) { const p=document.createElement('p');p.textContent=`${item.title}: ${item.body}`;items.append(p); }
+    }
     setText(document.getElementById('totalFocusActiveTask'), () => active ? `${session.intention} · ${t('Until')} ${new Date(session.expiresAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'})}` : '');
     document.getElementById('totalFocusStart').hidden = Boolean(active);
     document.getElementById('totalFocusEnd').hidden = !active;
@@ -90,6 +110,7 @@ export function mountTotalFocus({invoke}) {
       state = await invoke('get_total_focus');
       if (fill && !dirty && state?.preferences) {
         for (const [suffix,value] of [['Sites',state.preferences.patterns.join('\n')],['Exceptions',state.preferences.exceptions.join('\n')],['Minutes',state.preferences.durationMinutes]]) document.getElementById(`totalFocus${suffix}`).value = value;
+        document.getElementById('totalFocusQuiet').checked=state.preferences.quietNotifications !== false;
       }
       render();
     } catch { feedback(() => t('Could not load focus settings. Try again.')); }
@@ -113,7 +134,11 @@ export function mountTotalFocus({invoke}) {
     feedback(() => t('Browser protection confirmed. Your session is ready.'));
   });
   document.getElementById('totalFocusEnd').onclick = () => action(async()=>{
-    const result=await invoke('end_total_focus');feedback(() => result.browserReleased ? t('Total focus ended') : t('Session ended. Reconnect the extension or use End total focus on a blocked page to release it now.'));
+    const result=await invoke('end_total_focus');feedback(() => result.notificationWarning ? `${t('Could not restore notification banners:')} ${localizeStatus(result.notificationWarning)}` : result.browserReleased ? t('Total focus ended') : t('Session ended. Reconnect the extension or use End total focus on a blocked page to release it now.'));
+  });
+  document.getElementById('totalFocusDigestDismiss').onclick=()=>action(async()=>{
+    await invoke('dismiss_total_focus_digest',{ids:(state?.digest||[]).map(item=>item.id)});
+    feedback(() => t('Saved reminders dismissed'));
   });
   document.getElementById('totalFocusBrowser').onclick=()=>{
     const details=document.getElementById('localAgentBrowserSetup');details.open=true;details.scrollIntoView({block:'start'});details.querySelector('summary').focus();
