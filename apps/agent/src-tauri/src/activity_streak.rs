@@ -20,7 +20,7 @@ fn canonical_day(key: &str) -> Option<NaiveDate> {
         .filter(|day| day.format("%Y-%m-%d").to_string() == key)
 }
 
-fn load_checkpoint(conn: &Connection, today: NaiveDate) -> Result<Option<Checkpoint>, String> {
+fn load_checkpoints(conn: &Connection, today: NaiveDate) -> Result<Vec<Checkpoint>, String> {
     let raw: Option<String> = conn
         .query_row(
             "SELECT value FROM config WHERE key = ?1",
@@ -75,9 +75,9 @@ fn load_checkpoint(conn: &Connection, today: NaiveDate) -> Result<Option<Checkpo
                     .streak_days
                     .max(older.streak_days.saturating_add(distance));
             }
-            Some(newer)
+            vec![newer, older]
         }
-        (activity, wins) => activity.or(wins),
+        (activity, wins) => activity.or(wins).into_iter().collect(),
     })
 }
 
@@ -128,7 +128,7 @@ pub fn reconcile(conn: &Connection, today: NaiveDate) -> Result<u64, String> {
     let transaction = conn
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;
-    let checkpoint = load_checkpoint(&transaction, today)?;
+    let checkpoints = load_checkpoints(&transaction, today)?;
     let mut day = today;
     let mut streak = 0u64;
     let mut preserved_streak = 0u64;
@@ -136,11 +136,11 @@ pub fn reconcile(conn: &Connection, today: NaiveDate) -> Result<u64, String> {
     let mut earliest_loaded = today.succ_opt().unwrap_or(today);
     let mut days = HashSet::new();
     loop {
-        if let Some(saved) = checkpoint
-            .as_ref()
+        for saved in checkpoints
+            .iter()
             .filter(|saved| canonical_day(&saved.last_active_day) == Some(day))
         {
-            preserved_streak = streak.saturating_add(saved.streak_days);
+            preserved_streak = preserved_streak.max(streak.saturating_add(saved.streak_days));
             last_active_day.get_or_insert(day);
         }
         if day < earliest_loaded {
@@ -385,6 +385,16 @@ mod tests {
             reconcile(&conn, today).unwrap(),
             5,
             "A real gap between proofs cannot extend the streak"
+        );
+        clock(&conn, today - chrono::Duration::days(5), 1);
+        for offset in 0..5 {
+            clock(&conn, today - chrono::Duration::days(offset), 900000);
+        }
+        checkpoint(&conn, today - chrono::Duration::days(6), 40);
+        assert_eq!(
+            reconcile(&conn, today).unwrap(),
+            46,
+            "Retained short activity can bridge the older checkpoint and newer wins"
         );
     }
 
