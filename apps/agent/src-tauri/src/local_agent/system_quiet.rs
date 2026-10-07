@@ -135,6 +135,22 @@ fn write_policy_setting(value: Option<u32>) -> Result<(), String> {
             return Err(error.to_string());
         }
     }
+    // Notify the shell/broker; writing policy alone leaves its cached setting unchanged.
+    unsafe {
+        use windows::{
+            core::w,
+            Win32::{
+                Foundation::{LPARAM, WPARAM},
+                UI::WindowsAndMessaging::{SendNotifyMessageW, HWND_BROADCAST, WM_SETTINGCHANGE},
+            },
+        };
+        let _ = SendNotifyMessageW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            WPARAM(0),
+            LPARAM(w!("Policy").as_ptr() as isize),
+        );
+    }
     Ok(())
 }
 
