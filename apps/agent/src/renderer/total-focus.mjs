@@ -73,9 +73,10 @@ export function mountTotalFocus({invoke}) {
     <button type="button" class="button button-ghost" id="totalFocusBrowser">Connect your browser</button>
     <p class="session-help">Protection lasts until the chosen end time, even if FlowSight closes. You can end it from a blocked page. Tracking remains a separate choice.</p>
     ${messagingFuture()}`;
-  let state = null, busy = false, pending = '', dirty = false, digestKey = '';
+  let state = null, busy = false, pending = '', dirty = false, digestKey = '', feedbackSurface = 'settings';
+  const feedbackElement = () => document.getElementById(feedbackSurface === 'today' ? 'todayTotalFocusFeedback' : 'totalFocusFeedback');
   const feedback = (value, reveal = false) => {
-    const element = document.getElementById('totalFocusFeedback');
+    const element = feedbackElement();
     setText(element, value);element.hidden = !element.textContent;
     if (reveal) element.scrollIntoView({block:'nearest'});
   };
@@ -117,7 +118,12 @@ export function mountTotalFocus({invoke}) {
     document.querySelectorAll('#totalFocusConfig input, #totalFocusConfig textarea').forEach(field => field.disabled = present || busy);
     for (const id of buttons) document.getElementById(id).disabled = busy || (id === 'totalFocusSave' && present);
     document.getElementById('totalFocusStart').disabled = busy || !state?.browser?.connected || !state?.browser?.totalFocusAvailable;
-    setText(document.getElementById('todayTotalFocusLabel'), () => paused ? t('Total focus paused') : active ? t('Total focus active') : t('Total focus'));
+    setText(document.getElementById('todayTotalFocusLabel'), () => t('Total focus settings'));
+    const quickStart = document.getElementById('todayTotalFocusStart');
+    quickStart.hidden = present && pending !== 'start';
+    quickStart.disabled = busy || !state;
+    quickStart.setAttribute('aria-busy', String(busy && pending === 'start'));
+    setText(document.getElementById('todayTotalFocusStartLabel'), () => pending === 'start' ? t('Starting total focus…') : t('Start total focus'));
     document.dispatchEvent(new CustomEvent('flowsight:total-focus-state',{detail:{state,busy,pending}}));
   }
   async function refresh(fill = false) {
@@ -131,14 +137,15 @@ export function mountTotalFocus({invoke}) {
     } catch { feedback(() => t('Could not load focus settings. Try again.')); }
     return state;
   }
-  async function action(run, operation = '') {
+  async function action(run, operation = '', surface = 'settings') {
     if (busy) return;
+    feedbackSurface = surface;
     busy = true;pending = operation;render();
     feedback(() => operation === 'start' ? t('Starting total focus. Waiting for your browser to confirm protection; this can take up to 90 seconds.')
       : operation === 'end' ? t('Ending total focus…') : t('Saving settings…'), true);
     try { await run();await refresh(); }
     catch(error) { feedback(() => `${t('Could not update total focus:')} ${localizeStatus(error)}`); }
-    finally { busy = false;pending = '';render();document.getElementById('totalFocusFeedback').scrollIntoView({block:'nearest'}); }
+    finally { busy = false;pending = '';render();feedbackElement().scrollIntoView({block:'nearest'}); }
   }
   const task = document.getElementById('totalFocusTask');
   task.addEventListener('input',()=>{
@@ -150,6 +157,7 @@ export function mountTotalFocus({invoke}) {
   }, 'save');
   document.getElementById('totalFocusStart').onclick = () => {
     if (busy) return;
+    feedbackSurface = 'settings';
     // Validate before disabling controls, so focus and the error remain visible.
     if (!task.value.trim() || !task.checkValidity()) {
       const error = document.getElementById('totalFocusTaskError');
@@ -183,6 +191,7 @@ export function mountTotalFocus({invoke}) {
     catch(error) { feedback(() => `${t('Could not open the extension folder:')} ${localizeStatus(error)}`); }
   };
   const open = ()=>{
+    feedbackSurface = 'settings';
     document.getElementById('navProfile').click();
     const task=document.getElementById('manualTask')?.value?.trim();
     if(task&&!state?.session)document.getElementById('totalFocusTask').value=task;
@@ -198,5 +207,15 @@ export function mountTotalFocus({invoke}) {
     try { const result=await invoke(command);await refresh();return result; }
     finally {busy=false;pending='';render();}
   };
-  return {refresh,session:()=>state?.session,busy:()=>busy,clockAction,preferences:()=>state?.preferences||structuredClone(defaults)};
+  const startFromToday = intention => action(async () => {
+    await refresh();
+    if (state?.session) throw new Error(t('Total focus is already active. End it before starting another session.'));
+    if (!state?.browser?.connected || !state.browser.totalFocusAvailable) {
+      throw new Error(t('Connect Browser Controls in total focus settings, then try again.'));
+    }
+    const preferences = structuredClone(state.preferences || defaults);
+    await invoke('start_total_focus', {intention: String(intention || '').trim() || 'General', preferences});
+    feedback(() => t('Browser protection confirmed. Your session is ready.'));
+  }, 'start', 'today');
+  return {refresh,session:()=>state?.session,busy:()=>busy,ready:()=>Boolean(state),clockAction,startFromToday,preferences:()=>state?.preferences||structuredClone(defaults)};
 }

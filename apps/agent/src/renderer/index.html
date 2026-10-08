@@ -3667,6 +3667,11 @@
                 </button>
               </div>
             </div>
+            <button type="button" class="button today-focus-start" id="todayTotalFocusStart" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="8,5 19,12 8,19"/></svg>
+              <span id="todayTotalFocusStartLabel">Start total focus</span>
+            </button>
+            <p id="todayTotalFocusFeedback" class="session-help today-focus-feedback" role="status" aria-live="polite" hidden></p>
           </div>
         </div>
 
@@ -3729,7 +3734,7 @@
             <span class="checkbox-label">Sync time to Jira</span>
           </label>
         </div>
-        <button type="button" class="button button-secondary today-total-focus" id="todayTotalFocus"><span id="todayTotalFocusLabel">Total focus</span><span aria-hidden="true">→</span></button>
+        <button type="button" class="button button-secondary today-total-focus" id="todayTotalFocus"><span id="todayTotalFocusLabel">Total focus settings</span><span aria-hidden="true">→</span></button>
         <div class="today-goal-row">
           <div class="form-group" style="margin-bottom: 0;">
             <label class="label" for="dailyGoalSelect">Daily goal</label>
@@ -5468,6 +5473,8 @@
         setText(label,()=>text);setAttributeText(btn,'title',()=>text);btn.setAttribute('aria-label',text);
       }
       btn.disabled = trackingTransitionInProgress || pomodoroTransition || totalFocusController.busy();
+      const focusStart = document.getElementById('todayTotalFocusStart');
+      focusStart.disabled = btn.disabled || !totalFocusController.ready();
       if (!linkedFocus && timerPreferences.mode === 'pomodoro' && !isMonitoring) {
         const waitingForBreak = pomodoro.phase !== 'work' && !pomodoro.ready;
         btn.disabled = btn.disabled || waitingForBreak;
@@ -5939,6 +5946,11 @@
       } else {
         document.getElementById('startBtn')?.click();
       }
+    });
+
+    document.getElementById('todayTotalFocusStart').addEventListener('click', async () => {
+      if (setupInProgress || trackingTransitionInProgress || pomodoroTransition || totalFocusController.busy()) return;
+      await startTotalFocusWithNotice(getTaskContext().task);
     });
 
     // ===== RESTORE LINKED PROVIDERS ON STARTUP =====
@@ -7618,6 +7630,7 @@
     const PRIVACY_NOTICE_VERSION = '2026-08-23';
     let privacySettings = null;
     let pendingMonitoringStart = false;
+    let pendingTotalFocusStart = null;
     let pendingAutoMonitorConsent = false;
     let desktopPreferences = null;
 
@@ -7868,8 +7881,24 @@
       showMonitoringNotice();
     }
 
+    async function startTotalFocusWithNotice(intention) {
+      await loadPrivacySettings();
+      if (!privacySettings) {
+        showToast(tr('Could not load saved privacy settings. Try again.'), 'error');
+        return;
+      }
+      if (monitoringNoticeAccepted(privacySettings)) {
+        await totalFocusController.startFromToday(intention);
+        return;
+      }
+      pendingTotalFocusStart = intention;
+      pendingMonitoringStart = false;
+      showMonitoringNotice();
+    }
+
     document.getElementById('monitoringNoticeCancelBtn')?.addEventListener('click', () => {
       pendingMonitoringStart = false;
+      pendingTotalFocusStart = null;
       pendingAutoMonitorConsent = false;
       hideMonitoringNotice();
     });
@@ -7883,11 +7912,13 @@
           await invoke('set_start_monitoring_at_login', { enabled: true });
           await loadDesktopPreferences();
         }
-        if (pendingMonitoringStart) await startMonitoringFull();
+        if (pendingTotalFocusStart !== null) await totalFocusController.startFromToday(pendingTotalFocusStart);
+        else if (pendingMonitoringStart) await startMonitoringFull();
       } catch (error) {
         showToast(('Could not save the privacy acknowledgement: ' + error), 'error');
       } finally {
         pendingMonitoringStart = false;
+        pendingTotalFocusStart = null;
         pendingAutoMonitorConsent = false;
         if (button) button.disabled = false;
       }

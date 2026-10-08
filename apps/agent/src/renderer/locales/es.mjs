@@ -1030,6 +1030,8 @@ Object.assign(spanish, {
   'Total focus starts the main clock. Pause or resume both from the clock; your remaining focus time is kept.':'La concentración total inicia el reloj principal. Pausa o reanuda ambos desde el reloj; se conserva el tiempo de concentración restante.',
   'Total focus paused · resume from the main clock':'Concentración total pausada · reanuda desde el reloj principal',
   'Total focus paused':'Concentración total pausada',
+  'Total focus settings':'Ajustes concentración total',
+  'Connect Browser Controls in total focus settings, then try again.':'Conecta Browser Controls en los ajustes de concentración total y vuelve a intentarlo.',
   'Open main clock':'Abrir reloj principal',
   'Wait for the current focus action to finish.':'Espera a que termine la acción de concentración en curso.',
   'Pause total focus':'Pausar concentración total',

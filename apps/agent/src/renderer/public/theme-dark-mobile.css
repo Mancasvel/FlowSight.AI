@@ -36,6 +36,9 @@
   --glass-shadow: 0 14px 36px rgb(0 0 0 / 0.3);
 }
 
+.today-focus-start { background:#6cdfd0; color:#102c2a; }
+.today-focus-start:hover:not(:disabled) { background:#8be6da; }
+
 html,
 body,
 .app-shell,

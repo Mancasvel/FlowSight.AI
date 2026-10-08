@@ -21,6 +21,7 @@ try {
       let events=[],proposalCount=0,running=false,trackedMs=0,trackingTick=performance.now();
       const trackingSnapshot=()=>{const tick=performance.now();if(running)trackedMs+=tick-trackingTick;trackingTick=tick;return {date:'2026-10-01',total_milliseconds:trackedMs,total_seconds:Math.floor(trackedMs/1000),is_running:running};};
       let prefs={onboardingCompleted:false,displayName:'',workRoles:[],workActivities:[],improvementGoals:[],dailyGoalHours:6};
+      let privacy={noticeVersion:'2026-09-28',monitoringNoticeAcknowledged:false,cloudSyncEnabled:false,cloudAiEnabled:false,storeWindowTitles:false,excludedApplications:[],retentionDays:30};
       let desktop={focusAlertsEnabled:false,contextualFocusAlertsEnabled:false,promptDecided:true};
       let schedule={enabled:false,weekday:5,time:'17:00',folder:'',revision:0};
       let totalFocus={preferences:{patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50,quietNotifications:true},session:null,browser:{connected:false,fresh:false,applied:false},messagingAvailable:false,systemNotificationsAvailable:true,systemNotificationsQuiet:false,digest:[]};
@@ -52,6 +53,8 @@ try {
           };
           if(command==='get_local_agent_data')return {events,preferences:{},tasks:[]};
           if(command==='get_user_preferences')return prefs;
+          if(command==='get_privacy_settings')return structuredClone(privacy);
+          if(command==='update_privacy_settings'){privacy={...privacy,...args.patch};return structuredClone(privacy);}
           if(command==='get_status')return {isRunning:running};
           if(command==='get_tracking_clock')return trackingSnapshot();
           if(command==='get_total_focus')return structuredClone(totalFocus);
@@ -295,6 +298,48 @@ try {
     await page.locator('#totalFocusDigestDismiss').click();
     await page.locator('#totalFocusDigest').waitFor({state:'hidden'});
     assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>/start_monitoring|messages.*send/.test(c.command)),false);
+    // The new play starts from Today using the current task and saved settings.
+    // Unsaved Settings edits must not silently change the shortcut's protection.
+    await page.locator('#totalFocusSites').fill('unsaved.example.org');
+    await page.locator('#totalFocusMinutes').fill('5');
+    await page.locator('#navToday').click();
+    await page.locator('#manualTask').fill('Review the proposal');
+    assert.equal(await page.locator('#todayTotalFocusLabel').innerText(),'Total focus settings');
+    assert.equal(await page.locator('#todayTotalFocusStartLabel').innerText(),'Start total focus');
+    assert.equal(await page.locator('#todayTotalFocusStart').evaluate(element=>element.getBoundingClientRect().top > document.getElementById('playTimerBtn').getBoundingClientRect().bottom),true);
+    await page.locator('#todayTotalFocusStart').click();
+    await page.locator('#monitoringNoticeOverlay.visible').waitFor();
+    const startsBeforeConsent=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').length);
+    await page.locator('#monitoringNoticeCancelBtn').click();
+    assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').length),startsBeforeConsent);
+    await page.locator('#todayTotalFocusStart').click();
+    await page.locator('#monitoringNoticeAcceptBtn').click();
+    await page.locator('#todayTotalFocusFeedback').filter({hasText:'Your session is ready'}).waitFor();
+    assert.equal(await page.locator('#tabToday').evaluate(element=>element.classList.contains('active')),true);
+    const shortcutStart=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').at(-1));
+    assert.equal(shortcutStart.args.intention,'Review the proposal');
+    assert.deepEqual(shortcutStart.args.preferences.patterns,['youtube.com','instagram.com']);
+    assert.equal(shortcutStart.args.preferences.durationMinutes,50);
+    assert.equal(shortcutStart.args.preferences.quietNotifications,false);
+    await page.locator('#playTimerBtn').filter({hasText:'Pause total focus'}).waitFor();
+    assert.equal(await page.locator('#todayTotalFocusStart').isVisible(),false);
+    await page.locator('#stopTimerBtn').click();
+    await page.locator('#todayTotalFocusStart').waitFor({state:'visible'});
+    await page.evaluate(()=>{window.testFailures={start_total_focus:'Browser did not confirm'};});
+    await page.locator('#todayTotalFocusStart').click();
+    await page.locator('#todayTotalFocusFeedback').filter({hasText:'Browser did not confirm'}).waitFor();
+    assert.equal(await page.locator('#todayTotalFocusStart').isEnabled(),true);
+    assert.equal(await page.locator('#tabToday').evaluate(element=>element.classList.contains('active')),true);
+    await page.evaluate(()=>{window.testFailures={};});
+    await page.evaluate(()=>{document.getElementById('todayTotalFocusFeedback').hidden=true;document.getElementById('sessionPlanner').open=false;});
+    await page.locator('#todayTotalFocusStart').scrollIntoViewIfNeeded();
+    await page.screenshot({path:fileURLToPath(new URL(`total-focus-quick-start-${viewport.name}.png`,output))});
+    // Spanish labels must fit as well as the English controls.
+    await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='es';select.dispatchEvent(new Event('change',{bubbles:true}));});
+    assert.equal(await page.locator('#todayTotalFocusStartLabel').innerText(),'Iniciar concentración total');
+    assert.equal(await page.locator('#todayTotalFocusLabel').innerText(),'Ajustes concentración total');
+    await page.screenshot({path:fileURLToPath(new URL(`total-focus-quick-start-es-${viewport.name}.png`,output))});
+    await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));});
     // Notion is absent for both free and paid entitlements and in both report
     // branches. No provider calls or erasure occur when visiting Insights.
     await page.locator('#navSummary').click();
@@ -308,6 +353,7 @@ try {
     assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>/notion/.test(c.command)),false);
     await page.locator('#navToday').click();
     // A failed replacement must preserve the original draft's expiry timer.
+    await page.evaluate(()=>{document.getElementById('sessionPlanner').open=true;});
     await page.evaluate(()=>{
       window.__TAURI_INTERNALS__.invoke=async(command,args)=>{
         if(command==='propose_session_plan'){
@@ -324,7 +370,7 @@ try {
     assert.equal(await page.locator('#sessionConfirm').isDisabled(),true);
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
     assert.equal(overflow,false);assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.testWindowErrors),[]);
-    console.log(`${viewport.name}: block-label containment, notification examples/consents, Notion disabled, optional onboarding, revision without writes, and one confirmed save passed.`);
+    console.log(`${viewport.name}: onboarding/planner regression and direct total focus play with saved settings, task context, consent cancel/accept, failure/retry, linked clock and Spanish labels passed.`);
     await page.close();
   }
 } finally { await browser.close(); }
