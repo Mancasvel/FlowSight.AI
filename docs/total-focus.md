@@ -107,6 +107,13 @@ review agents were omitted to respect the user's request to reduce PC load.
 
 ## Arc and extension updates
 
+Windows 6.0.8 adds a Start total focus play button immediately below Start tracking
+in Today. It uses the current task context and saved total focus preferences;
+unsaved edits in Settings do not change the shortcut. Progress, protection errors
+and retry stay in Today. The existing monitoring acknowledgement is required.
+Once linked, pause/resume and Stop remain on the main clock. The lower navigation
+button is labelled Total focus settings and opens the configuration.
+
 Arc uses the same MV3 extension on Windows and macOS. Linux uses Chrome or another
 compatible Chromium browser. Version 1.0.0 supports the older browser tools but
 does not apply total focus. Desktop 5.0.17 requires a recent valid focus-status
