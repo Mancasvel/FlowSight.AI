@@ -335,11 +335,11 @@ try {
     await page.locator('#todayTotalFocusStart').scrollIntoViewIfNeeded();
     await page.screenshot({path:fileURLToPath(new URL(`total-focus-quick-start-${viewport.name}.png`,output))});
     // Spanish labels must fit as well as the English controls.
-    await page.evaluate(async()=>{const {setLanguagePreference}=await import('/i18n.mjs');setLanguagePreference('es');});
+    await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='es';select.dispatchEvent(new Event('change',{bubbles:true}));});
     assert.equal(await page.locator('#todayTotalFocusStartLabel').innerText(),'Iniciar concentración total');
     assert.equal(await page.locator('#todayTotalFocusLabel').innerText(),'Ajustes concentración total');
     await page.screenshot({path:fileURLToPath(new URL(`total-focus-quick-start-es-${viewport.name}.png`,output))});
-    await page.evaluate(async()=>{const {setLanguagePreference}=await import('/i18n.mjs');setLanguagePreference('en');});
+    await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));});
     // Notion is absent for both free and paid entitlements and in both report
     // branches. No provider calls or erasure occur when visiting Insights.
     await page.locator('#navSummary').click();
