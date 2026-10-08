@@ -74,7 +74,7 @@ pub fn get_desktop_preferences(app: tauri::AppHandle) -> Result<DesktopPreferenc
         contextual_focus_alerts_enabled: read_bool(CONTEXTUAL_FOCUS_ALERTS_KEY)?,
         prompt_decided: read_bool(PROMPT_DECIDED_KEY)?,
         autostart_launch: std::env::args().any(|arg| arg == "--flowsight-autostart"),
-        development_build: tauri::is_dev(),
+        development_build: development_executable(),
     })
 }
 
@@ -82,10 +82,15 @@ pub fn get_desktop_preferences(app: tauri::AppHandle) -> Result<DesktopPreferenc
 pub fn set_launch_at_login(app: tauri::AppHandle, enabled: bool) -> Result<bool, String> {
     #[cfg(desktop)]
     {
-        if enabled && tauri::is_dev() {
+        if enabled && development_executable() {
             return Err("Install the release build before enabling launch at login.".into());
         }
         if enabled {
+            #[cfg(windows)]
+            crate::windows_autostart::enable(
+                &std::env::current_exe().map_err(|error| error.to_string())?,
+            )?;
+            #[cfg(not(windows))]
             app.autolaunch().enable().map_err(|e| e.to_string())?;
         } else {
             app.autolaunch().disable().map_err(|e| e.to_string())?;
@@ -99,6 +104,16 @@ pub fn set_launch_at_login(app: tauri::AppHandle, enabled: bool) -> Result<bool,
         let _ = (app, enabled);
         Err("Launch at login is available on desktop only.".into())
     }
+}
+
+fn development_executable() -> bool {
+    #[cfg(windows)]
+    if std::env::current_exe()
+        .is_ok_and(|path| crate::windows_autostart::is_development_executable(&path))
+    {
+        return true;
+    }
+    tauri::is_dev()
 }
 
 #[tauri::command]

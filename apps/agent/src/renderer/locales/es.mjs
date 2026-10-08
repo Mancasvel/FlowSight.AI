@@ -1,5 +1,6 @@
 // Explicit application copy. User-authored task names, messages and activity are never translated.
 export const spanish = Object.fromEntries(`
+Could not load saved privacy settings. Try again.|No se pudieron cargar tus preferencias de privacidad guardadas. Inténtalo de nuevo.
 Planning runs on this device. Review and confirm to add the blocks to your linked calendar, or to FlowSight if none is connected.|La planificación se ejecuta en este dispositivo. Revisa y confirma para añadir los bloques a tu calendario vinculado, o a FlowSight si no hay ninguno conectado.
 Draft ready. Review the times and estimates before adding the blocks to {calendar}.|Borrador listo. Revisa las horas y estimaciones antes de añadir los bloques a {calendar}.
 {count} block added to {calendar}.|{count} bloque añadido a {calendar}.
@@ -975,6 +976,7 @@ Storage unavailable|Almacenamiento no disponible
 spanish['{p0}\n\n{p1}\n\nDraft only; copy and review before publishing.']='{p0}\n\n{p1}\n\nSolo borrador; copia y revisa antes de publicar.';
 
 Object.assign(spanish, {
+  'Clock': 'Reloj',
   '1 of 6':'1 de 6','{p0} of 6':'{p0} de 6',
   'Total focus':'Concentración total','Total focus active':'Concentración total activa',
   'Use a domain or HTTP(S) path without spaces.':'Escribe un dominio o una ruta HTTP(S) sin espacios.',
@@ -1023,7 +1025,41 @@ Object.assign(spanish, {
 });
 
 Object.assign(spanish, {
+  'Silence Windows app notification banners':'Silenciar los avisos de aplicaciones de Windows',
+  'Your focus task (required)':'Tu tarea de concentración (obligatoria)',
+  'Total focus starts the main clock. Pause or resume both from the clock; your remaining focus time is kept.':'La concentración total inicia el reloj principal. Pausa o reanuda ambos desde el reloj; se conserva el tiempo de concentración restante.',
+  'Total focus paused · resume from the main clock':'Concentración total pausada · reanuda desde el reloj principal',
+  'Total focus paused':'Concentración total pausada',
+  'Open main clock':'Abrir reloj principal',
+  'Wait for the current focus action to finish.':'Espera a que termine la acción de concentración en curso.',
+  'Pause total focus':'Pausar concentración total',
+  'Resume total focus':'Reanudar concentración total',
+  'Total focus remaining':'Concentración total restante',
+  'Total focus paused. Your remaining time is kept.':'Concentración total pausada. Se conserva el tiempo restante.',
+  'Reconnect Browser Controls before resuming total focus.':'Reconecta Browser Controls antes de reanudar la concentración total.',
+  'Starting total focus…':'Iniciando concentración total…',
+  'Ending total focus…':'Finalizando concentración total…',
+  'Saving settings…':'Guardando ajustes…',
+  'Starting total focus. Waiting for your browser to confirm protection; this can take up to 90 seconds.':'Iniciando concentración total. Esperando a que tu navegador confirme la protección; puede tardar hasta 90 segundos.',
+  'Choose a focus duration between 5 and 180 minutes.':'Elige una duración de concentración de entre 5 y 180 minutos.',
+  'The previous notification setting is restored when the session ends. Browser protection continues if you quit FlowSight; notification silence resumes when you reopen it.':'Al terminar se restaura el ajuste anterior de notificaciones. Si sales de FlowSight, el bloqueo del navegador continúa; el silencio se reanuda al volver a abrirlo.',
+  'Reminders saved during focus':'Recordatorios guardados durante la concentración',
+  'Dismiss saved reminders':'Descartar recordatorios guardados',
+  'Saved reminders dismissed':'Recordatorios guardados descartados',
+  'Windows app notification banners are silenced.':'Los avisos de aplicaciones de Windows están silenciados.',
+  'Notification silence is not confirmed. End the session and try again.':'El silencio de notificaciones no está confirmado. Finaliza la sesión e inténtalo de nuevo.',
+  'Could not restore notification banners:':'No se pudieron restaurar los avisos de notificaciones:',
   'Ready. Browser actions and total focus are available.': 'Listo. Las acciones del navegador y la concentración total están disponibles.',
+  'Browser connected · website protection unavailable. Check site access or use the compatible extension below.': 'Navegador conectado · bloqueo de páginas no disponible. Comprueba el acceso a los sitios o usa la extensión compatible de abajo.',
+  'Updating FlowSight does not update the browser extension. If the store still has the older version, use the compatible Browser Controls included with this app.': 'Actualizar FlowSight no actualiza la extensión del navegador. Si la tienda sigue ofreciendo la versión antigua, usa Browser Controls compatible incluida con esta app.',
+  'Open compatible extension folder': 'Abrir carpeta de la extensión compatible',
+  "Open your browser's extensions page: arc://extensions, chrome://extensions, or edge://extensions.": 'Abre la página de extensiones de tu navegador: arc://extensions, chrome://extensions o edge://extensions.',
+  'Turn off the older FlowSight Browser Controls, enable Developer mode, and choose Load unpacked. Select the folder opened above.': 'Desactiva FlowSight Browser Controls antigua, activa el Modo de desarrollador y pulsa Cargar descomprimida. Selecciona la carpeta que se ha abierto.',
+  "Open the new extension's options, paste your pairing key, and choose Save and connect.": 'Abre las opciones de la nueva extensión, pega tu clave de vinculación y pulsa Guardar y conectar.',
+  "If the store version cannot start total focus, open your browser's extensions page, turn off the older Browser Controls, enable Developer mode, and choose Load unpacked with this folder.": 'Si la versión de la tienda no permite iniciar la concentración total, abre las extensiones del navegador, desactiva Browser Controls antigua, activa el Modo de desarrollador y pulsa Cargar descomprimida con esta carpeta.',
+  'Could not open the extension folder:': 'No se pudo abrir la carpeta de la extensión:',
+  'Describe your focus task in 1–160 characters.': 'Describe tu tarea de concentración en 1–160 caracteres.',
+  'Allow Browser Controls access to all websites in your browser extension settings.': 'Permite que Browser Controls acceda a todos los sitios desde los ajustes de la extensión en tu navegador.',
   'Browser connected. Update Browser Controls to enable total focus. In Arc, open arc://extensions and update the extension; approve any requested site access.': 'Navegador conectado. Actualiza Browser Controls para activar la concentración total. En Arc, abre arc://extensions y actualiza la extensión; acepta el acceso a los sitios si te lo solicita.',
   'Block distracting websites with Browser Controls in Arc on Windows or macOS, and Chrome on Windows, macOS, or Linux.': 'Bloquea páginas que te distraen con Browser Controls en Arc para Windows o macOS, y en Chrome para Windows, macOS o Linux.',
   'Choose the websites to block during a focus session. Browser Controls works with Arc on Windows and macOS, and Chrome on Windows, macOS, and Linux.': 'Elige las páginas que quieres bloquear durante una sesión. Browser Controls funciona con Arc en Windows y macOS, y con Chrome en Windows, macOS y Linux.',
@@ -1046,6 +1082,7 @@ Object.assign(spanish, {
   '{minutes} min to go': 'Quedan {minutes} min',
   'Daily win earned. Come back when you are ready.': 'Logro diario conseguido. Vuelve cuando estés listo.',
   'Record 15 minutes today. Pauses and breaks do not count.': 'Registra 15 minutos hoy. Las pausas y los descansos no cuentan.',
+  'Your streak counts consecutive days with saved tracking time.': 'Tu racha cuenta los días consecutivos con tiempo de seguimiento guardado.',
   'Daily Flow progress': 'Progreso del ritmo diario',
   'This week': 'Esta semana',
   '{count} / {target} days': '{count} / {target} días',

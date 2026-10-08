@@ -1,3 +1,4 @@
+mod activity_streak;
 mod agent;
 mod agent_pure;
 mod anonymous_analytics;
@@ -24,6 +25,7 @@ pub mod mcp;
 mod model_assets;
 mod notion;
 mod oauth_env;
+mod online_leagues;
 pub mod paths;
 mod privacy;
 mod report_schedule;
@@ -35,6 +37,8 @@ mod telemetry;
 mod tracking_clock;
 mod user_preferences;
 mod vision_model;
+#[cfg(windows)]
+mod windows_autostart;
 
 use tauri::Manager;
 
@@ -54,6 +58,16 @@ pub fn run() {
     // never the whole process. See `crash_guard` module docs.
     crash_guard::install();
 
+    // Repair before the single-instance handoff, even if an older copy is open.
+    #[cfg(windows)]
+    if !tauri::is_dev() {
+        if let Ok(executable) = std::env::current_exe() {
+            if let Err(error) = windows_autostart::repair_existing(&executable) {
+                log::warn!("Could not refresh the existing startup entry: {error}");
+            }
+        }
+    }
+
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -71,6 +85,9 @@ pub fn run() {
             language::get_language_preference,
             language::set_language_preference,
             initialize_agent,
+            online_leagues::get_online_leagues,
+            online_leagues::set_online_league_consent,
+            online_leagues::online_league_action,
             get_config,
             update_config,
             get_status,
@@ -121,6 +138,9 @@ pub fn run() {
             local_agent::total_focus::save_total_focus_preferences,
             local_agent::total_focus::start_total_focus,
             local_agent::total_focus::end_total_focus,
+            local_agent::total_focus::pause_total_focus,
+            local_agent::total_focus::resume_total_focus,
+            local_agent::total_focus::dismiss_total_focus_digest,
             local_agent::browser_bridge::get_browser_pairing,
             local_agent::browser_bridge::open_browser_extension_store,
             local_agent::browser_bridge::open_browser_extension_folder,

@@ -82,6 +82,9 @@ fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionPro
         fields
             .entry("exceptions")
             .or_insert(json!(preferences.exceptions));
+        fields
+            .entry("quiet_notifications")
+            .or_insert(json!(preferences.quiet_notifications));
     }
     registry::validate(spec, &arguments)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -578,8 +581,17 @@ pub fn start_maintenance(app: AppHandle) {
             });
         }
     }
+    if let Err(error) = total_focus::restore_after_restart() {
+        log::warn!("Could not restore total focus notifications after restart: {error}");
+    }
     std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(15));
+        std::thread::sleep(Duration::from_secs(5));
+        if let Err(error) = total_focus::maintain() {
+            log::warn!("Could not finish total focus protection: {error}");
+        }
+        if let Err(error) = total_focus::maintain_linked_clock(&app) {
+            log::warn!("Could not reconcile the total focus clock: {error}");
+        }
         if let Err(error) = actions::expire_focus_if_due(app.clone(), app.state::<AgentState>()) {
             log::warn!("Could not expire focus block: {error}");
         }
@@ -604,6 +616,9 @@ pub fn start_maintenance(app: AppHandle) {
 }
 
 pub fn restore_on_exit() {
+    if let Err(error) = system_quiet::disable_total_focus() {
+        log::warn!("Could not restore total focus notifications during quit: {error}");
+    }
     if state::read().ok().and_then(|data| data.quiet).is_some() {
         if let Err(error) = system_quiet::disable() {
             log::warn!("Could not restore notifications during quit: {error}");

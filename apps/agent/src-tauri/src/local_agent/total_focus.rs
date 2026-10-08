@@ -1,12 +1,15 @@
 //! Intentional browser protection, independent of telemetry and cloud plans.
+use crate::agent::AgentState;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Mutex;
+use tauri::{AppHandle, Manager};
 
-use super::{browser_bridge, state};
+use super::{browser_bridge, state, system_quiet};
 
 static CONTROL: Mutex<()> = Mutex::new(());
+static LINKED_CONTROL: Mutex<()> = Mutex::new(());
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -14,6 +17,7 @@ pub struct Preferences {
     pub patterns: Vec<String>,
     pub exceptions: Vec<String>,
     pub duration_minutes: u16,
+    pub quiet_notifications: bool,
 }
 
 impl Default for Preferences {
@@ -22,6 +26,7 @@ impl Default for Preferences {
             patterns: vec!["instagram.com".into(), "tiktok.com".into(), "x.com".into()],
             exceptions: Vec::new(),
             duration_minutes: 50,
+            quiet_notifications: true,
         }
     }
 }
@@ -34,6 +39,33 @@ pub struct Session {
     pub expires_at: String,
     pub patterns: Vec<String>,
     pub exceptions: Vec<String>,
+    #[serde(default)]
+    pub quiet_notifications: bool,
+    #[serde(default)]
+    pub linked_clock: bool,
+    #[serde(default)]
+    pub paused_at: Option<String>,
+    #[serde(default)]
+    pub remaining_seconds: i64,
+}
+
+impl Session {
+    pub fn is_active(&self) -> bool {
+        self.paused_at.is_none() && self.remaining() > 0
+    }
+    pub fn remaining(&self) -> i64 {
+        if self.paused_at.is_some() {
+            self.remaining_seconds.max(0)
+        } else {
+            chrono::DateTime::parse_from_rfc3339(&self.expires_at)
+                .map(|until| {
+                    (until.with_timezone(&Utc) - Utc::now())
+                        .num_seconds()
+                        .max(0)
+                })
+                .unwrap_or(0)
+        }
+    }
 }
 
 fn normalize(pattern: &str) -> Result<String, String> {
@@ -92,18 +124,17 @@ pub fn validate(mut preferences: Preferences) -> Result<Preferences, String> {
 }
 
 pub fn policy() -> Result<Option<Session>, String> {
-    Ok(state::read()?.total_focus.filter(|session| {
-        chrono::DateTime::parse_from_rfc3339(&session.expires_at)
-            .is_ok_and(|until| until > Utc::now())
-    }))
+    Ok(state::read()?.total_focus.filter(Session::is_active))
 }
 
 #[tauri::command]
 pub fn get_total_focus() -> Result<Value, String> {
     let data = state::read()?;
     Ok(
-        json!({"preferences":data.total_focus_preferences,"session":policy()?,
-        "browser":browser_bridge::focus_status(),"messagingAvailable":false}),
+        json!({"preferences":data.total_focus_preferences,"session":data.total_focus.as_ref().filter(|session| session.is_active() || session.paused_at.is_some()),
+        "browser":browser_bridge::focus_status(),"messagingAvailable":false,
+        "systemNotificationsAvailable":cfg!(windows),"systemNotificationsQuiet":system_quiet::total_focus_confirmed(),
+        "digest":if state::holding_notifications(&data) { Vec::new() } else { data.notification_digest }}),
     )
 }
 
@@ -118,17 +149,31 @@ pub fn save_total_focus_preferences(preferences: Preferences) -> Result<Preferen
 }
 
 pub fn activate(intention: String, preferences: Preferences) -> Result<Value, String> {
+    activate_with(intention, preferences, browser_bridge::focus_status, || {
+        browser_bridge::execute("browser.focus_status", &json!({}))
+    })
+}
+
+fn activate_with(
+    intention: String,
+    preferences: Preferences,
+    status: impl FnOnce() -> Value,
+    apply: impl FnOnce() -> Result<Value, String>,
+) -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
     let preferences = validate(preferences)?;
     if intention.trim().is_empty() || intention.chars().count() > 160 {
         return Err("Describe your focus task in 1–160 characters.".into());
     }
-    if policy()?.is_some() {
+    if state::read()?
+        .total_focus
+        .is_some_and(|session| session.is_active() || session.paused_at.is_some())
+    {
         return Err(
             "Total focus is already active. End it before starting another session.".into(),
         );
     }
-    if browser_bridge::focus_status()["totalFocusAvailable"] != true {
+    if status()["totalFocusAvailable"] != true {
         return Err(
             "Update Browser Controls in your browser and reconnect it before starting total focus."
                 .into(),
@@ -141,22 +186,35 @@ pub fn activate(intention: String, preferences: Preferences) -> Result<Value, St
             .to_rfc3339(),
         patterns: preferences.patterns.clone(),
         exceptions: preferences.exceptions.clone(),
+        quiet_notifications: preferences.quiet_notifications,
+        linked_clock: false,
+        paused_at: None,
+        remaining_seconds: i64::from(preferences.duration_minutes) * 60,
     };
     state::update(|data| {
         data.total_focus = Some(session.clone());
         Ok(())
     })?;
+    if cfg!(windows) && session.quiet_notifications {
+        if let Err(error) = system_quiet::enable_total_focus(preferences.duration_minutes.into()) {
+            clear_session(Some(&session.id))?;
+            release_notifications()?;
+            return Err(error);
+        }
+    }
     // The extension reconciles the authoritative policy before returning this ACK.
-    let applied = browser_bridge::execute("browser.focus_status", &json!({}));
+    let applied = apply();
     match applied {
-        Ok(value) if value["sessionId"] == session.id && value["applied"] == true => {
+        Ok(value)
+            if value["sessionId"] == session.id
+                && value["applied"] == true
+                && policy()?.is_some_and(|current| current.id == session.id) =>
+        {
             get_total_focus()
         }
         result => {
-            state::update(|data| {
-                data.total_focus = None;
-                Ok(())
-            })?;
+            clear_session(Some(&session.id))?;
+            release_notifications()?;
             Err(result.err().unwrap_or_else(|| {
                 "The extension did not apply total focus. Check its connection and try again."
                     .into()
@@ -167,56 +225,572 @@ pub fn activate(intention: String, preferences: Preferences) -> Result<Value, St
 
 pub fn end() -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
-    state::update(|data| {
-        data.total_focus = None;
-        Ok(())
-    })?;
+    clear_session(None)?;
+    let notification_warning = release_notifications().err();
     let result = browser_bridge::execute("browser.focus_status", &json!({}));
     Ok(
         json!({"ended":true,"browserReleased":result.as_ref().is_ok_and(|value| value["applied"] == false),
-        "warning":result.err(),"state":get_total_focus()?}),
+        "warning":result.err(),"notificationWarning":notification_warning,"state":get_total_focus()?}),
     )
 }
 
 #[tauri::command]
 pub async fn start_total_focus(
+    app: AppHandle,
     intention: String,
     preferences: Preferences,
 ) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || activate(intention, preferences))
+    tauri::async_runtime::spawn_blocking(move || activate_linked(&app, intention, preferences))
         .await
         .map_err(|error| format!("Total focus worker failed: {error}"))?
 }
 
 #[tauri::command]
-pub async fn end_total_focus() -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(end)
+pub async fn end_total_focus(app: AppHandle) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || end_linked(&app))
         .await
         .map_err(|error| format!("Total focus worker failed: {error}"))?
 }
 
-pub fn cancel_from_extension(id: &str) -> Result<(), String> {
-    state::update(|data| {
-        if data
+pub fn activate_linked(
+    app: &AppHandle,
+    intention: String,
+    preferences: Preferences,
+) -> Result<Value, String> {
+    let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+    crate::privacy::require_monitoring_acknowledgement(&crate::paths::db_path()?)?;
+    if state::read()?
+        .focus
+        .is_some_and(|focus| focus.status != "ended")
+    {
+        return Err("End the existing focus block before starting total focus.".into());
+    }
+    activate(intention.clone(), preferences)?;
+    if let Err(error) = crate::agent::start_monitoring(app.state::<AgentState>()) {
+        let _ = end();
+        return Err(error);
+    }
+    if let Err(error) = state::update(|data| {
+        let session = data
             .total_focus
-            .as_ref()
-            .is_some_and(|session| session.id == id)
+            .as_mut()
+            .ok_or("Total focus ended before the clock could start.")?;
+        session.linked_clock = true;
+        data.total_focus_clock_stop_pending = false;
+        Ok(())
+    }) {
+        let _ = crate::agent::stop_monitoring(app.state::<AgentState>());
+        let _ = end();
+        return Err(error);
+    }
+    crate::agent::set_task_context(Some(intention.trim().into()), None)?;
+    get_total_focus()
+}
+
+pub fn end_linked(app: &AppHandle) -> Result<Value, String> {
+    let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+    if state::read()?
+        .total_focus
+        .is_some_and(|session| session.linked_clock)
+    {
+        crate::agent::stop_monitoring(app.state::<AgentState>())?;
+    }
+    let result = end()?;
+    state::update(|data| {
+        data.total_focus_clock_stop_pending = false;
+        Ok(())
+    })?;
+    Ok(result)
+}
+
+fn pause_with(apply: impl FnOnce() -> Result<Value, String>) -> Result<Value, String> {
+    let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
+    state::update(|data| {
+        let session = data
+            .total_focus
+            .as_mut()
+            .ok_or("No total focus session is active.")?;
+        if !session.is_active() {
+            return Err("Total focus is already paused or ended.".into());
+        }
+        session.remaining_seconds = session.remaining();
+        session.paused_at = Some(Utc::now().to_rfc3339());
+        Ok(())
+    })?;
+    let notification_warning = release_notifications().err();
+    let result = apply();
+    Ok(
+        json!({"browserReleased":result.as_ref().is_ok_and(|value| value["applied"] == false),
+        "warning":result.err(),"notificationWarning":notification_warning,"state":get_total_focus()?}),
+    )
+}
+
+fn resume_with(
+    status: impl FnOnce() -> Value,
+    apply: impl FnOnce() -> Result<Value, String>,
+) -> Result<Value, String> {
+    let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
+    let previous = state::read()?
+        .total_focus
+        .ok_or("No total focus session is paused.")?;
+    if previous.paused_at.is_none() || previous.remaining_seconds <= 0 {
+        return Err("No total focus session is paused.".into());
+    }
+    if status()["totalFocusAvailable"] != true {
+        return Err("Reconnect Browser Controls before resuming total focus.".into());
+    }
+    let mut resumed = previous.clone();
+    // A new policy identity prevents an old blocked page from cancelling a resumed session.
+    resumed.id = uuid::Uuid::new_v4().to_string();
+    resumed.paused_at = None;
+    resumed.expires_at = (Utc::now() + Duration::seconds(previous.remaining_seconds)).to_rfc3339();
+    state::update(|data| {
+        data.total_focus = Some(resumed.clone());
+        Ok(())
+    })?;
+    let result = (|| {
+        if cfg!(windows) && resumed.quiet_notifications {
+            system_quiet::enable_total_focus((previous.remaining_seconds + 59) / 60)?;
+        }
+        let value = apply()?;
+        if value["sessionId"] != resumed.id
+            || value["applied"] != true
+            || !policy()?.is_some_and(|session| session.id == resumed.id)
         {
+            return Err(
+                "The extension did not apply total focus. Check its connection and try again."
+                    .into(),
+            );
+        }
+        get_total_focus()
+    })();
+    if result.is_err() {
+        state::update(|data| {
+            if data
+                .total_focus
+                .as_ref()
+                .is_some_and(|session| session.id == resumed.id)
+            {
+                data.total_focus = Some(previous);
+            }
+            Ok(())
+        })?;
+        release_notifications()?;
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn pause_total_focus(app: AppHandle) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+        crate::agent::stop_monitoring(app.state::<AgentState>())?;
+        let result = pause_with(|| browser_bridge::execute("browser.focus_status", &json!({})));
+        if result.is_err() && policy()?.is_some() {
+            let _ = crate::agent::start_monitoring(app.state::<AgentState>());
+        }
+        result
+    })
+    .await
+    .map_err(|error| format!("Total focus worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn resume_total_focus(app: AppHandle) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+        crate::privacy::require_monitoring_acknowledgement(&crate::paths::db_path()?)?;
+        resume_with(browser_bridge::focus_status, || {
+            browser_bridge::execute("browser.focus_status", &json!({}))
+        })?;
+        if let Err(error) = crate::agent::start_monitoring(app.state::<AgentState>()) {
+            let _ = pause_with(|| browser_bridge::execute("browser.focus_status", &json!({})));
+            return Err(error);
+        }
+        if let Some(session) = state::read()?.total_focus {
+            crate::agent::set_task_context(Some(session.intention), None)?;
+        }
+        get_total_focus()
+    })
+    .await
+    .map_err(|error| format!("Total focus worker failed: {error}"))?
+}
+
+fn clear_session(id: Option<&str>) -> Result<(), String> {
+    state::update(|data| {
+        if id.is_none()
+            || data
+                .total_focus
+                .as_ref()
+                .is_some_and(|session| Some(session.id.as_str()) == id)
+        {
+            data.total_focus_clock_stop_pending |= data
+                .total_focus
+                .as_ref()
+                .is_some_and(|session| session.linked_clock);
             data.total_focus = None;
         }
         Ok(())
     })
 }
 
+pub fn cancel_from_extension(id: &str) -> Result<(), String> {
+    // Never wait for CONTROL here: the bridge must still acknowledge activation.
+    clear_session(Some(id))?;
+    if let Ok(_guard) = CONTROL.try_lock() {
+        release_notifications()?;
+    }
+    Ok(())
+}
+
+pub fn release_notifications() -> Result<(), String> {
+    if policy()?.is_none() && state::read()?.total_focus_quiet.is_some() {
+        system_quiet::disable_total_focus()?;
+    }
+    Ok(())
+}
+
+pub fn maintain() -> Result<(), String> {
+    let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
+    if state::read()?
+        .total_focus
+        .as_ref()
+        .is_some_and(|session| session.paused_at.is_none() && !session.is_active())
+    {
+        state::update(|data| {
+            if data
+                .total_focus
+                .as_ref()
+                .is_some_and(|session| session.paused_at.is_none() && !session.is_active())
+            {
+                data.total_focus_clock_stop_pending |= data
+                    .total_focus
+                    .as_ref()
+                    .is_some_and(|session| session.linked_clock);
+                data.total_focus = None;
+            }
+            Ok(())
+        })?;
+    }
+    release_notifications()
+}
+
+pub fn maintain_linked_clock(app: &AppHandle) -> Result<(), String> {
+    let Ok(_guard) = LINKED_CONTROL.try_lock() else {
+        return Ok(());
+    };
+    // Native initialization is performed by the renderer after app setup.
+    let agent = app.state::<AgentState>();
+    let Some(running) = agent
+        .lock()
+        .map_err(|error| error.to_string())?
+        .as_ref()
+        .map(|agent| agent.is_running)
+    else {
+        return Ok(());
+    };
+    let data = state::read()?;
+    if data.total_focus_clock_stop_pending {
+        crate::agent::stop_monitoring(agent)?;
+        state::update(|data| {
+            data.total_focus_clock_stop_pending = false;
+            Ok(())
+        })?;
+    } else if let Some(session) = data.total_focus.filter(|session| session.linked_clock) {
+        if session.is_active() && !running {
+            crate::agent::set_task_context(Some(session.intention), None)?;
+            crate::agent::start_monitoring(agent)?;
+        } else if session.paused_at.is_some() && running {
+            crate::agent::stop_monitoring(agent)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn dismiss_total_focus_digest(ids: Vec<String>) -> Result<(), String> {
+    state::update(|data| {
+        if !state::holding_notifications(data) {
+            data.notification_digest
+                .retain(|item| !ids.contains(&item.id));
+        }
+        Ok(())
+    })
+}
+
+pub fn restore_after_restart() -> Result<(), String> {
+    maintain()?;
+    if let Some(session) = policy()? {
+        if cfg!(windows) && session.quiet_notifications {
+            let until = chrono::DateTime::parse_from_rfc3339(&session.expires_at)
+                .map_err(|error| error.to_string())?;
+            let remaining = ((until.with_timezone(&Utc) - Utc::now()).num_seconds() + 59) / 60;
+            system_quiet::enable_total_focus(remaining.max(1))?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pause_keeps_remaining_time_and_resumes_with_fresh_policy_identity() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(None);
+        start_confirmed();
+        state::update(|data| {
+            data.total_focus.as_mut().unwrap().linked_clock = true;
+            Ok(())
+        })
+        .unwrap();
+        let original = policy().unwrap().unwrap();
+        pause_with(|| Ok(json!({"applied":false}))).unwrap();
+        let paused = state::read().unwrap().total_focus.unwrap();
+        assert!(paused.paused_at.is_some());
+        assert!((2990..=3000).contains(&paused.remaining_seconds));
+        assert!(policy().unwrap().is_none());
+        assert_eq!(system_quiet::mocked_banners(), None);
+        state::update(|data| {
+            data.total_focus.as_mut().unwrap().expires_at =
+                (Utc::now() - Duration::days(2)).to_rfc3339();
+            Ok(())
+        })
+        .unwrap();
+        maintain().unwrap();
+        restore_after_restart().unwrap();
+        assert!(state::read()
+            .unwrap()
+            .total_focus
+            .unwrap()
+            .paused_at
+            .is_some());
+        assert_eq!(system_quiet::mocked_banners(), None);
+        resume_with(
+            || json!({"totalFocusAvailable":true}),
+            || {
+                let id = policy()?.unwrap().id;
+                Ok(json!({"sessionId":id,"applied":true}))
+            },
+        )
+        .unwrap();
+        let resumed = policy().unwrap().unwrap();
+        assert_ne!(resumed.id, original.id);
+        assert!((resumed.remaining() - paused.remaining_seconds).abs() <= 1);
+        assert!(resumed.linked_clock);
+        assert_eq!(system_quiet::mocked_banners(), Some(1));
+        cancel_from_extension(&original.id).unwrap();
+        assert!(policy().unwrap().is_some());
+        cancel_from_extension(&resumed.id).unwrap();
+        assert!(state::read().unwrap().total_focus_clock_stop_pending);
+    }
+    #[test]
+    fn failed_resume_stays_paused_without_counting_or_notification_silence() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(Some(0));
+        start_confirmed();
+        pause_with(|| Ok(json!({"applied":false}))).unwrap();
+        let paused = state::read().unwrap().total_focus.unwrap();
+        assert!(resume_with(
+            || json!({"totalFocusAvailable":false}),
+            || panic!("unavailable browser must not activate")
+        )
+        .is_err());
+        assert_eq!(
+            resume_with(
+                || json!({"totalFocusAvailable":true}),
+                || Err("DNR unavailable".into())
+            )
+            .unwrap_err(),
+            "DNR unavailable"
+        );
+        let after = state::read().unwrap().total_focus.unwrap();
+        assert_eq!(after.id, paused.id);
+        assert_eq!(after.remaining_seconds, paused.remaining_seconds);
+        assert!(after.paused_at.is_some());
+        assert!(policy().unwrap().is_none());
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        end().unwrap();
+        assert!(state::read().unwrap().total_focus.is_none());
+    }
+    #[test]
+    fn linked_expiry_journals_clock_stop_and_old_sessions_default_to_unlinked() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(None);
+        start_confirmed();
+        state::update(|data| {
+            let session = data.total_focus.as_mut().unwrap();
+            session.linked_clock = true;
+            session.expires_at = (Utc::now() - Duration::seconds(1)).to_rfc3339();
+            Ok(())
+        })
+        .unwrap();
+        maintain().unwrap();
+        assert!(state::read().unwrap().total_focus_clock_stop_pending);
+        assert!(state::read().unwrap().total_focus.is_none());
+        assert_eq!(system_quiet::mocked_banners(), None);
+        let old:Session=serde_json::from_value(json!({"id":"old","intention":"Study","expiresAt":(Utc::now()+Duration::minutes(5)).to_rfc3339(),"patterns":["x.com"],"exceptions":[]})).unwrap();
+        assert!(!old.linked_clock);
+        assert!(old.is_active());
+    }
+    fn start_confirmed() {
+        activate_with(
+            "Study ADDA".into(),
+            Preferences::default(),
+            || json!({"totalFocusAvailable":true}),
+            || {
+                let id = policy()?.unwrap().id;
+                Ok(json!({"sessionId":id,"applied":true}))
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn holds_reminders_and_restores_banners_on_emergency_end() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(Some(0));
+        start_confirmed();
+        assert_eq!(system_quiet::mocked_banners(), Some(1));
+        assert!(state::hold_notification("Return to ADDA", "Saved reminder").unwrap());
+        assert!(get_total_focus().unwrap()["digest"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        let id = policy().unwrap().unwrap().id;
+        cancel_from_extension("stale-session").unwrap();
+        assert!(policy().unwrap().is_some());
+        cancel_from_extension(&id).unwrap();
+        maintain().unwrap(); // busy activation may defer cleanup to maintenance
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        let digest = get_total_focus().unwrap()["digest"].clone();
+        assert_eq!(digest[0]["body"], "Saved reminder");
+        // Summary survives reload; only acknowledged IDs are removed.
+        dismiss_total_focus_digest(vec!["unknown".into()]).unwrap();
+        assert_eq!(get_total_focus().unwrap()["digest"], digest);
+        dismiss_total_focus_digest(vec![digest[0]["id"].as_str().unwrap().into()]).unwrap();
+        assert!(get_total_focus().unwrap()["digest"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!state::hold_notification("After focus", "Deliver normally").unwrap());
+    }
+
+    #[test]
+    fn activation_failure_restores_original_and_allows_retry() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(None);
+        let result = activate_with(
+            "Study".into(),
+            Preferences::default(),
+            || json!({"totalFocusAvailable":true}),
+            || Err("DNR install failed".into()),
+        );
+        assert_eq!(result.unwrap_err(), "DNR install failed");
+        assert!(policy().unwrap().is_none());
+        assert_eq!(system_quiet::mocked_banners(), None);
+        assert!(state::read().unwrap().total_focus_quiet.is_none());
+        start_confirmed();
+        end().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), None);
+    }
+
+    #[test]
+    fn expires_resumes_on_restart_and_preserves_external_setting_change() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(Some(0));
+        start_confirmed();
+        system_quiet::disable_total_focus().unwrap(); // graceful quit
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        restore_after_restart().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(1));
+        state::hold_notification("Reminder", "Do this later").unwrap();
+        state::update(|data| {
+            data.total_focus.as_mut().unwrap().expires_at =
+                (Utc::now() - Duration::seconds(1)).to_rfc3339();
+            Ok(())
+        })
+        .unwrap();
+        maintain().unwrap();
+        assert!(state::read().unwrap().total_focus.is_none());
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        assert_eq!(
+            get_total_focus().unwrap()["digest"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        start_confirmed();
+        system_quiet::mock_banners(Some(0)); // user changes Windows setting during focus
+        end().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+    }
+
+    #[test]
+    fn overlapping_modes_keep_silence_and_digest_until_last_owner_ends() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(Some(0));
+        system_quiet::enable(Some(30)).unwrap();
+        start_confirmed();
+        state::hold_notification("Reminder", "Held").unwrap();
+        end().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(1));
+        assert!(get_total_focus().unwrap()["digest"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        system_quiet::disable().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        start_confirmed();
+        system_quiet::enable(Some(30)).unwrap();
+        system_quiet::disable().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(1));
+        assert!(state::update(|data| Ok(state::take_released_digest(data)))
+            .unwrap()
+            .is_empty());
+        end().unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        assert_eq!(
+            get_total_focus().unwrap()["digest"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn optional_silence_and_old_saved_preferences_remain_usable() {
+        let old: Preferences =
+            serde_json::from_value(json!({"patterns":["x.com"],"durationMinutes":25})).unwrap();
+        assert!(old.quiet_notifications);
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(Some(0));
+        activate_with(
+            "Study".into(),
+            Preferences {
+                quiet_notifications: false,
+                ..old
+            },
+            || json!({"totalFocusAvailable":true}),
+            || {
+                let id = policy()?.unwrap().id;
+                Ok(json!({"sessionId":id,"applied":true}))
+            },
+        )
+        .unwrap();
+        assert_eq!(system_quiet::mocked_banners(), Some(0));
+        assert!(state::hold_notification("Reminder", "Still held").unwrap());
+        end().unwrap();
+    }
     #[test]
     fn validates_public_sites_and_preserves_path_exceptions() {
         let preferences = validate(Preferences {
             patterns: vec!["HTTPS://YouTube.com".into(), "www.youtube.com".into()],
             exceptions: vec!["youtube.com/watch".into()],
             duration_minutes: 50,
+            quiet_notifications: true,
         })
         .unwrap();
         assert_eq!(preferences.patterns, vec!["youtube.com"]);

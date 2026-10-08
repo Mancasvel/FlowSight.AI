@@ -43,7 +43,7 @@ export function mountDailyFlow({ root, preference, statusElement, invoke }) {
       ${summary}<div class="daily-flow-detail">
       <div class="daily-flow-heading"><h2>${t('Daily Flow')}</h2><span class="daily-flow-private">${t('Only on this device')}</span></div>
       <div class="daily-flow-mission"><strong>${done ? t('You showed up today') : t('A small step, every day')}</strong><span class="daily-flow-count">${done ? check : ''}${done ? t('Daily win') : t('{minutes} min to go', { minutes: view.remainingMinutes })}</span></div>
-      <p class="daily-flow-note">${note}</p>
+      <p class="daily-flow-note">${note} ${t('Your streak counts consecutive days with saved tracking time.')}</p>
       <div class="daily-flow-track" role="progressbar" aria-label="${t('Daily Flow progress')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${view.percent}">
         <svg viewBox="0 0 100 4" preserveAspectRatio="none" aria-hidden="true"><rect width="${view.percent}" height="4" rx="2"/></svg>
       </div>

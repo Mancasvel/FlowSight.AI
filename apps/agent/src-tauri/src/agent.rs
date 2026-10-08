@@ -87,6 +87,7 @@ impl FlowSightAgent {
 
         // Start Background Sync (10m interval)
         crate::sync::start_sync_thread(agent.db_path.clone());
+        crate::online_leagues::start_sync_thread(agent.db_path.clone(), app_handle.clone());
         // Proactive Supabase JWT refresh (~every 2m when near expiry)
         crate::sync::start_token_refresh_thread(agent.db_path.clone());
         // Opt-in pseudonymous analytics sync (~every 6h when consented)
@@ -1697,13 +1698,19 @@ pub(crate) fn insert_report(
         params![description, activity_type, jira_ticket, duration_seconds, system.app_name, system.window_title, capture_source, theme_hint, observed_at_utc],
     )
     .ok()?;
-    Some(conn.last_insert_rowid())
+    let report_id = conn.last_insert_rowid();
+    crate::online_leagues::bind_observation(&conn, report_id, system.league_user_id.as_deref());
+    if capture_source == "periodic_vision" && system.league_user_id.is_some() {
+        crate::online_leagues::request_sync();
+    }
+    Some(report_id)
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct CapturedWindowContext {
     pub app_name: Option<String>,
     pub window_title: Option<String>,
+    pub league_user_id: Option<String>,
 }
 
 impl From<crate::context::SystemContext> for CapturedWindowContext {
@@ -1711,6 +1718,7 @@ impl From<crate::context::SystemContext> for CapturedWindowContext {
         Self {
             app_name: value.app_name,
             window_title: value.window_title,
+            league_user_id: None,
         }
     }
 }
@@ -1732,6 +1740,7 @@ pub(crate) fn capture_and_analyze_screen(
     task_context: &str,
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let league_user_id = crate::online_leagues::capture_owner(db_path);
     let (capture, sys) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_image_with_vision(&capture, task_context, None).unwrap_or_else(|e| {
@@ -1747,7 +1756,11 @@ pub(crate) fn capture_and_analyze_screen(
     Ok(AnalyzedCapture {
         description,
         category,
-        window: sys.into(),
+        window: CapturedWindowContext {
+            app_name: sys.app_name,
+            window_title: sys.window_title,
+            league_user_id,
+        },
         observed_at_utc,
     })
 }
@@ -1763,6 +1776,7 @@ pub(crate) fn capture_and_analyze_action(
     action_context: &str,
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let league_user_id = crate::online_leagues::capture_owner(db_path);
     let (capture, sys) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_action_screenshot_with_vision(&capture, task_context, action_context)
@@ -1779,7 +1793,11 @@ pub(crate) fn capture_and_analyze_action(
     Ok(AnalyzedCapture {
         description,
         category,
-        window: sys.into(),
+        window: CapturedWindowContext {
+            app_name: sys.app_name,
+            window_title: sys.window_title,
+            league_user_id,
+        },
         observed_at_utc,
     })
 }
@@ -2007,6 +2025,7 @@ mod agent_struct_tests {
             Some(CapturedWindowContext {
                 app_name: Some("Captured App".into()),
                 window_title: Some("Captured Window".into()),
+                league_user_id: None,
             }),
             Some("2026-08-22 07:30:00".into()),
         )

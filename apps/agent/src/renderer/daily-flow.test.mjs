@@ -70,3 +70,13 @@ test('native lifetime totals and streak survive retention with only current-week
   assert.equal(view.milestone, null);
   assert.equal(view.weekWins, 1);
 });
+
+test('activity streak preserves thirteen days independently of five daily wins', () => {
+  const today = new Date(2026, 9, 7, 12).getTime();
+  const view = dailyFlowView({ date: '2026-10-07', total_seconds: 900,
+    completed_dates: ['2026-10-05', '2026-10-06', '2026-10-07'], total_wins: 5, streak: 13 }, today);
+  assert.equal(view.streak, 13);
+  assert.equal(view.totalWins, 5);
+  assert.equal(view.weekWins, 3);
+  assert.equal(view.milestone.days, 7);
+});

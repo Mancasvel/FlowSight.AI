@@ -10,6 +10,7 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of [{width:370,height:700,name:'compact'},{width:340,height:400,name:'small'},{width:900,height:800,name:'wide-dark',dark:true}]) {
+    if(process.env.FLOWSIGHT_TEST_VIEWPORT && process.env.FLOWSIGHT_TEST_VIEWPORT!==viewport.name)continue;
     const page = await browser.newPage({viewport:{width:viewport.width,height:viewport.height},timezoneId:'Europe/Madrid',locale:'en-GB',colorScheme:viewport.dark?'dark':'light',reducedMotion:'reduce'});
     await page.clock.setFixedTime(new Date('2026-10-01T08:00:00+02:00'));
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -17,11 +18,12 @@ try {
       const calls=[];window.testCalls=calls;window.testWindowErrors=[];
       window.addEventListener('error',event=>window.testWindowErrors.push(event.message));
       window.testFailures={};
-      let events=[],proposalCount=0;
+      let events=[],proposalCount=0,running=false,trackedMs=0,trackingTick=performance.now();
+      const trackingSnapshot=()=>{const tick=performance.now();if(running)trackedMs+=tick-trackingTick;trackingTick=tick;return {date:'2026-10-01',total_milliseconds:trackedMs,total_seconds:Math.floor(trackedMs/1000),is_running:running};};
       let prefs={onboardingCompleted:false,displayName:'',workRoles:[],workActivities:[],improvementGoals:[],dailyGoalHours:6};
       let desktop={focusAlertsEnabled:false,contextualFocusAlertsEnabled:false,promptDecided:true};
       let schedule={enabled:false,weekday:5,time:'17:00',folder:'',revision:0};
-      let totalFocus={preferences:{patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50},session:null,browser:{connected:false,fresh:false,applied:false},messagingAvailable:false};
+      let totalFocus={preferences:{patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50,quietNotifications:true},session:null,browser:{connected:false,fresh:false,applied:false},messagingAvailable:false,systemNotificationsAvailable:true,systemNotificationsQuiet:false,digest:[]};
       const responses={
         initialize_agent:null,get_config:{captureInterval:60000,dailyGoalHours:6},
         get_auth_session:null,get_current_user:null,get_entitlements:{plan:pro?'pro':'free',status:'active',can_integrations:pro,can_cloud_ai:false,can_sync:false,team_ids:[]},
@@ -38,6 +40,7 @@ try {
         transformCallback(fn){const id=counter++;callbacks.set(id,fn);return id;},unregisterCallback(id){callbacks.delete(id);},convertFileSrc(p){return p;},
         async invoke(command,args={}) {
           calls.push({command,args});
+          if(window.testDelays?.[command])await new Promise(resolve=>setTimeout(resolve,window.testDelays[command]));
           if(window.testFailures[command]) throw new Error(window.testFailures[command]);
           if(command.startsWith('plugin:window|'))return command.endsWith('is_maximized')?false:null;
           if(command==='plugin:event|listen')return args.handler;
@@ -49,13 +52,20 @@ try {
           };
           if(command==='get_local_agent_data')return {events,preferences:{},tasks:[]};
           if(command==='get_user_preferences')return prefs;
+          if(command==='get_status')return {isRunning:running};
+          if(command==='get_tracking_clock')return trackingSnapshot();
           if(command==='get_total_focus')return structuredClone(totalFocus);
           if(command==='save_total_focus_preferences'){totalFocus.preferences=args.preferences;return args.preferences;}
           if(command==='start_total_focus'){
-            totalFocus.session={id:'synthetic-focus',intention:args.intention,expiresAt:'2026-10-01T09:00:00+02:00',...args.preferences};
+            trackingSnapshot();running=true;
+            totalFocus.session={id:'synthetic-focus',intention:args.intention,expiresAt:'2026-10-01T09:00:00+02:00',linkedClock:true,pausedAt:null,...args.preferences};
+            totalFocus.systemNotificationsQuiet=args.preferences.quietNotifications;
             totalFocus.browser={connected:true,totalFocusAvailable:true,fresh:true,applied:true,sessionId:'synthetic-focus'};return structuredClone(totalFocus);
           }
-          if(command==='end_total_focus'){totalFocus.session=null;totalFocus.browser.applied=false;return {browserReleased:true};}
+          if(command==='pause_total_focus'){trackingSnapshot();running=false;totalFocus.session.pausedAt=new Date().toISOString();totalFocus.session.remainingSeconds=2900;totalFocus.browser.applied=false;totalFocus.systemNotificationsQuiet=false;return {browserReleased:true};}
+          if(command==='resume_total_focus'){trackingSnapshot();running=true;totalFocus.session.pausedAt=null;totalFocus.session.expiresAt=new Date(Date.now()+2900000).toISOString();totalFocus.browser.applied=true;totalFocus.systemNotificationsQuiet=true;return structuredClone(totalFocus);}
+          if(command==='end_total_focus'){trackingSnapshot();running=false;totalFocus.session=null;totalFocus.browser.applied=false;totalFocus.systemNotificationsQuiet=false;totalFocus.digest=[{id:'reminder-1',title:'Return to your task',body:'Saved during focus'}];return {browserReleased:true};}
+          if(command==='dismiss_total_focus_digest'){totalFocus.digest=totalFocus.digest.filter(item=>!args.ids.includes(item.id));return null;}
           if(command==='test_focus_connection'){totalFocus.browser.connected=args.connected;totalFocus.browser.totalFocusAvailable=args.available ?? false;return null;}
           if(command==='save_user_preferences_command'){prefs=args.prefs;return prefs;}
           if(command==='get_desktop_preferences')return desktop;
@@ -146,6 +156,8 @@ try {
     await page.locator('#onboardingFocusSites').fill('youtube.com\ninstagram.com');
     await page.locator('#onboardingFocusExceptions').fill('youtube.com/watch');
     await page.locator('#onboardingFocusMinutes').fill('50');
+    assert.equal(await page.locator('#onboardingFocusQuiet').isChecked(),true);
+    await page.locator('#onboardingFocusQuiet').uncheck();
     await page.locator('#onboardingBody').evaluate(element=>{element.scrollTop=0;});
     await page.screenshot({path:fileURLToPath(new URL(`onboarding-total-focus-${viewport.name}.png`,output))});
     await page.locator('#onboardingBody .total-focus-future').scrollIntoViewIfNeeded();
@@ -203,6 +215,7 @@ try {
     const calls=await page.evaluate(()=>window.testCalls);
     assert.equal(calls.some(c=>c.command==='start_total_focus'),false,'Wizard must save settings without activating protection.');
     assert.deepEqual(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.exceptions,['youtube.com/watch']);
+    assert.equal(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.quietNotifications,false);
     assert.equal(calls.find(c=>c.command==='set_focus_alerts_enabled').args.enabled,true);
     assert.equal(calls.find(c=>c.command==='save_weekly_report_schedule').args.schedule.enabled,true);
     assert.equal(calls.some(c=>c.command==='start_monitoring'||c.command==='set_calendar_auto_publish'||c.command==='set_analytics_consent'),false);
@@ -210,18 +223,77 @@ try {
     await page.locator('#totalFocusSettings').waitFor({state:'visible'});
     assert.equal(await page.locator('#totalFocusStart').isDisabled(),true);
     await page.evaluate(async()=>{await window.__TAURI_INTERNALS__.invoke('test_focus_connection',{connected:true,available:false});});
-    await page.locator('#totalFocusStatus').filter({hasText:'Update Browser Controls'}).waitFor();
+    await page.locator('#totalFocusStatus').filter({hasText:'website protection unavailable'}).waitFor();
+    await page.locator('#totalFocusRepair').waitFor({state:'visible'});
+    await page.locator('#totalFocusRepairOpen').click();
+    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='open_browser_extension_folder'),true);
     assert.equal(await page.locator('#totalFocusStart').isDisabled(),true, 'Legacy extension must not start an unprotected session');
     await page.evaluate(async()=>{await window.__TAURI_INTERNALS__.invoke('test_focus_connection',{connected:true,available:true});});
     await page.locator('#totalFocusStart').waitFor({state:'visible'});
     await page.waitForFunction(()=>!document.getElementById('totalFocusStart').disabled);
-    await page.locator('#totalFocusTask').fill('ADDA · exercise 1');
+    await page.locator('#totalFocusRepair').waitFor({state:'hidden'});
+    await page.locator('#totalFocusTask').fill('');
     await page.locator('#totalFocusStart').click();
+    await page.locator('#totalFocusTaskError').filter({hasText:'Describe your focus task'}).waitFor();
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'totalFocusTask');
+    assert.equal(await page.locator('#totalFocusTask').getAttribute('aria-invalid'),'true');
+    assert.equal(await page.locator('#totalFocusTask').isEnabled(),true);
+    assert.equal(await page.locator('#totalFocusStart').innerText(),'Start total focus');
+    assert.equal(await page.locator('#totalFocusTaskError').evaluate(element=>{
+      const r=element.getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight;
+    }),true,'An empty-task click must reveal the input error in the viewport.');
+    await page.screenshot({path:fileURLToPath(new URL(`total-focus-task-error-${viewport.name}.png`,output))});
+    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
+    await page.locator('#totalFocusTask').fill('   ');
+    await page.locator('#totalFocusStart').click();
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'totalFocusTask');
+    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
+    await page.locator('#totalFocusTask').fill('ADDA · exercise 1');
+    await page.locator('#totalFocusTaskError').waitFor({state:'hidden'});
+    await page.locator('#totalFocusMinutes').fill('4');
+    await page.locator('#totalFocusStart').click();
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'totalFocusMinutes');
+    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
+    await page.locator('#totalFocusMinutes').fill('50');
+    await page.locator('#totalFocusQuiet').check();
+    await page.evaluate(()=>{window.testDelays={start_total_focus:700};window.testFailures.start_total_focus='Browser unavailable';});
+    await page.locator('#totalFocusStart').click();
+    assert.equal(await page.locator('#totalFocusStart').innerText(),'Starting total focus…');
+    assert.equal(await page.locator('#totalFocusStart').isDisabled(),true);
+    assert.equal(await page.locator('#totalFocusTask').isDisabled(),true);
+    await page.locator('#totalFocusFeedback').filter({hasText:'Waiting for your browser'}).waitFor();
+    await page.locator('#totalFocusFeedback').filter({hasText:'Browser unavailable'}).waitFor();
+    assert.equal(await page.locator('#totalFocusStart').isEnabled(),true);
+    assert.equal(await page.locator('#totalFocusStart').innerText(),'Start total focus');
+    assert.equal(await page.locator('#totalFocusFeedback').evaluate(element=>{
+      const r=element.getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight;
+    }),true,'Failed activation must leave a visible error and a retryable button.');
+    await page.evaluate(()=>{window.testFailures={};window.testDelays={start_total_focus:700};});
+    await page.locator('#totalFocusStart').click();
+    assert.equal(await page.locator('#totalFocusStart').innerText(),'Starting total focus…');
     await page.locator('#totalFocusStatus').filter({hasText:'browser block confirmed'}).waitFor();
+    await page.locator('#totalFocusQuietStatus').filter({hasText:'notification banners are silenced'}).waitFor();
+    await page.locator('#totalFocusClock').click();
+    await page.locator('#playTimerBtn').filter({hasText:'Pause total focus'}).waitFor();
+    const beforeCount=await page.locator('#timerDisplay').innerText();await page.waitForTimeout(1200);
+    assert.notEqual(await page.locator('#timerDisplay').innerText(),beforeCount,'Total focus must count in the main clock.');
+    await page.locator('#playTimerBtn').click();
+    await page.locator('#playTimerBtn').filter({hasText:'Resume total focus'}).waitFor();
+    const pausedCount=await page.locator('#timerDisplay').innerText();await page.waitForTimeout(1200);
+    assert.equal(await page.locator('#timerDisplay').innerText(),pausedCount,'The main clock must stay still during total focus pause.');
+    assert.match(await page.locator('#timerRecordingNote').innerText(),/00:48:20.*Paused/);
+    await page.locator('#playTimerBtn').click();
+    await page.locator('#playTimerBtn').filter({hasText:'Pause total focus'}).waitFor();
+    await page.locator('#todayTotalFocus').click();
+    await page.locator('#totalFocusQuietStatus').filter({hasText:'notification banners are silenced'}).waitFor();
+    assert.equal(await page.locator('#totalFocusDigest').isVisible(),false);
     await page.locator('#totalFocusSettings').evaluate(element=>element.scrollIntoView({block:'start'}));
     await page.screenshot({path:fileURLToPath(new URL(`total-focus-active-${viewport.name}.png`,output))});
     await page.locator('#totalFocusEnd').click();
     await page.locator('#totalFocusFeedback').filter({hasText:'Total focus ended'}).waitFor();
+    await page.locator('#totalFocusDigestItems').filter({hasText:'Saved during focus'}).waitFor();
+    await page.locator('#totalFocusDigestDismiss').click();
+    await page.locator('#totalFocusDigest').waitFor({state:'hidden'});
     assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>/start_monitoring|messages.*send/.test(c.command)),false);
     // Notion is absent for both free and paid entitlements and in both report
     // branches. No provider calls or erasure occur when visiting Insights.

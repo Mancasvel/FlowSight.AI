@@ -36,13 +36,14 @@ fn spec(
 
 pub fn specs() -> Vec<ToolSpec> {
     vec![
-        spec("focus.total_start", "focus_total_start", "Activate total focus in the paired browser, without starting tracking. Uses saved settings unless sites or exceptions are supplied. Messaging auto replies are not available.", json!({
+        spec("focus.total_start", "focus_total_start", "Activate total focus in the paired browser, hold FlowSight reminders and optionally silence Windows app notification banners, without starting tracking. Uses saved settings unless supplied. Messaging auto replies are not available.", json!({
             "intention":{"type":"string","maxLength":160},
             "duration_minutes":{"type":"integer","minimum":5,"maximum":180},
             "patterns":{"type":"array","items":{"type":"string","maxLength":240},"minItems":1,"maxItems":20},
-            "exceptions":{"type":"array","items":{"type":"string","maxLength":240},"maxItems":20}
+            "exceptions":{"type":"array","items":{"type":"string","maxLength":240},"maxItems":20},
+            "quiet_notifications":{"type":"boolean","description":"Silence Windows app notification banners for this session and restore their prior setting afterwards."}
         }), &["intention"], true),
-        spec("focus.total_end", "focus_total_end", "End total focus and release its browser protection.", json!({}), &[], true),
+        spec("focus.total_end", "focus_total_end", "End total focus, release its browser protection and restore notification banners owned by this session.", json!({}), &[], true),
         spec("focus.total_status", "focus_total_status", "Read total focus settings and the actual extension acknowledgement.", json!({}), &[], false),
         spec("focus.start", "focus_start", "Start a timed focus block with a specific intention. Ask the user to confirm first.", json!({
             "intention": {"type":"string","maxLength":160},

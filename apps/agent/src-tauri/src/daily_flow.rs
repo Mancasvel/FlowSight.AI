@@ -113,13 +113,9 @@ pub fn load_progress(
 ) -> Result<DailyFlowProgress, String> {
     let today =
         NaiveDate::parse_from_str(&snapshot.date, "%Y-%m-%d").map_err(|error| error.to_string())?;
+    // Recover proof from the old win checkpoint before new wins can reset it.
+    let streak = crate::activity_streak::reconcile(conn, today)?;
     let saved = reconcile_progress(conn, today)?;
-    let streak = saved
-        .last_win
-        .as_deref()
-        .and_then(|last| NaiveDate::parse_from_str(last, "%Y-%m-%d").ok())
-        .filter(|last| (0..=1).contains(&today.signed_duration_since(*last).num_days()))
-        .map_or(0, |_| saved.streak_at_last_win);
     Ok(DailyFlowProgress {
         date: snapshot.date,
         total_seconds: snapshot.total_seconds,

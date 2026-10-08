@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "5.0.18"
+version = "6.0.7"
 default-run = "app"
 description = "FlowSight Agent — Understand your own Workflows"
 authors = ["you"]
@@ -59,6 +59,7 @@ tauri-plugin-notification = "=2.3.3"
 tauri-plugin-single-instance = "=2.3.5"
 
 [target.'cfg(windows)'.dependencies]
+winreg = "0.10"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_JobObjects",
