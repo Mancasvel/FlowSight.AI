@@ -8,6 +8,31 @@ import { chromium } from 'playwright';
 const output = new URL('../.impeccable/review/', import.meta.url);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
+async function assertTimerLabelFits(page, selector) {
+  const result = await page.locator(selector).evaluate(button => {
+    const label=button.querySelector('span'),box=button.getBoundingClientRect();
+    const range=document.createRange();range.selectNodeContents(label);
+    const inside=rect=>rect.left>=box.left+1 && rect.right<=box.right-1 && rect.top>=box.top+1 && rect.bottom<=box.bottom-1;
+    return {text:label.textContent, fits:[...range.getClientRects()].every(inside) && [...button.querySelectorAll('svg')].filter(icon=>getComputedStyle(icon).display!=='none').every(icon=>inside(icon.getBoundingClientRect())),
+      width:box.width,height:box.height,scrollWidth:button.scrollWidth,clientWidth:button.clientWidth};
+  });
+  assert.equal(result.fits,true,`Timer label and icon must fit: ${JSON.stringify(result)}`);
+  assert.ok(result.scrollWidth<=result.clientWidth+1,`Timer control must not overflow: ${JSON.stringify(result)}`);
+}
+async function inspectSpanishClock(page, viewport, paused=false) {
+  await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='es';select.dispatchEvent(new Event('change',{bubbles:true}));});
+  assert.equal(await page.locator('#playTimerLabel').innerText(),paused?'Reanudar concentración total':'Pausar concentración total');
+  await assertTimerLabelFits(page,'#playTimerBtn');
+  const sizes=await page.locator('.timer-actions').evaluate(row=>[...row.querySelectorAll('button')].filter(button=>getComputedStyle(button).display!=='none').map(button=>button.getBoundingClientRect().height));
+  assert.ok(Math.max(...sizes)-Math.min(...sizes)<1,'Pause/resume and Stop must align in height.');
+  await page.locator('#playTimerBtn').scrollIntoViewIfNeeded();
+  await page.screenshot({path:fileURLToPath(new URL(`total-focus-${paused?'resume':'pause'}-fit-es-${viewport.name}.png`,output))});
+  // Text expansion must reflow instead of escaping the button.
+  await page.locator('#playTimerBtn').evaluate(button=>button.style.fontSize='28px');
+  await assertTimerLabelFits(page,'#playTimerBtn');
+  await page.locator('#playTimerBtn').evaluate(button=>button.style.removeProperty('font-size'));
+  await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));});
+}
 try {
   for (const viewport of [{width:370,height:700,name:'compact'},{width:340,height:400,name:'small'},{width:900,height:800,name:'wide-dark',dark:true}]) {
     if(process.env.FLOWSIGHT_TEST_VIEWPORT && process.env.FLOWSIGHT_TEST_VIEWPORT!==viewport.name)continue;
@@ -278,10 +303,12 @@ try {
     await page.locator('#totalFocusQuietStatus').filter({hasText:'notification banners are silenced'}).waitFor();
     await page.locator('#totalFocusClock').click();
     await page.locator('#playTimerBtn').filter({hasText:'Pause total focus'}).waitFor();
+    await inspectSpanishClock(page,viewport);
     const beforeCount=await page.locator('#timerDisplay').innerText();await page.waitForTimeout(1200);
     assert.notEqual(await page.locator('#timerDisplay').innerText(),beforeCount,'Total focus must count in the main clock.');
     await page.locator('#playTimerBtn').click();
     await page.locator('#playTimerBtn').filter({hasText:'Resume total focus'}).waitFor();
+    await inspectSpanishClock(page,viewport,true);
     const pausedCount=await page.locator('#timerDisplay').innerText();await page.waitForTimeout(1200);
     assert.equal(await page.locator('#timerDisplay').innerText(),pausedCount,'The main clock must stay still during total focus pause.');
     assert.match(await page.locator('#timerRecordingNote').innerText(),/00:48:20.*Paused/);
@@ -338,6 +365,12 @@ try {
     await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='es';select.dispatchEvent(new Event('change',{bubbles:true}));});
     assert.equal(await page.locator('#todayTotalFocusStartLabel').innerText(),'Iniciar concentración total');
     assert.equal(await page.locator('#todayTotalFocusLabel').innerText(),'Ajustes concentración total');
+    await assertTimerLabelFits(page,'#playTimerBtn');
+    await assertTimerLabelFits(page,'#todayTotalFocusStart');
+    const actionStyles=await page.locator('.timer-primary-btn').evaluateAll(buttons=>buttons.map(button=>{
+      const css=getComputedStyle(button);return {background:css.backgroundImage,color:css.color,fontSize:css.fontSize,fontWeight:css.fontWeight,lineHeight:css.lineHeight,padding:css.padding,borderRadius:css.borderRadius,height:button.getBoundingClientRect().height};
+    }));
+    assert.deepEqual(actionStyles[0],actionStyles[1],'Tracking and total focus play must share their design and size.');
     await page.screenshot({path:fileURLToPath(new URL(`total-focus-quick-start-es-${viewport.name}.png`,output))});
     await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='en';select.dispatchEvent(new Event('change',{bubbles:true}));});
     // Notion is absent for both free and paid entitlements and in both report

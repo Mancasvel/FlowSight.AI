@@ -30,9 +30,6 @@
 .total-focus-example figcaption { margin-top:9px; font-size:11px; color:hsl(var(--muted-foreground)); line-height:1.5; }
 .total-focus-pairing { margin:18px 0; } .total-focus-pairing .button { min-height:40px; margin:4px 0; }
 .today-total-focus { display:flex; justify-content:space-between; align-items:center; min-height:42px; width:100%; margin:12px 0 0; font-size:12px; }
-.today-focus-start { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; min-height:48px; height:auto; margin-top:8px; padding:12px; border-radius:16px; background:#087f78; color:#fff; font-weight:800; white-space:normal; }
-.today-focus-start svg { width:18px; height:18px; flex:none; }
-.today-focus-start:hover:not(:disabled) { background:#066b65; }
-.today-focus-start:disabled { opacity:.56; }
+.today-focus-start { width:100%; margin-top:8px; }
 .today-focus-feedback { margin:10px 0 0; overflow-wrap:anywhere; }
 .today-timer-ring .today-focus-start[hidden], .today-timer-ring .today-focus-feedback[hidden] { display:none; }
