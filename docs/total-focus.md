@@ -1,6 +1,6 @@
 # Total focus
 
-Total focus is an intentional protection mode. It redirects chosen websites to a
+Total focus is an intentional protection mode linked to the main tracking clock. It redirects chosen websites to a
 local blocked page and leaves explicitly allowed domains or paths available. It
 does not prove that the user is in a measured Deep Focus or flow state.
 
@@ -10,6 +10,13 @@ The initial wizard has six steps. The fourth shows an illustrative block and let
 the user save blocked sites, exceptions and a 5–180 minute duration. It includes
 Chrome store installation, masked pairing-key copy and a connection check. Saving
 the wizard does not activate protection. Today opens the same controls in Settings.
+
+The task is required. Starting with an empty or whitespace-only task reveals an
+inline error and scrolls to the enabled task input with keyboard focus. During
+activation, the button shows Starting total focus and visible progress explains
+the browser acknowledgement wait (up to 90 seconds). A failed activation reveals
+its error and restores the button for retry; a successful start is confirmed only
+after actual browser acknowledgement.
 
 The user must install and pair Browser Controls on the same machine. The app
 shows connected, confirmed active, unconfirmed and pending release states. The
@@ -42,6 +49,17 @@ Windows, macOS and Linux share the same loopback protocol and MV3 extension. The
 feature requires neither a cloud plan nor a running model. Activity tracking is a
 separate choice. No messages are sent by this mode; messaging status and automatic
 replies are explicitly described as a future integration.
+
+From Windows 6.0.7, starting total focus also starts the native recorded-time
+clock after browser protection is confirmed. The clock's pause and resume buttons
+control total focus, and Stop or End total focus stops both without clearing daily
+time. Pausing persists the exact remaining seconds, releases browser rules and
+owned Windows silence, and survives restart. Resume uses the saved remaining time
+and a new policy ID, confirms protection, then resumes counting. Failed resume
+keeps the session paused. Native expiry and browser emergency end also stop the
+linked clock, including when the window is hidden. The main timer stays on its
+recorded-time display during total focus and shows the remaining focus time below;
+Pomodoro preferences remain saved for ordinary sessions.
 
 ## Lifecycle and privacy
 

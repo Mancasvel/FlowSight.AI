@@ -612,11 +612,12 @@ pub fn execute(
         None
     };
     match name {
-        "focus.total_start" => super::total_focus::activate(
+        "focus.total_start" => super::total_focus::activate_linked(
+            &app,
             text_arg(args, "intention")?.into(),
             total_preferences(args)?,
         ),
-        "focus.total_end" => super::total_focus::end(),
+        "focus.total_end" => super::total_focus::end_linked(&app),
         "focus.total_status" => super::total_focus::get_total_focus(),
         "focus.start" => {
             if state::read()?

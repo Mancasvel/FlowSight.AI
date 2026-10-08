@@ -589,6 +589,9 @@ pub fn start_maintenance(app: AppHandle) {
         if let Err(error) = total_focus::maintain() {
             log::warn!("Could not finish total focus protection: {error}");
         }
+        if let Err(error) = total_focus::maintain_linked_clock(&app) {
+            log::warn!("Could not reconcile the total focus clock: {error}");
+        }
         if let Err(error) = actions::expire_focus_if_due(app.clone(), app.state::<AgentState>()) {
             log::warn!("Could not expire focus block: {error}");
         }

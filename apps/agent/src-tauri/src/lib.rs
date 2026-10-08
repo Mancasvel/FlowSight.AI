@@ -138,6 +138,8 @@ pub fn run() {
             local_agent::total_focus::save_total_focus_preferences,
             local_agent::total_focus::start_total_focus,
             local_agent::total_focus::end_total_focus,
+            local_agent::total_focus::pause_total_focus,
+            local_agent::total_focus::resume_total_focus,
             local_agent::total_focus::dismiss_total_focus_digest,
             local_agent::browser_bridge::get_browser_pairing,
             local_agent::browser_bridge::open_browser_extension_store,

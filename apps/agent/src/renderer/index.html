@@ -5364,6 +5364,21 @@
     let dailyHistoryRequest = null;
     let trackingStateHydrated = false;
     let trackingTransitionInProgress = false;
+    let linkedTotalFocusKnown = false, totalFocusClockRequest = 0;
+    document.addEventListener('flowsight:total-focus-state', async ({detail}) => {
+      const linked=Boolean(detail.state?.session?.linkedClock);
+      updatePlayButtonState();updateTimerDisplay();
+      if(detail.busy || trackingTransitionInProgress || (!linked && !linkedTotalFocusKnown))return;
+      const request=++totalFocusClockRequest;
+      const status=await invoke('get_status').catch(()=>null);
+      if(request!==totalFocusClockRequest || !status || trackingTransitionInProgress)return;
+      linkedTotalFocusKnown=linked;
+      const running=Boolean(status.isRunning),paused=Boolean(detail.state?.session?.pausedAt);
+      if(isMonitoring===running && isPaused===paused)return;
+      isMonitoring=running;isPaused=paused;
+      if(isMonitoring)resumeSessionTimer();else commitSessionTime();
+      renderTrackingStatus();persistTrackingState();
+    });
     const TIMER_RING_CIRC = 2 * Math.PI * 82;
     const TRACKING_CHECKPOINT_INTERVAL_SECONDS = 15;
 
@@ -5394,6 +5409,10 @@
     function syncTrackingClock() {
       if (!clockRequest) {
         clockRequest = invoke('get_tracking_clock').then(snapshot => {
+          if (totalFocusController.session()?.linkedClock && snapshot && isMonitoring !== Boolean(snapshot.is_running)) {
+            isMonitoring=Boolean(snapshot.is_running);isPaused=Boolean(totalFocusController.session()?.pausedAt);
+            renderTrackingStatus();
+          }
           if (liveTrackingClock.sample({ ...snapshot, is_running: trackingStateHydrated ? isMonitoring : snapshot.is_running })) {
             updateTimerDisplay();
             dailyFlow.refresh();
@@ -5428,6 +5447,7 @@
       const pauseIcon = document.getElementById('pauseIcon');
       const label = document.getElementById('playTimerLabel');
       if (!btn) return;
+      const linkedFocus=totalFocusController.session()?.linkedClock;
       if (isMonitoring) {
         btn.classList.add('active');
         setAttributeText(btn, 'title', () => (tr('Pause tracking')));
@@ -5443,8 +5463,12 @@
         if (playIcon) playIcon.style.display = 'block';
         if (pauseIcon) pauseIcon.style.display = 'none';
       }
-      btn.disabled = trackingTransitionInProgress || pomodoroTransition;
-      if (timerPreferences.mode === 'pomodoro' && !isMonitoring) {
+      if(linkedFocus) {
+        const text=tr(isMonitoring?'Pause total focus':'Resume total focus');
+        setText(label,()=>text);setAttributeText(btn,'title',()=>text);btn.setAttribute('aria-label',text);
+      }
+      btn.disabled = trackingTransitionInProgress || pomodoroTransition || totalFocusController.busy();
+      if (!linkedFocus && timerPreferences.mode === 'pomodoro' && !isMonitoring) {
         const waitingForBreak = pomodoro.phase !== 'work' && !pomodoro.ready;
         btn.disabled = btn.disabled || waitingForBreak;
         const text = waitingForBreak ? tr('Taking a break') : tr('Start focus interval');
@@ -5452,9 +5476,9 @@
         btn.setAttribute('aria-label', text);
         btn.title = text;
       }
-      document.getElementById('timerModeSelect').disabled = trackingTransitionInProgress || pomodoroTransition;
+      document.getElementById('timerModeSelect').disabled = trackingTransitionInProgress || pomodoroTransition || Boolean(linkedFocus);
       for (const id of ['pomodoroWork','pomodoroShortBreak','pomodoroLongBreak']) {
-        document.getElementById(id).disabled = isMonitoring || (pomodoro.phase !== 'work' && !pomodoro.ready);
+        document.getElementById(id).disabled = Boolean(linkedFocus) || isMonitoring || (pomodoro.phase !== 'work' && !pomodoro.ready);
       }
       updateTimerControlsVisibility();
     }
@@ -5505,15 +5529,18 @@
       const display = document.getElementById('timerDisplay');
       if (!display) return;
       const total = getDisplayTotalSeconds();
-      const isPomodoro = timerPreferences.mode === 'pomodoro';
+      const focusSession=totalFocusController.session();
+      const linkedFocus=Boolean(focusSession?.linkedClock);
+      const isPomodoro = !linkedFocus && timerPreferences.mode === 'pomodoro';
       const shown = isPomodoro ? Math.ceil(pomodoro.remaining() / 1000) : total;
       setText(display, () => isPomodoro ? `${String(Math.floor(shown / 60)).padStart(2, '0')}:${String(shown % 60).padStart(2, '0')}` : formatTimerDisplay(shown));
       const timerLabel = document.getElementById('timerKindLabel');
       if (timerLabel) setText(timerLabel, () => !isPomodoro ? tr('Recorded today') : tr(pomodoro.ready ? 'Ready for the next interval' : pomodoro.phase === 'work' ? 'Focus interval' : pomodoro.phase === 'long-break' ? 'Long break' : 'Break'));
       const note = document.getElementById('timerRecordingNote');
       if (note) {
-        note.hidden = !isPomodoro;
-        setText(note, () => isPomodoro ? formatMessage`${pomodoro.completed} completed intervals · ${formatTimerDisplay(total)} tracked today` : '');
+        note.hidden = !isPomodoro && !linkedFocus;
+        const remaining=focusSession?.pausedAt ? focusSession.remainingSeconds : Math.max(0,Math.ceil((Date.parse(focusSession?.expiresAt)-Date.now())/1000));
+        setText(note, () => linkedFocus ? `${tr('Total focus remaining')}: ${formatTimerDisplay(remaining)}${focusSession.pausedAt ? ` · ${tr('Paused')}` : ''}` : isPomodoro ? formatMessage`${pomodoro.completed} completed intervals · ${formatTimerDisplay(total)} tracked today` : '');
       }
       const skip = document.getElementById('pomodoroSkipBreak');
       if (skip) skip.hidden = !isPomodoro || pomodoro.phase === 'work' || pomodoro.ready;
@@ -5568,7 +5595,7 @@
     }
 
     async function advancePomodoro() {
-      if (timerPreferences.mode !== 'pomodoro' || pomodoroTransition || trackingTransitionInProgress) return;
+      if (totalFocusController.session()?.linkedClock || timerPreferences.mode !== 'pomodoro' || pomodoroTransition || trackingTransitionInProgress) return;
       const transition = pomodoro.update();
       if (!transition) return;
       if (transition === 'break-complete') {
@@ -5663,6 +5690,9 @@
     });
 
     async function pushTaskContextToBackend() {
+      if(totalFocusController.session()?.linkedClock) {
+        await invoke('set_task_context',{userTask:totalFocusController.session().intention,jiraTicket:null});return;
+      }
       const { task, jiraTicket } = getTaskContext();
       try {
         await invoke('set_task_context', {
@@ -5700,10 +5730,11 @@
       if (trackingStateHydrated) return;
 
       try {
-        const [nativeStatus, history, localAgent] = await Promise.all([
+        const [nativeStatus, history, localAgent, totalFocus] = await Promise.all([
           invoke('get_status'),
           loadCurrentDayHistory(),
           invoke('get_local_agent_data').catch(() => null),
+          totalFocusController.refresh(),
         ]);
         const checkpoint = loadTrackingCheckpoint(localStorage);
         let serverOnline = false;
@@ -5718,7 +5749,7 @@
           serverOnline,
           historySeconds: recordedDailyTotal(history),
           checkpoint,
-          agentFocusStatus: localAgent?.focus?.status,
+          agentFocusStatus: totalFocus?.session?.pausedAt ? 'paused' : localAgent?.focus?.status,
         });
 
         if (restored.shouldResumeNative) {
@@ -5756,6 +5787,16 @@
       trackingTransitionInProgress = true;
       setTrackingControlsBusy(true);
       try {
+        if(totalFocusController.session()?.linkedClock) {
+          const sample=setInterval(()=>syncTrackingClock().catch(()=>{}),500);
+          let result;
+          try { result=await totalFocusController.clockAction('pause_total_focus'); }
+          finally { clearInterval(sample); }
+          isMonitoring=false;isPaused=true;commitSessionTime();renderTrackingStatus();persistTrackingState();
+          showToast(tr('Total focus paused. Your remaining time is kept.'),'success');
+          if(!result.browserReleased)showToast(tr('Session ended. Reconnect the extension or use End total focus on a blocked page to release it now.'),'error',8000);
+          return;
+        }
         const focus = (await invoke('get_local_agent_data').catch(() => null))?.focus;
         if (focus?.status === 'running') await invoke('control_local_focus_block', { action: 'pause' });
         else await stopNativeMonitoring({ requireSuccess: true });
@@ -5775,10 +5816,15 @@
     }
 
     async function stopMonitoring() {
-      if ((!isMonitoring && !isPaused) || trackingTransitionInProgress) return;
+      if ((!isMonitoring && !isPaused && !totalFocusController.session()) || trackingTransitionInProgress) return;
       trackingTransitionInProgress = true;
       setTrackingControlsBusy(true);
       try {
+        if(totalFocusController.session()?.linkedClock) {
+          await totalFocusController.clockAction('end_total_focus');
+          isMonitoring=false;isPaused=false;commitSessionTime();renderTrackingStatus();persistTrackingState();
+          showToast(tr('Total focus ended'),'success');return;
+        }
         const focus = (await invoke('get_local_agent_data').catch(() => null))?.focus;
         if (focus) await invoke('control_local_focus_block', { action: 'end' });
         else await stopNativeMonitoring({ requireSuccess: isMonitoring });
@@ -5808,11 +5854,18 @@
     }
 
     async function resumeMonitoring() {
+      if(trackingTransitionInProgress || totalFocusController.busy())return;
+      trackingTransitionInProgress=true;
       document.getElementById('pomodoroStatus').textContent = '';
       const btn = document.getElementById('playTimerBtn');
       btn.disabled = true;
       btn.classList.add('loading-state');
       try {
+        if(totalFocusController.session()?.linkedClock) {
+          await totalFocusController.clockAction('resume_total_focus');
+          isMonitoring=true;isPaused=false;resumeSessionTimer();renderTrackingStatus();persistTrackingState();
+          showToast(tr('Browser protection confirmed. Your session is ready.'),'success');return;
+        }
         const focus = (await invoke('get_local_agent_data').catch(() => null))?.focus;
         if (focus?.status === 'paused') {
           await invoke('control_local_focus_block', { action: 'resume' });
@@ -5840,6 +5893,7 @@
         console.error('Resume failed:', e);
         showToast(('Error resuming: ' + e), 'error');
       } finally {
+        trackingTransitionInProgress=false;
         btn.disabled = false;
         btn.classList.remove('loading-state');
         updatePlayButtonState();
@@ -5874,7 +5928,10 @@
     });
 
     document.getElementById('playTimerBtn')?.addEventListener('click', () => {
-      if (trackingTransitionInProgress || pomodoroTransition || (timerPreferences.mode === 'pomodoro' && pomodoro.phase !== 'work' && !pomodoro.ready)) return;
+      if (trackingTransitionInProgress || totalFocusController.busy() || pomodoroTransition || (!totalFocusController.session()?.linkedClock && timerPreferences.mode === 'pomodoro' && pomodoro.phase !== 'work' && !pomodoro.ready)) return;
+      if(totalFocusController.session()?.linkedClock) {
+        if(totalFocusController.session().pausedAt)resumeMonitoring();else pauseMonitoring();return;
+      }
       if (isMonitoring) {
         document.getElementById('pauseBtn')?.click();
       } else if (isPaused) {
@@ -8706,6 +8763,7 @@
     });
 
     listen('local-agent-focus-changed', ({ payload }) => {
+      if(totalFocusController.session()?.linkedClock) { totalFocusController.refresh();return; }
       if (payload?.status === 'running') {
         isMonitoring = true;
         isPaused = false;

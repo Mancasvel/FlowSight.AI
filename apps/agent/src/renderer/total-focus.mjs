@@ -43,6 +43,7 @@ export function mountTotalFocus({invoke}) {
   const host = document.getElementById('totalFocusSettings');
   host.innerHTML = html`<div class="card-header"><div class="card-title">Total focus</div></div>
     <p class="profile-card-intro">Block distracting websites with Browser Controls in Arc on Windows or macOS, and Chrome on Windows, macOS, or Linux.</p>
+    <p class="session-help">Total focus starts the main clock. Pause or resume both from the clock; your remaining focus time is kept.</p>
     <p class="session-help">FlowSight focus reminders are held in your local digest during this session.</p>
     <p id="totalFocusStatus" class="total-focus-status" role="status" aria-live="polite">Checking browser protection…</p>
     <p id="totalFocusQuietStatus" class="session-help" role="status"></p>
@@ -61,29 +62,37 @@ export function mountTotalFocus({invoke}) {
       </ol>
     </div>
     <p id="totalFocusActiveTask" class="total-focus-task" data-user-content></p>
-    <label for="totalFocusTask">Your focus task</label><input id="totalFocusTask" class="input" type="text" maxlength="160" placeholder="What are you working on?">
+    <label for="totalFocusTask">Your focus task (required)</label><input id="totalFocusTask" class="input" type="text" required maxlength="160" aria-describedby="totalFocusTaskError" placeholder="What are you working on?">
+    <p id="totalFocusTaskError" class="session-help total-focus-error" role="alert" hidden></p>
     <div id="totalFocusConfig">${focusFields('totalFocus')}</div>
+    <p id="totalFocusFeedback" class="session-help" role="status" aria-live="polite" hidden></p>
     <div class="total-focus-actions"><button type="button" class="button button-primary" id="totalFocusStart">Start total focus</button>
     <button type="button" class="button button-secondary" id="totalFocusEnd" hidden>End total focus</button>
+    <button type="button" class="button button-secondary" id="totalFocusClock" hidden>Open main clock</button>
     <button type="button" class="button button-secondary" id="totalFocusSave">Save settings</button></div>
-    <p id="totalFocusFeedback" class="session-help" role="status" aria-live="polite"></p>
     <button type="button" class="button button-ghost" id="totalFocusBrowser">Connect your browser</button>
     <p class="session-help">Protection lasts until the chosen end time, even if FlowSight closes. You can end it from a blocked page. Tracking remains a separate choice.</p>
     ${messagingFuture()}`;
-  let state = null, busy = false, dirty = false, digestKey = '';
-  const feedback = value => setText(document.getElementById('totalFocusFeedback'), value);
+  let state = null, busy = false, pending = '', dirty = false, digestKey = '';
+  const feedback = (value, reveal = false) => {
+    const element = document.getElementById('totalFocusFeedback');
+    setText(element, value);element.hidden = !element.textContent;
+    if (reveal) element.scrollIntoView({block:'nearest'});
+  };
   const buttons = ['totalFocusStart','totalFocusEnd','totalFocusSave'];
   function render() {
     const session = state?.session;
-    const active = session && Date.parse(session.expiresAt) > Date.now();
+    const paused = Boolean(session?.pausedAt);
+    const active = session && !paused && Date.parse(session.expiresAt) > Date.now();
+    const present = Boolean(active || paused);
     const acknowledged = active && state.browser?.connected && state.browser?.fresh && state.browser?.applied && state.browser?.sessionId === session.id;
     const released = !active && state?.browser?.fresh && state?.browser?.applied;
-    setText(document.getElementById('totalFocusStatus'), () => acknowledged ? t('Total focus active · browser block confirmed')
+    setText(document.getElementById('totalFocusStatus'), () => paused ? t('Total focus paused · resume from the main clock') : acknowledged ? t('Total focus active · browser block confirmed')
       : active ? t('Session active · browser protection not confirmed. Check the extension.')
       : released ? t('Session ended · waiting for the extension to release protection.')
       : state?.browser?.connected && !state.browser.totalFocusAvailable ? t('Browser connected · website protection unavailable. Check site access or use the compatible extension below.')
       : state?.browser?.connected ? t('Browser connected · ready to start') : t('Connect Browser Controls to activate total focus.'));
-    document.getElementById('totalFocusRepair').hidden = active || !state?.browser?.connected || Boolean(state.browser.totalFocusAvailable);
+    document.getElementById('totalFocusRepair').hidden = present || !state?.browser?.connected || Boolean(state.browser.totalFocusAvailable);
     document.getElementById('totalFocusStatus').dataset.active = String(Boolean(acknowledged));
     setText(document.getElementById('totalFocusQuietStatus'), () => state?.systemNotificationsQuiet
       ? t('Windows app notification banners are silenced.')
@@ -96,14 +105,20 @@ export function mountTotalFocus({invoke}) {
       digestKey=key;const items=document.getElementById('totalFocusDigestItems');items.replaceChildren();
       for(const item of digest) { const p=document.createElement('p');p.textContent=`${item.title}: ${item.body}`;items.append(p); }
     }
-    setText(document.getElementById('totalFocusActiveTask'), () => active ? `${session.intention} · ${t('Until')} ${new Date(session.expiresAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'})}` : '');
-    document.getElementById('totalFocusStart').hidden = Boolean(active);
-    document.getElementById('totalFocusEnd').hidden = !active;
-    document.getElementById('totalFocusTask').disabled = Boolean(active) || busy;
-    document.querySelectorAll('#totalFocusConfig input, #totalFocusConfig textarea').forEach(field => field.disabled = Boolean(active) || busy);
-    for (const id of buttons) document.getElementById(id).disabled = busy || (id === 'totalFocusSave' && Boolean(active));
+    setText(document.getElementById('totalFocusActiveTask'), () => paused ? `${session.intention} · ${t('Paused')}` : active ? `${session.intention} · ${t('Until')} ${new Date(session.expiresAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'})}` : '');
+    document.getElementById('totalFocusStart').hidden = present && pending !== 'start';
+    document.getElementById('totalFocusEnd').hidden = !present || pending === 'start';
+    document.getElementById('totalFocusClock').hidden = !present;
+    setText(document.getElementById('totalFocusStart'), () => pending === 'start' ? t('Starting total focus…') : t('Start total focus'));
+    setText(document.getElementById('totalFocusEnd'), () => pending === 'end' ? t('Ending total focus…') : t('End total focus'));
+    setText(document.getElementById('totalFocusSave'), () => pending === 'save' ? t('Saving settings…') : t('Save settings'));
+    host.setAttribute('aria-busy', String(busy));
+    document.getElementById('totalFocusTask').disabled = present || busy;
+    document.querySelectorAll('#totalFocusConfig input, #totalFocusConfig textarea').forEach(field => field.disabled = present || busy);
+    for (const id of buttons) document.getElementById(id).disabled = busy || (id === 'totalFocusSave' && present);
     document.getElementById('totalFocusStart').disabled = busy || !state?.browser?.connected || !state?.browser?.totalFocusAvailable;
-    setText(document.getElementById('todayTotalFocusLabel'), () => active ? t('Total focus active') : t('Total focus'));
+    setText(document.getElementById('todayTotalFocusLabel'), () => paused ? t('Total focus paused') : active ? t('Total focus active') : t('Total focus'));
+    document.dispatchEvent(new CustomEvent('flowsight:total-focus-state',{detail:{state,busy,pending}}));
   }
   async function refresh(fill = false) {
     try {
@@ -116,26 +131,46 @@ export function mountTotalFocus({invoke}) {
     } catch { feedback(() => t('Could not load focus settings. Try again.')); }
     return state;
   }
-  async function action(run) {
+  async function action(run, operation = '') {
     if (busy) return;
-    busy = true; render();feedback(() => t('Applying browser protection…'));
+    busy = true;pending = operation;render();
+    feedback(() => operation === 'start' ? t('Starting total focus. Waiting for your browser to confirm protection; this can take up to 90 seconds.')
+      : operation === 'end' ? t('Ending total focus…') : t('Saving settings…'), true);
     try { await run();await refresh(); }
     catch(error) { feedback(() => `${t('Could not update total focus:')} ${localizeStatus(error)}`); }
-    finally { busy = false;render(); }
+    finally { busy = false;pending = '';render();document.getElementById('totalFocusFeedback').scrollIntoView({block:'nearest'}); }
   }
+  const task = document.getElementById('totalFocusTask');
+  task.addEventListener('input',()=>{
+    task.removeAttribute('aria-invalid');document.getElementById('totalFocusTaskError').hidden = true;
+  });
   document.getElementById('totalFocusConfig').addEventListener('input',()=>{dirty=true;});
   document.getElementById('totalFocusSave').onclick = () => action(async()=>{
     await invoke('save_total_focus_preferences',{preferences:readFocusFields('totalFocus')});dirty=false;feedback(() => t('Focus settings saved'));
-  });
-  document.getElementById('totalFocusStart').onclick = () => action(async()=>{
-    const task = document.getElementById('totalFocusTask');
-    if (!task.value.trim()) { task.focus(); throw new Error(t('Describe your focus task in 1–160 characters.')); }
-    await invoke('start_total_focus',{intention:document.getElementById('totalFocusTask').value,preferences:readFocusFields('totalFocus')});
-    feedback(() => t('Browser protection confirmed. Your session is ready.'));
-  });
+  }, 'save');
+  document.getElementById('totalFocusStart').onclick = () => {
+    if (busy) return;
+    // Validate before disabling controls, so focus and the error remain visible.
+    if (!task.value.trim() || !task.checkValidity()) {
+      const error = document.getElementById('totalFocusTaskError');
+      setText(error, () => t('Describe your focus task in 1–160 characters.'));error.hidden = false;
+      task.setAttribute('aria-invalid','true');feedback('');task.focus();task.scrollIntoView({block:'center'});return;
+    }
+    const minutes = document.getElementById('totalFocusMinutes');
+    if (!minutes.checkValidity()) {
+      feedback(() => t('Choose a focus duration between 5 and 180 minutes.'), true);
+      minutes.focus();minutes.scrollIntoView({block:'center'});minutes.reportValidity();return;
+    }
+    const intention = task.value.trim(), preferences = readFocusFields('totalFocus');
+    return action(async()=>{
+      await invoke('start_total_focus',{intention,preferences});
+      feedback(() => t('Browser protection confirmed. Your session is ready.'));
+    }, 'start');
+  };
   document.getElementById('totalFocusEnd').onclick = () => action(async()=>{
     const result=await invoke('end_total_focus');feedback(() => result.notificationWarning ? `${t('Could not restore notification banners:')} ${localizeStatus(result.notificationWarning)}` : result.browserReleased ? t('Total focus ended') : t('Session ended. Reconnect the extension or use End total focus on a blocked page to release it now.'));
-  });
+  }, 'end');
+  document.getElementById('totalFocusClock').onclick=()=>document.getElementById('navToday').click();
   document.getElementById('totalFocusDigestDismiss').onclick=()=>action(async()=>{
     await invoke('dismiss_total_focus_digest',{ids:(state?.digest||[]).map(item=>item.id)});
     feedback(() => t('Saved reminders dismissed'));
@@ -157,5 +192,11 @@ export function mountTotalFocus({invoke}) {
   document.addEventListener('flowsight:languagechange',render);
   setInterval(()=>{ if(!document.hidden && (state?.session || document.getElementById('tabProfile')?.classList.contains('active'))) refresh(); },5000);
   refresh(true);
-  return {refresh,preferences:()=>state?.preferences||structuredClone(defaults)};
+  const clockAction=async command=>{
+    if(busy)throw new Error(t('Wait for the current focus action to finish.'));
+    busy=true;pending=command==='resume_total_focus'?'start':'end';render();
+    try { const result=await invoke(command);await refresh();return result; }
+    finally {busy=false;pending='';render();}
+  };
+  return {refresh,session:()=>state?.session,busy:()=>busy,clockAction,preferences:()=>state?.preferences||structuredClone(defaults)};
 }

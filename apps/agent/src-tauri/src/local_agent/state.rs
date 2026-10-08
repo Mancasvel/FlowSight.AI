@@ -22,6 +22,7 @@ pub struct AgentData {
     pub total_focus_quiet: Option<SystemQuiet>,
     pub total_focus_preferences: super::total_focus::Preferences,
     pub total_focus: Option<super::total_focus::Session>,
+    pub total_focus_clock_stop_pending: bool,
     pub calendar_provider: Option<String>,
     pub email_provider: Option<String>,
     pub notification_digest: Vec<DigestItem>,

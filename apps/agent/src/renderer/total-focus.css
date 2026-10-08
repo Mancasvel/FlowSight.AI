@@ -9,6 +9,9 @@
 .total-focus-status { margin:14px 0 8px; color:hsl(var(--muted-foreground)); font-size:12px; line-height:1.5; }
 .total-focus-status[data-active="true"] { color:hsl(var(--primary)); font-weight:700; }
 .total-focus-task { margin:0; font-size:13px; overflow-wrap:anywhere; }
+.total-focus-error { color:hsl(var(--destructive)); }
+#totalFocusTask[aria-invalid="true"] { border-color:hsl(var(--destructive)); }
+#totalFocusFeedback { overflow-wrap:anywhere; }
 .total-focus-actions { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 8px; }
 .total-focus-actions .button { min-height:40px; flex:1 1 120px; }
 .total-focus-settings [hidden] { display:none; }
