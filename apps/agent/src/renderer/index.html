@@ -4298,6 +4298,9 @@
     const totalFocusController = mountTotalFocus({ invoke });
     import { renderCoachMarkdown } from './coach-markdown.mjs';
     import './session-planner.css';
+    import './work-review.css';
+    import { createWorkReviewController } from './work-review.mjs';
+    const workReview = createWorkReviewController(invoke);
     import { listen } from '@tauri-apps/api/event';
     import { getCurrentWindow } from '@tauri-apps/api/window';
     import { getVersion } from '@tauri-apps/api/app';
@@ -7247,7 +7250,7 @@
       const el = document.getElementById('workPreferencesSummary');
       if (!el) return;
       if (!prefs?.onboardingCompleted) {
-        setText(el, () => ((authSession ? tr('Complete the setup wizard to personalize reports and greetings.') : tr('Sign in to cloud features to set up your work preferences.'))));
+        setText(el, () => tr('Work preferences are optional and saved on this device. No account is needed.'));
         return;
       }
       const roleLabels = (prefs.workRoles || [])
@@ -7363,7 +7366,8 @@
       setText(continueBtn, () => (((step === 5) ? tr('Finish setup') : tr('Continue'))));
       if (step === 0) {
         body.innerHTML = html`<h1 class="onboarding-title" tabindex="-1">Make room for your work</h1>
-          <p class="onboarding-subtitle">Start tracking when you choose. FlowSight helps you review your time and work patterns on this computer.</p>
+          <p class="onboarding-subtitle">Understand your week and choose what to change, with local analysis and control over your data.</p>
+          <p class="session-help">Start a tracking block when you choose, then open Insights to review your first work report. You do not need seven days of activity.</p>
           <label for="onboardingNameInput">What should we call you? <span class="session-help">Optional</span></label>
           <input type="text" class="onboarding-name-input" id="onboardingNameInput" maxlength="40" autocomplete="given-name" placeholder="Your first name" value="${escapeHtml(onboardingState.displayName)}">
           <label for="onboardingDailyGoal">Daily tracking goal</label>
@@ -8455,10 +8459,16 @@
       }
     });
 
-    function requestStatusReportPayload() {
+    let workReportPeriodDays = 1;
+    let reportGenerationPeriod = null;
+    function requestStatusReportPayload(periodDays = 7) {
+      if (reportGenerationPromise && reportGenerationPeriod !== periodDays) {
+        return reportGenerationPromise.catch(() => null).then(() => requestStatusReportPayload(periodDays));
+      }
       if (!reportGenerationPromise) {
-        reportGenerationPromise = invoke('generate_local_status_report', { periodDays: 7 })
-          .finally(() => { reportGenerationPromise = null; });
+        reportGenerationPeriod = periodDays;
+        reportGenerationPromise = invoke('generate_local_status_report', { periodDays })
+          .finally(() => { reportGenerationPromise = null; reportGenerationPeriod = null; });
       }
       return reportGenerationPromise;
     }
@@ -8986,6 +8996,18 @@
       }
     }
 
+    function bindWorkReportPeriod() {
+      const header = summaryBody.querySelector('.summary-header');
+      if (!header) return;
+      const field = document.createElement('div');
+      field.className = 'report-period-field';
+      field.innerHTML = html`<label for="workReportPeriod">Report period</label><select class="select" id="workReportPeriod"><option value="1">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>`;
+      header.after(field);
+      const select = field.querySelector('select');
+      select.value = String(workReportPeriodDays);
+      select.addEventListener('change', () => { workReportPeriodDays = Number(select.value); });
+    }
+
     function renderHistoryContent(data, week) {
       if (data.entries.length === 0 && getDisplayTotalSeconds() === 0) {
         summaryBody.innerHTML = html`
@@ -9001,10 +9023,12 @@
             </div>
           </div>
           <div data-daily-flow-slot></div>
-          <div class="empty-state">No activity recorded today. Start a tracking block to see your work patterns here.</div>`;
+          <div class="first-report-guide"><p>Start a tracking block when you choose, then open your work report to review the activity recorded on this device.</p><p>You can generate a report for today. An empty report has no evidence for recommendations.</p><button type="button" class="button button-secondary" id="firstReportTrackingBtn">Go to tracking</button></div>`;
+        document.getElementById('firstReportTrackingBtn').onclick = () => switchTab('tabToday');
         document.getElementById('generateReportBtn').onclick = () => {
           generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
         };
+        bindWorkReportPeriod();
         updateNotionControls();
         return;
       }
@@ -9085,6 +9109,7 @@
       document.getElementById('generateReportBtn').onclick = () => {
         generateStatusReport().catch((e) => showToast(String(e), 'error', 6000));
       };
+      bindWorkReportPeriod();
       updateNotionControls();
     }
 
@@ -9156,7 +9181,7 @@
     }
 
     function statusReportViewModel(payload) {
-      const userName = currentUser?.display_name || currentUser?.name || currentUser?.email || tr('Knowledge worker');
+      const userName = userPreferences?.displayName || currentUser?.display_name || currentUser?.name || currentUser?.email || tr('Knowledge worker');
       return createStatusReportViewModel(payload, {
         userName,
         todayDate: currentHistoryData?.date || new Date().toISOString().slice(0, 10),
@@ -9168,7 +9193,19 @@
       const host = document.getElementById('statusReportModalBody');
       if (!host || !payload) return;
 
-      host.innerHTML = renderStatusReportHtml(statusReportViewModel(payload));
+      const model = statusReportViewModel(payload);
+      host.innerHTML = renderStatusReportHtml(model);
+      workReview.attach(document.getElementById('workReviewSlot'), model);
+      workReview.bindSuggestions(host);
+      const syncState = privacySettings?.cloudSyncEnabled ? tr('Activity sync is on.') : tr('Activity sync is off.');
+      const cloudState = privacySettings?.cloudAiEnabled ? tr('Cloud AI is on.') : tr('Cloud AI is off.');
+      const origin = host.querySelector('.sr-origin');
+      if (origin) {
+        const sharing = document.createElement('p');
+        sharing.className = 'sr-origin';
+        sharing.textContent = privacySettings ? `${syncState} ${cloudState} ${tr('MCP shares the requested report with the AI client you connect. Manage sharing in Settings.')}` : tr('Sharing settings could not be loaded. Check Settings before sharing.');
+        origin.after(sharing);
+      }
       document.getElementById('downloadReportPdfBtn')?.addEventListener('click', async (event) => {
         const button = event.currentTarget;
         button.disabled = true;
@@ -9198,7 +9235,8 @@
       await beginReportProgressListen();
 
       try {
-        const payload = await requestStatusReportPayload();
+        const periodDays = workReportPeriodDays;
+        const payload = await requestStatusReportPayload(periodDays);
         lastStatusReportPayload = payload;
         reportProgressState = {
           activeStep: REPORT_GEN_STEP_LABELS.length - 1,

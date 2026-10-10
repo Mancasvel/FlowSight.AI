@@ -680,6 +680,13 @@ No assessment available|Sin evaluación disponible
 Unlabelled|Sin etiqueta
 Daily work review|Revisión diaria de trabajo
 Weekly work review|Revisión semanal de trabajo
+Work review|Revisión de trabajo
+The period in view|El período a la vista
+Discard your unsaved choice and open another?|¿Descartar tu decisión sin guardar y abrir otra?
+Write a choice before saving.|Escribe una decisión antes de guardarla.
+Save as new choice|Guardar como nueva decisión
+This saved choice is no longer available. Your draft is here; save it as a new choice.|Esta decisión guardada ya no está disponible. Tu borrador sigue aquí; guárdalo como una nueva decisión.
+Could not delete your choice. It is still here; try again.|No se pudo eliminar tu decisión. Sigue aquí; vuelve a intentarlo.
 The day in view|El día de un vistazo
 The week in view|La semana de un vistazo
 Activity was recorded in this period.|Se registró actividad en este periodo.
@@ -1022,6 +1029,49 @@ Object.assign(spanish, {
   'Pairing key copied. Local port: 38547. Paste the key in the extension options.':'Clave copiada. Puerto local: 38547. Pega la clave en las opciones de la extensión.',
   'Could not copy the pairing key. Try again in Settings.':'No se pudo copiar la clave. Inténtalo otra vez en Ajustes.',
   'This step saves your settings. Start total focus from Today when you are ready. Tracking remains a separate choice.':'Este paso guarda tus ajustes. Inicia la concentración total desde Hoy cuando estés listo. El seguimiento se activa por separado.',
+  'Understand your week and choose what to change, with local analysis and control over your data.': 'Entiende tu semana y decide qué cambiar, con análisis local y control sobre tus datos.',
+  'Start a tracking block when you choose, then open Insights to review your first work report. You do not need seven days of activity.': 'Inicia un bloque de seguimiento cuando quieras y abre Informes para revisar tu primer informe. No necesitas siete días de actividad.',
+  'Work preferences are optional and saved on this device. No account is needed.': 'Las preferencias de trabajo son opcionales y se guardan en este dispositivo. No necesitas una cuenta.',
+  'Start a tracking block when you choose, then open your work report to review the activity recorded on this device.': 'Inicia un bloque de seguimiento cuando quieras y abre tu informe para revisar la actividad registrada en este dispositivo.',
+  'You can generate a report for today. An empty report has no evidence for recommendations.': 'Puedes generar un informe de hoy. Un informe vacío no tiene datos para proponer recomendaciones.',
+  'Go to tracking': 'Ir al seguimiento',
+  'Report period': 'Periodo del informe',
+  'Last 7 days': 'Últimos 7 días',
+  'Last 30 days': 'Últimos 30 días',
+  'Local AI report': 'Informe con IA local',
+  'Rule-based report': 'Informe basado en reglas',
+  '{p0} of {p1} days with activity': '{p0} de {p1} días con actividad',
+  'This covers recorded activity, not your whole working day.': 'Incluye la actividad registrada, que puede cubrir solo parte de tu jornada.',
+  'Activity sync is on.': 'La sincronización de actividad está activada.',
+  'Activity sync is off.': 'La sincronización de actividad está desactivada.',
+  'Cloud AI is on.': 'La IA en la nube está activada.',
+  'Cloud AI is off.': 'La IA en la nube está desactivada.',
+  'MCP shares the requested report with the AI client you connect. Manage sharing in Settings.': 'MCP comparte el informe solicitado con el cliente de IA que conectes. Gestiona las opciones de compartir en Ajustes.',
+  'Sharing settings could not be loaded. Check Settings before sharing.': 'No se han podido cargar las opciones de compartir. Revisa Ajustes antes de compartir.',
+  'Choose a change to try': 'Elige un cambio para probar',
+  'Save one choice, then come back to review what happened. Keeping your current plan is a valid choice.': 'Guarda una decisión y vuelve después para revisar qué ocurrió. Mantener tu plan actual también es una decisión válida.',
+  'Saved only on this device. Not included in PDF, MCP or cloud sync. Your local retention setting also applies to these choices.': 'Se guarda solo en este dispositivo. No se incluye en PDF, MCP ni sincronización. La retención local también se aplica a estas decisiones.',
+  'Try this change': 'Probar este cambio',
+  'Write a choice': 'Escribir una decisión',
+  'Keep my current plan': 'Mantener mi plan actual',
+  'Your choice': 'Tu decisión',
+  'Review on': 'Revisar el',
+  'What happened?': '¿Qué ocurrió?',
+  'Result or context (optional)': 'Resultado o contexto (opcional)',
+  'Save choice': 'Guardar decisión',
+  'Delete choice': 'Eliminar decisión',
+  'Delete this saved choice?': '¿Eliminar esta decisión guardada?',
+  'Choice deleted': 'Decisión eliminada',
+  'Choice saved locally': 'Decisión guardada en local',
+  'Saved choices': 'Decisiones guardadas',
+  'Review or edit': 'Revisar o editar',
+  'To review': 'Pendiente de revisión',
+  'Tried': 'Probado',
+  'Not tried': 'Sin probar',
+  'Discarded': 'Descartado',
+  'Ready to review': 'Ya se puede revisar',
+  'Could not save your choice. Your draft is still here; try again.': 'No se ha podido guardar la decisión. Tu borrador sigue aquí; inténtalo de nuevo.',
+  'Could not load saved choices. Reopen the report to try again.': 'No se han podido cargar las decisiones guardadas. Abre de nuevo el informe para reintentar.',
 });
 
 Object.assign(spanish, {

@@ -48,28 +48,28 @@ can also send the requested report data to that AI.
 - **Self-hostable backend** — the Community Edition can run against your own
   Supabase instance.
 
-## Current release: v5.0.10 (Windows)
+## Current release: v6.1.0 (Windows)
 
-- **Let's plan today's session** in Today uses the bundled local model to suggest
-  time blocks from your available hours, task estimates and saved context. Review
-  or revise the draft before adding blocks to the private FlowSight calendar.
-- The shorter first-run setup introduces the main features while configuring
-  daily goals, reminders, reports and optional calendar connections.
-- The Windows installer includes signed Visual C++ runtime files and checks
-  their integrity when the app starts and before local AI starts.
+- **Start locally:** optional name, goals and work preferences stay on this device
+  and can be configured without signing in. Start tracking explicitly, use
+  FlowSight during a work session, then open Insights to review it.
+- **Choose the report period:** today, the last seven days or the last thirty days.
+  The report and PDF identify local AI or rules and the number of days with
+  recorded activity. They interpret the available record, not personal performance.
+- **Choose a change to try:** edit a recommendation or write your own choice,
+  set a review date, then record whether you tried it and an optional result.
+  Keeping your current plan is also a valid choice. Reopen a report to review
+  or delete saved choices.
+- **Private review history:** choices stay in local SQLite, follow local retention
+  and erasure, and are excluded from report PDFs, MCP and cloud sync. They are
+  included only in the explicit personal data export in Settings.
 
-- The optional cloud Coach runs its reply and usage requests off the UI thread,
-  so the rest of the app remains responsive while a request is pending.
-- In Today, a connected Google or Microsoft Calendar event shows a progress
-  bar for elapsed **scheduled event time**. It is independent of recorded work
-  time; the daily goal remains a separate text value without a duplicate bar.
-- The Windows release provides an NSIS installer and `latest.json` with its
-  update signature. The `.msi` is also offered when packaging succeeds; see
-  [GitHub Releases](../../releases).
+Automatic weekly PDFs still cover seven days while FlowSight is running. Session
+planning uses the bundled local model and adds blocks to the private FlowSight
+calendar only after you review and confirm them. Optional cloud calendars and
+other connected services require their own account, entitlement and consent.
 
-The FlowSight local calendar used by session planning stays on this device.
-Connecting Google or Microsoft Calendar is part of the eligible paid cloud plan
-described below.
+Download the Windows installer from [GitHub Releases](../../releases).
 
 ## Bring your own AI (MCP)
 
@@ -140,10 +140,12 @@ not grant the model general event-editing authority.
 ## Calendar companion (paid cloud plan)
 
 Calendar companion is an optional paid integration in **Settings → Calendar
-companion** and the last, skippable onboarding step. It requires an eligible,
-active FlowSight Cloud Individual/Pro plan with integrations. The EUR 10
-one-time Individual local purchase uses a separate license and does not unlock
-Cloud integrations. The calendar APIs need internet access; FlowSight activity
+companion** and a skippable onboarding step. It requires an eligible,
+active FlowSight Cloud Individual/Pro plan with integrations. The one-time
+Individual local purchase uses a separate license and does not unlock Cloud
+integrations. Installer purchases, cloud subscriptions and commercial source
+rights are separate; current checkout terms specify the price and billing period.
+The calendar APIs need internet access; FlowSight activity
 analysis and the mini-report calculation remain local. Free, expired, and
 other-account Cloud entitlements cannot connect, read live events, or publish
 recaps. The app checks the Cloud entitlement locally; Google's token broker
@@ -446,7 +448,7 @@ publish a fork, please pick a different name for your distribution.
 
 ## Links
 
-- **Product website:** *coming soon*
+- **Product website:** https://flowsight.ai
 - **Commercial inquiries:** manuel@flowsight.site
 - **Security reports:** manuel@flowsight.site
 - **Legal (CLA questions):** manuel@flowsight.site
