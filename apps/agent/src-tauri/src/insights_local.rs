@@ -488,44 +488,39 @@ pub fn generate_local_status_report(
         crate::language::copy("Preparing model…", "Preparando el modelo…"),
         "start",
     );
-    crate::agent::ensure_local_llm_ready(app, state)?;
+    let ai_ready = if local_data["total_seconds"].as_i64().unwrap_or(0) > 0 {
+        crate::agent::ensure_local_llm_ready(app, state)
+    } else {
+        Ok(())
+    };
     emit_report_progress(
         &app_handle,
         0,
         "warmup",
         crate::language::copy("Starting local AI engine", "Iniciando la IA local"),
-        crate::language::copy("Local AI ready", "IA local lista"),
+        if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
+            crate::language::copy(
+                "No activity recorded; preparing an empty report",
+                "Sin actividad registrada; preparando un informe vacío",
+            )
+        } else if ai_ready.is_ok() {
+            crate::language::copy("Local AI ready", "IA local lista")
+        } else {
+            crate::language::copy(
+                "Local AI unavailable; using rules",
+                "IA local no disponible; usando reglas",
+            )
+        },
         "done",
     );
 
     let user_prefs = crate::user_preferences::load_user_preferences(&db_path).unwrap_or_default();
     let prefs_block = crate::user_preferences::preferences_llm_block(&user_prefs);
 
-    let (report, generation_passes) = match generate_report_by_sections(
-        &app_handle,
-        &local_data,
-        &prefs_block,
-    ) {
-        Ok(result) => result,
-        Err(err) => {
-            log::warn!(
-                "[LocalReport] Pipeline incomplete ({}), merging partial + structured fallback",
-                err
-            );
-            let fallback = build_rule_based_report(&local_data);
-            (
-                fallback,
-                vec![serde_json::json!({
-                    "id": "fallback",
-                    "label": crate::language::copy("Structured summary", "Resumen estructurado"),
-                    "detail": crate::language::copy(
-                        "Full AI pipeline could not finish; showing a report from verified local data.",
-                        "La IA no pudo terminar; se muestra un informe basado en datos locales verificados."
-                    )
-                })],
-            )
-        }
-    };
+    let (report, generation_passes) = report_with_fallback(&local_data, || {
+        ai_ready?;
+        generate_report_by_sections(&app_handle, &local_data, &prefs_block)
+    });
 
     let mut report = report;
     // The model selects indices only. Host templates and user text must remain
@@ -579,6 +574,32 @@ pub fn generate_local_status_report(
         "ai_powered": ai_powered,
         "generation_passes": generation_passes,
     }))
+}
+
+fn report_with_fallback(
+    local_data: &serde_json::Value,
+    generate: impl FnOnce() -> Result<(serde_json::Value, Vec<serde_json::Value>), String>,
+) -> (serde_json::Value, Vec<serde_json::Value>) {
+    if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
+        return (build_rule_based_report(local_data), Vec::new());
+    }
+    match generate() {
+        Ok(result) => result,
+        Err(error) => {
+            log::warn!("[LocalReport] AI unavailable ({error}); showing structured fallback");
+            (
+                build_rule_based_report(local_data),
+                vec![serde_json::json!({
+                    "id": "fallback",
+                    "label": crate::language::copy("Structured summary", "Resumen estructurado"),
+                    "detail": crate::language::copy(
+                        "Local AI is unavailable; showing a report from recorded activity.",
+                        "La IA local no está disponible; se muestra un informe de la actividad registrada."
+                    )
+                })],
+            )
+        }
+    }
 }
 
 fn call_local_llm_with_system(
@@ -2383,6 +2404,9 @@ fn default_recommendations_for(
     local_data: &serde_json::Value,
     language: ReportLanguage,
 ) -> Vec<String> {
+    if local_data["total_seconds"].as_i64().unwrap_or(0) <= 0 {
+        return Vec::new();
+    }
     let mut recs = Vec::new();
     let focus = &local_data["focus_semantics"];
     let distraction_events = focus["distraction_events"].as_i64().unwrap_or(0);
@@ -2652,6 +2676,22 @@ fn clamp_line(s: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn empty_report_skips_inference_and_startup_failure_uses_rules() {
+        let empty = serde_json::json!({"total_seconds": 0});
+        let (report, passes) =
+            report_with_fallback(&empty, || panic!("Empty reports must not invoke AI"));
+        assert!(report["recommendations"].as_array().unwrap().is_empty());
+        assert!(passes.is_empty());
+        let observed = serde_json::json!({"total_seconds": 1800});
+        let (report, passes) =
+            report_with_fallback(&observed, || Err("Local model unavailable".into()));
+        assert_eq!(report, build_rule_based_report(&observed));
+        assert!(!passes
+            .iter()
+            .any(|pass| pass["source"] == "local_ai_selection"));
+    }
 
     fn bilingual_report_fixture() -> serde_json::Value {
         let mut days = Vec::new();
@@ -2935,7 +2975,7 @@ mod tests {
         );
         assert_eq!(
             payload["es"]["recommendations"].as_array().unwrap().len(),
-            1
+            0
         );
         assert_same_report_evidence(&payload["en"], &payload["es"]);
     }

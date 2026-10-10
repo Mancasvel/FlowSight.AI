@@ -272,6 +272,7 @@ pub fn enforce_local_retention(db_path: &Path) -> Result<usize, String> {
         .map_err(|error| error.to_string())?;
     }
     let modifier = format!("-{} days", settings.retention_days);
+    crate::work_review::prune(&conn, settings.retention_days)?;
     // Capture the activity streak before either source of historical days expires.
     crate::activity_streak::reconcile(&conn, Local::now().date_naive())?;
     let deleted = conn
@@ -565,6 +566,7 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
             "withdrawal_pending": analytics.withdrawal_pending,
         },
         "user_preferences": user_preferences,
+        "local_review_decisions": crate::work_review::list(&conn)?,
         "weekly_report_schedule": weekly_report_schedule,
         "local_agent_data": local_agent_data,
         "application_settings": application_settings,
@@ -645,7 +647,7 @@ pub(crate) fn erase_local_database(conn: &Connection) -> Result<(), String> {
         .execute("DELETE FROM config", [])
         .map_err(|error| error.to_string())?;
     transaction
-        .execute_batch("DROP TABLE IF EXISTS tracking_daily_time; DROP TABLE IF EXISTS online_observation_owner; DROP TABLE IF EXISTS online_local_consent;")
+        .execute_batch("DROP TABLE IF EXISTS work_review_decisions; DROP TABLE IF EXISTS tracking_daily_time; DROP TABLE IF EXISTS online_observation_owner; DROP TABLE IF EXISTS online_local_consent;")
         .map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())?;
     conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;")

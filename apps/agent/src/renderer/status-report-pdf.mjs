@@ -499,6 +499,7 @@ function addFooters(doc, model) {
 
 export function renderStatusReportPdf(doc, model) {
   let y = drawReportHeader(doc, model);
+  y = drawParagraph(doc, `${model.aiPowered ? tr('Local AI report') : tr('Rule-based report')} · ${formatMessage`${model.activeDays} of ${model.periodDays} days with activity`}. ${tr('This covers recorded activity, not your whole working day.')}`, y, {size:8,leading:4.4,color:MUTED}) + 5;
   y = drawParagraph(doc, model.summary, y, { size: 10, leading: 5.5 }) + 7;
   y = drawMetrics(doc, model, y);
 

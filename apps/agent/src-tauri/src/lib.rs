@@ -39,6 +39,7 @@ mod user_preferences;
 mod vision_model;
 #[cfg(windows)]
 mod windows_autostart;
+mod work_review;
 
 use tauri::Manager;
 
@@ -156,6 +157,9 @@ pub fn run() {
             mcp::get_mcp_connection_info,
             user_preferences::get_user_preferences,
             user_preferences::save_user_preferences_command,
+            work_review::get_work_review_decisions,
+            work_review::save_work_review_decision,
+            work_review::delete_work_review_decision,
             anonymous_analytics::get_analytics_consent,
             anonymous_analytics::set_analytics_consent,
             anonymous_analytics::sync_anonymous_analytics,

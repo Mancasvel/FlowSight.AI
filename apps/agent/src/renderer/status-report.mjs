@@ -221,11 +221,14 @@ export function createStatusReportViewModel(payload, { userName = tr('Knowledge 
       percent: totalSeconds ? Math.min(100, Math.round(row.seconds / totalSeconds * 100)) : 0,
     }));
   const distractions = reportDistractionApps(local);
+  const periodDays = days.length || Math.max(0, Number(local.period_days) || 0);
 
   return {
-    title: days.length === 1 ? tr('Daily work review') : tr('Weekly work review'),
-    evidenceTitle: days.length === 1 ? tr('The day in view') : tr('The week in view'),
+    title: periodDays === 1 ? tr('Daily work review') : periodDays > 7 ? tr('Work review') : tr('Weekly work review'),
+    evidenceTitle: periodDays === 1 ? tr('The day in view') : periodDays > 7 ? tr('The period in view') : tr('The week in view'),
     period,
+    periodStart,
+    periodEnd,
     userName: text(userName) || tr('Knowledge worker'),
     generatedAt: text(payload?.generated_at) || todayDate,
     summary: text(report.executive_overview || report.work_summary)
@@ -239,12 +242,12 @@ export function createStatusReportViewModel(payload, { userName = tr('Knowledge 
     focusHours: (focusSeconds / 3600).toFixed(1),
     focusSessions,
     activeDays,
-    periodDays: days.length || Math.max(0, Number(local.period_days) || 0),
+    periodDays,
     empty: totalSeconds === 0,
     days,
     categories,
     distractions,
-    actions: list(report.recommendations),
+    actions: totalSeconds > 0 ? list(report.recommendations) : [],
     breakdown: asItems(report.health_breakdown).map((row) => ({
       element: text(row.element) || tr('Work area'),
       status: text(row.status) || tr('Observed'),
@@ -293,7 +296,7 @@ export function renderStatusReportHtml(model) {
     : markup('<p class="sr-muted">No category time recorded.</p>');
   const actions = model.actions.length
     ? html`<ol class="sr-action-list">${model.actions.map((action, index) => html`
-        <li><span class="sr-action-number">${String(index + 1).padStart(2, '0')}</span><p>${escapeHtml(action)}</p></li>`).join('')}</ol>`
+        <li><span class="sr-action-number">${String(index + 1).padStart(2, '0')}</span><div><p>${escapeHtml(action)}</p><button type="button" class="button button-ghost sr-choice-btn" data-review-suggestion="${index}">Try this change</button></div></li>`).join('')}</ol>`
     : markup('<p class="sr-muted">No specific next move is supported by this period yet. Keep tracking to build a baseline.</p>');
   const breakdown = model.breakdown.length
     ? html`<div class="sr-signal-list">${model.breakdown.map((row) => html`
@@ -325,6 +328,7 @@ export function renderStatusReportHtml(model) {
         <div class="sr-review-heading"><div><h2>${escapeHtml(model.title)}</h2><p>${escapeHtml(model.period)}</p></div>
           <span class="sr-signal-chip sr-signal-${model.statusTone}">${escapeHtml(model.status)}</span></div>
         <p class="sr-review-meta">${escapeHtml(model.userName)} <span aria-hidden="true">·</span> ${escapeHtml(formatMessage`Generated ${model.generatedAt}`)}</p>
+        <p class="sr-origin">${escapeHtml(model.aiPowered ? tr('Local AI report') : tr('Rule-based report'))} · ${escapeHtml(formatMessage`${model.activeDays} of ${model.periodDays} days with activity`)}. ${escapeHtml(tr('This covers recorded activity, not your whole working day.'))}</p>
       </header>
 
       <section class="sr-overview" aria-label="Review summary">
@@ -340,6 +344,8 @@ export function renderStatusReportHtml(model) {
         <div class="sr-section-heading"><h3 id="srNextTitle">What to do next</h3><p>Actions suggested by the recorded evidence</p></div>
         ${actions}
       </section>
+
+      <div id="workReviewSlot"></div>
 
       <section class="sr-section sr-distractions" aria-labelledby="srDistractionsTitle">
         <div class="sr-section-heading"><h3 id="srDistractionsTitle">Attention detours</h3><p>Observed visits and returns between work screens</p></div>
