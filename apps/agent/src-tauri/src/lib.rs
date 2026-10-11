@@ -10,6 +10,7 @@ mod crash_guard;
 mod daily_flow;
 mod desktop_presence;
 mod entitlements;
+mod esp32_companion;
 mod focus_alerts;
 mod focus_semantics;
 mod insights_local;
@@ -82,7 +83,11 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .manage(AgentState::default())
+        .manage(esp32_companion::Companion::default())
         .invoke_handler(tauri::generate_handler![
+            esp32_companion::update_esp32_companion,
+            esp32_companion::complete_esp32_companion_action,
+            esp32_companion::get_esp32_companion_status,
             language::get_language_preference,
             language::set_language_preference,
             initialize_agent,
@@ -243,6 +248,7 @@ pub fn run() {
             }
             local_agent::start_maintenance(app.handle().clone());
             calendar_companion::start_monitor();
+            esp32_companion::start(app.handle().clone());
             Ok(())
         })
         .on_window_event(|window, event| {
