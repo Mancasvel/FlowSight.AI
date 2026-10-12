@@ -82,7 +82,7 @@ try {
           if(command==='update_privacy_settings'){privacy={...privacy,...args.patch};return structuredClone(privacy);}
           if(command==='get_status')return {isRunning:running};
           if(command==='get_tracking_clock')return trackingSnapshot();
-          if(command==='get_total_focus')return structuredClone(totalFocus);
+          if(command==='get_total_focus')return structuredClone({...totalFocus,digest:totalFocus.session && !totalFocus.session.pausedAt ? [] : totalFocus.digest});
           if(command==='save_total_focus_preferences'){totalFocus.preferences=args.preferences;return args.preferences;}
           if(command==='start_total_focus'){
             trackingSnapshot();running=true;
