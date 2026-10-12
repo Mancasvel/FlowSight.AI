@@ -20,6 +20,7 @@ colors:
   teal-active-dark: "#6cdfd0"
   session-action: "#087f78"
   session-action-hover: "#066b65"
+  bip-accent: "#167b6d"
   action-indigo: "#7a7cf1"
   action-teal: "#2cbdb4"
 typography:
@@ -56,6 +57,7 @@ rounded:
   dock: "24px"
   action: "16px"
   control: "11px"
+  studio-control: "9px"
   dialog: "22px"
   pill: "999px"
 spacing:
@@ -140,6 +142,8 @@ The visual language carries through Today, Insights, Settings, first run, and co
 
 Onboarding and session planning follow the Operate direction within this incumbent family: compact labelled controls, useful examples, visible progress and status, and an explicit primary action at each decision. Their dark teal actions support white labels while the existing lighter teal continues to carry state and progress.
 
+Build in public extends this Operate direction inside Online. It keeps the gridded ground and compact type, with labelled choices, open rows, and quiet separators. Clear evidence, editable prompts, and returned proposals share the same working surface and retain their distinct meanings.
+
 **Key Characteristics:**
 
 - A 56px pale grid behind centered, softly layered work surfaces.
@@ -156,6 +160,7 @@ The system is light first, with a complete deep-slate appearance for system dark
 - **Signal Teal** (teal-primary / teal-progress): regular affirmative controls, live state, week marks, charts, and progress rails.
 - **Soft Teal** (teal-soft): selected navigation and other quiet active surfaces. **Dark Active Teal** (teal-active-dark) keeps that signal legible on the dark dock.
 - **Session Action Teal** (session-action / session-action-hover): solid affirmative controls in the session planner and onboarding footer. The scoped focus treatment uses Session Action Teal in light appearance and Dark Active Teal in dark appearance.
+- **Studio Teal** (bip-accent): text actions, selected checkboxes, active view underlines, status copy, and focus outlines inside Build in public. Dark appearance reuses Dark Active Teal. Headings and form labels use the actual theme foreground; supporting copy uses the muted foreground. Filled primary buttons retain the incumbent Signal Teal treatment.
 
 ### Secondary
 
@@ -202,6 +207,10 @@ The five-step onboarding overlay uses a vertical flex layout: the progress heade
 
 The Today planner remains an expandable section in the existing reading column at 370 × 700px, 340 × 400px, and 900px wide. Its form uses a 14px rhythm, two equal-width time fields, a full-width intention field, and a chronological proposal list with a 96px time column. Confirmation and discard actions wrap from a 120px basis instead of forcing a narrow window to scroll horizontally.
 
+Online keeps Leagues and Build in public in one in-place, two-choice tab strip. The studio stays in a single reading column at compact and wide widths. Four views sit below the heading: Ideas, Prompts, Contenido, and Ajustes (Ideas, Prompts, Content, and Settings in English). Their underline navigation uses a 14px gap and gives returned content a count. The period selector and full-width local-idea search lead Ideas; network, style, and profile controls follow the reviewed selection.
+
+At 700px and wider, the studio is capped at 760px, idea sections at 680px, and the optional portrait preview at 360px, within the containing Online layout. Network controls stack in separate divided rows, long text can break, and studio content adds 28px bottom padding above the shared pane's dock allowance. At heights of 550px or less, the heading reduces to 22px, its supporting sentence is hidden, the Online controls reduce to a 30px minimum height, and view spacing contracts. The reading order remains unchanged.
+
 ## Elevation & Depth
 
 This interface uses soft depth. White cards have fine borders and diffuse low-opacity shadows; the timer adds a faint cool tint; the floating dock and modal surfaces have stronger shadows because they sit above scrolling content. The title bar stays nearly flat. Dark mode changes the layers to deep slate surfaces while retaining the grid and border separation.
@@ -217,6 +226,8 @@ This interface uses soft depth. White cards have fine borders and diffuse low-op
 ## Shapes
 
 The timer surface has generous corners (27px), ordinary cards use 20–21px, the floating dock uses 24px, and the monitoring dialog uses 22px. Primary tracking actions use 16px corners; ordinary fields and buttons use 11px. Status badges, week marks, and progress rails use circular or fully rounded forms where their state benefits from it.
+
+Build in public uses the tighter Studio Control corner for fields and the selected Online tab. Idea, prompt, proposal, and profile rows remain flat, separated by fine theme borders; the optional portrait preview uses gently rounded corners (12px).
 
 ## Components
 
@@ -259,6 +270,22 @@ Each of the five steps pairs a compact heading (22px, 700, 1.25) with explanator
 
 Inline SVG examples have purposeful geometry: staggered work, break, and review blocks explain a session; activity lines leading to a document explain a local report. Examples stop growing at 300px, carry accessible descriptions, and use foreground text for their labels. Work blocks reveal through clipping over 650ms with the existing restrained ease (cubic-bezier(0.16, 1, 0.3, 1)) and small staged delays; reduced motion removes the animation and leaves the complete example visible.
 
+### Build in public inside Online
+
+The studio uses a compact Manrope heading (28px, 800, 1.15), then 12px reading and control text, 11px field labels, and quieter 10px dates, revision metadata, and counters. Section headings remain in the incumbent heading family. At wider widths, editor textareas increase to 14px. The Online tab strip shows selection with a card-colored surface; the four studio views show it with a teal underline.
+
+Ideas present local observations for review. Each saved item groups a native checkbox and a separate text column with a 10px gap; the date and confirmation sit beneath the title, and Edit remains a separate action. A labelled evidence editor lets the person revise the account and record whether it describes the work accurately. Adjacent saving copy identifies that only the selected highlight moves to the private online space. The next controls choose LinkedIn, X, or Instagram, a style for each network, and an optional saved profile. These choices prepare prompts for an external assistant.
+
+Prompts reuse the divided-row pattern to show network, style, source idea, and whether content has returned. The editor places the saved prompt in one large editable field with explicit Save, Copy, and Delete actions. Contenido shows proposals with network, text preview, origin, and revision. Its editor separates the post or first message from the full thread, script, or slide plan and optional visual outline. Edits show Unsaved changes; the available actions save, copy, or delete the proposal. The surface has no approval, scheduling, destination, or publication controls.
+
+Ajustes groups social profiles stored independently in FlowSight, a scoped assistant connection, and project/voice preferences with a local suggestion cadence. Profile name, handle, network, and usual style give prompts context without a Buffer account requirement. Each group is separated by a fine rule and spacing, rather than additional raised cards. The surface journey and pilot boundary are recorded in `docs/BUILD_IN_PUBLIC.md`.
+
+Fields use theme surfaces and foregrounds, a fine border, Studio Control corners, and 10px by 11px padding. Interactive studio controls have a 2px accent focus outline with a 3px offset. Same-view renders restore keyboard focus and text selection; changing views moves focus to a heading, and an editor can receive focus on its back control. A persistent live-region node announces work and failures. Button color changes take 150ms and lose their transition under reduced motion.
+
+Profile and preference drafts survive busy and error renders; successful writes clear the transient draft, and owner changes clear the previous owner's form state. Prompt and proposal edits remain available during ordinary internal navigation. A minute-based studio check updates returned content and its count while an idle view is open, including manual idea cadence. Open editors, active forms, and ongoing requests defer this refresh so incoming content does not overwrite the user's work or steal focus.
+
+An optional Instagram visual outline uses a programmatically drawn PNG canvas in a 4:5 portrait format (1080 × 1350). Its editable headline leads, followed by an explanation and a signature/project footer. Manrope, a pale field, and dark green reading text carry the composition; the footer has a quiet separator. The title and explanation wrap and reduce in size to fit. The preview fills the available column and keeps its portrait ratio. It is labelled as an outline for creative development, not a finished carousel or generated image asset.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -274,10 +301,3 @@ Inline SVG examples have purposeful geometry: staggered work, break, and review 
 - **Don't** use teal on every card or turn observed activity into a score-like visual.
 - **Don't** let the floating dock cover the last controls in a scrolled pane.
 - **Don't** hide remaining consent details behind a fixed action row without a visible way to reach them.
-
-
-## Build in public inside Online
-
-Online has two in-place tabs: Leagues and Build in public. The personal publishing studio retains the existing desktop ground, fonts, title bar and dock. Its Stories, Drafts and Connections views use quiet separators and a single reading column. Story selection is a checkbox plus a text column, separated by 10px, with date and confirmation beneath the title.
-
-Local story search leads the first viewport. Selected highlights become channel-specific drafts; Instagram adds an editable portrait image with a main headline, explanation and footer. In the editor, unsaved changes replace approval status immediately. Same-view renders preserve keyboard focus and selection; navigation moves focus to the new view and a stable live region reports work and failures.

@@ -17,8 +17,12 @@ try{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript({content:`(${source.slice(begin,end)})({locale:'es-ES'});`});
  await page.addInitScript(({token,endpoint})=>{
+  window.__bipTest={failNext:'',poll:null};
+  const interval=window.setInterval.bind(window);
+  window.setInterval=(fn,delay,...args)=>{if(delay===60000&&fn.toString().includes('bip_collect_local'))window.__bipTest.poll=fn;return interval(fn,delay,...args);};
   const original=window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke=async(command,args={})=>{
+   if(command==='bip_cloud'&&window.__bipTest.failNext===args.request.action){window.__bipTest.failNext='';throw 'Fallo de conexión simulado para comprobar la recuperación.';}
    if(command==='bip_cloud'){const response=await fetch(endpoint+'build-in-public',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(args.request)});const payload=await response.json();if(!response.ok)throw payload.error;return payload;}
    if(command==='bip_collect_local')return {evidence:[{source_key:'synthetic-browser-evidence',title:'La música acompaña a las pausas de trabajo',summary:'Prueba sintética: trabajo en vincular la pausa de YouTube con una sesión de concentración.',occurred_on:'2026-10-12',kind:'progress'}]};
    if(command==='bip_generate_local')throw new Error('Prompt preparation must not invoke local copywriting.');
@@ -31,7 +35,13 @@ try{
  await page.goto(process.env.FLOWSIGHT_RENDERER_URL||'http://127.0.0.1:1443',{waitUntil:'networkidle'});
  await click('#navOnline');await click('#onlineContentTab');await click('[data-view=connections]');
  await page.locator('#bipProfileNetwork').selectOption('x');await page.locator('#bipProfileName').fill('Perfil de prueba');await page.locator('#bipProfileHandle').fill('@synthetic_builder');await page.locator('#bipProfileStyle').selectOption('thread');
+ await page.evaluate(()=>{window.__bipTest.failNext='profile';});await click('#bipProfileForm button[type=submit]');await status('Fallo de conexión');
+ assert.equal(await page.locator('#bipProfileName').inputValue(),'Perfil de prueba');assert.equal(await page.locator('#bipProfileHandle').inputValue(),'@synthetic_builder');assert.equal(await page.locator('#bipProfileNetwork').inputValue(),'x');assert.equal(await page.locator('#bipProfileStyle').inputValue(),'thread');
  await click('#bipProfileForm button[type=submit]');await status('Perfil añadido');await focus('bipProfileFormSubmit');assert.equal(await page.locator('#bipBufferKey').count(),0);
+ await page.locator('#bipVoice').fill('Contexto sintético que debe sobrevivir a un error de conexión.');await page.locator('#bipProject').fill('Prueba de persistencia');await page.locator('#bipExcluded').fill('privado');
+ await page.evaluate(()=>{window.__bipTest.failNext='settings';});await click('#bipSettings button[type=submit]');await status('Fallo de conexión');
+ assert.equal(await page.locator('#bipVoice').inputValue(),'Contexto sintético que debe sobrevivir a un error de conexión.');assert.equal(await page.locator('#bipProject').inputValue(),'Prueba de persistencia');assert.equal(await page.locator('#bipExcluded').inputValue(),'privado');
+ await click('#bipSettings button[type=submit]');await status('Preferencias guardadas');
  await click('[data-view=stories]');await click('[data-action=collect]');await click('[data-local="0"]');await page.locator('#bipConfirmed').check();await click('#bipEvidenceEdit button[type=submit]');await page.locator('[data-action=generate]').waitFor();
  await page.locator('[data-network=x]').uncheck();assert.equal(await page.evaluate(()=>document.activeElement.dataset.network),'x');await page.locator('[data-network=x]').check();await page.locator('#bipStyle-x').selectOption('thread');
  const state=await api({action:'studio'});await page.locator('#bipProfile-x').selectOption(state.profiles[0].id);
@@ -42,8 +52,9 @@ try{
  async function mcp(name,args={}){const response=await fetch(endpoint+'build-in-public-assistant',{method:'POST',headers:{Authorization:`Bearer ${assistant}`,'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})});const value=await response.json();assert.ok(response.ok&&!value.result.isError,JSON.stringify(value));return value.result;}
  const context=JSON.parse((await mcp('get_content_context')).content[0].text);assert.equal(context.briefs.length,3);assert.equal(context.profiles.length,1);
  const drafts=context.briefs.map(brief=>({brief_id:brief.id,evidence_id:brief.evidence_id,channel:brief.channel,body:'Propuesta sintética: la música acompaña a la pausa de concentración.',details:brief.channel==='x'?'1. Problema observado.\n2. Decisión de diseño.\n3. Próximo paso.':'Desarrollo sintético devuelto por el asistente.',visual:brief.channel==='instagram'?{title:'La pausa también se escucha',detail:'Un boceto sintético para explicar el trabajo.',footer:'FlowSight · Prueba'}:null}));
+ await click('[data-view=drafts]');assert.equal(await page.locator('[data-draft]').count(),0);
  await mcp('save_content_drafts',{batch_key:crypto.randomUUID(),drafts});
- await page.reload({waitUntil:'networkidle'});await click('#navOnline');await click('#onlineContentTab');await click('[data-view=drafts]');await page.locator('[data-draft]').first().waitFor();assert.equal(await page.locator('[data-draft]').count(),3);assert.equal(await page.locator('[data-action=send],[data-action=approve]').count(),0);
+ await page.evaluate(()=>window.__bipTest.poll());await page.locator('[data-draft]').first().waitFor();assert.equal(await page.locator('[data-draft]').count(),3);assert.equal(await page.locator('[data-action=send],[data-action=approve]').count(),0);
  await page.locator('[data-draft]').filter({hasText:'Instagram'}).click();await page.locator('#bipBody').fill('Texto sintético revisado.');await click('#bipDraftEdit button[type=submit]');await status('Cambios guardados');await focus('bipDraftEditSubmit');
  for(const [name,width,height,scheme] of [['compact',370,700,'light'],['minimum',340,400,'light'],['wide',900,780,'light'],['dark',370,700,'dark']]){
   await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:scheme});await page.waitForTimeout(250);
@@ -53,6 +64,6 @@ try{
   }
  }
  assert.deepEqual(errors,[]);
- await writeFile(resolve(output,'result.json'),JSON.stringify({passed:true,checks:['Independent X profile without Buffer','Per-network styles','Local ideas reviewed','Three prompts persisted','Prompt editing','MCP receives profiles and briefs','MCP returns full thread/visual content','Returned content editable','No publishing controls','Focus after profile/prompt/content save','370x700,340x400,900x780 and dark'],data:'Synthetic disposable account; actual compiled renderer, live API/database and MCP'},null,2));
+ await writeFile(resolve(output,'result.json'),JSON.stringify({passed:true,checks:['Independent X profile without Buffer','Profile and preferences preserved after request failures','Per-network styles','Local ideas reviewed','Three prompts persisted','Prompt editing','MCP receives profiles and briefs','MCP returns full thread/visual content','Incoming MCP content appears without reloading in manual cadence','Returned content editable','No publishing controls','Focus after profile/prompt/content save','370x700,340x400,900x780 and dark'],data:'Synthetic disposable account; actual compiled renderer, live API/database and MCP'},null,2));
  console.log('Assistant-first Build in public: full renderer/API/database/MCP round-trip passed. Synthetic data.');
 }finally{await browser.close();}

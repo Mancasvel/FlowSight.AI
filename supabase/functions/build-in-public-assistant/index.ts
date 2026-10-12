@@ -28,7 +28,9 @@ export async function handler(req: Request): Promise<Response> {
         if (request.params?.name === 'get_content_context') {
           const state = await service.studio()
           const handoff = await briefService(db,principal.userId).studio()
-          return reply({ content: [{ type: 'text', text: JSON.stringify({ settings: { project_name: state.settings.project_name, voice: state.settings.voice, locale: state.settings.locale }, evidence: state.evidence.filter(item => item.state === 'selected'), drafts: state.drafts, profiles:handoff.profiles, briefs:handoff.briefs }) }] })
+          const selected = state.evidence.filter(item => item.state === 'selected')
+          const selectedIds = new Set(selected.map(item => item.id))
+          return reply({ content: [{ type: 'text', text: JSON.stringify({ settings: { project_name: state.settings.project_name, voice: state.settings.voice, locale: state.settings.locale }, evidence: selected, drafts: state.drafts.filter(item => selectedIds.has(item.evidence_id)), profiles:handoff.profiles, briefs:handoff.briefs.filter(item => selectedIds.has(item.evidence_id)) }) }] })
         }
         if (request.params?.name === 'save_content_drafts') {
           const args = request.params.arguments

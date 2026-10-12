@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T00:35:59Z",
+  "generatedAt": "2026-10-12T18:00:23Z",
   "title": "Design System: FlowSight Desktop Renderer",
   "extensions": {
     "colorMeta": {
@@ -231,12 +231,30 @@
       "session-action": {
         "role": "primary",
         "displayName": "Session Action Teal",
-        "tonalRamp": ["oklch(15% 0.06 185)", "oklch(27% 0.06 185)", "oklch(39% 0.06 185)", "oklch(51% 0.06 185)", "oklch(63% 0.06 185)", "oklch(75% 0.06 185)", "oklch(86% 0.06 185)", "oklch(95% 0.06 185)"]
+        "tonalRamp": [
+          "oklch(15% 0.06 185)",
+          "oklch(27% 0.06 185)",
+          "oklch(39% 0.06 185)",
+          "oklch(51% 0.06 185)",
+          "oklch(63% 0.06 185)",
+          "oklch(75% 0.06 185)",
+          "oklch(86% 0.06 185)",
+          "oklch(95% 0.06 185)"
+        ]
       },
       "session-action-hover": {
         "role": "primary",
         "displayName": "Session Action Hover Teal",
-        "tonalRamp": ["oklch(15% 0.06 185)", "oklch(27% 0.06 185)", "oklch(39% 0.06 185)", "oklch(51% 0.06 185)", "oklch(63% 0.06 185)", "oklch(75% 0.06 185)", "oklch(86% 0.06 185)", "oklch(95% 0.06 185)"]
+        "tonalRamp": [
+          "oklch(15% 0.06 185)",
+          "oklch(27% 0.06 185)",
+          "oklch(39% 0.06 185)",
+          "oklch(51% 0.06 185)",
+          "oklch(63% 0.06 185)",
+          "oklch(75% 0.06 185)",
+          "oklch(86% 0.06 185)",
+          "oklch(95% 0.06 185)"
+        ]
       },
       "action-indigo": {
         "role": "secondary",
@@ -264,6 +282,20 @@
           "oklch(75% 0.130 182)",
           "oklch(86% 0.130 182)",
           "oklch(95% 0.130 182)"
+        ]
+      },
+      "bip-accent": {
+        "role": "primary",
+        "displayName": "Studio Teal",
+        "tonalRamp": [
+          "oklch(15% 0.09 178)",
+          "oklch(27% 0.09 178)",
+          "oklch(39% 0.09 178)",
+          "oklch(51% 0.09 178)",
+          "oklch(63% 0.09 178)",
+          "oklch(75% 0.09 178)",
+          "oklch(86% 0.09 178)",
+          "oklch(95% 0.09 178)"
         ]
       }
     },
@@ -298,7 +330,7 @@
       {
         "name": "dock-lift",
         "value": "0 18px 36px rgb(40 67 86 / 0.13), 0 3px 9px rgb(40 67 86 / 0.06)",
-        "purpose": "Keeps the four-tab dock above scrolling content."
+        "purpose": "Keeps the five-control dock above scrolling content."
       },
       {
         "name": "consent-lift",
@@ -307,6 +339,11 @@
       }
     ],
     "motion": [
+      {
+        "name": "studio-control-feedback",
+        "value": "0.15s",
+        "purpose": "Background and text color changes on Build in public controls; reduced motion removes the transition."
+      },
       {
         "name": "tracking-feedback",
         "value": "0.16s ease",
@@ -320,11 +357,34 @@
     ],
     "sessionSurfaces": {
       "direction": "Operate within the incumbent FlowSight mobile family",
-      "focus": { "light": "{colors.session-action}", "dark": "{colors.teal-active-dark}", "width": "3px", "offset": "3px", "scope": "Session planner and onboarding buttons, inputs, selects, textareas, and summaries" },
-      "onboarding": { "steps": 5, "layout": "Vertical flex overlay with a static footer, independently scrolling body, remaining-content button, and a visible live status region in the footer", "labels": "Actual theme foreground; muted foreground for explanations", "demoMotion": "650ms cubic-bezier(0.16, 1, 0.3, 1) clip reveal, with 100ms and 180ms staged delays; removed for reduced motion" },
-      "planner": { "layout": "Expandable Today section; two equal time fields; 96px chronological time column; actions wrap from a 120px basis", "states": "Request, local draft, feedback and revision, explicit confirmation, local calendar blocks", "windowSizes": ["370x700", "340x400", "900px wide"] }
+      "focus": {
+        "light": "{colors.session-action}",
+        "dark": "{colors.teal-active-dark}",
+        "width": "3px",
+        "offset": "3px",
+        "scope": "Session planner and onboarding buttons, inputs, selects, textareas, and summaries"
+      },
+      "onboarding": {
+        "steps": 5,
+        "layout": "Vertical flex overlay with a static footer, independently scrolling body, remaining-content button, and a visible live status region in the footer",
+        "labels": "Actual theme foreground; muted foreground for explanations",
+        "demoMotion": "650ms cubic-bezier(0.16, 1, 0.3, 1) clip reveal, with 100ms and 180ms staged delays; removed for reduced motion"
+      },
+      "planner": {
+        "layout": "Expandable Today section; two equal time fields; 96px chronological time column; actions wrap from a 120px basis",
+        "states": "Request, local draft, feedback and revision, explicit confirmation, local calendar blocks",
+        "windowSizes": [
+          "370x700",
+          "340x400",
+          "900px wide"
+        ]
+      }
     },
     "breakpoints": [
+      {
+        "name": "studio-wide-window",
+        "value": "700px"
+      },
       {
         "name": "narrow-window",
         "value": "380px"
@@ -336,10 +396,76 @@
       {
         "name": "short-window-height",
         "value": "520px"
+      },
+      {
+        "name": "studio-short-window-height",
+        "value": "550px"
       }
-    ]
+    ],
+    "buildInPublic": {
+      "direction": "Operate within the incumbent FlowSight mobile family",
+      "navigation": {
+        "outer": "Online contains Leagues and Build in public",
+        "views": [
+          "Ideas",
+          "Prompts",
+          "Contenido",
+          "Ajustes"
+        ],
+        "englishViews": [
+          "Ideas",
+          "Prompts",
+          "Content",
+          "Settings"
+        ],
+        "selection": "Card-colored selected outer tab; 2px teal underline for the current studio view; returned-content count beside Content"
+      },
+      "layout": "One reading column; period selector and local-idea search lead Ideas; reviewed selections precede network, style and optional profile controls; network controls stack in divided rows",
+      "responsive": "At 700px and wider, studio/idea/portrait widths cap at 760px/680px/360px within Online. At heights of 550px or less, the title reduces to 22px, its supporting sentence hides, outer tabs use a 30px minimum height and view spacing contracts. Studio content adds 28px bottom padding above the shared pane dock allowance.",
+      "storyChoice": {
+        "gap": "10px",
+        "checkboxSize": "16px",
+        "structure": "Separate checkbox and text column; date and confirmation beneath title; independent Edit action"
+      },
+      "focus": {
+        "light": "{colors.bip-accent}",
+        "dark": "{colors.teal-active-dark}",
+        "width": "2px",
+        "offset": "3px",
+        "continuity": "Same-view renders restore the active control and text selection; view navigation moves to a heading; editor fallback is the back control; the live-region node persists"
+      },
+      "evidence": "Local observations remain on the device until a reviewed highlight is saved. A saved row groups selection, title, date and factual confirmation separately from its Edit action.",
+      "prompts": "Network-specific stored prompts show network, style, source idea and returned-content status. Their editor exposes explicit Save, Copy and Delete actions.",
+      "profiles": "Social profiles are stored independently in FlowSight with network, name, handle and usual style; they supply prompt context without a Buffer account requirement.",
+      "assistant": "Scoped revocable MCP connection lets an external assistant collect evidence, profiles and prompts, then return proposals. Any later publication is handled with the assistant outside FlowSight.",
+      "returnedContent": "Rows show network, proposal preview, origin and revision. The editor separates post or first message from full thread, script or slide plan, with an optional visual outline. Save, Copy and Delete actions are available; approval, schedule, destination and publication controls are absent.",
+      "errorRecovery": "Profile and preference drafts survive busy/error renders and clear after successful writes or an owner change. Prompt and proposal edits survive ordinary internal navigation.",
+      "incomingContent": "A minute-based studio check refreshes returned content and its count in an idle open view, including manual idea cadence. Active editors, focused forms and ongoing requests defer refresh; the existing live region reports updates without stealing focus.",
+      "portraitVisual": {
+        "medium": "Programmatic PNG canvas without external raster assets",
+        "size": "1080x1350",
+        "ratio": "4:5",
+        "hierarchy": "Editable headline, explanation, and signature/project footer; a quiet separator belongs to the footer",
+        "fit": "Headline and explanation wrap and reduce in size; the preview fills the column and is capped at 360px on wider windows",
+        "role": "Optional editable visual outline for a creative assistant; not a completed carousel or generated illustration"
+      }
+    }
   },
   "components": [
+    {
+      "name": "Reviewed Idea",
+      "kind": "custom",
+      "description": "A saved idea pairs a native checkbox with a separate title/date/confirmation column and an independent Edit action.",
+      "html": "<article class=\"ds-studio-story\"><label class=\"ds-studio-choice\"><input type=\"checkbox\" checked><span><strong>A change worth explaining</strong><small>12 Oct &middot; Confirmed by you</small></span></label><button class=\"ds-studio-edit\" type=\"button\">Edit</button></article>",
+      "css": ".ds-studio-story{display:flex;align-items:flex-start;gap:10px;padding:14px 0;border-bottom:1px solid hsl(var(--border,214.3 31.8% 91.4%));color:hsl(var(--foreground,222.2 84% 4.9%));font-family:\"Plus Jakarta Sans\",sans-serif}.ds-studio-choice{display:flex;flex:1;align-items:flex-start;gap:10px;margin:0;font-size:12px;line-height:1.5;cursor:pointer}.ds-studio-choice input{width:16px;height:16px;flex:0 0 16px;margin:2px 0 0;accent-color:var(--bip-accent,#167b6d)}.ds-studio-choice span{display:block;min-width:0}.ds-studio-choice strong{font-weight:650;overflow-wrap:anywhere}.ds-studio-choice small{display:block;margin-top:5px;color:hsl(var(--muted-foreground,215.4 16.3% 46.9%));font-size:10px}.ds-studio-edit{min-height:36px;padding:9px 0;border:0;background:none;color:var(--bip-accent,#167b6d);font:600 11px \"Plus Jakarta Sans\",sans-serif;text-align:left;cursor:pointer;transition:background-color .15s,color .15s}.ds-studio-edit:hover{color:var(--bip-accent,#167b6d)}.ds-studio-choice input:focus-visible,.ds-studio-edit:focus-visible{outline:2px solid var(--bip-accent,#167b6d);outline-offset:3px}.ds-studio-choice input:disabled,.ds-studio-edit:disabled{opacity:.5;cursor:wait}@media(prefers-reduced-motion:reduce){.ds-studio-edit{transition:none}}"
+    },
+    {
+      "name": "Build in Public Views",
+      "kind": "nav",
+      "description": "Four compact views use an understated underline and a returned-content count within the Online workspace.",
+      "html": "<nav class=\"ds-studio-views\" aria-label=\"Build in public\"><button type=\"button\" aria-current=\"false\">Ideas</button><button type=\"button\" aria-current=\"page\">Prompts</button><button type=\"button\" aria-current=\"false\">Contenido<span>3</span></button><button type=\"button\" aria-current=\"false\">Ajustes</button></nav>",
+      "css": ".ds-studio-views{display:flex;gap:14px;border-bottom:1px solid hsl(var(--border,216 24% 88%));font-family:\"Plus Jakarta Sans\",sans-serif}.ds-studio-views button{border:0;border-bottom:2px solid transparent;background:none;color:hsl(var(--muted-foreground,215 16% 43%));padding:10px 0;font:650 12px \"Plus Jakarta Sans\",sans-serif;cursor:pointer}.ds-studio-views button[aria-current=page]{border-bottom-color:var(--bip-accent,#167b6d);color:hsl(var(--foreground,222 47% 11%))}.ds-studio-views button span{font-size:10px;margin-left:3px}.ds-studio-views button:focus-visible{outline:2px solid var(--bip-accent,#167b6d);outline-offset:3px}@media(max-height:550px){.ds-studio-views button{padding:8px 0}}"
+    },
     {
       "name": "Session Action",
       "kind": "button",
@@ -405,11 +531,11 @@
       "css": ".ds-success-badge{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:#def7f0;color:#0a766c;font:700 10px/1.1 \"Plus Jakarta Sans\", sans-serif;white-space:nowrap}"
     },
     {
-      "name": "Floating Four-Tab Dock",
+      "name": "Floating Five-Control Dock",
       "kind": "nav",
       "refersTo": "bottom-nav",
-      "description": "Mobile-family navigation adapted to the compact desktop window.",
-      "html": "<nav class=\"ds-dock\" aria-label=\"Primary navigation\"><button class=\"ds-dock-item ds-active\" type=\"button\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/></svg><span>Today</span></button><button class=\"ds-dock-item\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><path d=\"M4 18V9m6 9V5m6 13v-7m4 7V3\"/></svg><span>Insights</span></button><button class=\"ds-dock-item\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><path d=\"m12 2 2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z\"/></svg><span>Coach</span></button><button class=\"ds-dock-item\" type=\"button\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"8\" r=\"3\"/><path d=\"M5 21v-2a7 7 0 0 1 14 0v2\"/></svg><span>Settings</span></button></nav>",
+      "description": "Five icon-only controls in order: Online, Insights, Clock, Coach, and Settings. Online contains Leagues and Build in public.",
+      "html": "<nav class=\"ds-dock\" aria-label=\"Primary navigation\"><button class=\"ds-dock-item ds-active\" type=\"button\" aria-label=\"Online\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M3 12h18M12 3c5 5 5 13 0 18M12 3c-5 5-5 13 0 18\"/></svg></button><button class=\"ds-dock-item\" type=\"button\" aria-label=\"Insights\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg></button><button class=\"ds-dock-item\" type=\"button\" aria-label=\"Clock\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg></button><button class=\"ds-dock-item\" type=\"button\" aria-label=\"Coach\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z\"/><path d=\"M5 19h14M8 19v-3M16 19v-3\"/></svg></button><button class=\"ds-dock-item\" type=\"button\" aria-label=\"Settings\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"/><circle cx=\"12\" cy=\"7\" r=\"4\"/></svg></button></nav>",
       "css": ".ds-dock{width:min(100%,540px);display:flex;gap:3px;padding:7px;border:1px solid rgb(211 223 228 / .7);border-radius:24px;background:rgb(255 255 255 / .96);box-shadow:0 18px 36px rgb(40 67 86 / .13),0 3px 9px rgb(40 67 86 / .06);font-family:\"Plus Jakarta Sans\", sans-serif}.ds-dock-item{flex:1;min-width:0;min-height:51px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 3px;border:0;border-radius:17px;background:transparent;color:#8191a3;font:700 10px/1.1 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;transition:background-color .16s ease,color .16s ease}.ds-dock-item svg{width:21px;height:21px}.ds-dock-item:hover:not(.ds-active){background:#f2f7f8;color:#526d7b}.ds-dock-item.ds-active{background:#e8f8f5;color:#0ca99c}.ds-dock-item:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(prefers-color-scheme:dark){.ds-dock{border-color:#2a414b;background:#1a2c36;box-shadow:0 10px 26px rgb(0 0 0 / .12)}.ds-dock-item{color:#a4b6c2}.ds-dock-item:hover:not(.ds-active){background:#243b44;color:#d5e5e8}.ds-dock-item.ds-active{background:#204441;color:#6cdfd0}}@media(max-width:380px){.ds-dock{padding:5px;border-radius:20px}.ds-dock-item{min-height:49px}}"
     },
     {
@@ -431,12 +557,12 @@
   ],
   "narrative": {
     "northStar": "The Gridded Work Companion",
-    "overview": "The desktop renderer belongs to the FlowSight mobile family. A pale technical grid, slate reading text, teal signals, softly raised white panels, and one indigo-to-teal tracking action make the compact Tauri window feel related to the Android app without stretching a phone screen into desktop proportions.\n\nThe visual language carries through Today, Insights, Settings, first run, and consent. It puts a clear tracking decision beside measured time, then uses quieter cards and rails for supporting evidence. This contract describes the desktop WebView and its shared interface patterns.\n\nOnboarding and session planning follow the Operate direction within this incumbent family: compact labelled controls, useful examples, visible progress and status, and an explicit primary action at each decision. Their dark teal actions support white labels while the existing lighter teal continues to carry state and progress.",
+    "overview": "The desktop renderer belongs to the FlowSight mobile family. A pale technical grid, slate reading text, teal signals, softly raised white panels, and one indigo-to-teal tracking action make the compact Tauri window feel related to the Android app without stretching a phone screen into desktop proportions.\n\nThe visual language carries through Today, Insights, Settings, first run, and consent. It puts a clear tracking decision beside measured time, then uses quieter cards and rails for supporting evidence. This contract describes the desktop WebView and its shared interface patterns.\n\nOnboarding and session planning follow the Operate direction within this incumbent family: compact labelled controls, useful examples, visible progress and status, and an explicit primary action at each decision. Their dark teal actions support white labels while the existing lighter teal continues to carry state and progress.\n\nBuild in public extends this Operate direction inside Online. It keeps the gridded ground and compact type, with labelled choices, open rows, and quiet separators. Clear evidence, editable prompts, and returned proposals share the same working surface and retain their distinct meanings.",
     "keyCharacteristics": [
       "A 56px pale grid behind centered, softly layered work surfaces.",
       "Manrope for headings and measured display figures; Plus Jakarta Sans for reading and controls.",
       "Teal for state and progress, with an indigo-to-teal gradient concentrated in tracking and first-run actions.",
-      "A floating four-tab dock that stays available in the narrow work window."
+      "A floating five-control dock that stays available in the narrow work window."
     ],
     "rules": [
       {
