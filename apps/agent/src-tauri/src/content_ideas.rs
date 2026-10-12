@@ -207,6 +207,7 @@ pub(crate) fn select_five(
     let rating = json!({"type":"integer","minimum":0,"maximum":5});
     let schema = json!({"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":130},"angle":{"type":"string","maxLength":80},"reason":{"type":"string","maxLength":160},"interest":rating,"uniqueness":rating,"relevance":rating},"required":["title","angle","reason","interest","uniqueness","relevance"],"additionalProperties":false});
     let maximum = topics.iter().map(measured_score).fold(1.0_f64, f64::max);
+    let exact_direction = !identifiers(direction).is_empty();
     let mut chosen: Vec<(f64, Value)> = Vec::new();
     let mut attempted = 0;
     let mut matched = false;
@@ -234,7 +235,9 @@ pub(crate) fn select_five(
         let source_words = terms(source["summary"].as_str().unwrap_or(""));
         if title.is_empty()
             || terms(&title).is_disjoint(&source_words)
-            || (!direction.trim().is_empty() && proposal["relevance"].as_u64().unwrap_or(0) < 2)
+            || (!exact_direction
+                && !direction.trim().is_empty()
+                && proposal["relevance"].as_u64().unwrap_or(0) < 2)
         {
             continue;
         }
@@ -404,7 +407,7 @@ mod tests {
                     .as_str()
                     .unwrap()
                     .contains("FlowSight"));
-                let generated = json!({"title":title,"angle":"Invented unsupported feature","reason":"Invented productivity benefit","interest":4,"uniqueness":4,"relevance":5});
+                let generated = json!({"title":title,"angle":"Invented unsupported feature","reason":"Invented productivity benefit","interest":4,"uniqueness":4,"relevance":0});
                 request.respond(tiny_http::Response::from_string(json!({"choices":[{"finish_reason":"stop","message":{"content":generated.to_string()}}]}).to_string())).unwrap();
             }
         });
