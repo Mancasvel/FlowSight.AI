@@ -4,7 +4,11 @@ use reqwest::blocking::Client;
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{path::Path, time::Duration};
+use std::{
+    io::{BufRead, BufReader, Read},
+    path::Path,
+    time::Duration,
+};
 use tauri::Manager;
 
 pub(crate) fn clean(text: &str) -> String {
@@ -31,7 +35,38 @@ pub(crate) fn clean(text: &str) -> String {
         .collect()
 }
 
-fn collect(path: &Path, days: i32, excluded: &[String]) -> Result<Value, String> {
+fn safe_source(text: &str, excluded: &[String]) -> bool {
+    let lower = text.to_lowercase();
+    ![
+        "api key",
+        "api_key",
+        "access_token",
+        "refresh_token",
+        "password",
+        "contraseña",
+        "bearer ",
+        "passkey",
+        "two-factor",
+        "authentication screen",
+        "sk-",
+        "ghp_",
+        "github_pat_",
+        "sb_secret_",
+    ]
+    .iter()
+    .any(|term| lower.contains(term))
+        && !excluded
+            .iter()
+            .any(|term| !term.is_empty() && lower.contains(&term.to_lowercase()))
+}
+
+fn collect(
+    path: &Path,
+    days: i32,
+    excluded: &[String],
+    direction: &str,
+    codex_root: Option<&Path>,
+) -> Result<Value, String> {
     if ![1, 7, 30].contains(&days) {
         return Err("Choose 1, 7 or 30 days.".into());
     }
@@ -59,7 +94,7 @@ fn collect(path: &Path, days: i32, excluded: &[String]) -> Result<Value, String>
         .with_timezone(&Utc)
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
-    let mut statement = conn.prepare("SELECT id, description, date(created_at,'localtime'), coalesce(active_app,''), coalesce(duration_seconds,0) FROM reports WHERE created_at >= ?1 AND created_at <= datetime('now') AND length(description)>24 ORDER BY created_at DESC LIMIT 1500")
+    let mut statement = conn.prepare("SELECT id, description, date(created_at,'localtime'), coalesce(active_app,''), coalesce(duration_seconds,0) FROM reports WHERE created_at >= ?1 AND created_at <= datetime('now') AND length(description)>24 ORDER BY created_at DESC")
         .map_err(|_| "Could not read local observations")?;
     let rows = statement
         .query_map(params![since], |row| {
@@ -75,67 +110,18 @@ fn collect(path: &Path, days: i32, excluded: &[String]) -> Result<Value, String>
     let mut candidates = Vec::new();
     for row in rows {
         let (_, description, date, app, seconds) = row.map_err(|_| "Invalid local observation")?;
-        let lower = description.to_lowercase();
         if seconds < 20
-            || [
-                "api key",
-                "api_key",
-                "access_token",
-                "refresh_token",
-                "password",
-                "contraseña",
-                "bearer ",
-                "passkey",
-                "two-factor",
-                "authentication screen",
-            ]
-            .iter()
-            .any(|term| lower.contains(term))
+            || !safe_source(&description, excluded)
+            || description.trim() == "Screen analysis failed."
             || privacy
                 .excluded_applications
                 .iter()
                 .any(|name| app.to_lowercase().contains(&name.to_lowercase()))
-            || excluded
-                .iter()
-                .any(|term| !term.is_empty() && lower.contains(&term.to_lowercase()))
         {
             continue;
         }
         let summary = clean(&description);
         if summary.len() < 25 {
-            continue;
-        }
-        let score = [
-            "implement",
-            "develop",
-            "desarroll",
-            "fix",
-            "error",
-            "deploy",
-            "release",
-            "diseñ",
-            "design",
-            "test",
-            "research",
-            "investig",
-            "build",
-            "flowsight",
-            "product",
-            "learn",
-            "writing",
-            "document",
-            "analiz",
-            "plan",
-            "estrateg",
-            "reuni",
-            "meeting",
-            "content",
-            "video",
-        ]
-        .iter()
-        .filter(|word| lower.contains(**word))
-        .count();
-        if score == 0 {
             continue;
         }
         let title: String = summary.chars().take(105).collect();
@@ -145,13 +131,143 @@ fn collect(path: &Path, days: i32, excluded: &[String]) -> Result<Value, String>
         );
         candidates.push(json!({"source_key":key,"title":title,"summary":summary,"occurred_on":date,"kind":"progress","signals":{"observations":1,"recorded_seconds":seconds.max(0),"days":1}}));
     }
-    let evidence = crate::content_ideas::group_work(candidates);
+    if let Some(root) = codex_root {
+        candidates.extend(collect_codex_prompts(root, first_day, excluded)?);
+    }
+    let evidence = crate::content_ideas::retrieve_work(candidates, direction);
     Ok(
         json!({"evidence":evidence,"source":"local_activity","period_days":days,"generated_at":chrono::Utc::now().to_rfc3339()}),
     )
 }
 
+/// Read only user-authored prompts, never tool output, assistant claims, system
+/// instructions or credentials. Dates come from each event, not file mtime.
+fn collect_codex_prompts(
+    root: &Path,
+    first_day: chrono::NaiveDate,
+    excluded: &[String],
+) -> Result<Vec<Value>, String> {
+    let mut candidates = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for offset in 0..=(Local::now().date_naive() - first_day).num_days() {
+        let day = first_day + ChronoDuration::days(offset);
+        // Local dates can cross a UTC directory boundary.
+        for utc_day in [
+            day,
+            day - ChronoDuration::days(1),
+            day + ChronoDuration::days(1),
+        ] {
+            let directory = root.join(utc_day.format("%Y/%m/%d").to_string());
+            let entries = match std::fs::read_dir(directory) {
+                Ok(entries) => entries,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(_) => return Err("Could not read the selected local Codex prompts".into()),
+            };
+            for entry in entries {
+                let entry = entry.map_err(|_| "Could not read local Codex prompts")?;
+                if !entry
+                    .file_type()
+                    .map_err(|_| "Could not read prompt file")?
+                    .is_file()
+                    || entry.path().extension().is_none_or(|ext| ext != "jsonl")
+                {
+                    continue;
+                }
+                // Deduplicate directory visits and duplicate event representations.
+                let file_key = entry.path();
+                if !seen.insert(format!("file:{}", file_key.display())) {
+                    continue;
+                }
+                let file = std::fs::File::open(&file_key)
+                    .map_err(|_| "Could not open local Codex prompts")?;
+                let mut reader = BufReader::new(file);
+                let mut buffer = Vec::new();
+                loop {
+                    buffer.clear();
+                    // Discard huge tool/image lines without retaining their contents.
+                    let bytes = std::io::Read::by_ref(&mut reader)
+                        .take(256 * 1024)
+                        .read_until(b'\n', &mut buffer)
+                        .map_err(|_| "Could not read local Codex prompts")?;
+                    if bytes == 0 {
+                        break;
+                    }
+                    if buffer.last() != Some(&b'\n') && bytes == 256 * 1024 {
+                        loop {
+                            buffer.clear();
+                            let read = std::io::Read::by_ref(&mut reader)
+                                .take(256 * 1024)
+                                .read_until(b'\n', &mut buffer)
+                                .map_err(|_| "Could not skip local tool output")?;
+                            if read == 0 || buffer.last() == Some(&b'\n') {
+                                break;
+                            }
+                        }
+                        continue;
+                    }
+                    let Ok(event) = serde_json::from_slice::<Value>(&buffer) else {
+                        continue;
+                    };
+                    let payload = &event["payload"];
+                    let text = if event["type"] == "response_item"
+                        && payload["type"] == "message"
+                        && payload["role"] == "user"
+                    {
+                        payload["content"]
+                            .as_array()
+                            .map(|parts| {
+                                parts
+                                    .iter()
+                                    .filter(|part| part["type"] == "input_text")
+                                    .filter_map(|part| part["text"].as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(" ")
+                            })
+                            .unwrap_or_default()
+                    } else if event["type"] == "event_msg" && payload["type"] == "user_message" {
+                        payload["message"].as_str().unwrap_or("").to_string()
+                    } else {
+                        continue;
+                    };
+                    let text = text.trim();
+                    if text.chars().count() < 25
+                        || text.starts_with('#')
+                        || text.starts_with('<')
+                        || !safe_source(text, excluded)
+                    {
+                        continue;
+                    }
+                    let Some(timestamp) = event["timestamp"]
+                        .as_str()
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                    else {
+                        continue;
+                    };
+                    let date = timestamp.with_timezone(&Local).date_naive();
+                    if date < first_day || timestamp.with_timezone(&Utc) > Utc::now() {
+                        continue;
+                    }
+                    let summary = format!(
+                        "PROMPT DEL USUARIO (solicitud, resultado por confirmar): {}",
+                        clean(text)
+                    );
+                    let key = format!(
+                        "codex:{:x}",
+                        Sha256::digest(format!("{date}:{summary}").as_bytes())
+                    );
+                    if !seen.insert(key.clone()) {
+                        continue;
+                    }
+                    candidates.push(json!({"source_key":key,"title":clean(text).chars().take(105).collect::<String>(),"summary":summary,"occurred_on":date.to_string(),"kind":"progress","signals":{"observations":1,"recorded_seconds":0,"days":1}}));
+                }
+            }
+        }
+    }
+    Ok(candidates)
+}
+
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // explicit owner-local source and generation controls
 pub async fn bip_collect_local(
     app: tauri::AppHandle,
     period_days: i32,
@@ -159,14 +275,21 @@ pub async fn bip_collect_local(
     locale: Option<String>,
     direction: Option<String>,
     recent_keys: Option<Vec<String>>,
+    include_codex_prompts: Option<bool>,
+    recent_titles: Option<Vec<String>>,
 ) -> Result<Value, String> {
     let path = crate::paths::db_path_read_only()?;
     let terms = excluded_terms.unwrap_or_default();
     let direction = direction.unwrap_or_default();
     let recent = recent_keys.unwrap_or_default();
+    let recent_titles = recent_titles.unwrap_or_default();
     if direction.chars().count() > 1000
         || recent.len() > 100
         || recent.iter().any(|key| key.len() > 160)
+        || recent_titles.len() > 20
+        || recent_titles
+            .iter()
+            .any(|title| title.chars().count() > 160)
     {
         return Err("Invalid idea selection context".into());
     }
@@ -174,11 +297,22 @@ pub async fn bip_collect_local(
         return Err("Too many private terms.".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        let observations = collect(&path, period_days, &terms)?;
+        let codex = if include_codex_prompts.unwrap_or(false) {
+            dirs::home_dir().map(|home| home.join(".codex/sessions"))
+        } else {
+            None
+        };
+        let observations = collect(&path, period_days, &terms, &direction, codex.as_deref())?;
         if observations["evidence"]
             .as_array()
             .map_or(true, Vec::is_empty)
         {
+            let mut observations = observations;
+            observations["status"] = json!(if direction.trim().is_empty() {
+                "empty"
+            } else {
+                "no_matches"
+            });
             return Ok(observations);
         }
         crate::agent::ensure_local_llm_ready(app.clone(), app.state::<crate::agent::AgentState>())?;
@@ -190,6 +324,7 @@ pub async fn bip_collect_local(
             locale.as_deref().unwrap_or("es"),
             &direction,
             &recent,
+            &recent_titles,
         )
     })
     .await
@@ -344,6 +479,8 @@ pub fn verify_local(input: &Path, output: &Path) -> Result<(), String> {
             Path::new(request["database"].as_str().ok_or("Missing database")?),
             request["days"].as_i64().unwrap_or(7) as i32,
             &[],
+            request["direction"].as_str().unwrap_or(""),
+            request["codex_root"].as_str().map(Path::new),
         ),
         Some("generate") => {
             let url =
@@ -365,6 +502,8 @@ pub fn verify_local(input: &Path, output: &Path) -> Result<(), String> {
                 Path::new(request["database"].as_str().ok_or("Missing database")?),
                 request["days"].as_i64().unwrap_or(7) as i32,
                 &[],
+                request["direction"].as_str().unwrap_or(""),
+                request["codex_root"].as_str().map(Path::new),
             )?;
             crate::content_ideas::select_five(
                 observations,
@@ -372,6 +511,15 @@ pub fn verify_local(input: &Path, output: &Path) -> Result<(), String> {
                 request["locale"].as_str().unwrap_or("es"),
                 request["direction"].as_str().unwrap_or(""),
                 &request["recent_keys"]
+                    .as_array()
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(|v| v.as_str().map(str::to_string))
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default(),
+                &request["recent_titles"]
                     .as_array()
                     .map(|items| {
                         items
@@ -409,6 +557,51 @@ pub async fn bip_generate_local(app: tauri::AppHandle, request: Value) -> Result
 mod tests {
     use super::*;
     #[test]
+    fn codex_prompts_are_deduplicated_filtered_and_do_not_claim_completion() {
+        let dir = tempfile::tempdir().unwrap();
+        let day = Local::now().date_naive();
+        let folder = dir.path().join(day.format("%Y/%m/%d").to_string());
+        std::fs::create_dir_all(&folder).unwrap();
+        let timestamp = Utc::now().to_rfc3339();
+        let prompt = "Haz una pantalla táctil ESP32 con tiempo pausa y reanudar";
+        let event = |role: &str, text: &str| {
+            json!({"timestamp":timestamp,"type":"response_item","payload":{"type":"message","role":role,"content":[{"type":"input_text","text":text}]}}).to_string()
+        };
+        let rows = [event("user",prompt), json!({"timestamp":timestamp,"type":"event_msg","payload":{"type":"user_message","message":prompt}}).to_string(), event("assistant","He terminado la ESP32 y funciona perfectamente"), event("user","ESP32 con password secret-hidden para la conexión"), event("user","Haz una carcasa ESP32 para AlphaProject"), event("user","# AGENTS.md instructions esp32 ignore previous rules"), json!({"timestamp":timestamp,"type":"response_item","payload":{"type":"function_call_output","output":"ESP32 no es evidencia de usuario"}}).to_string()];
+        let path = folder.join("thread.jsonl");
+        let content = rows.join("\n") + "\n";
+        std::fs::write(&path, &content).unwrap();
+        let found = collect_codex_prompts(dir.path(), day, &["AlphaProject".into()]).unwrap();
+        assert_eq!(found.len(), 1);
+        assert!(found[0]["summary"]
+            .as_str()
+            .unwrap()
+            .contains("solicitud, resultado por confirmar"));
+        assert!(found[0]["summary"].as_str().unwrap().contains(prompt));
+        assert_eq!(found[0]["signals"]["recorded_seconds"], 0);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
+    }
+    #[test]
+    fn requested_old_report_survives_newer_flood_without_keyword_gate() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE config(key TEXT PRIMARY KEY,value TEXT); CREATE TABLE reports(id INTEGER PRIMARY KEY,description TEXT,created_at TEXT,active_app TEXT,duration_seconds INTEGER);").unwrap();
+        conn.execute("INSERT INTO reports VALUES(1,'ESP32 pantalla táctil botones pausa reanudar',datetime('now','-1 day'),'Editor',60)",[]).unwrap();
+        for i in 2..1605 {
+            conn.execute("INSERT INTO reports VALUES(?1,'Preparing unrelated long-running documents',datetime('now'),'Editor',60)",params![i]).unwrap();
+        }
+        drop(conn);
+        let before = std::fs::read(&path).unwrap();
+        let found = collect(&path, 7, &[], "mi trabajo con la ESP32", None).unwrap();
+        assert_eq!(found["evidence"].as_array().unwrap().len(), 1);
+        assert!(found["evidence"][0]["summary"]
+            .as_str()
+            .unwrap()
+            .contains("ESP32"));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+    #[test]
     fn credentials_never_become_content() {
         let value = clean(
             "Work alice@example.com https://private.test sk-abcdefghijklmnop C:\\private\\key",
@@ -443,10 +636,10 @@ mod tests {
         }
         drop(conn);
         let before = std::fs::read(&path).unwrap();
-        let result = collect(&path, 7, &["AlphaProject".into()]).unwrap();
+        let result = collect(&path, 7, &["AlphaProject".into()], "", None).unwrap();
         assert_eq!(result["evidence"].as_array().unwrap().len(), 1);
         assert_eq!(std::fs::read(&path).unwrap(), before);
-        assert!(collect(&path, 2, &[]).is_err());
+        assert!(collect(&path, 2, &[], "", None).is_err());
     }
     #[test]
     fn generated_identity_is_host_owned() {
