@@ -104,11 +104,17 @@ Starting saves the settings it uses. The same
 optional setting is available during setup and defaults to off for existing and
 new installations. Playlist parameters and URL fragments are preserved.
 
-Browser Controls 1.1.3 opens the link once in an inactive tab inside an existing
+Browser Controls 1.1.4 opens the link once in an inactive tab inside an existing
 browser window. It never creates or activates a window and leaves the selected
 tab unchanged. Keep the paired browser running. Pause, resume, periodic status
-checks, and reconnection do not reopen music. Ending focus leaves the music tab
-available for the user to control. Browser audio autoplay permissions still
+checks, and reconnection do not reopen music. For YouTube and YouTube Music,
+starting requests playback, pausing total focus pauses the session's music tab,
+and resuming requests playback at the same position. Only the tab opened by the
+session is controlled; other YouTube tabs are untouched. A pause received while
+the page is loading remains in effect when its player appears. Periodic checks
+do not override a manual playback choice during an active session. Ending focus
+leaves the music tab available for the user to control. Closed or navigated tabs
+are not recreated on resume. Browser audio autoplay permissions still
 apply; a website may need a prior playback action or site permission.
 
 If the music site is blocked, the exact configured URL (including its query)

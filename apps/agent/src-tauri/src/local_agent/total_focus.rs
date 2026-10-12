@@ -298,9 +298,15 @@ fn activate_with(
 
 pub fn end() -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
+    let previous = state::read()?.total_focus;
     clear_session(None)?;
     let notification_warning = release_notifications().err();
-    let result = browser_bridge::execute("browser.focus_status", &json!({}));
+    let result = browser_bridge::execute(
+        "browser.focus_status",
+        &previous.map_or_else(|| json!({}), |session| {
+            json!({"musicPlayback":"release","musicSessionId":session.id,"sessionId":session.id})
+        }),
+    );
     Ok(
         json!({"ended":true,"browserReleased":result.as_ref().is_ok_and(|value| value["applied"] == false),
         "warning":result.err(),"notificationWarning":notification_warning,"state":get_total_focus()?}),
@@ -377,9 +383,9 @@ pub fn end_linked(app: &AppHandle) -> Result<Value, String> {
     Ok(result)
 }
 
-fn pause_with(apply: impl FnOnce() -> Result<Value, String>) -> Result<Value, String> {
+fn pause_with(apply: impl FnOnce(&Session) -> Result<Value, String>) -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
-    state::update(|data| {
+    let paused = state::update(|data| {
         let session = data
             .total_focus
             .as_mut()
@@ -389,10 +395,13 @@ fn pause_with(apply: impl FnOnce() -> Result<Value, String>) -> Result<Value, St
         }
         session.remaining_seconds = session.remaining();
         session.paused_at = Some(Utc::now().to_rfc3339());
-        Ok(())
+        Ok(session.clone())
     })?;
     let notification_warning = release_notifications().err();
-    let result = apply();
+    let result = apply(&paused);
+    if let Ok(value) = &result {
+        update_music_warning(&paused.id, value)?;
+    }
     Ok(
         json!({"browserReleased":result.as_ref().is_ok_and(|value| value["applied"] == false),
         "warning":result.err(),"notificationWarning":notification_warning,"state":get_total_focus()?}),
@@ -401,7 +410,7 @@ fn pause_with(apply: impl FnOnce() -> Result<Value, String>) -> Result<Value, St
 
 fn resume_with(
     status: impl FnOnce() -> Value,
-    apply: impl FnOnce() -> Result<Value, String>,
+    apply: impl FnOnce(&Session) -> Result<Value, String>,
 ) -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
     let previous = state::read()?
@@ -426,7 +435,7 @@ fn resume_with(
         if cfg!(windows) && resumed.quiet_notifications {
             system_quiet::enable_total_focus((previous.remaining_seconds + 59) / 60)?;
         }
-        let value = apply()?;
+        let value = apply(&previous)?;
         if value["sessionId"] != resumed.id
             || value["applied"] != true
             || !policy()?.is_some_and(|session| session.id == resumed.id)
@@ -436,6 +445,7 @@ fn resume_with(
                     .into(),
             );
         }
+        update_music_warning(&resumed.id, &value)?;
         get_total_focus()
     })();
     if result.is_err() {
@@ -454,12 +464,35 @@ fn resume_with(
     result
 }
 
+fn update_music_warning(session_id: &str, value: &Value) -> Result<(), String> {
+    state::update(|data| {
+        if let Some(session) = data
+            .total_focus
+            .as_mut()
+            .filter(|session| session.id == session_id)
+        {
+            if session.music_url.is_some() {
+                session.music_warning = value["musicError"].as_str().map(str::to_string);
+            }
+        }
+        Ok(())
+    })
+}
+
+fn sync_music_playback(previous: &Session, playback: &str) -> Result<Value, String> {
+    let session = state::read()?.total_focus.ok_or("Total focus has ended.")?;
+    browser_bridge::execute(
+        "browser.focus_status",
+        &json!({"musicPlayback":playback,"musicSessionId":previous.id,"sessionId":session.id}),
+    )
+}
+
 #[tauri::command]
 pub async fn pause_total_focus(app: AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
         crate::agent::stop_monitoring(app.state::<AgentState>())?;
-        let result = pause_with(|| browser_bridge::execute("browser.focus_status", &json!({})));
+        let result = pause_with(|session| sync_music_playback(session, "pause"));
         if result.is_err() && policy()?.is_some() {
             let _ = crate::agent::start_monitoring(app.state::<AgentState>());
         }
@@ -474,11 +507,11 @@ pub async fn resume_total_focus(app: AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
         crate::privacy::require_monitoring_acknowledgement(&crate::paths::db_path()?)?;
-        resume_with(browser_bridge::focus_status, || {
-            browser_bridge::execute("browser.focus_status", &json!({}))
+        resume_with(browser_bridge::focus_status, |previous| {
+            sync_music_playback(previous, "play")
         })?;
         if let Err(error) = crate::agent::start_monitoring(app.state::<AgentState>()) {
-            let _ = pause_with(|| browser_bridge::execute("browser.focus_status", &json!({})));
+            let _ = pause_with(|session| sync_music_playback(session, "pause"));
             return Err(error);
         }
         if let Some(session) = state::read()?.total_focus {
@@ -609,6 +642,48 @@ pub fn restore_after_restart() -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn music_pause_resume_keeps_tab_identity_and_surfaces_playback_errors() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(None);
+        start_confirmed();
+        state::update(|data| {
+            data.total_focus.as_mut().unwrap().music_url =
+                Some("https://www.youtube.com/watch?v=music".into());
+            Ok(())
+        })
+        .unwrap();
+        let original = policy().unwrap().unwrap();
+        pause_with(|session| {
+            assert_eq!(session.id, original.id);
+            assert!(session.paused_at.is_some());
+            assert!(policy()?.is_none());
+            Ok(json!({"applied":false,"musicError":"Music tab closed"}))
+        })
+        .unwrap();
+        assert_eq!(
+            state::read()
+                .unwrap()
+                .total_focus
+                .unwrap()
+                .music_warning
+                .as_deref(),
+            Some("Music tab closed")
+        );
+        resume_with(
+            || json!({"totalFocusAvailable":true}),
+            |previous| {
+                assert_eq!(previous.id, original.id);
+                let current = policy()?.unwrap();
+                assert_ne!(current.id, previous.id);
+                assert_eq!(current.music_url, previous.music_url);
+                Ok(json!({"sessionId":current.id,"applied":true,"musicPlayback":"play"}))
+            },
+        )
+        .unwrap();
+        assert!(policy().unwrap().unwrap().music_warning.is_none());
+    }
+
+    #[test]
     fn pause_keeps_remaining_time_and_resumes_with_fresh_policy_identity() {
         let _store = state::TestStore::new();
         system_quiet::mock_banners(None);
@@ -619,7 +694,7 @@ mod tests {
         })
         .unwrap();
         let original = policy().unwrap().unwrap();
-        pause_with(|| Ok(json!({"applied":false}))).unwrap();
+        pause_with(|_| Ok(json!({"applied":false}))).unwrap();
         let paused = state::read().unwrap().total_focus.unwrap();
         assert!(paused.paused_at.is_some());
         assert!((2990..=3000).contains(&paused.remaining_seconds));
@@ -642,7 +717,7 @@ mod tests {
         assert_eq!(system_quiet::mocked_banners(), None);
         resume_with(
             || json!({"totalFocusAvailable":true}),
-            || {
+            |_| {
                 let id = policy()?.unwrap().id;
                 Ok(json!({"sessionId":id,"applied":true}))
             },
@@ -663,17 +738,17 @@ mod tests {
         let _store = state::TestStore::new();
         system_quiet::mock_banners(Some(0));
         start_confirmed();
-        pause_with(|| Ok(json!({"applied":false}))).unwrap();
+        pause_with(|_| Ok(json!({"applied":false}))).unwrap();
         let paused = state::read().unwrap().total_focus.unwrap();
         assert!(resume_with(
             || json!({"totalFocusAvailable":false}),
-            || panic!("unavailable browser must not activate")
+            |_| panic!("unavailable browser must not activate")
         )
         .is_err());
         assert_eq!(
             resume_with(
                 || json!({"totalFocusAvailable":true}),
-                || Err("DNR unavailable".into())
+                |_| Err("DNR unavailable".into())
             )
             .unwrap_err(),
             "DNR unavailable"

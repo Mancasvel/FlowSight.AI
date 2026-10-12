@@ -73,6 +73,7 @@ fn write_install_manifest() {
             "options.html",
             "options.js",
             "worker.js",
+            "music.js",
             "blocked.html",
             "blocked.js",
             "focus.css",
