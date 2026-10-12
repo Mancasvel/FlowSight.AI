@@ -60,9 +60,10 @@ export function mountBuildInPublic({root,invoke}){
   const selected=()=>state?.evidence.filter(item=>item.state==='selected')||[];
   const stateLabel=value=>({draft:tr('Borrador','Draft'),approved:tr('Aprobado','Approved'),sending:tr('Enviando','Sending'),scheduled:tr('En cola','Queued'),published:tr('Publicado','Published'),failed:tr('Revisar envío','Review delivery'),uncertain:tr('Comprobar en Buffer','Check Buffer')})[value]||value;
   async function refresh(){
-    if(busy||refreshing)return;refreshing=true;
+    if(busy||refreshing)return;refreshing=true;busy=true;
     captureEditor();
-    try{acceptStudio(await api({action:'studio'}));error='';}catch(e){state=null;loaded=false;local=[];editor=null;secret='';error=String(e);}finally{refreshing=false;}
+    render();
+    try{acceptStudio(await api({action:'studio'}));error='';}catch(e){state=null;loaded=false;local=[];editor=null;secret='';error=String(e);}finally{refreshing=false;busy=false;}
     render();
   }
   async function run(task,{reload=true}={}){

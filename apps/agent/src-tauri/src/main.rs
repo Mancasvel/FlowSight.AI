@@ -192,5 +192,23 @@ fn main() {
         );
     }
 
+    #[cfg(debug_assertions)]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if args.get(1).map(String::as_str) == Some("--bip-verify") {
+            if args.len() != 4 {
+                eprintln!("Expected --bip-verify INPUT OUTPUT");
+                std::process::exit(2);
+            }
+            if let Err(error) = app_lib::verify_build_in_public(
+                std::path::Path::new(&args[2]),
+                std::path::Path::new(&args[3]),
+            ) {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+            return;
+        }
+    }
     app_lib::run();
 }

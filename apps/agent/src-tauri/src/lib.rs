@@ -4,6 +4,8 @@ mod agent_pure;
 mod anonymous_analytics;
 mod auth;
 mod build_in_public;
+#[cfg(debug_assertions)]
+pub use build_in_public::verify_local as verify_build_in_public;
 mod calendar_companion;
 mod coach_chat;
 pub mod context;

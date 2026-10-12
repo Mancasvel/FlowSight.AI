@@ -45,7 +45,8 @@ try{
  assert.equal(await page.locator('#bipBody').inputValue(),'Cambio sintético tras la aprobación.');
  for(const [name,width,height,scheme] of [['compact',370,700,'light'],['minimum',340,700,'light'],['wide',900,780,'light'],['dark',370,700,'dark']]){
   await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:scheme});
-  await page.evaluate(()=>window.scrollTo(0,0));
+  await page.waitForTimeout(250); // Allow the app's theme stylesheets to settle.
+  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.app-viewport').scrollTop=0;});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${name}: page overflow`);
   await page.screenshot({path:resolve(output,`${name}.png`)});
   await page.locator('#bipImage').screenshot({path:resolve(output,`${name}-instagram.png`)});
