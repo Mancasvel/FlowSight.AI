@@ -10,7 +10,7 @@ export function check(error: { message: string; code?: string } | null) {
   if (error) throw new StudioError(503, error.code === '42P01' || error.code === 'PGRST205'
     ? 'La base de datos de Build in public todavía no está instalada.' : 'No se ha podido guardar el cambio. Inténtalo de nuevo.')
 }
-const DEFAULTS: Settings = { project_name: 'Mi proyecto', locale: 'es', timezone: 'Europe/Madrid', cadence: 'manual', excluded_terms: [], voice: '', last_collected_at: null }
+const DEFAULTS: Settings = { project_name: 'Mi proyecto', locale: 'es', timezone: 'Europe/Madrid', cadence: 'manual', excluded_terms: [], voice: '', topic_direction:'', last_collected_at: null }
 export const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
 
 export function studioService(db: SupabaseClient, userId: string) {
@@ -44,11 +44,15 @@ export function studioService(db: SupabaseClient, userId: string) {
     const value = settingsSchema.parse(input)
     const { error } = await db.from('bip_settings').upsert({ ...value, user_id: userId }); check(error)
   }
+  async function saveDirection(input: unknown) {
+    const topic_direction=z.string().trim().max(1000).parse(input)
+    const {error}=await db.from('bip_settings').upsert({user_id:userId,topic_direction});check(error)
+  }
   async function importEvidence(input: unknown, manual = false) {
     const rows = z.array(evidenceSchema).min(1).max(30).parse(input)
     const prefs = await settings()
     // Insert-only: recollection cannot undo a person's edits, selection or dismissal.
-    const { error } = await db.from('bip_evidence').upsert(rows.map(row => ({ ...row, title: redact(row.title, prefs.excluded_terms), summary: redact(row.summary, prefs.excluded_terms), user_id: userId, provenance: manual ? 'manual' : 'local_activity', confirmed: manual })), { onConflict: 'user_id,source_key', ignoreDuplicates: true }); check(error)
+    const { error } = await db.from('bip_evidence').upsert(rows.map(row => ({ ...row, signals:Object.fromEntries(Object.entries(row.signals).map(([key,value])=>[key,typeof value==='string'?redact(value,prefs.excluded_terms):value])), title: redact(row.title, prefs.excluded_terms), summary: redact(row.summary, prefs.excluded_terms), user_id: userId, provenance: manual ? 'manual' : 'local_activity', confirmed: manual })), { onConflict: 'user_id,source_key', ignoreDuplicates: true }); check(error)
     const { error: settingsError } = await db.from('bip_settings').upsert({ ...prefs, user_id: userId, last_collected_at: new Date().toISOString() }); check(settingsError)
   }
   async function editEvidence(id: string, input: unknown) {
@@ -114,7 +118,7 @@ export function studioService(db: SupabaseClient, userId: string) {
     const paths = data.flatMap(row => row.image_path ? [row.image_path] : [])
     if (paths.length) await db.storage.from('bip-media').remove(paths)
   }
-  return { studio, settings, evidence, draft, saveSettings, importEvidence, editEvidence, createToken, revokeToken, enqueue, saveGenerated, editDraft, approve, removeDraft }
+  return { studio, settings, evidence, draft, saveSettings, importEvidence, editEvidence, createToken, revokeToken, enqueue, saveGenerated, editDraft, approve, removeDraft, saveDirection }
 }
 
 export async function authenticateIntegration(db: SupabaseClient, bearer: string, scope: 'device' | 'assistant') {

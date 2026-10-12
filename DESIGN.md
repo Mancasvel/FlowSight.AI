@@ -41,6 +41,11 @@ typography:
     fontSize: "15px"
     fontWeight: 800
     letterSpacing: "-0.025em"
+  studio-title:
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "14px"
+    fontWeight: 750
+    lineHeight: 1.4
   body:
     fontFamily: "'Plus Jakarta Sans', sans-serif"
     fontSize: "13px"
@@ -188,10 +193,13 @@ Manrope gives headings and measured time a strong, friendly shape. Plus Jakarta 
 - **Display** (800, 46px, 1.12): centered elapsed time; 40px in the narrow window and 52px at 600px and wider. Tabular numerals keep the timer steady.
 - **Headline** (800, 34px, 1.16): Today, Insights, and You headings; 30px at 380px and narrower.
 - **Title** (800, 15px): card headings and section titles.
+- **Studio title** (750, 14px, 1.4): the useful subject at the start of Build in public idea, prompt, and proposal rows.
 - **Body** (13px, 1.5): standard reading and control text; secondary explanations commonly use 11–12px.
 - **Kicker** (800, 11px, 0.16em, uppercase): brief teal section cues such as Today and Your Space.
 
 **The Measurement Rule.** Keep numbers aligned with tabular numerals while preserving the same Manrope display voice as the rest of the interface.
+
+**The Subject First Rule.** In Build in public lists, lead with the useful idea title. Keep the source excerpt, recorded signals, network, and status subordinate to that subject.
 
 ## Layout
 
@@ -207,9 +215,11 @@ The five-step onboarding overlay uses a vertical flex layout: the progress heade
 
 The Today planner remains an expandable section in the existing reading column at 370 × 700px, 340 × 400px, and 900px wide. Its form uses a 14px rhythm, two equal-width time fields, a full-width intention field, and a chronological proposal list with a 96px time column. Confirmation and discard actions wrap from a 120px basis instead of forcing a narrow window to scroll horizontally.
 
-Online keeps Leagues and Build in public in one in-place, two-choice tab strip. The studio stays in a single reading column at compact and wide widths. Four views sit below the heading: Ideas, Prompts, Contenido, and Ajustes (Ideas, Prompts, Content, and Settings in English). Their underline navigation uses a 14px gap and gives returned content a count. The period selector and full-width local-idea search lead Ideas; network, style, and profile controls follow the reviewed selection.
+Online keeps Leagues and Build in public in one in-place, two-choice tab strip. The studio has an accessible heading but no duplicate visible title or slogan below the selected outer tab. Its four views follow immediately: Ideas, Prompts, Contenido, and Ajustes (Ideas, Prompts, Content, and Settings in English). Their underline navigation uses an 18px gap, 36px minimum-height controls, and a returned-content count. The outer strip uses 3px inset padding, 34px minimum-height controls, and an 8px gap below it.
 
-At 700px and wider, the studio is capped at 760px, idea sections at 680px, and the optional portrait preview at 360px, within the containing Online layout. Network controls stack in separate divided rows, long text can break, and studio content adds 28px bottom padding above the shared pane's dock allowance. At heights of 550px or less, the heading reduces to 22px, its supporting sentence is hidden, the Online controls reduce to a 30px minimum height, and view spacing contracts. The reading order remains unchanged.
+Ideas leads with a compact two-column toolbar: the work period occupies the first column and Generate 5 ideas / 5 more ideas occupies the second. The columns use a 9px gap and 38px minimum-height controls. Optional text direction sits in a disclosure below the toolbar. Open idea rows follow their count heading; retained earlier ideas and saved selections remain separate. A selected count and Prepare prompts action open a dedicated inline setup step in place of the list.
+
+At 700px and wider, the studio is capped at 760px and the optional portrait preview at 360px, within the containing Online layout. Idea rows use the available studio width. Setup keeps networks in divided groups; style and profile fields stack in compact windows and sit in two equal columns from 560px. Studio content uses 12px top and 40px bottom padding in addition to the shared pane's dock allowance. At heights of 550px or less, the top padding contracts to 8px and toolbar controls to a 34px minimum height. The shared shell and reading order carry through all four views.
 
 ## Elevation & Depth
 
@@ -272,17 +282,19 @@ Inline SVG examples have purposeful geometry: staggered work, break, and review 
 
 ### Build in public inside Online
 
-The studio uses a compact Manrope heading (28px, 800, 1.15), then 12px reading and control text, 11px field labels, and quieter 10px dates, revision metadata, and counters. Section headings remain in the incumbent heading family. At wider widths, editor textareas increase to 14px. The Online tab strip shows selection with a card-colored surface; the four studio views show it with a teal underline.
+The compact shell gives the work list precedence over a visible feature heading. Idea, prompt, and proposal titles share the Studio Title role; ordinary reading and controls use 12px, field labels and short excerpts use 11px, and dates, recorded signals, revision metadata, and counters use 10px. Section headings remain in the incumbent heading family. The idea-count heading is a quiet 12px, 600-weight label. At wider widths, editor textareas increase to 14px. The Online tab strip shows selection with a card-colored surface; the four studio views show it with a teal underline.
 
-Ideas present local observations for review. Each saved item groups a native checkbox and a separate text column with a 10px gap; the date and confirmation sit beneath the title, and Edit remains a separate action. A labelled evidence editor lets the person revise the account and record whether it describes the work accurately. Adjacent saving copy identifies that only the selected highlight moves to the private online space. The next controls choose LinkedIn, X, or Instagram, a style for each network, and an optional saved profile. These choices prepare prompts for an external assistant.
+Each successful local batch presents five grounded editorial alternatives. An idea row leads with a title of up to two visible lines, followed by a single-line source excerpt and one line of recorded minutes, observation count, date, and editorial angle. The excerpt and metadata truncate while the editor retains the complete evidence. Fine borders and 13px vertical row padding keep the alternatives comparable without turning them into cards. The toolbar distinguishes first generation, further generation, and the busy state; current results remain present while work is pending.
 
-Prompts reuse the divided-row pattern to show network, style, source idea, and whether content has returned. The editor places the saved prompt in one large editable field with explicit Save, Copy, and Delete actions. Contenido shows proposals with network, text preview, origin, and revision. Its editor separates the post or first message from the full thread, script, or slide plan and optional visual outline. Edits show Unsaved changes; the available actions save, copy, or delete the proposal. The surface has no approval, scheduling, destination, or publication controls.
+Current and earlier local batches remain distinguishable. Saved selections have their own heading and count, with a native checkbox beside a separate title/date/confirmation column at a 10px gap and a separate Review action. A labelled evidence editor allows factual corrections and confirmation; its saving copy identifies the chosen highlight as the material that moves to the private online space. Prepare prompts opens the dedicated network/style/profile step. LinkedIn, X, and Instagram choices prepare prompts for an external assistant.
+
+Prompts and Contenido reuse the subject-first divided rows. Prompt metadata shows network, style, and whether content has returned. Proposal metadata shows network, state, origin, and revision; its preview is limited to two lines. Their editors retain the full prompt or proposal, with a visible Unsaved changes state. The content editor separates the post or first message from the full thread, script, or slide plan and optional visual outline. Explicit Save, Copy, and Delete actions remain available; the surface has no approval, scheduling, destination, or publication controls.
 
 Ajustes groups social profiles stored independently in FlowSight, a scoped assistant connection, and project/voice preferences with a local suggestion cadence. Profile name, handle, network, and usual style give prompts context without a Buffer account requirement. Each group is separated by a fine rule and spacing, rather than additional raised cards. The surface journey and pilot boundary are recorded in `docs/BUILD_IN_PUBLIC.md`.
 
 Fields use theme surfaces and foregrounds, a fine border, Studio Control corners, and 10px by 11px padding. Interactive studio controls have a 2px accent focus outline with a 3px offset. Same-view renders restore keyboard focus and text selection; changing views moves focus to a heading, and an editor can receive focus on its back control. A persistent live-region node announces work and failures. Button color changes take 150ms and lose their transition under reduced motion.
 
-Profile and preference drafts survive busy and error renders; successful writes clear the transient draft, and owner changes clear the previous owner's form state. Prompt and proposal edits remain available during ordinary internal navigation. A minute-based studio check updates returned content and its count while an idle view is open, including manual idea cadence. Open editors, active forms, and ongoing requests defer this refresh so incoming content does not overwrite the user's work or steal focus.
+Profile, preference, and direction form drafts survive busy and error renders; successful writes clear the transient draft, and owner changes clear the previous owner's form state. Stable local identities retain corrected ideas across regeneration and keep prior batches on the device. Unfinished manual highlights also use local persistence. Evidence, prompt, and proposal edits remain available during ordinary internal navigation, with unsaved state visible in their editors. This draft retention does not upload evidence. A minute-based studio check updates returned content, its count, and assistant-set direction while an idle view is open, including manual idea cadence. Open editors, active forms, and ongoing requests defer this refresh so incoming content does not overwrite the user's work or steal focus.
 
 An optional Instagram visual outline uses a programmatically drawn PNG canvas in a 4:5 portrait format (1080 × 1350). Its editable headline leads, followed by an explanation and a signature/project footer. Manrope, a pale field, and dark green reading text carry the composition; the footer has a quiet separator. The title and explanation wrap and reduce in size to fit. The preview fills the available column and keeps its portrait ratio. It is labelled as an outline for creative development, not a finished carousel or generated image asset.
 

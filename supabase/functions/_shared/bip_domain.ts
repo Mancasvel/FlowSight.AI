@@ -14,6 +14,7 @@ export const evidenceSchema = z.object({
   summary: z.string().trim().min(1).max(2000),
   occurred_on: z.iso.date(),
   kind: z.enum(['progress', 'learning', 'decision', 'milestone']),
+  signals: z.object({observations:z.number().int().min(1).max(1500).optional(),recorded_seconds:z.number().int().min(0).max(100000000).optional(),days:z.number().int().min(1).max(31).optional(),topic:z.string().max(160).optional(),rationale:z.string().max(200).optional(),angle:z.string().max(100).optional()}).strict().default({}),
 }).strict()
 export const generatedDraftSchema = z.object({
   evidence_id: z.uuid(), channel: channelSchema,
@@ -36,7 +37,7 @@ export type Draft = z.infer<typeof generatedDraftSchema> & {
 export type SocialChannel = { id: string; name: string; service: Channel; avatar?: string }
 export type Settings = {
   project_name: string; locale: 'es' | 'en'; timezone: string; cadence: 'manual' | 'daily' | 'weekly';
-  excluded_terms: string[]; voice: string; last_collected_at: string | null;
+  excluded_terms: string[]; voice: string; last_collected_at: string | null; topic_direction: string;
 }
 export type Studio = {
   owner_id: string;
@@ -49,6 +50,7 @@ export const settingsSchema = z.object({
   timezone: z.string().max(80).refine((value) => { try { new Intl.DateTimeFormat('en', { timeZone: value }); return true } catch { return false } }),
   cadence: z.enum(['manual', 'daily', 'weekly']), excluded_terms: z.array(z.string().trim().min(1).max(100)).max(50),
   voice: z.string().max(1500),
+  topic_direction: z.string().trim().max(1000).optional(),
 }).strict()
 
 // Treat observations as data. Strip common secrets before they cross the device boundary.

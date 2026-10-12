@@ -17,14 +17,21 @@ try{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript({content:`(${source.slice(begin,end)})({locale:'es-ES'});`});
  await page.addInitScript(({token,endpoint})=>{
-  window.__bipTest={failNext:'',poll:null};
+  window.__bipTest={failNext:'',poll:null,batch:0,lastCollection:null};
   const interval=window.setInterval.bind(window);
   window.setInterval=(fn,delay,...args)=>{if(delay===60000&&fn.toString().includes('bip_collect_local'))window.__bipTest.poll=fn;return interval(fn,delay,...args);};
   const original=window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke=async(command,args={})=>{
    if(command==='bip_cloud'&&window.__bipTest.failNext===args.request.action){window.__bipTest.failNext='';throw 'Fallo de conexión simulado para comprobar la recuperación.';}
    if(command==='bip_cloud'){const response=await fetch(endpoint+'build-in-public',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(args.request)});const payload=await response.json();if(!response.ok)throw payload.error;return payload;}
-   if(command==='bip_collect_local')return {evidence:[{source_key:'synthetic-browser-evidence',title:'La música acompaña a las pausas de trabajo',summary:'Prueba sintética: trabajo en vincular la pausa de YouTube con una sesión de concentración.',occurred_on:'2026-10-12',kind:'progress'}]};
+   if(command==='bip_collect_local'){
+    window.__bipTest.lastCollection=args;
+    if(window.__bipTest.failNext==='collect'){window.__bipTest.failNext='';throw 'Fallo de conexión local simulado. Tus ideas anteriores siguen aquí.';}
+    const batch=++window.__bipTest.batch;
+    const titles=['La música acompaña a las pausas de trabajo','Elegir dónde empieza una sesión de concentración','Qué revisar antes de entregar una mejora','Una interfaz que deja sitio al trabajo','Cómo explicar una decisión de producto'];
+    const facts=['Revisando la pausa de YouTube al pausar una sesión.','Comparando el inicio de Total focus desde Today y Ajustes.','Probando la recuperación de una sesión tras reiniciar la app.','Ajustando la jerarquía de los controles de concentración.','Preparando una explicación visual del recorrido de inicio.'];
+    return {evidence:titles.map((title,i)=>({source_key:`synthetic-${batch}-${i}`,title:batch===1?title:`Otro enfoque: ${title}`,summary:`${facts[i]} Ejemplo sintético para la prueba.`,occurred_on:'2026-10-12',kind:'progress',signals:{observations:12-i,recorded_seconds:3600-i*200,days:2,topic:title,rationale:'Un detalle de producto que puede servir a otros creadores.',angle:['El problema','Una decisión','El proceso','Un detalle','Una pregunta'][i]}}))};
+   }
    if(command==='bip_generate_local')throw new Error('Prompt preparation must not invoke local copywriting.');
    return original(command,args);
   };
@@ -42,7 +49,16 @@ try{
  await page.evaluate(()=>{window.__bipTest.failNext='settings';});await click('#bipSettings button[type=submit]');await status('Fallo de conexión');
  assert.equal(await page.locator('#bipVoice').inputValue(),'Contexto sintético que debe sobrevivir a un error de conexión.');assert.equal(await page.locator('#bipProject').inputValue(),'Prueba de persistencia');assert.equal(await page.locator('#bipExcluded').inputValue(),'privado');
  await click('#bipSettings button[type=submit]');await status('Preferencias guardadas');
- await click('[data-view=stories]');await click('[data-action=collect]');await click('[data-local="0"]');await page.locator('#bipConfirmed').check();await click('#bipEvidenceEdit button[type=submit]');await page.locator('[data-action=generate]').waitFor();
+ await click('[data-view=stories]');await click('.bip-direction summary');await page.locator('#bipDirection').fill('Decisiones de producto para otros founders');await click('[data-action=collect]');await page.locator('[data-local="4"]').waitFor();
+ assert.equal(await page.locator('[data-local]').count(),5);assert.equal(await page.evaluate(()=>window.__bipTest.lastCollection.direction),'Decisiones de producto para otros founders');
+ await click('.bip-direction summary');
+ await click('[data-local="0"]');await page.locator('#bipTitle').fill('Mi edición local conservada');await click('[data-action=back]');await click('[data-local="0"]');assert.equal(await page.locator('#bipTitle').inputValue(),'Mi edición local conservada');
+ await click('[data-action=back]');await page.evaluate(()=>{window.__bipTest.failNext='collect';});await click('[data-action=collect]');await status('Fallo de conexión local');assert.equal(await page.locator('[data-local]').count(),5);
+ await click('[data-action=collect]');await page.locator('[data-local="0"] strong').filter({hasText:'Otro enfoque'}).waitFor();assert.equal(await page.locator('[data-local]').count(),5);assert.equal((await page.evaluate(()=>window.__bipTest.lastCollection.recentKeys)).length,5);
+ await click('[data-action=history]');await click('[data-local="0"]');assert.equal(await page.locator('#bipTitle').inputValue(),'Mi edición local conservada');
+ await page.locator('#bipConfirmed').check();await click('#bipEvidenceEdit button[type=submit]');await page.locator('[data-evidence]').first().waitFor();
+ await page.locator('[data-evidence]').first().click();await page.locator('#bipTitle').fill('Edición online pendiente');await click('[data-action=back]');await page.locator('[data-evidence]').first().click();assert.equal(await page.locator('#bipTitle').inputValue(),'Edición online pendiente');await click('[data-action=back]');
+ await click('[data-action=history]');await page.locator('[data-action=setup]').first().click();await page.locator('[data-action=generate]').waitFor();
  await page.locator('[data-network=x]').uncheck();assert.equal(await page.evaluate(()=>document.activeElement.dataset.network),'x');await page.locator('[data-network=x]').check();await page.locator('#bipStyle-x').selectOption('thread');
  const state=await api({action:'studio'});await page.locator('#bipProfile-x').selectOption(state.profiles[0].id);
  await click('[data-action=generate]');await page.locator('[data-brief]').first().waitFor();assert.equal(await page.locator('[data-brief]').count(),3);
@@ -51,19 +67,27 @@ try{
  const assistant=(await api({action:'assistant_token'})).token;
  async function mcp(name,args={}){const response=await fetch(endpoint+'build-in-public-assistant',{method:'POST',headers:{Authorization:`Bearer ${assistant}`,'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})});const value=await response.json();assert.ok(response.ok&&!value.result.isError,JSON.stringify(value));return value.result;}
  const context=JSON.parse((await mcp('get_content_context')).content[0].text);assert.equal(context.briefs.length,3);assert.equal(context.profiles.length,1);
+ await mcp('set_content_direction',{text:'Enfoque cambiado desde Codex'});await click('[data-view=stories]');await page.evaluate(()=>window.__bipTest.poll());assert.equal(await page.locator('#bipDirection').inputValue(),'Enfoque cambiado desde Codex');
  const drafts=context.briefs.map(brief=>({brief_id:brief.id,evidence_id:brief.evidence_id,channel:brief.channel,body:'Propuesta sintética: la música acompaña a la pausa de concentración.',details:brief.channel==='x'?'1. Problema observado.\n2. Decisión de diseño.\n3. Próximo paso.':'Desarrollo sintético devuelto por el asistente.',visual:brief.channel==='instagram'?{title:'La pausa también se escucha',detail:'Un boceto sintético para explicar el trabajo.',footer:'FlowSight · Prueba'}:null}));
  await click('[data-view=drafts]');assert.equal(await page.locator('[data-draft]').count(),0);
  await mcp('save_content_drafts',{batch_key:crypto.randomUUID(),drafts});
  await page.evaluate(()=>window.__bipTest.poll());await page.locator('[data-draft]').first().waitFor();assert.equal(await page.locator('[data-draft]').count(),3);assert.equal(await page.locator('[data-action=send],[data-action=approve]').count(),0);
  await page.locator('[data-draft]').filter({hasText:'Instagram'}).click();await page.locator('#bipBody').fill('Texto sintético revisado.');await click('#bipDraftEdit button[type=submit]');await status('Cambios guardados');await focus('bipDraftEditSubmit');
+ await click('[data-view=stories]');await click('[data-action=manual]');await page.locator('#bipTitle').fill('Un hito manual pendiente');await page.locator('#bipSummary').fill('Un hecho sintético que todavía no he guardado online.');await click('[data-action=back]');await click('[data-action=manual]');assert.equal(await page.locator('#bipTitle').inputValue(),'Un hito manual pendiente');await click('[data-view=prompts]');await click('[data-view=stories]');await click('[data-action=manual]');assert.equal(await page.locator('#bipSummary').inputValue(),'Un hecho sintético que todavía no he guardado online.');assert.equal((await api({action:'studio'})).evidence.length,1);
+ const layout=[];
  for(const [name,width,height,scheme] of [['compact',370,700,'light'],['minimum',340,400,'light'],['wide',900,780,'light'],['dark',370,700,'dark']]){
   await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:scheme});await page.waitForTimeout(250);
-  for(const view of ['stories','prompts','connections']){
+  for(const view of ['stories','prompts','drafts','connections']){
    await click(`[data-view=${view}]`);await page.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('*').forEach(el=>{if(el.scrollTop)el.scrollTop=0;});});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:resolve(output,`${name}-${view}.png`)});
+   if(view==='stories')layout.push({name,rows:await page.locator('[data-local] strong').evaluateAll(items=>items.map(item=>({y:item.getBoundingClientRect().y,height:item.getBoundingClientRect().height}))) });
   }
+  await click('[data-view=stories]');await page.locator('[data-action=setup]').first().click();await page.screenshot({path:resolve(output,`${name}-setup.png`)});
+  await click('[data-action=cancel-setup]');await click('[data-local="0"]');await page.screenshot({path:resolve(output,`${name}-idea-editor.png`)});
+  await click('[data-view=prompts]');await page.locator('[data-brief]').first().click();await page.screenshot({path:resolve(output,`${name}-prompt-editor.png`)});
  }
+ await writeFile(resolve(output,'layout.json'),JSON.stringify(layout,null,2));
  assert.deepEqual(errors,[]);
- await writeFile(resolve(output,'result.json'),JSON.stringify({passed:true,checks:['Independent X profile without Buffer','Profile and preferences preserved after request failures','Per-network styles','Local ideas reviewed','Three prompts persisted','Prompt editing','MCP receives profiles and briefs','MCP returns full thread/visual content','Incoming MCP content appears without reloading in manual cadence','Returned content editable','No publishing controls','Focus after profile/prompt/content save','370x700,340x400,900x780 and dark'],data:'Synthetic disposable account; actual compiled renderer, live API/database and MCP'},null,2));
+ await writeFile(resolve(output,'result.json'),JSON.stringify({passed:true,checks:['Independent X profile without Buffer','Profile and preferences preserved after request failures','Per-network styles','Five distinct ideas per batch with guided direction and prior-key avoidance','Local and saved edits preserved across back, tabs and regeneration','Failed collection keeps previous five ideas','MCP topic direction reaches the app','Local ideas reviewed','Three prompts persisted','Prompt editing','MCP receives profiles and briefs','MCP returns full thread/visual content','Incoming MCP content appears without reloading in manual cadence','Returned content editable','No publishing controls','Focus after profile/prompt/content save','370x700,340x400,900x780 and dark'],data:'Synthetic disposable account; actual compiled renderer, live API/database and MCP'},null,2));
  console.log('Assistant-first Build in public: full renderer/API/database/MCP round-trip passed. Synthetic data.');
 }finally{await browser.close();}

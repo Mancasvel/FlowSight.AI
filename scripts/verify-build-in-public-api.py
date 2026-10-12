@@ -29,9 +29,22 @@ try:
  assert api('invalid','studio')[0]==401
  assert api(a,'studio')[0]==200
  ok('Authentication and live studio')
- evidence={'source_key':'synthetic-live-test','title':'Synthetic progress','summary':'Synthetic evidence for a test, not real user work.','occurred_on':'2026-10-12','kind':'progress'}
+ evidence={'source_key':'synthetic-live-test','title':'Synthetic progress','summary':'Synthetic evidence for a test, not real user work.','occurred_on':'2026-10-12','kind':'progress','signals':{'observations':8,'recorded_seconds':600,'days':2,'topic':'Synthetic topic','rationale':'Useful synthetic example','angle':'Decision'}}
  assert api(a,'import',evidence=[evidence])[0]==200
  eid=api(a,'studio')[1]['evidence'][0]['id']
+ assert api(a,'studio')[1]['evidence'][0]['signals']==evidence['signals']
+ prefs={'project_name':'Synthetic project','locale':'en','timezone':'UTC','cadence':'weekly','excluded_terms':['secret-client'],'voice':'Synthetic voice'}
+ assert api(a,'settings',settings=prefs)[0]==200
+ assert api(a,'direction',text='Product decisions for founders')[0]==200
+ saved=api(a,'studio')[1]['settings']
+ assert all(saved[k]==v for k,v in prefs.items()) and saved['topic_direction']=='Product decisions for founders'
+ assert api(b,'studio')[1]['settings']['topic_direction']==''
+ assert api(a,'direction',text='x'*1001)[0]==400
+ # Restore Spanish output for the subsequent prompt contract.
+ prefs['locale']='es'
+ assert api(a,'settings',settings=prefs)[0]==200
+ assert api(a,'studio')[1]['settings']['topic_direction']=='Product decisions for founders'
+ ok('Signals persist; direction preserves preferences, owner boundaries and length limits')
  assert api(b,'evidence',id=eid,patch={'state':'selected'})[0]==404
  assert api(a,'evidence',id=eid,patch={'state':'selected','confirmed':True})[0]==200
  ok('Cross-owner evidence changes rejected')
@@ -65,8 +78,14 @@ try:
  def tool(name,args=None):return mcp('tools/call',{'name':name,'arguments':args or {}})[1]['result']
  def context():return json.loads(tool('get_content_context')['content'][0]['text'])
  assert mcp('initialize')[0]==200
- exposed=mcp('tools/list')[1]['result']['tools'];assert {t['name'] for t in exposed}=={'get_content_context','save_content_drafts'}
+ exposed=mcp('tools/list')[1]['result']['tools'];assert {t['name'] for t in exposed}=={'get_content_context','save_content_drafts','set_content_direction'}
  assert len(context()['briefs'])==2
+ assert not tool('set_content_direction',{'text':'Lessons about product design'}).get('isError')
+ assert context()['settings']['topic_direction']=='Lessons about product design'
+ assert api(a,'studio')[1]['settings']['project_name']=='Synthetic project'
+ assert tool('set_content_direction',{'text':'x'*1001}).get('isError')
+ assert api(b,'studio')[1]['settings']['topic_direction']==''
+ ok('MCP updates editorial direction in the app without changing other preferences')
  drafts=[{'evidence_id':eid,'brief_id':bid,'channel':'x','body':'A synthetic test opening.','details':'1. Synthetic problem.\n2. Synthetic decision.\n3. Next step.','visual':None}]
  batch=str(uuid.uuid4())
  assert not tool('save_content_drafts',{'drafts':drafts,'batch_key':batch}).get('isError')

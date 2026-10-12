@@ -18,3 +18,25 @@
 #buildInPublic .bip-choice input[type=checkbox]{margin:2px 0 0;flex:0 0 16px}
 
 .bip-tabs{gap:14px}.bip-target{padding:14px 0;border-bottom:1px solid hsl(var(--border))}.bip-target .bip-choice{font-weight:700}.bip-profile-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:13px 0;border-bottom:1px solid hsl(var(--border))}.bip-profile-row strong{font-size:12px;line-height:1.5}.bip-profile-row small{display:block;font-size:11px;line-height:1.5;color:hsl(var(--muted-foreground));overflow-wrap:anywhere;margin-top:5px}
+
+/* Five grounded ideas: a compact working list within the incumbent app. */
+.bip-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.online-mode-tabs{margin:0 0 8px;padding:3px}.online-mode-tabs button{min-height:34px}
+#buildInPublic .bip-tabs{gap:18px}.bip-tabs button{padding:8px 0;min-height:36px}
+#buildInPublic .bip-content{padding-top:12px;padding-bottom:40px}
+.bip-discovery-toolbar{display:grid;grid-template-columns:minmax(104px,.8fr) minmax(0,1.2fr);gap:9px;align-items:stretch}
+.bip-discovery-toolbar select{padding:8px 9px;min-height:38px}.bip-discovery-toolbar .button{margin:0;min-height:38px;padding:8px 10px;line-height:1.3;white-space:normal}
+.bip-direction{margin-top:7px}.bip-direction summary{cursor:pointer;font-size:11px;color:hsl(var(--muted-foreground));line-height:1.5;padding:4px 0;min-height:28px}.bip-direction summary span{color:var(--bip-accent);font-size:10px;margin-left:5px}.bip-direction summary:focus-visible{outline:2px solid var(--bip-accent);outline-offset:3px}.bip-direction[open]{padding-bottom:12px}.bip-direction form .button{margin-top:10px}
+#buildInPublic .bip-story-list{margin-top:6px;max-width:none}.bip-selection-note{display:none}
+#buildInPublic .bip-story-list .bip-section-heading{margin:0;min-height:24px}
+#buildInPublic .bip-section-heading h2{margin:0}
+#buildInPublic .bip-story-list h2{font-size:12px;line-height:1.5;color:hsl(var(--muted-foreground));font-weight:600}
+#buildInPublic .bip-story{padding:13px 0;text-align:left}#buildInPublic .bip-story strong{font-size:14px;font-family:Manrope,sans-serif;font-weight:750;line-height:1.4;margin:0 0 5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bip-idea-excerpt{display:block;font-size:11px;line-height:1.5;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bip-story-meta{display:block;font-size:10px;line-height:1.5;color:var(--bip-accent);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bip-saved-list{margin-top:25px}.bip-count{font-size:11px;color:var(--bip-accent);font-variant-numeric:tabular-nums}.bip-section-heading .bip-text-button{padding:4px 0;min-height:30px}
+#buildInPublic .bip-generation{margin-top:0}.bip-generation .bip-back{margin-bottom:8px;padding-top:0}.bip-targets{margin-top:8px}
+.bip-row-title{font-family:Manrope,sans-serif;display:block;font-size:14px;line-height:1.4;font-weight:750;margin-bottom:7px}
+#buildInPublic .bip-draft-row p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:11px;line-height:1.55;margin:7px 0 9px;color:hsl(var(--muted-foreground))}.bip-draft-meta{align-items:baseline}.bip-draft-meta strong{font-size:11px}.bip-draft-row small{display:block;margin-top:7px}
+@media(min-width:560px){.bip-target{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 16px}.bip-target .bip-choice{grid-column:1/-1}.bip-target label[for^="bipStyle"]{grid-column:1;grid-row:2}.bip-target select[id^="bipStyle"]{grid-column:1;grid-row:3}.bip-target label[for^="bipProfile"]{grid-column:2;grid-row:2}.bip-target select[id^="bipProfile"]{grid-column:2;grid-row:3}}
+@media(max-height:550px){#buildInPublic .bip-content{padding-top:8px}#buildInPublic .bip-story-list{margin-top:9px}.bip-story{padding:10px 0}.bip-selection-note{display:none}.bip-direction summary{min-height:24px}.bip-discovery-toolbar .button,.bip-discovery-toolbar select{min-height:34px;padding-top:6px;padding-bottom:6px}}

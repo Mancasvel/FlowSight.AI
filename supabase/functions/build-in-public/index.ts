@@ -26,6 +26,7 @@ export async function handler(req: Request): Promise<Response> {
       case 'edit_brief': await briefs.edit(id(),revision(),body.prompt); break
       case 'delete_brief': await briefs.remove(id()); break
       case 'settings': await service.saveSettings(body.settings); break
+      case 'direction': await service.saveDirection(body.text); break
       case 'import': await service.importEvidence(body.evidence, body.manual === true); break
       case 'evidence': await service.editEvidence(id(), body.patch); break
       case 'generated': await service.saveGenerated(body.drafts, 'local', z.uuid().parse(body.batch_key)); break
