@@ -14,7 +14,7 @@ function harness(fetchResponse = async () => { throw new Error('offline'); }) {
     permissions: { async contains() { return true; } },
     action: { onClicked: listeners },
     alarms: { create() {}, clear() {}, onAlarm: listeners },
-    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, getManifest() { return { version: '1.1.3' }; }, getURL(path) { return `chrome-extension://test/${path}`; }, openOptionsPage() {} },
+    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, getManifest() { return { version: '1.1.4' }; }, getURL(path) { return `chrome-extension://test/${path}`; }, openOptionsPage() {} },
     storage: { local: {
       async get(names) {
         const keys = Array.isArray(names) ? names : [names];
@@ -22,7 +22,8 @@ function harness(fetchResponse = async () => { throw new Error('offline'); }) {
       },
       async set(value) { Object.assign(stored, value); },
     } },
-    tabs: { onUpdated:listeners, async query() { return []; }, async update() {} },
+    tabs: { onUpdated:listeners, async query() { return []; }, async update() {},
+      async get(id) { return { id, url: stored.focusMusic?.url, status: 'complete' }; }, async sendMessage() { return {}; } },
     declarativeNetRequest: {
       async getDynamicRules() { return changes.reduce((rules, change) => [...rules.filter(rule => !change.removeRuleIds?.includes(rule.id)), ...(change.addRules || [])], []); },
       async updateDynamicRules(change) { changes.push(change); }
@@ -43,6 +44,59 @@ test('a URL path block matches the chosen site and route only', () => {
   assert.equal(pattern.test('https://notyoutube.com/shorts/abc'), false);
   assert.throws(() => ruleFor('file:///etc/passwd', 10002));
   assert.throws(() => ruleFor('https://evil.example/?secret=1', 10003));
+});
+
+test('YouTube playback follows pause and resume in the owned tab across policy IDs', async () => {
+  const h = harness(), messages = [], created = [];
+  h.chrome.windows = { async getAll() { return [{ id: 24, focused: true }]; } };
+  h.chrome.tabs.create = async options => { created.push(options); return { id: 50 }; };
+  h.chrome.tabs.sendMessage = async (id, message) => { messages.push({ id, ...message }); return {}; };
+  const musicUrl = 'https://www.youtube.com/watch?v=music&list=123';
+  await h.reconcileFocus(policy({ musicUrl }));
+  await h.runCommand('browser.focus_status', { openMusic: true, sessionId: 'focus-1' });
+  assert.equal(messages.at(-1).playback, 'play');
+  await h.reconcileFocus(null);
+  await h.runCommand('browser.focus_status', { musicPlayback: 'pause', musicSessionId: 'stale', sessionId: 'stale' });
+  assert.equal(messages.length, 1, 'Stale sessions cannot control music');
+  await h.runCommand('browser.focus_status', { musicPlayback: 'pause', musicSessionId: 'focus-1', sessionId: 'focus-1' });
+  assert.equal(messages.at(-1).playback, 'pause');
+  await h.reconcileFocus(policy({ id: 'resumed', musicUrl }));
+  await h.runCommand('browser.focus_status', { musicPlayback: 'play', musicSessionId: 'focus-1', sessionId: 'resumed' });
+  assert.equal(messages.at(-1).playback, 'play');
+  assert.equal(h.stored.focusMusic.sessionId, 'resumed');
+  assert.equal(created.length, 1);
+  assert.ok(messages.every(message => message.id === 50));
+  const count = messages.length;
+  await h.runCommand('browser.focus_status', {});
+  assert.equal(messages.length, count, 'Status polls do not override user playback');
+  await h.reconcileFocus(null);
+  await h.runCommand('browser.focus_status', { musicPlayback: 'release', musicSessionId: 'resumed', sessionId: 'resumed' });
+  assert.equal(messages.at(-1).playback, 'release');
+  assert.equal(h.stored.focusMusic, null);
+});
+
+test('loading, closed and navigated music tabs do not break protection or create duplicates', async () => {
+  const h = harness();
+  h.chrome.windows = { async getAll() { return [{ id: 24 }]; } };
+  h.chrome.tabs.create = async () => ({ id: 50 });
+  const musicUrl = 'https://music.youtube.com/watch?v=music';
+  await h.reconcileFocus(policy({ musicUrl }));
+  h.chrome.tabs.get = async () => ({ id: 50, url: musicUrl, status: 'loading' });
+  h.chrome.tabs.sendMessage = async () => { throw new Error('Receiving end does not exist'); };
+  const opening = await h.runCommand('browser.focus_status', { openMusic: true, sessionId: 'focus-1' });
+  assert.equal(opening.musicError, undefined);
+  await h.reconcileFocus(null);
+  const pending = await h.runCommand('browser.focus_status', { musicPlayback: 'pause', musicSessionId: 'focus-1', sessionId: 'focus-1' });
+  assert.equal(pending.musicPending, true);
+  assert.equal(h.stored.focusMusic.playback, 'pause');
+  h.chrome.tabs.get = async () => ({ id: 50, url: 'https://unrelated.example.com', status: 'complete' });
+  const navigated = await h.runCommand('browser.focus_status', { musicPlayback: 'pause', musicSessionId: 'focus-1', sessionId: 'focus-1' });
+  assert.match(navigated.musicError, /no longer on YouTube/);
+  h.chrome.tabs.get = async () => { throw new Error('No tab with id: 50'); };
+  await h.reconcileFocus(policy({ id: 'resumed', musicUrl }));
+  const closed = await h.runCommand('browser.focus_status', { musicPlayback: 'play', musicSessionId: 'focus-1', sessionId: 'resumed' });
+  assert.equal(closed.applied, true);
+  assert.match(closed.musicError, /No tab/);
 });
 
 test('music opens once in an inactive tab without changing window or tab focus', async () => {
@@ -166,7 +220,7 @@ test('pairing reports a rejected key and a confirmed MV3 focus handshake', async
   code = 200;
   assert.equal((await h.poll()).connected, true);
   const status = await h.focusStatus();
-  assert.equal(status.extensionVersion, '1.1.3');
+  assert.equal(status.extensionVersion, '1.1.4');
   assert.equal(status.applied, false);
 });
 

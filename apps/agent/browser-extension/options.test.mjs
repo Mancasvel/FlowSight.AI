@@ -65,7 +65,7 @@ test('store package has its runtime files and opens pairing options from the too
   assert.equal(manifest.action.default_title, 'FlowSight Browser Controls');
   assert.deepEqual(manifest.host_permissions, ['http://127.0.0.1/*','http://*/*','https://*/*']);
   assert.equal(manifest.web_accessible_resources[0].resources[0], 'blocked.html');
-  for (const name of ['manifest.json', 'worker.js', 'options.html', 'options.js', 'blocked.html', 'blocked.js', 'focus.css', ...Object.values(manifest.icons)]) {
+  for (const name of ['manifest.json', 'worker.js', 'music.js', 'options.html', 'options.js', 'blocked.html', 'blocked.js', 'focus.css', ...Object.values(manifest.icons)]) {
     assert.ok(statSync(new URL(name, import.meta.url)).size > 0, `${name} is missing or empty`);
   }
   const worker = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
