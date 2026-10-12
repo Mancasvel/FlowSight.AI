@@ -10,3 +10,7 @@
 #buildInPublic .bip-content input::placeholder,#buildInPublic .bip-content textarea::placeholder{color:hsl(var(--muted-foreground));opacity:1}
 #buildInPublic .bip-content{padding-bottom:28px}
 #buildInPublic .bip-content textarea{scrollbar-color:hsl(var(--muted-foreground)) transparent}
+
+#buildInPublic .bip-saved-story label.bip-choice{display:flex;gap:10px;align-items:flex-start;margin:0}
+#buildInPublic .bip-choice>span{display:block;min-width:0}
+#buildInPublic .bip-choice input[type=checkbox]{margin:2px 0 0;flex:0 0 16px}

@@ -37,21 +37,24 @@ try{
  assert.equal(await page.locator('.bip-draft-row').count(),3);
  await page.locator('.bip-draft-row').filter({hasText:'Instagram'}).click();
  await page.locator('#bipDraftEdit button[type=submit]').click();await page.locator('.bip-status').filter({hasText:'Cambios guardados'}).waitFor();
+ assert.equal(await page.evaluate(()=>document.activeElement.id),'bipDraftEditSubmit');
  await page.locator('[data-action=approve]').click();await page.locator('[data-action=send]').waitFor();
- await page.locator('#bipBody').fill('Cambio sintético tras la aprobación.');await page.locator('#bipDraftEdit button[type=submit]').click();
+ await page.locator('#bipBody').fill('Cambio sintético tras la aprobación.');assert.equal(await page.locator('[data-action=send]').count(),0);assert.equal(await page.locator('.bip-state').textContent(),'Cambios sin guardar');await page.locator('#bipDraftEdit button[type=submit]').click();
  await page.locator('[data-action=approve]').waitFor();assert.equal(await page.locator('[data-action=send]').count(),0);
+ await page.locator('.bip-status').filter({hasText:'Cambios guardados'}).waitFor();
  await page.reload({waitUntil:'networkidle'});await page.locator('#navOnline').click();await page.locator('#onlineContentTab').click();
  await page.locator('[data-view=drafts]').click();await page.locator('.bip-draft-row').filter({hasText:'Instagram'}).click();
  assert.equal(await page.locator('#bipBody').inputValue(),'Cambio sintético tras la aprobación.');
  for(const [name,width,height,scheme] of [['compact',370,700,'light'],['minimum',340,700,'light'],['wide',900,780,'light'],['dark',370,700,'dark']]){
   await page.setViewportSize({width,height});await page.emulateMedia({colorScheme:scheme});
   await page.waitForTimeout(250); // Allow the app's theme stylesheets to settle.
-  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.app-viewport').scrollTop=0;});
+  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('*').forEach(el=>{if(el.scrollTop)el.scrollTop=0;});});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${name}: page overflow`);
   await page.screenshot({path:resolve(output,`${name}.png`)});
   await page.locator('#bipImage').screenshot({path:resolve(output,`${name}-instagram.png`)});
   await page.locator('[data-action=back]').click();await page.locator('[data-view=stories]').click();
-  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:resolve(output,`${name}-stories.png`)});
+  await page.locator('[data-network=x]').uncheck();assert.equal(await page.evaluate(()=>document.activeElement.dataset.network),'x');await page.locator('[data-network=x]').check();
+  await page.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('*').forEach(el=>{if(el.scrollTop)el.scrollTop=0;});});await page.screenshot({path:resolve(output,`${name}-stories.png`)});
   await page.locator('[data-view=drafts]').click();await page.locator('.bip-draft-row').filter({hasText:'Instagram'}).click();
  }
  assert.deepEqual(errors,[]);

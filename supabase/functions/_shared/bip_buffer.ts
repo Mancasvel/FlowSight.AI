@@ -12,7 +12,7 @@ export async function bufferQuery<T>(key: string, query: string, variables: Reco
   if (!response.ok) throw new BufferError(response.status >= 500, response.status === 401 || response.status === 403 ? 'La conexión de Buffer ha caducado. Conecta tu cuenta de nuevo.' : 'Buffer no pudo completar la solicitud. Comprueba tu cuenta y sus límites.')
   let result: { data?: T; errors?: unknown[] }
   try { result = await response.json() } catch { throw new BufferError(true, 'Buffer devolvió una respuesta que no se ha podido confirmar.') }
-  if (result.errors?.length || !result.data) throw new BufferError(false, 'Buffer rechazó la solicitud. Revisa los permisos y el estado de la cuenta.')
+  if (result.errors?.length || !result.data) throw new BufferError(query.trimStart().startsWith('mutation'), 'No se ha podido confirmar la operación de Buffer. Revisa el estado de la cuenta y su cola.')
   return result.data
 }
 export async function listBufferChannels(key: string): Promise<SocialChannel[]> {

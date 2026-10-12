@@ -145,7 +145,7 @@ Onboarding and session planning follow the Operate direction within this incumbe
 - A 56px pale grid behind centered, softly layered work surfaces.
 - Manrope for headings and measured display figures; Plus Jakarta Sans for reading and controls.
 - Teal for state and progress, with an indigo-to-teal gradient concentrated in tracking and first-run actions.
-- A floating four-tab dock that stays available in the narrow work window.
+- A floating five-control dock that stays available in the narrow work window.
 
 ## Colors
 
@@ -196,7 +196,7 @@ The default Tauri window is 370 × 700px and remains usable at 340 × 400px. A 4
 
 Today centers within 640px; Insights and Settings center within 760px. At 520px, these surfaces retain their single-column reading order. At 600px and wider, content padding grows to 30px vertically and 28px horizontally, goal and task cards can sit in two columns, and Settings gains a two-column arrangement. At 380px and narrower, padding contracts to 18px top and 15px sides, while the timer, dock, and actions reduce their dimensions.
 
-The four-tab dock floats 14px above the window bottom, spans the available width with 12px outer margins, and stops growing at 540px. In the narrow variant it sits 8px above the bottom. Consent dialogs remain bounded by viewport height; the monitoring notice leaves its action row fixed while details scroll.
+The five-control dock floats 14px above the window bottom, spans the available width with 12px outer margins, and stops growing at 540px. In the narrow variant it sits 8px above the bottom. Consent dialogs remain bounded by viewport height; the monitoring notice leaves its action row fixed while details scroll.
 
 The five-step onboarding overlay uses a vertical flex layout: the progress header and footer keep their space, and the middle body shrinks and scrolls. The footer is a static flex child with an opaque theme background and its own reserved space. A remaining-content button advances the body by roughly four fifths of its visible height and becomes “Back to top” at the end; its row stays reserved for any step that overflows. Save and connection feedback occupies a persistent live region in the footer so messages remain visible while the body scrolls.
 
@@ -237,7 +237,7 @@ Standard cards use 20px corners, 20px internal padding, a fine border, and ambie
 
 ### Navigation
 
-The three-tab dock holds Today, Insights, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls. The proactive local agent does not occupy navigation or expose a chat; its permissions and proposals live in Settings, and its reminders arrive as notifications.
+The five-control dock holds Online, Insights, Clock, Coach, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls. The proactive local agent does not occupy navigation or expose a chat; its permissions and proposals live in Settings, and its reminders arrive as notifications.
 
 ### Timer and evidence
 
@@ -274,3 +274,10 @@ Inline SVG examples have purposeful geometry: staggered work, break, and review 
 - **Don't** use teal on every card or turn observed activity into a score-like visual.
 - **Don't** let the floating dock cover the last controls in a scrolled pane.
 - **Don't** hide remaining consent details behind a fixed action row without a visible way to reach them.
+
+
+## Build in public inside Online
+
+Online has two in-place tabs: Leagues and Build in public. The personal publishing studio retains the existing desktop ground, fonts, title bar and dock. Its Stories, Drafts and Connections views use quiet separators and a single reading column. Story selection is a checkbox plus a text column, separated by 10px, with date and confirmation beneath the title.
+
+Local story search leads the first viewport. Selected highlights become channel-specific drafts; Instagram adds an editable portrait image with a main headline, explanation and footer. In the editor, unsaved changes replace approval status immediately. Same-view renders preserve keyboard focus and selection; navigation moves focus to the new view and a stable live region reports work and failures.

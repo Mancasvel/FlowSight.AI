@@ -30,5 +30,6 @@ Deno.test('provider transport uncertainty is never reported as a definite reject
   await assert.rejects(()=>bufferQuery('test-key','query {}',{},async()=>{throw new Error('timeout')}),e=>e instanceof BufferError&&e.uncertain)
   await assert.rejects(()=>bufferQuery('test-key','query {}',{},async()=>new Response('down',{status:503})),e=>e instanceof BufferError&&e.uncertain)
   await assert.rejects(()=>bufferQuery('test-key','query {}',{},async()=>new Response('{}',{status:401})),e=>e instanceof BufferError&&!e.uncertain)
+  await assert.rejects(()=>bufferQuery('test-key','mutation {}',{},async()=>Response.json({data:{createPost:null},errors:[{message:'Resolver failed after acceptance'}]})),e=>e instanceof BufferError&&e.uncertain)
   assert.deepEqual(await bufferQuery('test-key','query {}',{},async()=>Response.json({data:{ok:true}})),{ok:true})
 })
