@@ -1,7 +1,7 @@
 import { z } from 'npm:zod@4.1.12'
 import { authenticate, corsHeaders, isResponse, jsonResponse } from '../_shared/http.ts'
 import { check, StudioError, studioService } from '../_shared/bip_service.ts'
-import { BufferError, connectBuffer, sendToBuffer } from '../_shared/bip_buffer.ts'
+import { briefService } from '../_shared/bip_briefs.ts'
 
 export async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -15,24 +15,24 @@ export async function handler(req: Request): Promise<Response> {
     try { body = JSON.parse(text) } catch { throw new StudioError(400, 'La solicitud no es válida.') }
     if (body.expected_owner && body.expected_owner !== auth.userId) throw new StudioError(409, 'La cuenta ha cambiado. Recarga Build in public antes de continuar.')
     const service = studioService(auth.serviceClient, auth.userId)
+    const briefs = briefService(auth.serviceClient, auth.userId)
     const id = () => z.uuid().parse(body.id)
     const revision = () => z.number().int().positive().parse(body.revision)
     switch (body.action) {
-      case 'studio': return jsonResponse(await service.studio())
+      case 'studio': return jsonResponse({ ...await service.studio(), ...await briefs.studio() })
+      case 'profile': await briefs.saveProfile(body.profile); break
+      case 'delete_profile': await briefs.removeProfile(id()); break
+      case 'briefs': await briefs.create(body.request); break
+      case 'edit_brief': await briefs.edit(id(),revision(),body.prompt); break
+      case 'delete_brief': await briefs.remove(id()); break
       case 'settings': await service.saveSettings(body.settings); break
       case 'import': await service.importEvidence(body.evidence, body.manual === true); break
       case 'evidence': await service.editEvidence(id(), body.patch); break
       case 'generated': await service.saveGenerated(body.drafts, 'local', z.uuid().parse(body.batch_key)); break
       case 'edit': await service.editDraft(id(), revision(), body.draft); break
-      case 'approve': await service.approve(id(), revision()); break
       case 'delete': await service.removeDraft(id()); break
       case 'assistant_token': return jsonResponse({ token: await service.createToken('assistant') })
       case 'revoke_token': await service.revokeToken(id()); break
-      case 'connect': return jsonResponse({ channels: await connectBuffer(auth.serviceClient, auth.userId, z.string().min(20).max(2000).parse(body.key)) })
-      case 'disconnect': {
-        const result = await auth.serviceClient.from('bip_connections').delete().eq('user_id', auth.userId); check(result.error); break
-      }
-      case 'send': return jsonResponse(await sendToBuffer(auth.serviceClient, auth.userId, id(), revision()))
       case 'image': {
         const current = await service.draft(id())
         if (current.state !== 'draft' || current.revision !== revision() || current.channel !== 'instagram') throw new StudioError(409, 'Recarga el borrador antes de guardar su imagen.')
@@ -56,7 +56,6 @@ export async function handler(req: Request): Promise<Response> {
     return jsonResponse({ ok: true })
   } catch (error) {
     if (error instanceof StudioError) return jsonResponse({ error: error.message }, error.status)
-    if (error instanceof BufferError) return jsonResponse({ error: error.message }, 502)
     if (error instanceof z.ZodError) return jsonResponse({ error: 'Revisa los campos del formulario.' }, 400)
     console.error('Build in public failed', error instanceof Error ? error.name : 'unknown')
     return jsonResponse({ error: 'No se pudo completar la solicitud. Inténtalo de nuevo.' }, 503)

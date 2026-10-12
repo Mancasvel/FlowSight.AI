@@ -65,7 +65,7 @@ pub fn run() {
 
     // Repair before the single-instance handoff, even if an older copy is open.
     #[cfg(windows)]
-    if !tauri::is_dev() {
+    if !tauri::is_dev() && paths::isolated_pilot_dir().is_none() {
         if let Ok(executable) = std::env::current_exe() {
             if let Err(error) = windows_autostart::repair_existing(&executable) {
                 log::warn!("Could not refresh the existing startup entry: {error}");
@@ -75,13 +75,17 @@ pub fn run() {
 
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-        }
-    }));
+    let builder = if paths::isolated_pilot_dir().is_none() {
+        builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+    } else {
+        builder
+    };
 
     builder
         .plugin(tauri_plugin_dialog::init())
@@ -228,7 +232,9 @@ pub fn run() {
                         .build(),
                 )?;
                 app.handle().plugin(tauri_plugin_notification::init())?;
-                desktop_presence::setup_tray(app)?;
+                if paths::isolated_pilot_dir().is_none() {
+                    desktop_presence::setup_tray(app)?;
+                }
             }
 
             // Log a archivo en TODOS los builds. En release el usuario no ve stderr,
@@ -242,12 +248,19 @@ pub fn run() {
                     .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
                     .targets([
                         tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                            file_name: None,
+                        tauri_plugin_log::Target::new(match paths::isolated_pilot_dir() {
+                            Some(path) => tauri_plugin_log::TargetKind::Folder {
+                                path,
+                                file_name: None,
+                            },
+                            None => tauri_plugin_log::TargetKind::LogDir { file_name: None },
                         }),
                     ])
                     .build(),
             )?;
+            if paths::isolated_pilot_dir().is_some() {
+                return Ok(());
+            }
             report_schedule::start_check_loop(app.handle().clone());
             if let Err(error) = local_agent::browser_bridge::start() {
                 log::warn!("Browser bridge unavailable: {error}");

@@ -84,15 +84,16 @@ export function studioService(db: SupabaseClient, userId: string) {
     for (const item of items) {
       const source = await evidence(item.evidence_id)
       if (source.state !== 'selected') throw new StudioError(409, 'El hito ya no está seleccionado.')
+      if(item.brief_id){const result=await db.from('bip_briefs').select('id').eq('user_id',userId).eq('id',item.brief_id).eq('evidence_id',item.evidence_id).eq('channel',item.channel).maybeSingle();check(result.error);if(!result.data)throw new StudioError(404,'El encargo no corresponde a esta idea o red.')}
       const invalid = validateDraft(item); if (invalid) throw new StudioError(400, invalid)
     }
     const { error } = await db.from('bip_drafts').upsert(items.map(item => ({ ...item, user_id: userId, engine, batch_key: batchKey })), { onConflict: 'user_id,batch_key,evidence_id,channel', ignoreDuplicates: true }); check(error)
   }
   async function editDraft(id: string, revision: number, input: unknown) {
-    const value = z.object({ body: z.string().trim().min(1).max(5000), visual: generatedDraftSchema.shape.visual, provider_channel_id: z.string().max(200).nullable(), scheduled_at: z.iso.datetime({ offset: true }).nullable() }).strict().parse(input)
+    const value = z.object({ body: z.string().trim().min(1).max(5000), details:z.string().max(20000).default(''), visual: generatedDraftSchema.shape.visual, provider_channel_id: z.string().max(200).nullable(), scheduled_at: z.iso.datetime({ offset: true }).nullable() }).strict().parse(input)
     const current = await draft(id)
     if (['sending', 'scheduled', 'published', 'uncertain'].includes(current.state)) throw new StudioError(409, 'Este envío ya está en curso. Comprueba el resultado en Buffer.')
-    const { data, error } = await db.from('bip_drafts').update(value).eq('user_id', userId).eq('id', id).eq('revision', revision).select('id'); check(error)
+    const { data, error } = await db.from('bip_drafts').update({...value,revision:revision+1,state:'draft',approved_revision:null,approved_at:null}).eq('user_id', userId).eq('id', id).eq('revision', revision).select('id'); check(error)
     if (!data?.length) throw new StudioError(409, 'Este borrador cambió en otra pestaña. Recarga antes de editarlo.')
     if (current.image_path && ['title','detail','footer'].some(key => current.visual?.[key as keyof typeof current.visual] !== value.visual?.[key as keyof typeof value.visual])) {
       await db.storage.from('bip-media').remove([current.image_path])

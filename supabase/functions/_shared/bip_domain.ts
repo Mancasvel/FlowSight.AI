@@ -17,7 +17,9 @@ export const evidenceSchema = z.object({
 }).strict()
 export const generatedDraftSchema = z.object({
   evidence_id: z.uuid(), channel: channelSchema,
+  brief_id: z.uuid().optional(),
   body: z.string().trim().min(1).max(5000),
+  details: z.string().max(20000).default(''),
   visual: visualSchema.nullable().default(null),
 }).strict()
 export type Visual = z.infer<typeof visualSchema>
@@ -74,6 +76,5 @@ export function textLength(body: string, channel: Channel): number {
 export function validateDraft(draft: Pick<Draft, 'body' | 'channel' | 'visual'>): string | null {
   if (!draft.body.trim()) return 'Escribe el texto de la publicación.'
   if (textLength(draft.body, draft.channel) > CHANNEL_LIMITS[draft.channel]) return `El texto supera el límite de ${CHANNEL_LIMITS[draft.channel]} caracteres.`
-  if (draft.channel === 'instagram' && !draft.visual) return 'Instagram necesita una imagen. Añade el título y el contenido visual.'
   return null
 }

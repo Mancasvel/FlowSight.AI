@@ -188,7 +188,14 @@ fn main() {
         // WebView2 overlay scrollbars ignore ::-webkit-scrollbar CSS; force classic bars.
         std::env::set_var(
             "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-            "--disable-features=msWebView2OverlayScrollbar,OverlayScrollbar",
+            if cfg!(debug_assertions) && std::env::var_os("FLOWSIGHT_PILOT_DATA_DIR").is_some() {
+                format!(
+                    "{} --disable-features=msWebView2OverlayScrollbar,OverlayScrollbar",
+                    std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default()
+                )
+            } else {
+                "--disable-features=msWebView2OverlayScrollbar,OverlayScrollbar".to_string()
+            },
         );
     }
 

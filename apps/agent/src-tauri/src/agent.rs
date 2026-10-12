@@ -73,6 +73,9 @@ impl FlowSightAgent {
             agent.tracking_clock = load_tracking_clock(&conn).ok();
         }
         agent.load_config();
+        if crate::paths::isolated_pilot_dir().is_some() {
+            return agent;
+        }
         crate::focus_alerts::set_enabled(crate::desktop_presence::focus_alerts_enabled());
         if let Err(error) = crate::privacy::enforce_local_retention(&agent.db_path) {
             log::warn!("[Privacy] Local retention enforcement failed: {error}");

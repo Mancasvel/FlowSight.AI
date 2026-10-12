@@ -13,4 +13,7 @@
 
 #buildInPublic .bip-saved-story label.bip-choice{display:flex;gap:10px;align-items:flex-start;margin:0}
 #buildInPublic .bip-choice>span{display:block;min-width:0}
+#buildInPublic label.bip-choice{display:flex;gap:10px;align-items:flex-start}
 #buildInPublic .bip-choice input[type=checkbox]{margin:2px 0 0;flex:0 0 16px}
+
+.bip-tabs{gap:14px}.bip-target{padding:14px 0;border-bottom:1px solid hsl(var(--border))}.bip-target .bip-choice{font-weight:700}.bip-profile-row{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;padding:13px 0;border-bottom:1px solid hsl(var(--border))}.bip-profile-row strong{font-size:12px;line-height:1.5}.bip-profile-row small{display:block;font-size:11px;line-height:1.5;color:hsl(var(--muted-foreground));overflow-wrap:anywhere;margin-top:5px}
