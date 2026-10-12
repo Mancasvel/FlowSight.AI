@@ -11,8 +11,10 @@ the user save blocked sites, exceptions and a 5–180 minute duration. It includ
 Chrome store installation, masked pairing-key copy and a connection check. Saving
 the wizard does not activate protection. Today opens the same controls in Settings.
 
-The task is required. Starting with an empty or whitespace-only task reveals an
-inline error and scrolls to the enabled task input with keyboard focus. During
+The task is optional. Empty or whitespace-only input starts general focus; a
+supplied description can contain up to 160 characters. Starting also saves the
+current protection and music settings. The Today shortcut uses unsaved Settings
+edits when present and saves them before starting, or uses saved settings otherwise. During
 activation, the button shows Starting total focus and visible progress explains
 the browser acknowledgement wait (up to 90 seconds). A failed activation reveals
 its error and restores the button for retry; a successful start is confirmed only
@@ -87,7 +89,7 @@ and authenticated requests to 127.0.0.1:38547.
 
 ## Agent tools
 
-- `focus.total_start`: reviewed activation, with explicit intention and optional
+- `focus.total_start`: reviewed activation, with optional intention and optional
   sites, exceptions and duration. Saved settings are frozen into the proposal so
   the confirmed action matches the preview.
 - `focus.total_end`: reviewed release.
@@ -97,7 +99,8 @@ and authenticated requests to 127.0.0.1:38547.
 
 In Total focus settings, enable **Open music when total focus starts**, paste a
 complete HTTP(S) link into **Music link**, and save settings. The Today shortcut
-uses the saved link; a start from Settings uses the current fields. The same
+uses the current unsaved Settings edits when present, otherwise the saved link.
+Starting saves the settings it uses. The same
 optional setting is available during setup and defaults to off for existing and
 new installations. Playlist parameters and URL fragments are preserved.
 
@@ -139,8 +142,8 @@ review agents were omitted to respect the user's request to reduce PC load.
 ## Arc and extension updates
 
 Windows 6.0.8 adds a Start total focus play button immediately below Start tracking
-in Today. It uses the current task context and saved total focus preferences;
-unsaved edits in Settings do not change the shortcut. Progress, protection errors
+in Today. It uses the current task context and current total focus preferences;
+unsaved edits in Settings are saved and used on start. Progress, protection errors
 and retry stay in Today. The existing monitoring acknowledgement is required.
 Once linked, pause/resume and Stop remain on the main clock. The lower navigation
 button is labelled Total focus settings and opens the configuration.

@@ -1084,7 +1084,10 @@ Object.assign(spanish, {
 
 Object.assign(spanish, {
   'Silence Windows app notification banners':'Silenciar los avisos de aplicaciones de Windows',
-  'Your focus task (required)':'Tu tarea de concentración (obligatoria)',
+  'Your focus task (optional)':'Tu tarea de concentración (opcional)',
+  'Keep your focus task within 160 characters.':'La tarea de concentración puede tener hasta 160 caracteres.',
+  'Starting total focus saves these settings for the Today shortcut.':'Al iniciar la concentración total, estos ajustes se guardan para el botón de Hoy.',
+  'The browser did not confirm opening the music link.':'El navegador no ha confirmado la apertura del enlace de música.',
   'Total focus starts the main clock. Pause or resume both from the clock; your remaining focus time is kept.':'La concentración total inicia el reloj principal. Pausa o reanuda ambos desde el reloj; se conserva el tiempo de concentración restante.',
   'Total focus paused · resume from the main clock':'Concentración total pausada · reanuda desde el reloj principal',
   'Total focus paused':'Concentración total pausada',

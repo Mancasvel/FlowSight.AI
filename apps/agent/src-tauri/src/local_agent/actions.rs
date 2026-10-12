@@ -217,6 +217,9 @@ fn paired(english: String, spanish: String) -> Result<(String, String), String> 
 pub fn preview(name: &str, args: &Value) -> Result<(String, String), String> {
     if name == "focus.total_start" {
         let prefs = total_preferences(args)?;
+        let intention = super::total_focus::normalize_intention(
+            args["intention"].as_str().unwrap_or_default(),
+        )?;
         let quiet = if prefs.quiet_notifications {
             "Silence Windows app notification banners."
         } else {
@@ -240,8 +243,8 @@ pub fn preview(name: &str, args: &Value) -> Result<(String, String), String> {
         } else {
             String::new()
         };
-        return paired(format!("Total focus: {} · {} minutes. Block: {}. Exceptions: {}. {quiet}{music} No automatic messages.", text_arg(args,"intention")?,prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")),
-            format!("Concentración total: {} · {} minutos. Bloquear: {}. Excepciones: {}. {quiet_es}{music_es} Sin mensajes automáticos.", text_arg(args,"intention")?,prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")));
+        return paired(format!("Total focus: {intention} · {} minutes. Block: {}. Exceptions: {}. {quiet}{music} No automatic messages.", prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")),
+            format!("Concentración total: {intention} · {} minutos. Bloquear: {}. Excepciones: {}. {quiet_es}{music_es} Sin mensajes automáticos.", prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")));
     }
     if name == "focus.total_end" {
         return paired(
@@ -633,7 +636,9 @@ pub fn execute(
     match name {
         "focus.total_start" => super::total_focus::activate_linked(
             &app,
-            text_arg(args, "intention")?.into(),
+            super::total_focus::normalize_intention(
+                args["intention"].as_str().unwrap_or_default(),
+            )?,
             total_preferences(args)?,
         ),
         "focus.total_end" => super::total_focus::end_linked(&app),

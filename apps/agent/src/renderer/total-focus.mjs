@@ -69,7 +69,7 @@ export function mountTotalFocus({invoke}) {
       </ol>
     </div>
     <p id="totalFocusActiveTask" class="total-focus-task" data-user-content></p>
-    <label for="totalFocusTask">Your focus task (required)</label><input id="totalFocusTask" class="input" type="text" required maxlength="160" aria-describedby="totalFocusTaskError" placeholder="What are you working on?">
+    <label for="totalFocusTask">Your focus task (optional)</label><input id="totalFocusTask" class="input" type="text" maxlength="160" aria-describedby="totalFocusTaskError" placeholder="What are you working on?">
     <p id="totalFocusTaskError" class="session-help total-focus-error" role="alert" hidden></p>
     <div id="totalFocusConfig">${focusFields('totalFocus')}</div>
     <p id="totalFocusFeedback" class="session-help" role="status" aria-live="polite" hidden></p>
@@ -77,6 +77,7 @@ export function mountTotalFocus({invoke}) {
     <button type="button" class="button button-secondary" id="totalFocusEnd" hidden>End total focus</button>
     <button type="button" class="button button-secondary" id="totalFocusClock" hidden>Open main clock</button>
     <button type="button" class="button button-secondary" id="totalFocusSave">Save settings</button></div>
+    <p class="session-help">Starting total focus saves these settings for the Today shortcut.</p>
     <button type="button" class="button button-ghost" id="totalFocusBrowser">Connect your browser</button>
     <p class="session-help">Protection lasts until the chosen end time, even if FlowSight closes. You can end it from a blocked page. Tracking remains a separate choice.</p>
     ${messagingFuture()}`;
@@ -120,7 +121,7 @@ export function mountTotalFocus({invoke}) {
       digestKey=key;const items=document.getElementById('totalFocusDigestItems');items.replaceChildren();
       for(const item of digest) { const p=document.createElement('p');p.textContent=`${item.title}: ${item.body}`;items.append(p); }
     }
-    setText(document.getElementById('totalFocusActiveTask'), () => paused ? `${session.intention} · ${t('Paused')}` : active ? `${session.intention} · ${t('Until')} ${new Date(session.expiresAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'})}` : '');
+    setText(document.getElementById('totalFocusActiveTask'), () => paused ? `${session.intention === 'General' ? t('General') : session.intention} · ${t('Paused')}` : active ? `${session.intention === 'General' ? t('General') : session.intention} · ${t('Until')} ${new Date(session.expiresAt).toLocaleTimeString(getLocale(),{hour:'2-digit',minute:'2-digit'})}` : '');
     document.getElementById('totalFocusStart').hidden = present && pending !== 'start';
     document.getElementById('totalFocusEnd').hidden = !present || pending === 'start';
     document.getElementById('totalFocusClock').hidden = !present;
@@ -163,6 +164,12 @@ export function mountTotalFocus({invoke}) {
     catch(error) { feedback(() => `${t('Could not update total focus:')} ${localizeStatus(error)}`); }
     finally { busy = false;pending = '';render();feedbackElement().scrollIntoView({block:'nearest'}); }
   }
+  async function startWithPreferences(intention, preferences) {
+    // Commit the exact fields used to start so Today and later sessions agree.
+    const saved = await invoke('save_total_focus_preferences',{preferences});
+    state.preferences = saved;dirty = false;
+    return invoke('start_total_focus',{intention,preferences:saved});
+  }
   const task = document.getElementById('totalFocusTask');
   task.addEventListener('input',()=>{
     task.removeAttribute('aria-invalid');document.getElementById('totalFocusTaskError').hidden = true;
@@ -175,9 +182,9 @@ export function mountTotalFocus({invoke}) {
     if (busy) return;
     feedbackSurface = 'settings';
     // Validate before disabling controls, so focus and the error remain visible.
-    if (!task.value.trim() || !task.checkValidity()) {
+    if (!task.checkValidity() || task.value.trim().length > 160) {
       const error = document.getElementById('totalFocusTaskError');
-      setText(error, () => t('Describe your focus task in 1–160 characters.'));error.hidden = false;
+      setText(error, () => t('Keep your focus task within 160 characters.'));error.hidden = false;
       task.setAttribute('aria-invalid','true');feedback('');task.focus();task.scrollIntoView({block:'center'});return;
     }
     const minutes = document.getElementById('totalFocusMinutes');
@@ -187,7 +194,7 @@ export function mountTotalFocus({invoke}) {
     }
     const intention = task.value.trim(), preferences = readFocusFields('totalFocus');
     return action(async()=>{
-      const result = await invoke('start_total_focus',{intention,preferences});
+      const result = await startWithPreferences(intention,preferences);
       feedback(() => result?.session?.musicWarning ? `${t('Focus is active, but the music link could not be opened:')} ${localizeStatus(result.session.musicWarning)}` : t('Browser protection confirmed. Your session is ready.'));
     }, 'start');
   };
@@ -229,8 +236,8 @@ export function mountTotalFocus({invoke}) {
     if (!state?.browser?.connected || !state.browser.totalFocusAvailable) {
       throw new Error(t('Connect Browser Controls in total focus settings, then try again.'));
     }
-    const preferences = structuredClone(state.preferences || defaults);
-    const result = await invoke('start_total_focus', {intention: String(intention || '').trim() || 'General', preferences});
+    const preferences = dirty ? readFocusFields('totalFocus') : structuredClone(state.preferences || defaults);
+    const result = await startWithPreferences(String(intention || '').trim(),preferences);
     feedback(() => result?.session?.musicWarning ? `${t('Focus is active, but the music link could not be opened:')} ${localizeStatus(result.session.musicWarning)}` : t('Browser protection confirmed. Your session is ready.'));
   }, 'start', 'today');
   return {refresh,session:()=>state?.session,busy:()=>busy,ready:()=>Boolean(state),clockAction,startFromToday,preferences:()=>state?.preferences||structuredClone(defaults)};
