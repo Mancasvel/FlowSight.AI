@@ -85,6 +85,12 @@ fn proposal_for(spec: &registry::ToolSpec, arguments: Value) -> Result<ActionPro
         fields
             .entry("quiet_notifications")
             .or_insert(json!(preferences.quiet_notifications));
+        fields
+            .entry("music_enabled")
+            .or_insert(json!(preferences.music_enabled));
+        fields
+            .entry("music_url")
+            .or_insert(json!(preferences.music_url));
     }
     registry::validate(spec, &arguments)?;
     let id = uuid::Uuid::new_v4().to_string();
@@ -673,5 +679,31 @@ mod tests {
         assert!(spec.confirmation);
         let proposal = proposal_for(&spec, args).unwrap();
         assert_eq!(proposal.tool, "tasks.create");
+    }
+
+    #[test]
+    fn music_link_is_frozen_in_the_reviewed_focus_proposal() {
+        let _store = state::TestStore::new();
+        let music_url = "https://music.example.com/playlist?list=focus&track=123";
+        state::update(|data| {
+            data.total_focus_preferences.music_enabled = true;
+            data.total_focus_preferences.music_url = music_url.into();
+            Ok(())
+        })
+        .unwrap();
+        let spec = registry::specs()
+            .into_iter()
+            .find(|spec| spec.name == "focus.total_start")
+            .unwrap();
+        let proposal = proposal_for(&spec, json!({"intention":"Study"})).unwrap();
+        assert_eq!(proposal.arguments["music_enabled"], true);
+        assert_eq!(proposal.arguments["music_url"], music_url);
+        assert!(proposal.summary.contains(music_url));
+        state::update(|data| {
+            data.total_focus_preferences.music_url = "https://music.example.com/changed".into();
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(proposal.arguments["music_url"], music_url);
     }
 }

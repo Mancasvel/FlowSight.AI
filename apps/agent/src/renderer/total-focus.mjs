@@ -1,7 +1,7 @@
 import { html, t, setText, getLocale, localizeStatus } from './i18n.mjs';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-const defaults = {patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50,quietNotifications:true};
+const defaults = {patterns:['instagram.com','tiktok.com','x.com'],exceptions:[],durationMinutes:50,quietNotifications:true,musicEnabled:false,musicUrl:''};
 const sites = value => value.split(/[\n,]+/).map(item => item.trim()).filter(Boolean);
 
 export function focusFields(prefix, preferences = defaults) {
@@ -16,6 +16,10 @@ export function focusFields(prefix, preferences = defaults) {
     <input id="${prefix}Minutes" class="input" type="number" min="5" max="180" step="1" value="${preferences.durationMinutes}">
     <label class="total-focus-quiet" for="${prefix}Quiet"><input id="${prefix}Quiet" type="checkbox" ${preferences.quietNotifications !== false ? 'checked' : ''}> Silence Windows app notification banners</label>
     <p class="session-help">The previous notification setting is restored when the session ends. Browser protection continues if you quit FlowSight; notification silence resumes when you reopen it.</p>
+    <label class="total-focus-quiet" for="${prefix}MusicEnabled"><input id="${prefix}MusicEnabled" type="checkbox" ${preferences.musicEnabled ? 'checked' : ''}> Open music when total focus starts</label>
+    <label for="${prefix}MusicUrl">Music link</label>
+    <input id="${prefix}MusicUrl" class="input total-focus-music-url" type="url" maxlength="2048" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="${prefix}MusicHelp" placeholder="https://music.youtube.com/playlist?list=…" value="${escape(preferences.musicUrl || '')}">
+    <p id="${prefix}MusicHelp" class="session-help">Opens once in a background tab in your connected browser, keeping your current window in front. The browser may require you to allow audio playback on that site.</p>
   </div>`;
 }
 
@@ -23,7 +27,9 @@ export function readFocusFields(prefix) {
   return {patterns:sites(document.getElementById(`${prefix}Sites`).value),
     exceptions:sites(document.getElementById(`${prefix}Exceptions`).value),
     durationMinutes:Number(document.getElementById(`${prefix}Minutes`).value),
-    quietNotifications:document.getElementById(`${prefix}Quiet`).checked};
+    quietNotifications:document.getElementById(`${prefix}Quiet`).checked,
+    musicEnabled:document.getElementById(`${prefix}MusicEnabled`).checked,
+    musicUrl:document.getElementById(`${prefix}MusicUrl`).value.trim()};
 }
 
 export function focusExample() {
@@ -47,6 +53,7 @@ export function mountTotalFocus({invoke}) {
     <p class="session-help">FlowSight focus reminders are held in your local digest during this session.</p>
     <p id="totalFocusStatus" class="total-focus-status" role="status" aria-live="polite">Checking browser protection…</p>
     <p id="totalFocusQuietStatus" class="session-help" role="status"></p>
+    <p id="totalFocusMusicStatus" class="session-help" role="status" hidden></p>
     <div id="totalFocusDigest" hidden>
       <strong>Reminders saved during focus</strong>
       <div id="totalFocusDigestItems" data-user-content></div>
@@ -93,12 +100,19 @@ export function mountTotalFocus({invoke}) {
       : released ? t('Session ended · waiting for the extension to release protection.')
       : state?.browser?.connected && !state.browser.totalFocusAvailable ? t('Browser connected · website protection unavailable. Check site access or use the compatible extension below.')
       : state?.browser?.connected ? t('Browser connected · ready to start') : t('Connect Browser Controls to activate total focus.'));
-    document.getElementById('totalFocusRepair').hidden = present || !state?.browser?.connected || Boolean(state.browser.totalFocusAvailable);
+    const musicUnsupported = document.getElementById('totalFocusMusicEnabled').checked && !state?.browser?.musicAvailable;
+    document.getElementById('totalFocusRepair').hidden = present || !state?.browser?.connected || Boolean(state.browser.totalFocusAvailable && !musicUnsupported);
     document.getElementById('totalFocusStatus').dataset.active = String(Boolean(acknowledged));
     setText(document.getElementById('totalFocusQuietStatus'), () => state?.systemNotificationsQuiet
       ? t('Windows app notification banners are silenced.')
       : active && session.quietNotifications && state?.systemNotificationsAvailable
       ? t('Notification silence is not confirmed. End the session and try again.') : '');
+    const musicStatus = document.getElementById('totalFocusMusicStatus');
+    setText(musicStatus, () => session?.musicWarning
+      ? `${t('Focus is active, but the music link could not be opened:')} ${localizeStatus(session.musicWarning)}`
+      : !present && document.getElementById('totalFocusMusicEnabled').checked && state?.browser?.connected && !state.browser.musicAvailable
+      ? t('Update Browser Controls to open music in the background.') : '');
+    musicStatus.hidden = !musicStatus.textContent;
     const digest=state?.digest || [];
     document.getElementById('totalFocusDigest').hidden=!digest.length;
     const key=JSON.stringify(digest);
@@ -132,6 +146,8 @@ export function mountTotalFocus({invoke}) {
       if (fill && !dirty && state?.preferences) {
         for (const [suffix,value] of [['Sites',state.preferences.patterns.join('\n')],['Exceptions',state.preferences.exceptions.join('\n')],['Minutes',state.preferences.durationMinutes]]) document.getElementById(`totalFocus${suffix}`).value = value;
         document.getElementById('totalFocusQuiet').checked=state.preferences.quietNotifications !== false;
+        document.getElementById('totalFocusMusicEnabled').checked=Boolean(state.preferences.musicEnabled);
+        document.getElementById('totalFocusMusicUrl').value=state.preferences.musicUrl || '';
       }
       render();
     } catch { feedback(() => t('Could not load focus settings. Try again.')); }
@@ -151,7 +167,7 @@ export function mountTotalFocus({invoke}) {
   task.addEventListener('input',()=>{
     task.removeAttribute('aria-invalid');document.getElementById('totalFocusTaskError').hidden = true;
   });
-  document.getElementById('totalFocusConfig').addEventListener('input',()=>{dirty=true;});
+  document.getElementById('totalFocusConfig').addEventListener('input',()=>{dirty=true;render();});
   document.getElementById('totalFocusSave').onclick = () => action(async()=>{
     await invoke('save_total_focus_preferences',{preferences:readFocusFields('totalFocus')});dirty=false;feedback(() => t('Focus settings saved'));
   }, 'save');
@@ -171,8 +187,8 @@ export function mountTotalFocus({invoke}) {
     }
     const intention = task.value.trim(), preferences = readFocusFields('totalFocus');
     return action(async()=>{
-      await invoke('start_total_focus',{intention,preferences});
-      feedback(() => t('Browser protection confirmed. Your session is ready.'));
+      const result = await invoke('start_total_focus',{intention,preferences});
+      feedback(() => result?.session?.musicWarning ? `${t('Focus is active, but the music link could not be opened:')} ${localizeStatus(result.session.musicWarning)}` : t('Browser protection confirmed. Your session is ready.'));
     }, 'start');
   };
   document.getElementById('totalFocusEnd').onclick = () => action(async()=>{
@@ -214,8 +230,8 @@ export function mountTotalFocus({invoke}) {
       throw new Error(t('Connect Browser Controls in total focus settings, then try again.'));
     }
     const preferences = structuredClone(state.preferences || defaults);
-    await invoke('start_total_focus', {intention: String(intention || '').trim() || 'General', preferences});
-    feedback(() => t('Browser protection confirmed. Your session is ready.'));
+    const result = await invoke('start_total_focus', {intention: String(intention || '').trim() || 'General', preferences});
+    feedback(() => result?.session?.musicWarning ? `${t('Focus is active, but the music link could not be opened:')} ${localizeStatus(result.session.musicWarning)}` : t('Browser protection confirmed. Your session is ready.'));
   }, 'start', 'today');
   return {refresh,session:()=>state?.session,busy:()=>busy,ready:()=>Boolean(state),clockAction,startFromToday,preferences:()=>state?.preferences||structuredClone(defaults)};
 }

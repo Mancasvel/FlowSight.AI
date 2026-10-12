@@ -93,6 +93,37 @@ and authenticated requests to 127.0.0.1:38547.
 - `focus.total_end`: reviewed release.
 - `focus.total_status`: read-only preferences, session and extension status.
 
+## Background music
+
+In Total focus settings, enable **Open music when total focus starts**, paste a
+complete HTTP(S) link into **Music link**, and save settings. The Today shortcut
+uses the saved link; a start from Settings uses the current fields. The same
+optional setting is available during setup and defaults to off for existing and
+new installations. Playlist parameters and URL fragments are preserved.
+
+Browser Controls 1.1.3 opens the link once in an inactive tab inside an existing
+browser window. It never creates or activates a window and leaves the selected
+tab unchanged. Keep the paired browser running. Pause, resume, periodic status
+checks, and reconnection do not reopen music. Ending focus leaves the music tab
+available for the user to control. Browser audio autoplay permissions still
+apply; a website may need a prior playback action or site permission.
+
+If the music site is blocked, the exact configured URL (including its query)
+gets a temporary main-frame exception during the focus session. Other URLs on
+that site remain subject to the selected blocks and exceptions. Redirects to a
+different blocked URL still need an explicit allowed exception. The link stays
+in local preferences and the authenticated local browser bridge.
+
+Update the browser extension separately from the desktop app. Older extensions
+continue supporting focus with music disabled; starting with music enabled asks
+for an extension update before changing tracking or protection. If tab creation
+fails after protection is applied, the session remains active and FlowSight
+displays the music error. It does not report that the music is playing.
+
+The local agent's `focus.total_start` accepts `music_enabled` and `music_url`.
+Its confirmation preview includes the exact link, and the proposed action
+freezes the saved music settings so later edits cannot change a reviewed action.
+
 ## Verification
 
 Node tests cover rule ownership, allow precedence, expiry, reconnect/restart,

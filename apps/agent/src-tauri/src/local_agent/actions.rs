@@ -89,6 +89,12 @@ fn total_preferences(args: &Value) -> Result<super::total_focus::Preferences, St
     if let Some(quiet) = args["quiet_notifications"].as_bool() {
         preferences.quiet_notifications = quiet;
     }
+    if let Some(enabled) = args["music_enabled"].as_bool() {
+        preferences.music_enabled = enabled;
+    }
+    if let Some(url) = args["music_url"].as_str() {
+        preferences.music_url = url.into();
+    }
     super::total_focus::validate(preferences)
 }
 
@@ -221,8 +227,21 @@ pub fn preview(name: &str, args: &Value) -> Result<(String, String), String> {
         } else {
             "Mantener el ajuste de avisos de Windows."
         };
-        return paired(format!("Total focus: {} · {} minutes. Block: {}. Exceptions: {}. {quiet} No automatic messages.", text_arg(args,"intention")?,prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")),
-            format!("Concentración total: {} · {} minutos. Bloquear: {}. Excepciones: {}. {quiet_es} Sin mensajes automáticos.", text_arg(args,"intention")?,prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")));
+        let music = if prefs.music_enabled {
+            format!(" Open music in a background tab: {}.", prefs.music_url)
+        } else {
+            String::new()
+        };
+        let music_es = if prefs.music_enabled {
+            format!(
+                " Abrir música en una pestaña en segundo plano: {}.",
+                prefs.music_url
+            )
+        } else {
+            String::new()
+        };
+        return paired(format!("Total focus: {} · {} minutes. Block: {}. Exceptions: {}. {quiet}{music} No automatic messages.", text_arg(args,"intention")?,prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")),
+            format!("Concentración total: {} · {} minutos. Bloquear: {}. Excepciones: {}. {quiet_es}{music_es} Sin mensajes automáticos.", text_arg(args,"intention")?,prefs.duration_minutes,prefs.patterns.join(", "),prefs.exceptions.join(", ")));
     }
     if name == "focus.total_end" {
         return paired(
