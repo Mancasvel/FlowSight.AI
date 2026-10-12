@@ -192,6 +192,19 @@ pub fn activate(intention: String, preferences: Preferences) -> Result<Value, St
     })
 }
 
+pub fn normalize_intention(intention: &str) -> Result<String, String> {
+    let intention = intention.trim();
+    if intention.chars().count() > 160 {
+        return Err("Keep your focus task within 160 characters.".into());
+    }
+    Ok(if intention.is_empty() {
+        "General"
+    } else {
+        intention
+    }
+    .into())
+}
+
 fn activate_with(
     intention: String,
     preferences: Preferences,
@@ -200,9 +213,7 @@ fn activate_with(
 ) -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
     let preferences = validate(preferences)?;
-    if intention.trim().is_empty() || intention.chars().count() > 160 {
-        return Err("Describe your focus task in 1–160 characters.".into());
-    }
+    let intention = normalize_intention(&intention)?;
     if state::read()?
         .total_focus
         .is_some_and(|session| session.is_active() || session.paused_at.is_some())
@@ -223,7 +234,7 @@ fn activate_with(
     }
     let session = Session {
         id: uuid::Uuid::new_v4().to_string(),
-        intention: intention.trim().into(),
+        intention,
         expires_at: (Utc::now() + Duration::minutes(preferences.duration_minutes.into()))
             .to_rfc3339(),
         patterns: preferences.patterns.clone(),
@@ -256,7 +267,11 @@ fn activate_with(
                 && value["applied"] == true
                 && policy()?.is_some_and(|current| current.id == session.id) =>
         {
-            if let Some(warning) = value["musicError"].as_str() {
+            let music_warning = value["musicError"].as_str().or_else(|| {
+                (session.music_url.is_some() && value["musicOpened"] != true)
+                    .then_some("The browser did not confirm opening the music link.")
+            });
+            if let Some(warning) = music_warning {
                 state::update(|data| {
                     if let Some(current) = data
                         .total_focus
@@ -316,6 +331,7 @@ pub fn activate_linked(
     preferences: Preferences,
 ) -> Result<Value, String> {
     let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+    let intention = normalize_intention(&intention)?;
     crate::privacy::require_monitoring_acknowledgement(&crate::paths::db_path()?)?;
     if state::read()?
         .focus
@@ -341,7 +357,7 @@ pub fn activate_linked(
         let _ = end();
         return Err(error);
     }
-    crate::agent::set_task_context(Some(intention.trim().into()), None)?;
+    crate::agent::set_task_context(Some(intention), None)?;
     get_total_focus()
 }
 
@@ -705,6 +721,30 @@ mod tests {
     }
 
     #[test]
+    fn empty_task_starts_general_focus_and_named_tasks_remain_optional() {
+        let _store = state::TestStore::new();
+        assert_eq!(normalize_intention("  Study ADDA  ").unwrap(), "Study ADDA");
+        assert!(normalize_intention(&"a".repeat(161)).is_err());
+        for intention in ["", " \t\n "] {
+            activate_with(
+                intention.into(),
+                Preferences {
+                    quiet_notifications: false,
+                    ..Preferences::default()
+                },
+                || json!({"totalFocusAvailable":true}),
+                || {
+                    let session = policy()?.unwrap();
+                    assert_eq!(session.intention, "General");
+                    Ok(json!({"sessionId":session.id,"applied":true}))
+                },
+            )
+            .unwrap();
+            clear_session(None).unwrap();
+        }
+    }
+
+    #[test]
     fn holds_reminders_and_restores_banners_on_emergency_end() {
         let _store = state::TestStore::new();
         system_quiet::mock_banners(Some(0));
@@ -941,5 +981,32 @@ mod tests {
         }).unwrap();
         assert!(policy().unwrap().unwrap().music_warning.is_some());
         assert_eq!(state::read().unwrap().total_focus_preferences.music_url, "");
+        clear_session(None).unwrap();
+        activate_with(
+            "".into(),
+            preferences.clone(),
+            || json!({"totalFocusAvailable":true,"musicAvailable":true}),
+            || {
+                let session = policy()?.unwrap();
+                Ok(json!({"sessionId":session.id,"applied":true}))
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            policy().unwrap().unwrap().music_warning.as_deref(),
+            Some("The browser did not confirm opening the music link.")
+        );
+        clear_session(None).unwrap();
+        activate_with(
+            "".into(),
+            preferences,
+            || json!({"totalFocusAvailable":true,"musicAvailable":true}),
+            || {
+                let session = policy()?.unwrap();
+                Ok(json!({"sessionId":session.id,"applied":true,"musicOpened":true}))
+            },
+        )
+        .unwrap();
+        assert!(policy().unwrap().unwrap().music_warning.is_none());
     }
 }

@@ -695,9 +695,13 @@ mod tests {
             .into_iter()
             .find(|spec| spec.name == "focus.total_start")
             .unwrap();
-        let proposal = proposal_for(&spec, json!({"intention":"Study"})).unwrap();
+        // The user can request focus and saved music without inventing a task.
+        let proposal = proposal_for(&spec, json!({})).unwrap();
+        assert!(proposal.summary.contains("General"));
         assert_eq!(proposal.arguments["music_enabled"], true);
         assert_eq!(proposal.arguments["music_url"], music_url);
+        let empty = proposal_for(&spec, json!({"intention":"  "})).unwrap();
+        assert!(empty.summary.contains("General"));
         assert!(proposal.summary.contains(music_url));
         state::update(|data| {
             data.total_focus_preferences.music_url = "https://music.example.com/changed".into();

@@ -86,7 +86,7 @@ try {
           if(command==='save_total_focus_preferences'){totalFocus.preferences=args.preferences;return args.preferences;}
           if(command==='start_total_focus'){
             trackingSnapshot();running=true;
-            totalFocus.session={id:'synthetic-focus',intention:args.intention,expiresAt:'2026-10-01T09:00:00+02:00',linkedClock:true,pausedAt:null,...args.preferences};
+            totalFocus.session={id:'synthetic-focus',intention:args.intention.trim() || 'General',expiresAt:'2026-10-01T09:00:00+02:00',linkedClock:true,pausedAt:null,...args.preferences};
             totalFocus.systemNotificationsQuiet=args.preferences.quietNotifications;
             totalFocus.browser={connected:true,totalFocusAvailable:true,fresh:true,applied:true,sessionId:'synthetic-focus'};return structuredClone(totalFocus);
           }
@@ -268,27 +268,27 @@ try {
     await page.evaluate(()=>{document.getElementById('totalFocusMusicEnabled').checked=false;document.getElementById('totalFocusMusicEnabled').dispatchEvent(new Event('input',{bubbles:true}));});
     await page.locator('#totalFocusRepair').waitFor({state:'hidden'});
     await page.locator('#totalFocusTask').fill('');
+    assert.equal(await page.locator('#totalFocusTask').getAttribute('required'),null);
+    assert.equal(await page.locator('label[for=totalFocusTask]').innerText(),'Your focus task (optional)');
     await page.locator('#totalFocusStart').click();
-    await page.locator('#totalFocusTaskError').filter({hasText:'Describe your focus task'}).waitFor();
-    assert.equal(await page.evaluate(()=>document.activeElement.id),'totalFocusTask');
-    assert.equal(await page.locator('#totalFocusTask').getAttribute('aria-invalid'),'true');
-    assert.equal(await page.locator('#totalFocusTask').isEnabled(),true);
-    assert.equal(await page.locator('#totalFocusStart').innerText(),'Start total focus');
-    assert.equal(await page.locator('#totalFocusTaskError').evaluate(element=>{
-      const r=element.getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight;
-    }),true,'An empty-task click must reveal the input error in the viewport.');
-    await page.screenshot({path:fileURLToPath(new URL(`total-focus-task-error-${viewport.name}.png`,output))});
-    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
+    await page.locator('#totalFocusFeedback').filter({hasText:'Your session is ready'}).waitFor();
+    assert.match(await page.locator('#totalFocusActiveTask').innerText(),/^General ·/);
+    assert.equal(await page.locator('#totalFocusTaskError').isVisible(),false);
+    await page.locator('#totalFocusEnd').click();
+    await page.locator('#totalFocusFeedback').filter({hasText:'Total focus ended'}).waitFor();
     await page.locator('#totalFocusTask').fill('   ');
     await page.locator('#totalFocusStart').click();
-    assert.equal(await page.evaluate(()=>document.activeElement.id),'totalFocusTask');
-    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
+    await page.locator('#totalFocusFeedback').filter({hasText:'Your session is ready'}).waitFor();
+    assert.match(await page.locator('#totalFocusActiveTask').innerText(),/^General ·/);
+    await page.locator('#totalFocusEnd').click();
+    await page.locator('#totalFocusFeedback').filter({hasText:'Total focus ended'}).waitFor();
+    const startsBeforeInvalidDuration=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').length);
     await page.locator('#totalFocusTask').fill('ADDA · exercise 1');
     await page.locator('#totalFocusTaskError').waitFor({state:'hidden'});
     await page.locator('#totalFocusMinutes').fill('4');
     await page.locator('#totalFocusStart').click();
     assert.equal(await page.evaluate(()=>document.activeElement.id),'totalFocusMinutes');
-    assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>c.command==='start_total_focus'),false);
+    assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').length),startsBeforeInvalidDuration);
     await page.locator('#totalFocusMinutes').fill('50');
     await page.locator('#totalFocusQuiet').check();
     await page.evaluate(()=>{window.testDelays={start_total_focus:700};window.testFailures.start_total_focus='Browser unavailable';});
@@ -332,10 +332,14 @@ try {
     await page.locator('#totalFocusDigestDismiss').click();
     await page.locator('#totalFocusDigest').waitFor({state:'hidden'});
     assert.equal((await page.evaluate(()=>window.testCalls)).some(c=>/start_monitoring|messages.*send/.test(c.command)),false);
-    // The new play starts from Today using the current task and saved settings.
-    // Unsaved Settings edits must not silently change the shortcut's protection.
-    await page.locator('#totalFocusSites').fill('unsaved.example.org');
-    await page.locator('#totalFocusMinutes').fill('5');
+    // Today starts with the current Settings edits, including a music link that
+    // has not been saved. A cancelled consent must not save or start anything.
+    await page.locator('#totalFocusSites').fill('youtube.com, instagram.com');
+    await page.locator('#totalFocusMinutes').fill('35');
+    await page.locator('#totalFocusQuiet').uncheck();
+    await page.locator('#totalFocusMusicEnabled').check();
+    const editedMusicUrl='https://music.example.com/listen?playlist=new&track=456';
+    await page.locator('#totalFocusMusicUrl').fill(editedMusicUrl);
     await page.locator('#navToday').click();
     await page.locator('#manualTask').fill('Review the proposal');
     assert.equal(await page.locator('#todayTotalFocusLabel').innerText(),'Total focus settings');
@@ -344,8 +348,10 @@ try {
     await page.locator('#todayTotalFocusStart').click();
     await page.locator('#monitoringNoticeOverlay.visible').waitFor();
     const startsBeforeConsent=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').length);
+    const savesBeforeConsent=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='save_total_focus_preferences').length);
     await page.locator('#monitoringNoticeCancelBtn').click();
     assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').length),startsBeforeConsent);
+    assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='save_total_focus_preferences').length),savesBeforeConsent);
     await page.locator('#todayTotalFocusStart').click();
     await page.locator('#monitoringNoticeAcceptBtn').click();
     await page.locator('#todayTotalFocusFeedback').filter({hasText:'Your session is ready'}).waitFor();
@@ -353,12 +359,23 @@ try {
     const shortcutStart=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').at(-1));
     assert.equal(shortcutStart.args.intention,'Review the proposal');
     assert.deepEqual(shortcutStart.args.preferences.patterns,['youtube.com','instagram.com']);
-    assert.equal(shortcutStart.args.preferences.durationMinutes,50);
+    assert.equal(shortcutStart.args.preferences.durationMinutes,35);
     assert.equal(shortcutStart.args.preferences.quietNotifications,false);
     assert.equal(shortcutStart.args.preferences.musicEnabled,true);
-    assert.equal(shortcutStart.args.preferences.musicUrl,musicUrl);
+    assert.equal(shortcutStart.args.preferences.musicUrl,editedMusicUrl);
+    const savedAfterShortcut=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='save_total_focus_preferences').at(-1));
+    assert.deepEqual(savedAfterShortcut.args.preferences,shortcutStart.args.preferences);
     await page.locator('#playTimerBtn').filter({hasText:'Pause total focus'}).waitFor();
     assert.equal(await page.locator('#todayTotalFocusStart').isVisible(),false);
+    await page.locator('#stopTimerBtn').click();
+    await page.locator('#todayTotalFocusStart').waitFor({state:'visible'});
+    // With no dirty Settings fields, Today reuses the preferences just saved.
+    await page.locator('#manualTask').fill('');
+    await page.locator('#todayTotalFocusStart').click();
+    await page.locator('#todayTotalFocusFeedback').filter({hasText:'Your session is ready'}).waitFor();
+    const emptyTodayStart=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='start_total_focus').at(-1));
+    assert.equal(emptyTodayStart.args.intention,'General');
+    assert.deepEqual(emptyTodayStart.args.preferences,shortcutStart.args.preferences);
     await page.locator('#stopTimerBtn').click();
     await page.locator('#todayTotalFocusStart').waitFor({state:'visible'});
     await page.evaluate(()=>{window.testFailures={start_total_focus:'Browser did not confirm'};});
@@ -412,12 +429,13 @@ try {
     assert.equal(await page.locator('#sessionConfirm').isDisabled(),true);
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
     assert.equal(overflow,false);assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.testWindowErrors),[]);
-    console.log(`${viewport.name}: onboarding/planner regression and direct total focus play with saved settings, task context, consent cancel/accept, failure/retry, linked clock and Spanish labels passed.`);
+    console.log(`${viewport.name}: optional empty focus task, current music settings saved and used by Today, consent cancel/accept, failure/retry, linked clock and Spanish labels passed.`);
     await page.locator('#todayTotalFocus').click();
     await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='es';select.dispatchEvent(new Event('change',{bubbles:true}));});
     await page.locator('#totalFocusMusicEnabled').check();
     await page.locator('#totalFocusMusicUrl').fill(musicUrl);
     assert.equal(await page.locator('label[for=totalFocusMusicUrl]').innerText(),'Enlace de música');
+    assert.equal(await page.locator('label[for=totalFocusTask]').innerText(),'Tu tarea de concentración (opcional)');
     assert.match(await page.locator('label[for=totalFocusMusicEnabled]').innerText(),/Abrir música al iniciar la concentración total/);
     assert.equal(await page.locator('#totalFocusMusicUrl').inputValue(),musicUrl);
     assert.equal(await page.locator('#totalFocusMusicUrl').evaluate(input=>input.getBoundingClientRect().width>200),true);
