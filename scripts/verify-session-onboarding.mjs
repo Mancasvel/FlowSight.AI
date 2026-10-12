@@ -439,7 +439,7 @@ try {
     assert.match(await page.locator('label[for=totalFocusMusicEnabled]').innerText(),/Abrir música al iniciar la concentración total/);
     assert.equal(await page.locator('#totalFocusMusicUrl').inputValue(),musicUrl);
     assert.equal(await page.locator('#totalFocusMusicUrl').evaluate(input=>input.getBoundingClientRect().width>200),true);
-    await page.locator('label[for=totalFocusMusicEnabled]').evaluate(label=>label.scrollIntoView({block:'start'}));
+    await page.locator('label[for=totalFocusTask]').evaluate(label=>label.scrollIntoView({block:'start'}));
     await page.screenshot({path:fileURLToPath(new URL(`focus-music-es-${viewport.name}.png`,output)),animations:'disabled'});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     console.log(`${viewport.name}: background music saved during setup, used by Today, preserved on language change, compact fields fit.`);
