@@ -38,3 +38,10 @@ verify_jwt = true
 # desktop client secret is stored in Supabase secrets, never in the Tauri app.
 [functions.calendar-token]
 verify_jwt = true
+
+# JWTs and scoped assistant tokens are verified inside their handlers.
+[functions.build-in-public]
+verify_jwt = false
+
+[functions.build-in-public-assistant]
+verify_jwt = false

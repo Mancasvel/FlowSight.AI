@@ -3,6 +3,7 @@ mod agent;
 mod agent_pure;
 mod anonymous_analytics;
 mod auth;
+mod build_in_public;
 mod calendar_companion;
 mod coach_chat;
 pub mod context;
@@ -92,6 +93,9 @@ pub fn run() {
             language::set_language_preference,
             initialize_agent,
             online_leagues::get_online_leagues,
+            build_in_public::bip_collect_local,
+            build_in_public::bip_generate_local,
+            build_in_public::bip_cloud,
             online_leagues::set_online_league_consent,
             online_leagues::online_league_action,
             get_config,
