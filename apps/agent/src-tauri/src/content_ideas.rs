@@ -389,4 +389,51 @@ mod tests {
             )
         );
     }
+    #[test]
+    fn generation_preserves_sources_rejects_invented_titles_and_skips_used_work() {
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/v1/chat/completions", server.server_addr());
+        let worker = std::thread::spawn(move || {
+            for title in ["Flujo de datos con ESP32", "Carcasa impresa ESP32"] {
+                let mut request = server.recv().unwrap();
+                let mut body = String::new();
+                request.as_reader().read_to_string(&mut body).unwrap();
+                let input: Value = serde_json::from_str(&body).unwrap();
+                assert_eq!(input["max_tokens"], 300);
+                assert!(!input["messages"][0]["content"]
+                    .as_str()
+                    .unwrap()
+                    .contains("FlowSight"));
+                let generated = json!({"title":title,"angle":"Invented unsupported feature","reason":"Invented productivity benefit","interest":4,"uniqueness":4,"relevance":5});
+                request.respond(tiny_http::Response::from_string(json!({"choices":[{"finish_reason":"stop","message":{"content":generated.to_string()}}]}).to_string())).unwrap();
+            }
+        });
+        let mut first = work("first", "ESP32 pantalla táctil botones pausa reanudar", 60);
+        first["title"] = json!("ESP32 pantalla táctil botones pausa reanudar");
+        let mut second = work("second", "Carcasa impresa ESP32", 60);
+        second["title"] = json!("Carcasa impresa ESP32");
+        let sources = json!({"evidence":[first.clone(),second.clone()]});
+        let result = select_five(sources.clone(), &url, "es", "ESP32", &[], &[]).unwrap();
+        worker.join().unwrap();
+        let ideas = result["evidence"].as_array().unwrap();
+        assert_eq!(ideas.len(), 2);
+        assert_eq!(ideas[0]["summary"], first["summary"]);
+        assert_eq!(ideas[0]["title"], first["title"]);
+        assert_eq!(ideas[0]["origin_key"], "first");
+        assert_eq!(ideas[0]["signals"]["angle"], "");
+        assert_eq!(ideas[0]["signals"]["rationale"], "");
+        let repeat = select_five(
+            sources,
+            &url,
+            "es",
+            "ESP32",
+            &["used:first".into(), "used:second".into()],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(repeat["status"], "no_new_ideas");
+        assert!(repeat["evidence"].as_array().unwrap().is_empty());
+        let empty = select_five(json!({"evidence":[]}), &url, "es", "RP2040", &[], &[]).unwrap();
+        assert_eq!(empty["status"], "no_matches");
+    }
 }

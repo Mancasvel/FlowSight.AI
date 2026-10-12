@@ -131,7 +131,12 @@ fn collect(
         );
         candidates.push(json!({"source_key":key,"title":title,"summary":summary,"occurred_on":date,"kind":"progress","signals":{"observations":1,"recorded_seconds":seconds.max(0),"days":1}}));
     }
-    if let Some(root) = codex_root {
+    if let Some(root) = codex_root.filter(|_| {
+        !privacy
+            .excluded_applications
+            .iter()
+            .any(|app| app.eq_ignore_ascii_case("codex"))
+    }) {
         candidates.extend(collect_codex_prompts(root, first_day, excluded)?);
     }
     let evidence = crate::content_ideas::retrieve_work(candidates, direction);
