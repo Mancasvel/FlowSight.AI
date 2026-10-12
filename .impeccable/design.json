@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-12T18:00:23Z",
+  "generatedAt": "2026-10-12T18:38:56Z",
   "title": "Design System: FlowSight Desktop Renderer",
   "extensions": {
     "colorMeta": {
@@ -319,6 +319,10 @@
       "label": {
         "displayName": "Teal Kicker",
         "purpose": "Short uppercase section cues."
+      },
+      "studio-title": {
+        "displayName": "Studio Subject",
+        "purpose": "Useful subjects at the start of Build in public idea, prompt and proposal rows."
       }
     },
     "shadows": [
@@ -400,6 +404,10 @@
       {
         "name": "studio-short-window-height",
         "value": "550px"
+      },
+      {
+        "name": "studio-setup-columns",
+        "value": "560px"
       }
     ],
     "buildInPublic": {
@@ -418,14 +426,14 @@
           "Content",
           "Settings"
         ],
-        "selection": "Card-colored selected outer tab; 2px teal underline for the current studio view; returned-content count beside Content"
+        "selection": "Card-colored selected outer tab; four studio views immediately beneath it with an 18px gap, 36px minimum-height controls and 2px teal underline; returned-content count beside Content. The feature h1 remains accessible but is visually hidden."
       },
-      "layout": "One reading column; period selector and local-idea search lead Ideas; reviewed selections precede network, style and optional profile controls; network controls stack in divided rows",
-      "responsive": "At 700px and wider, studio/idea/portrait widths cap at 760px/680px/360px within Online. At heights of 550px or less, the title reduces to 22px, its supporting sentence hides, outer tabs use a 30px minimum height and view spacing contracts. Studio content adds 28px bottom padding above the shared pane dock allowance.",
+      "layout": "Compact two-column period/generation toolbar with a 9px gap; optional text direction behind a disclosure; title-first current ideas, retained earlier ideas and saved selections remain distinguishable. Selected count and Prepare prompts open a dedicated inline setup step.",
+      "responsive": "Studio width caps at 760px and optional portrait preview at 360px from 700px. Idea rows use the studio width. Setup style/profile fields stack in compact windows and use two equal columns from 560px. Content padding is 12px top and 40px bottom; at heights up to 550px, top padding is 8px and toolbar controls reduce from 38px to 34px minimum height. Outer tabs stay at 34px minimum height.",
       "storyChoice": {
         "gap": "10px",
         "checkboxSize": "16px",
-        "structure": "Separate checkbox and text column; date and confirmation beneath title; independent Edit action"
+        "structure": "Separate checkbox and text column; date and confirmation beneath title; independent Review action"
       },
       "focus": {
         "light": "{colors.bip-accent}",
@@ -434,13 +442,13 @@
         "offset": "3px",
         "continuity": "Same-view renders restore the active control and text selection; view navigation moves to a heading; editor fallback is the back control; the live-region node persists"
       },
-      "evidence": "Local observations remain on the device until a reviewed highlight is saved. A saved row groups selection, title, date and factual confirmation separately from its Edit action.",
-      "prompts": "Network-specific stored prompts show network, style, source idea and returned-content status. Their editor exposes explicit Save, Copy and Delete actions.",
+      "evidence": "A successful batch supplies five editorial alternatives grounded in local observations. Current and earlier batches stay local until a reviewed highlight is explicitly saved. Saved selections have a separate heading/count and a Review action.",
+      "prompts": "Subject-first divided rows show network, style and returned-content status. The editor preserves the complete stored prompt, shows unsaved changes and exposes explicit Save, Copy and Delete actions.",
       "profiles": "Social profiles are stored independently in FlowSight with network, name, handle and usual style; they supply prompt context without a Buffer account requirement.",
-      "assistant": "Scoped revocable MCP connection lets an external assistant collect evidence, profiles and prompts, then return proposals. Any later publication is handled with the assistant outside FlowSight.",
-      "returnedContent": "Rows show network, proposal preview, origin and revision. The editor separates post or first message from full thread, script or slide plan, with an optional visual outline. Save, Copy and Delete actions are available; approval, schedule, destination and publication controls are absent.",
-      "errorRecovery": "Profile and preference drafts survive busy/error renders and clear after successful writes or an owner change. Prompt and proposal edits survive ordinary internal navigation.",
-      "incomingContent": "A minute-based studio check refreshes returned content and its count in an idle open view, including manual idea cadence. Active editors, focused forms and ongoing requests defer refresh; the existing live region reports updates without stealing focus.",
+      "assistant": "Scoped revocable MCP connection exposes get_content_context, set_content_direction and save_content_drafts. The assistant can guide the next five-idea local selection and return proposals. Any later publication is handled outside FlowSight.",
+      "returnedContent": "Subject-first divided rows show network/state, a two-line body preview, origin and revision. The editor separates post or first message from full thread, script or slide plan, with an optional visual outline. Save, Copy and Delete actions are available; approval, schedule, destination and publication controls are absent.",
+      "errorRecovery": "Profile, preference and direction form drafts survive busy/error renders and clear after successful writes or an owner change. Stable local identities retain current/earlier ideas and corrections across generation; unfinished manual highlights are cached locally. Evidence, prompt and proposal edits survive ordinary internal navigation with unsaved status visible. Draft retention does not upload evidence.",
+      "incomingContent": "A minute-based studio check refreshes returned content, its count and assistant-set text direction in an idle open view, including manual idea cadence. Active editors, focused forms and ongoing requests defer refresh; the existing live region reports updates without stealing focus.",
       "portraitVisual": {
         "medium": "Programmatic PNG canvas without external raster assets",
         "size": "1080x1350",
@@ -448,23 +456,37 @@
         "hierarchy": "Editable headline, explanation, and signature/project footer; a quiet separator belongs to the footer",
         "fit": "Headline and explanation wrap and reduce in size; the preview fills the column and is capped at 360px on wider windows",
         "role": "Optional editable visual outline for a creative assistant; not a completed carousel or generated illustration"
+      },
+      "ideaRows": {
+        "hierarchy": "Useful title, one-line minimized source excerpt, recorded minutes/observation count/date/editorial angle",
+        "title": "Studio Title role, clamped to two visible lines",
+        "excerpt": "Single-line 11px muted foreground with ellipsis",
+        "metadata": "Single-line 10px Studio Teal, tabular numerals and ellipsis",
+        "form": "Open button row with a fine theme border and 13px vertical padding; hover uses a muted surface; full evidence remains in the editor"
       }
     }
   },
   "components": [
     {
+      "name": "Local Idea Row",
+      "kind": "custom",
+      "description": "A comparable local idea leads with a useful title, followed by a source excerpt and quiet measured/editorial metadata.",
+      "html": "<button class=\"ds-local-idea\" type=\"button\"><strong>Where a focus session should start</strong><span class=\"ds-local-excerpt\">Comparing the start action in Today and Settings.</span><span class=\"ds-local-meta\">60 min ? 6 observations ? 12 Oct ? A product decision</span></button>",
+      "css": ".ds-local-idea{display:block;width:100%;padding:13px 0;text-align:left;border:0;border-bottom:1px solid hsl(var(--border,216 24% 88%));background:transparent;color:hsl(var(--foreground,222 47% 11%));font-family:\"Plus Jakarta Sans\",sans-serif;cursor:pointer;transition:background-color .15s,color .15s}.ds-local-idea strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;margin:0 0 5px;font:750 14px/1.4 Manrope,sans-serif}.ds-local-excerpt{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:hsl(var(--muted-foreground,215 16% 43%));font-size:11px;line-height:1.5}.ds-local-meta{display:block;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bip-accent,#167b6d);font-size:10px;line-height:1.5;font-variant-numeric:tabular-nums}.ds-local-idea:hover{background:hsl(var(--muted,210 40% 96.1%)/.45)}.ds-local-idea:focus-visible{outline:2px solid var(--bip-accent,#167b6d);outline-offset:3px}.ds-local-idea:disabled{opacity:.5;cursor:wait}@media(prefers-reduced-motion:reduce){.ds-local-idea{transition:none}}"
+    },
+    {
       "name": "Reviewed Idea",
       "kind": "custom",
-      "description": "A saved idea pairs a native checkbox with a separate title/date/confirmation column and an independent Edit action.",
-      "html": "<article class=\"ds-studio-story\"><label class=\"ds-studio-choice\"><input type=\"checkbox\" checked><span><strong>A change worth explaining</strong><small>12 Oct &middot; Confirmed by you</small></span></label><button class=\"ds-studio-edit\" type=\"button\">Edit</button></article>",
+      "description": "A saved selection pairs a native checkbox with a separate title/date/confirmation column and an independent Review action.",
+      "html": "<article class=\"ds-studio-story\"><label class=\"ds-studio-choice\"><input type=\"checkbox\" checked><span><strong>A change worth explaining</strong><small>12 Oct &middot; Confirmed by you</small></span></label><button class=\"ds-studio-edit\" type=\"button\">Review</button></article>",
       "css": ".ds-studio-story{display:flex;align-items:flex-start;gap:10px;padding:14px 0;border-bottom:1px solid hsl(var(--border,214.3 31.8% 91.4%));color:hsl(var(--foreground,222.2 84% 4.9%));font-family:\"Plus Jakarta Sans\",sans-serif}.ds-studio-choice{display:flex;flex:1;align-items:flex-start;gap:10px;margin:0;font-size:12px;line-height:1.5;cursor:pointer}.ds-studio-choice input{width:16px;height:16px;flex:0 0 16px;margin:2px 0 0;accent-color:var(--bip-accent,#167b6d)}.ds-studio-choice span{display:block;min-width:0}.ds-studio-choice strong{font-weight:650;overflow-wrap:anywhere}.ds-studio-choice small{display:block;margin-top:5px;color:hsl(var(--muted-foreground,215.4 16.3% 46.9%));font-size:10px}.ds-studio-edit{min-height:36px;padding:9px 0;border:0;background:none;color:var(--bip-accent,#167b6d);font:600 11px \"Plus Jakarta Sans\",sans-serif;text-align:left;cursor:pointer;transition:background-color .15s,color .15s}.ds-studio-edit:hover{color:var(--bip-accent,#167b6d)}.ds-studio-choice input:focus-visible,.ds-studio-edit:focus-visible{outline:2px solid var(--bip-accent,#167b6d);outline-offset:3px}.ds-studio-choice input:disabled,.ds-studio-edit:disabled{opacity:.5;cursor:wait}@media(prefers-reduced-motion:reduce){.ds-studio-edit{transition:none}}"
     },
     {
       "name": "Build in Public Views",
       "kind": "nav",
-      "description": "Four compact views use an understated underline and a returned-content count within the Online workspace.",
+      "description": "Four compact views follow the outer Online strip directly, with a quiet underline and returned-content count.",
       "html": "<nav class=\"ds-studio-views\" aria-label=\"Build in public\"><button type=\"button\" aria-current=\"false\">Ideas</button><button type=\"button\" aria-current=\"page\">Prompts</button><button type=\"button\" aria-current=\"false\">Contenido<span>3</span></button><button type=\"button\" aria-current=\"false\">Ajustes</button></nav>",
-      "css": ".ds-studio-views{display:flex;gap:14px;border-bottom:1px solid hsl(var(--border,216 24% 88%));font-family:\"Plus Jakarta Sans\",sans-serif}.ds-studio-views button{border:0;border-bottom:2px solid transparent;background:none;color:hsl(var(--muted-foreground,215 16% 43%));padding:10px 0;font:650 12px \"Plus Jakarta Sans\",sans-serif;cursor:pointer}.ds-studio-views button[aria-current=page]{border-bottom-color:var(--bip-accent,#167b6d);color:hsl(var(--foreground,222 47% 11%))}.ds-studio-views button span{font-size:10px;margin-left:3px}.ds-studio-views button:focus-visible{outline:2px solid var(--bip-accent,#167b6d);outline-offset:3px}@media(max-height:550px){.ds-studio-views button{padding:8px 0}}"
+      "css": ".ds-studio-views{display:flex;gap:18px;border-bottom:1px solid hsl(var(--border,216 24% 88%));font-family:\"Plus Jakarta Sans\",sans-serif}.ds-studio-views button{border:0;border-bottom:2px solid transparent;background:none;color:hsl(var(--muted-foreground,215 16% 43%));padding:8px 0;min-height:36px;font:650 12px \"Plus Jakarta Sans\",sans-serif;cursor:pointer}.ds-studio-views button[aria-current=page]{border-bottom-color:var(--bip-accent,#167b6d);color:hsl(var(--foreground,222 47% 11%))}.ds-studio-views button span{font-size:10px;margin-left:3px}.ds-studio-views button:focus-visible{outline:2px solid var(--bip-accent,#167b6d);outline-offset:3px}"
     },
     {
       "name": "Session Action",
@@ -573,6 +595,11 @@
       {
         "name": "The Measurement Rule",
         "body": "Keep numbers aligned with tabular numerals while preserving the same Manrope display voice as the rest of the interface.",
+        "section": "typography"
+      },
+      {
+        "name": "The Subject First Rule",
+        "body": "In Build in public lists, lead with the useful idea title. Keep the source excerpt, recorded signals, network, and status subordinate to that subject.",
         "section": "typography"
       },
       {
