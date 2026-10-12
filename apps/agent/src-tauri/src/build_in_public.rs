@@ -174,7 +174,7 @@ fn collect_codex_prompts(
                     .file_type()
                     .map_err(|_| "Could not read prompt file")?
                     .is_file()
-                    || entry.path().extension().is_none_or(|ext| ext != "jsonl")
+                    || entry.path().extension().map_or(true, |ext| ext != "jsonl")
                 {
                     continue;
                 }

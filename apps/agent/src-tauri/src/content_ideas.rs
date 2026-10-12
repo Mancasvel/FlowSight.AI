@@ -290,7 +290,7 @@ pub(crate) fn select_five(
     observations["evidence"] = json!(chosen.into_iter().map(|(_, idea)| idea).collect::<Vec<_>>());
     observations["status"] = json!(if observations["evidence"]
         .as_array()
-        .is_none_or(Vec::is_empty)
+        .map_or(true, Vec::is_empty)
     {
         if attempted > 0 && !matched {
             "no_matches"
