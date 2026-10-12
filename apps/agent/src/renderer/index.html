@@ -4326,6 +4326,7 @@
       LiveTrackingClock,
     } from './tracking-session.mjs';
     import { loadTimerPreferences, saveTimerPreferences, PomodoroTimer } from './timer-modes.mjs';
+    import { mountEsp32Companion } from './esp32-companion.mjs';
     import { mountDailyFlow } from './daily-flow-ui.mjs';
     import { mountOnlineLeagues } from './online-leagues-ui.mjs';
     import {
@@ -9383,6 +9384,68 @@
         summaryBody.replaceChildren(errorState);
       }
     }
+
+    function esp32Snapshot() {
+      if (!trackingStateHydrated) return null;
+      // Native events keep the same renderer clock alive when the window is hidden.
+      advancePomodoro().catch(() => {});
+      updateTimerDisplay();
+      updatePlayButtonState();
+      const linked = Boolean(totalFocusController.session()?.linkedClock);
+      const breaking = !linked && timerPreferences.mode === 'pomodoro' && pomodoro.phase !== 'work' && !pomodoro.ready;
+      const busy = trackingTransitionInProgress || pomodoroTransition || totalFocusController.busy() || setupInProgress;
+      const event = activeCalendarTask();
+      const connectedCalendar = canUseCalendarCompanion() && (calendarStatus?.googleConnected || calendarStatus?.microsoftConnected);
+      const primary = breaking ? 'end_break' : isMonitoring ? 'pause' : isPaused ? 'resume' : 'start';
+      return {
+        language: getLanguage(),
+        mode: timerPreferences.mode,
+        mode_label: document.getElementById('timerModeSelect').selectedOptions[0]?.textContent || 'Normal',
+        kind: document.getElementById('timerKindLabel').textContent,
+        clock: document.getElementById('timerDisplay').textContent,
+        status: tr(isMonitoring ? 'Live' : isPaused ? 'Paused' : 'Ready'),
+        phase: isMonitoring ? 'running' : breaking ? 'break' : isPaused ? 'paused' : 'ready',
+        total_seconds: getDisplayTotalSeconds(),
+        goal_seconds: getDailyGoalHours() * 3600,
+        goal_label: tr('Daily goal'),
+        goal_value: document.getElementById('timerGoalLabel').textContent,
+        context: String(event?.title || (connectedCalendar ? tr('Calendar connected') : '')).slice(0, 100),
+        primary_action: primary,
+        primary_label: breaking ? tr('End break') : document.getElementById('playTimerLabel').textContent,
+        primary_enabled: !busy && (breaking || !document.getElementById('playTimerBtn').disabled),
+        stop_enabled: !busy && (isMonitoring || isPaused),
+        mode_enabled: !busy && !document.getElementById('timerModeSelect').disabled,
+        busy,
+      };
+    }
+
+    async function esp32Action(action) {
+      const before = esp32Snapshot();
+      if (!before || before.busy) return false;
+      if (action === 'mode_normal' || action === 'mode_pomodoro') {
+        if (!before.mode_enabled) return false;
+        const select = document.getElementById('timerModeSelect');
+        select.value = action === 'mode_normal' ? 'normal' : 'pomodoro';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      if (action === 'stop') {
+        if (!before.stop_enabled) return false;
+        await stopMonitoring();
+        return !isMonitoring && !isPaused;
+      }
+      // A stale physical press can never become the opposite operation.
+      if (!before.primary_enabled || action !== before.primary_action) return false;
+      if (action === 'start') await startMonitoringWithNotice();
+      else if (action === 'resume') await resumeMonitoring();
+      else if (action === 'pause') await pauseMonitoring();
+      else if (action === 'end_break') document.getElementById('pomodoroSkipBreak').click();
+      else return false;
+      return action === 'pause' ? !isMonitoring : action === 'end_break' ? pomodoro.ready : isMonitoring;
+    }
+
+    mountEsp32Companion({ invoke, listen, snapshot: esp32Snapshot, execute: esp32Action })
+      .catch(error => console.warn('[USB companion] Unavailable', error));
 
     // Refresh source-owned display surfaces without replacing editable fields,
     // restarting tracking, requesting a new plan, or generating another report.
