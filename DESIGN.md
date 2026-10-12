@@ -20,6 +20,7 @@ colors:
   teal-active-dark: "#6cdfd0"
   session-action: "#087f78"
   session-action-hover: "#066b65"
+  bip-accent: "#167b6d"
   action-indigo: "#7a7cf1"
   action-teal: "#2cbdb4"
 typography:
@@ -40,6 +41,11 @@ typography:
     fontSize: "15px"
     fontWeight: 800
     letterSpacing: "-0.025em"
+  studio-title:
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "14px"
+    fontWeight: 750
+    lineHeight: 1.4
   body:
     fontFamily: "'Plus Jakarta Sans', sans-serif"
     fontSize: "13px"
@@ -56,6 +62,7 @@ rounded:
   dock: "24px"
   action: "16px"
   control: "11px"
+  studio-control: "9px"
   dialog: "22px"
   pill: "999px"
 spacing:
@@ -140,12 +147,14 @@ The visual language carries through Today, Insights, Settings, first run, and co
 
 Onboarding and session planning follow the Operate direction within this incumbent family: compact labelled controls, useful examples, visible progress and status, and an explicit primary action at each decision. Their dark teal actions support white labels while the existing lighter teal continues to carry state and progress.
 
+Build in public extends this Operate direction inside Online. It keeps the gridded ground and compact type, with labelled choices, open rows, and quiet separators. Clear evidence, editable prompts, and returned proposals share the same working surface and retain their distinct meanings.
+
 **Key Characteristics:**
 
 - A 56px pale grid behind centered, softly layered work surfaces.
 - Manrope for headings and measured display figures; Plus Jakarta Sans for reading and controls.
 - Teal for state and progress, with an indigo-to-teal gradient concentrated in tracking and first-run actions.
-- A floating four-tab dock that stays available in the narrow work window.
+- A floating five-control dock that stays available in the narrow work window.
 
 ## Colors
 
@@ -156,6 +165,7 @@ The system is light first, with a complete deep-slate appearance for system dark
 - **Signal Teal** (teal-primary / teal-progress): regular affirmative controls, live state, week marks, charts, and progress rails.
 - **Soft Teal** (teal-soft): selected navigation and other quiet active surfaces. **Dark Active Teal** (teal-active-dark) keeps that signal legible on the dark dock.
 - **Session Action Teal** (session-action / session-action-hover): solid affirmative controls in the session planner and onboarding footer. The scoped focus treatment uses Session Action Teal in light appearance and Dark Active Teal in dark appearance.
+- **Studio Teal** (bip-accent): text actions, selected checkboxes, active view underlines, status copy, and focus outlines inside Build in public. Dark appearance reuses Dark Active Teal. Headings and form labels use the actual theme foreground; supporting copy uses the muted foreground. Filled primary buttons retain the incumbent Signal Teal treatment.
 
 ### Secondary
 
@@ -183,10 +193,13 @@ Manrope gives headings and measured time a strong, friendly shape. Plus Jakarta 
 - **Display** (800, 46px, 1.12): centered elapsed time; 40px in the narrow window and 52px at 600px and wider. Tabular numerals keep the timer steady.
 - **Headline** (800, 34px, 1.16): Today, Insights, and You headings; 30px at 380px and narrower.
 - **Title** (800, 15px): card headings and section titles.
+- **Studio title** (750, 14px, 1.4): the useful subject at the start of Build in public idea, prompt, and proposal rows.
 - **Body** (13px, 1.5): standard reading and control text; secondary explanations commonly use 11–12px.
 - **Kicker** (800, 11px, 0.16em, uppercase): brief teal section cues such as Today and Your Space.
 
 **The Measurement Rule.** Keep numbers aligned with tabular numerals while preserving the same Manrope display voice as the rest of the interface.
+
+**The Subject First Rule.** In Build in public lists, lead with the useful idea title. Keep the source excerpt, recorded signals, network, and status subordinate to that subject.
 
 ## Layout
 
@@ -196,11 +209,17 @@ The default Tauri window is 370 × 700px and remains usable at 340 × 400px. A 4
 
 Today centers within 640px; Insights and Settings center within 760px. At 520px, these surfaces retain their single-column reading order. At 600px and wider, content padding grows to 30px vertically and 28px horizontally, goal and task cards can sit in two columns, and Settings gains a two-column arrangement. At 380px and narrower, padding contracts to 18px top and 15px sides, while the timer, dock, and actions reduce their dimensions.
 
-The four-tab dock floats 14px above the window bottom, spans the available width with 12px outer margins, and stops growing at 540px. In the narrow variant it sits 8px above the bottom. Consent dialogs remain bounded by viewport height; the monitoring notice leaves its action row fixed while details scroll.
+The five-control dock floats 14px above the window bottom, spans the available width with 12px outer margins, and stops growing at 540px. In the narrow variant it sits 8px above the bottom. Consent dialogs remain bounded by viewport height; the monitoring notice leaves its action row fixed while details scroll.
 
 The five-step onboarding overlay uses a vertical flex layout: the progress header and footer keep their space, and the middle body shrinks and scrolls. The footer is a static flex child with an opaque theme background and its own reserved space. A remaining-content button advances the body by roughly four fifths of its visible height and becomes “Back to top” at the end; its row stays reserved for any step that overflows. Save and connection feedback occupies a persistent live region in the footer so messages remain visible while the body scrolls.
 
 The Today planner remains an expandable section in the existing reading column at 370 × 700px, 340 × 400px, and 900px wide. Its form uses a 14px rhythm, two equal-width time fields, a full-width intention field, and a chronological proposal list with a 96px time column. Confirmation and discard actions wrap from a 120px basis instead of forcing a narrow window to scroll horizontally.
+
+Online keeps Leagues and Build in public in one in-place, two-choice tab strip. The studio has an accessible heading but no duplicate visible title or slogan below the selected outer tab. Its four views follow immediately: Ideas, Prompts, Contenido, and Ajustes (Ideas, Prompts, Content, and Settings in English). Their underline navigation uses an 18px gap, 36px minimum-height controls, and a returned-content count. The outer strip uses 3px inset padding, 34px minimum-height controls, and an 8px gap below it.
+
+Ideas leads with a compact two-column toolbar: the work period occupies the first column and Generate 5 ideas / 5 more ideas occupies the second. The columns use a 9px gap and 38px minimum-height controls. Optional text direction sits in a disclosure below the toolbar. Open idea rows follow their count heading; retained earlier ideas and saved selections remain separate. A selected count and Prepare prompts action open a dedicated inline setup step in place of the list.
+
+At 700px and wider, the studio is capped at 760px and the optional portrait preview at 360px, within the containing Online layout. Idea rows use the available studio width. Setup keeps networks in divided groups; style and profile fields stack in compact windows and sit in two equal columns from 560px. Studio content uses 12px top and 40px bottom padding in addition to the shared pane's dock allowance. At heights of 550px or less, the top padding contracts to 8px and toolbar controls to a 34px minimum height. The shared shell and reading order carry through all four views.
 
 ## Elevation & Depth
 
@@ -217,6 +236,8 @@ This interface uses soft depth. White cards have fine borders and diffuse low-op
 ## Shapes
 
 The timer surface has generous corners (27px), ordinary cards use 20–21px, the floating dock uses 24px, and the monitoring dialog uses 22px. Primary tracking actions use 16px corners; ordinary fields and buttons use 11px. Status badges, week marks, and progress rails use circular or fully rounded forms where their state benefits from it.
+
+Build in public uses the tighter Studio Control corner for fields and the selected Online tab. Idea, prompt, proposal, and profile rows remain flat, separated by fine theme borders; the optional portrait preview uses gently rounded corners (12px).
 
 ## Components
 
@@ -237,7 +258,7 @@ Standard cards use 20px corners, 20px internal padding, a fine border, and ambie
 
 ### Navigation
 
-The three-tab dock holds Today, Insights, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls. The proactive local agent does not occupy navigation or expose a chat; its permissions and proposals live in Settings, and its reminders arrive as notifications.
+The five-control dock holds Online, Insights, Clock, Coach, and Settings as large, icon-only controls. Each item is at least 51px tall in the default layout; its name remains available to assistive technology. The selected item has a pale teal fill and teal icon. The dock remains floating while content scrolls. The proactive local agent does not occupy navigation or expose a chat; its permissions and proposals live in Settings, and its reminders arrive as notifications.
 
 ### Timer and evidence
 
@@ -258,6 +279,24 @@ Planner textareas use the existing cool border and 11px corner family, 12px padd
 Each of the five steps pairs a compact heading (22px, 700, 1.25) with explanatory copy (13px), labelled controls, and a numbered progress indicator. Optional work context sits behind a disclosure. Reminder choices and calendar recap consent remain separate labelled toggles; a disabled context choice explains its relationship through the adjacent focus-reminder control. The footer's solid teal Continue/Finish action, quiet Skip setup action, and visible save errors retain the same positions as step content changes.
 
 Inline SVG examples have purposeful geometry: staggered work, break, and review blocks explain a session; activity lines leading to a document explain a local report. Examples stop growing at 300px, carry accessible descriptions, and use foreground text for their labels. Work blocks reveal through clipping over 650ms with the existing restrained ease (cubic-bezier(0.16, 1, 0.3, 1)) and small staged delays; reduced motion removes the animation and leaves the complete example visible.
+
+### Build in public inside Online
+
+The compact shell gives the work list precedence over a visible feature heading. Idea, prompt, and proposal titles share the Studio Title role; ordinary reading and controls use 12px, field labels and short excerpts use 11px, and dates, recorded signals, revision metadata, and counters use 10px. Section headings remain in the incumbent heading family. The idea-count heading is a quiet 12px, 600-weight label. At wider widths, editor textareas increase to 14px. The Online tab strip shows selection with a card-colored surface; the four studio views show it with a teal underline.
+
+Each successful local batch presents five grounded editorial alternatives. An idea row leads with a title of up to two visible lines, followed by a single-line source excerpt and one line of recorded minutes, observation count, date, and editorial angle. The excerpt and metadata truncate while the editor retains the complete evidence. Fine borders and 13px vertical row padding keep the alternatives comparable without turning them into cards. The toolbar distinguishes first generation, further generation, and the busy state; current results remain present while work is pending.
+
+Current and earlier local batches remain distinguishable. Saved selections have their own heading and count, with a native checkbox beside a separate title/date/confirmation column at a 10px gap and a separate Review action. A labelled evidence editor allows factual corrections and confirmation; its saving copy identifies the chosen highlight as the material that moves to the private online space. Prepare prompts opens the dedicated network/style/profile step. LinkedIn, X, and Instagram choices prepare prompts for an external assistant.
+
+Prompts and Contenido reuse the subject-first divided rows. Prompt metadata shows network, style, and whether content has returned. Proposal metadata shows network, state, origin, and revision; its preview is limited to two lines. Their editors retain the full prompt or proposal, with a visible Unsaved changes state. The content editor separates the post or first message from the full thread, script, or slide plan and optional visual outline. Explicit Save, Copy, and Delete actions remain available; the surface has no approval, scheduling, destination, or publication controls.
+
+Ajustes groups social profiles stored independently in FlowSight, a scoped assistant connection, and project/voice preferences with a local suggestion cadence. Profile name, handle, network, and usual style give prompts context without a Buffer account requirement. Each group is separated by a fine rule and spacing, rather than additional raised cards. The surface journey and pilot boundary are recorded in `docs/BUILD_IN_PUBLIC.md`.
+
+Fields use theme surfaces and foregrounds, a fine border, Studio Control corners, and 10px by 11px padding. Interactive studio controls have a 2px accent focus outline with a 3px offset. Same-view renders restore keyboard focus and text selection; changing views moves focus to a heading, and an editor can receive focus on its back control. A persistent live-region node announces work and failures. Button color changes take 150ms and lose their transition under reduced motion.
+
+Profile, preference, and direction form drafts survive busy and error renders; successful writes clear the transient draft, and owner changes clear the previous owner's form state. Stable local identities retain corrected ideas across regeneration and keep prior batches on the device. Unfinished manual highlights also use local persistence. Evidence, prompt, and proposal edits remain available during ordinary internal navigation, with unsaved state visible in their editors. This draft retention does not upload evidence. A minute-based studio check updates returned content, its count, and assistant-set direction while an idle view is open, including manual idea cadence. Open editors, active forms, and ongoing requests defer this refresh so incoming content does not overwrite the user's work or steal focus.
+
+An optional Instagram visual outline uses a programmatically drawn PNG canvas in a 4:5 portrait format (1080 × 1350). Its editable headline leads, followed by an explanation and a signature/project footer. Manrope, a pale field, and dark green reading text carry the composition; the footer has a quiet separator. The title and explanation wrap and reduce in size to fit. The preview fills the available column and keeps its portrait ratio. It is labelled as an outline for creative development, not a finished carousel or generated image asset.
 
 ## Do's and Don'ts
 

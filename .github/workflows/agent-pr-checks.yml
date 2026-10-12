@@ -9,6 +9,17 @@ permissions:
   contents: read
 
 jobs:
+  content-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate content service and assistant endpoints
+        run: deno check --node-modules-dir=none supabase/functions/build-in-public/index.ts supabase/functions/build-in-public-assistant/index.ts
+      - name: Test content privacy, network limits and delivery failures
+        run: deno test --node-modules-dir=none --allow-env --allow-read supabase/functions
   windows-runtime-staging:
     runs-on: windows-latest
     timeout-minutes: 10
@@ -171,6 +182,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/agent/src-tauri -> target
+          save-if: "true"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -197,3 +209,15 @@ jobs:
       - name: Probe startup with corrupt app-local Visual C++ DLLs
         shell: pwsh
         run: ./scripts/check-windows-loader-recovery.ps1 -Executable apps/agent/src-tauri/target/debug/app.exe
+
+      - name: Build embedded pilot executable
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo build --manifest-path apps/agent/src-tauri/Cargo.toml --bin app --features tauri/custom-protocol
+
+      - name: Upload private pilot executable
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowSight-Build-in-public-pilot
+          path: apps/agent/src-tauri/target/debug/app.exe
+          retention-days: 3

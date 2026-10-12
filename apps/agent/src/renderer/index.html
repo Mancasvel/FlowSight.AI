@@ -3275,6 +3275,7 @@
   <link rel="stylesheet" href="./calendar-companion.css">
   <link rel="stylesheet" href="./coach.css">
   <link rel="stylesheet" href="./online-leagues.css">
+  <link rel="stylesheet" href="./build-in-public.css">
 </head>
 
 <body>
@@ -4224,7 +4225,14 @@
         </div>
       </div>
 
-      <section class="tab-panel" id="tabOnline" aria-label="Online leagues"></section>
+      <section class="tab-panel" id="tabOnline" aria-label="Online">
+        <div class="online-mode-tabs" role="tablist" aria-label="Online">
+          <button type="button" role="tab" id="onlineLeaguesTab" aria-selected="true" aria-controls="onlineLeaguesPanel">Leagues</button>
+          <button type="button" role="tab" id="onlineContentTab" tabindex="-1" aria-selected="false" aria-controls="buildInPublic">Build in public</button>
+        </div>
+        <div id="onlineLeaguesPanel" role="tabpanel" aria-labelledby="onlineLeaguesTab"></div>
+        <div id="buildInPublic" role="tabpanel" aria-labelledby="onlineContentTab" hidden></div>
+      </section>
     </div>
 
     <!-- Bottom Navigation -->
@@ -4329,6 +4337,7 @@
     import { mountEsp32Companion } from './esp32-companion.mjs';
     import { mountDailyFlow } from './daily-flow-ui.mjs';
     import { mountOnlineLeagues } from './online-leagues-ui.mjs';
+    import { mountBuildInPublic } from './build-in-public.mjs';
     import {
       cleanReportText as extractEnglishText,
       createStatusReportViewModel,
@@ -5362,7 +5371,25 @@
       invoke,
     });
 
-    const onlineLeagues = mountOnlineLeagues({root: document.getElementById('tabOnline'), invoke, listen});
+    const onlineLeagues = mountOnlineLeagues({root: document.getElementById('onlineLeaguesPanel'), invoke, listen});
+    const contentStudio = mountBuildInPublic({root: document.getElementById('buildInPublic'), invoke});
+    for (const [tabId, panelId] of [['onlineLeaguesTab', 'onlineLeaguesPanel'], ['onlineContentTab', 'buildInPublic']]) {
+      document.getElementById(tabId).addEventListener('click', () => {
+        for (const [otherTab, otherPanel] of [['onlineLeaguesTab', 'onlineLeaguesPanel'], ['onlineContentTab', 'buildInPublic']]) {
+          document.getElementById(otherTab).setAttribute('aria-selected', String(otherTab === tabId));
+          document.getElementById(otherTab).tabIndex = otherTab === tabId ? 0 : -1;
+          document.getElementById(otherPanel).hidden = otherPanel !== panelId;
+        }
+        if (panelId === 'buildInPublic') contentStudio.refresh();
+        else onlineLeagues.refresh();
+      });
+    }
+    document.querySelector('.online-mode-tabs').addEventListener('keydown', event => {
+      if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 'onlineLeaguesTab' : event.key === 'End' ? 'onlineContentTab' : event.target.id === 'onlineLeaguesTab' ? 'onlineContentTab' : 'onlineLeaguesTab';
+      document.getElementById(next).click();document.getElementById(next).focus();
+    });
     const liveTrackingClock = new LiveTrackingClock();
     let timerPreferences = loadTimerPreferences(localStorage);
     const pomodoro = new PomodoroTimer(timerPreferences);
