@@ -210,6 +210,11 @@ fn collect_codex_prompts(
                         }
                         continue;
                     }
+                    if !buffer.windows(6).any(|part| part == b"\"user\"")
+                        && !buffer.windows(14).any(|part| part == b"\"user_message\"")
+                    {
+                        continue;
+                    }
                     let Ok(event) = serde_json::from_slice::<Value>(&buffer) else {
                         continue;
                     };

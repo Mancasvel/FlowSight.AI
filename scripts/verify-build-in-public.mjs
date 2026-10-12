@@ -17,7 +17,7 @@ try{
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript({content:`(${source.slice(begin,end)})({locale:'es-ES'});`});
  await page.addInitScript(({token,endpoint})=>{
-  window.__bipTest={failNext:'',poll:null,batch:0,lastCollection:null};
+  window.__bipTest={failNext:'',poll:null,batch:0,lastCollection:null,mode:''};
   const interval=window.setInterval.bind(window);
   window.setInterval=(fn,delay,...args)=>{if(delay===60000&&fn.toString().includes('bip_collect_local'))window.__bipTest.poll=fn;return interval(fn,delay,...args);};
   const original=window.__TAURI_INTERNALS__.invoke;
@@ -26,11 +26,13 @@ try{
    if(command==='bip_cloud'){const response=await fetch(endpoint+'build-in-public',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(args.request)});const payload=await response.json();if(!response.ok)throw payload.error;return payload;}
    if(command==='bip_collect_local'){
     window.__bipTest.lastCollection=args;
+    if(window.__bipTest.mode==='missing')return {evidence:[],status:'no_matches'};
+    if(window.__bipTest.mode==='exhausted')return {evidence:[],status:'no_new_ideas'};
     if(window.__bipTest.failNext==='collect'){window.__bipTest.failNext='';throw 'Fallo de conexión local simulado. Tus ideas anteriores siguen aquí.';}
     const batch=++window.__bipTest.batch;
     const titles=['La música acompaña a las pausas de trabajo','Elegir dónde empieza una sesión de concentración','Qué revisar antes de entregar una mejora','Una interfaz que deja sitio al trabajo','Cómo explicar una decisión de producto'];
     const facts=['Revisando la pausa de YouTube al pausar una sesión.','Comparando el inicio de Total focus desde Today y Ajustes.','Probando la recuperación de una sesión tras reiniciar la app.','Ajustando la jerarquía de los controles de concentración.','Preparando una explicación visual del recorrido de inicio.'];
-    return {evidence:titles.map((title,i)=>({source_key:`synthetic-${batch}-${i}`,title:batch===1?title:`Otro enfoque: ${title}`,summary:`${facts[i]} Ejemplo sintético para la prueba.`,occurred_on:'2026-10-12',kind:'progress',signals:{observations:12-i,recorded_seconds:3600-i*200,days:2,topic:title,rationale:'Un detalle de producto que puede servir a otros creadores.',angle:['El problema','Una decisión','El proceso','Un detalle','Una pregunta'][i]}}))};
+    return {evidence:titles.slice(0,window.__bipTest.mode==='partial'?2:5).map((title,i)=>({source_key:`synthetic-${batch}-${i}`,title:batch===1?title:`Otro enfoque: ${title}`,summary:`${facts[i]} Ejemplo sintético para la prueba.`,occurred_on:'2026-10-12',kind:'progress',signals:{observations:12-i,recorded_seconds:3600-i*200,days:2,topic:title,rationale:'Un detalle de producto que puede servir a otros creadores.',angle:['El problema','Una decisión','El proceso','Un detalle','Una pregunta'][i]}}))};
    }
    if(command==='bip_generate_local')throw new Error('Prompt preparation must not invoke local copywriting.');
    return original(command,args);
@@ -51,10 +53,12 @@ try{
  await click('#bipSettings button[type=submit]');await status('Preferencias guardadas');
  await click('[data-view=stories]');await click('.bip-direction summary');await page.locator('#bipDirection').fill('Decisiones de producto para otros founders');await click('[data-action=collect]');await page.locator('[data-local="4"]').waitFor();
  assert.equal(await page.locator('[data-local]').count(),5);assert.equal(await page.evaluate(()=>window.__bipTest.lastCollection.direction),'Decisiones de producto para otros founders');
+ await page.locator('#bipCodexPrompts').check();
  await click('.bip-direction summary');
  await click('[data-local="0"]');await page.locator('#bipTitle').fill('Mi edición local conservada');await click('[data-action=back]');await click('[data-local="0"]');assert.equal(await page.locator('#bipTitle').inputValue(),'Mi edición local conservada');
  await click('[data-action=back]');await page.evaluate(()=>{window.__bipTest.failNext='collect';});await click('[data-action=collect]');await status('Fallo de conexión local');assert.equal(await page.locator('[data-local]').count(),5);
  await click('[data-action=collect]');await page.locator('[data-local="0"] strong').filter({hasText:'Otro enfoque'}).waitFor();assert.equal(await page.locator('[data-local]').count(),5);assert.equal((await page.evaluate(()=>window.__bipTest.lastCollection.recentKeys)).length,5);
+ assert.equal(await page.evaluate(()=>window.__bipTest.lastCollection.includeCodexPrompts),true);assert.ok((await page.evaluate(()=>window.__bipTest.lastCollection.recentTitles)).includes('Mi edición local conservada'));
  await click('[data-action=history]');await click('[data-local="0"]');assert.equal(await page.locator('#bipTitle').inputValue(),'Mi edición local conservada');
  await page.locator('#bipConfirmed').check();await click('#bipEvidenceEdit button[type=submit]');await page.locator('[data-evidence]').first().waitFor();
  await page.locator('[data-evidence]').first().click();await page.locator('#bipTitle').fill('Edición online pendiente');await click('[data-action=back]');await page.locator('[data-evidence]').first().click();assert.equal(await page.locator('#bipTitle').inputValue(),'Edición online pendiente');await click('[data-action=back]');
@@ -87,6 +91,10 @@ try{
   await click('[data-view=prompts]');await page.locator('[data-brief]').first().click();await page.screenshot({path:resolve(output,`${name}-prompt-editor.png`)});
  }
  await writeFile(resolve(output,'layout.json'),JSON.stringify(layout,null,2));
+ await click('[data-view=stories]');
+ await page.evaluate(()=>{window.__bipTest.mode='exhausted';});await click('[data-action=collect]');await status('No he encontrado ideas nuevas');assert.equal(await page.locator('[data-local]').count(),5);
+ await page.evaluate(()=>{window.__bipTest.mode='missing';});await click('[data-action=collect]');await status('No he encontrado el tema solicitado');assert.equal(await page.locator('[data-local]').count(),0);assert.equal(await page.locator('[data-action=history]').count(),1);
+ await page.evaluate(()=>{window.__bipTest.mode='partial';});await click('[data-action=collect]');await status('He encontrado 2 ideas');assert.equal(await page.locator('[data-local]').count(),2);
  assert.deepEqual(errors,[]);
  await writeFile(resolve(output,'result.json'),JSON.stringify({passed:true,checks:['Independent X profile without Buffer','Profile and preferences preserved after request failures','Per-network styles','Five distinct ideas per batch with guided direction and prior-key avoidance','Local and saved edits preserved across back, tabs and regeneration','Failed collection keeps previous five ideas','MCP topic direction reaches the app','Local ideas reviewed','Three prompts persisted','Prompt editing','MCP receives profiles and briefs','MCP returns full thread/visual content','Incoming MCP content appears without reloading in manual cadence','Returned content editable','No publishing controls','Focus after profile/prompt/content save','370x700,340x400,900x780 and dark'],data:'Synthetic disposable account; actual compiled renderer, live API/database and MCP'},null,2));
  console.log('Assistant-first Build in public: full renderer/API/database/MCP round-trip passed. Synthetic data.');
