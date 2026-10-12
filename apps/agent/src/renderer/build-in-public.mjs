@@ -159,7 +159,7 @@ export function mountBuildInPublic({root,invoke}){
     const keep=new Map([...local,...history].map(item=>[item.source_key,item]));
     for(const item of items)keep.delete(item.source_key);
     history=[...keep.values()];local=items;showHistory=false;
-    recentKeys=[...new Set([...items.map(item=>item.source_key),...recentKeys])].slice(0,100);persistLocal();
+    recentKeys=[...new Set([...items.flatMap(item=>[item.source_key,...(item.origin_key?[`used:${item.origin_key}`]:[])]),...recentKeys])].slice(0,100);persistLocal();
   }
   async function collectIdeas(){
     if(busy)return;
