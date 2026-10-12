@@ -182,7 +182,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/agent/src-tauri -> target
-          save-if: ${{ !cancelled() }}
+          save-if: "true"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
