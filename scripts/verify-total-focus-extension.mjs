@@ -25,13 +25,14 @@ const server=createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 // Extension-created tabs cannot have their first request intercepted by Playwright.
-// Serve the music fixture locally through Chromium's host resolver instead.
+// Serve it through a local HTTP proxy on a free port; port 80 is reserved on
+// Windows CI runners. The browser still navigates to the exact public-shaped URL.
 const musicSite=createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<h1>Synthetic music site</h1>');});
-await new Promise(resolve=>musicSite.listen(80,'127.0.0.1',resolve));
+await new Promise((resolve,reject)=>{musicSite.once('error',reject);musicSite.listen(0,'127.0.0.1',resolve);});
 const extension=resolve('apps/agent/browser-extension');
 let context;
 try{
-  context=await chromium.launchPersistentContext(folder,{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`,'--host-resolver-rules=MAP music.example.com 127.0.0.1','--no-proxy-server']});
+  context=await chromium.launchPersistentContext(folder,{channel:'chromium',headless:true,args:[`--disable-extensions-except=${extension}`,`--load-extension=${extension}`,`--proxy-server=http://127.0.0.1:${musicSite.address().port}`,'--proxy-bypass-list=127.0.0.1;localhost']});
   await context.route('https://*.example.com/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Synthetic work site</h1>'}));
   const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
   const extensionId=new URL(worker.url()).host;
