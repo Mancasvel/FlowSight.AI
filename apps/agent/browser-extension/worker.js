@@ -2,7 +2,7 @@
 // arrive through the loopback bridge after the user confirms them in FlowSight.
 const POLL_ALARM = 'flowsight-poll';
 const FOCUS_ALARM = 'flowsight-focus-expiry';
-const FOCUS_RULE_IDS = Array.from({ length: 40 }, (_, index) => 1000 + index);
+const FOCUS_RULE_IDS = Array.from({ length: 41 }, (_, index) => 1000 + index);
 let polling = false;
 let pendingPoll = null;
 let focusQueue = Promise.resolve();
@@ -67,8 +67,36 @@ function focusPattern(pattern) {
 
 function matchesFocus(url, policy) {
   if (!policy || Date.parse(policy.expiresAt) <= Date.now() || !/^https?:\/\//i.test(url || '')) return false;
+  if (policy.musicUrl) {
+    const candidate = new URL(url);candidate.hash = '';
+    if (candidate.href === musicAddress(policy.musicUrl)) return false;
+  }
   const matches = pattern => new RegExp(focusPattern(pattern).regexFilter, 'i').test(url);
   return policy.patterns.some(matches) && !policy.exceptions.some(matches);
+}
+
+function musicAddress(raw) {
+  const url = new URL(raw);
+  if (typeof raw !== 'string' || raw.length > 2048 || /\s/.test(raw)
+      || !['http:', 'https:'].includes(url.protocol) || url.username || url.password
+      || url.port || !url.hostname.includes('.') || url.hostname.endsWith('.')
+      || /^\d+\.\d+\.\d+\.\d+$/.test(url.hostname)) throw new Error('Use a complete public HTTP(S) music link without spaces or sign-in credentials.');
+  url.hash = '';
+  return url.href;
+}
+
+async function openFocusMusic(sessionId) {
+  const { focus, musicOpenedSessionId } = await chrome.storage.local.get(['focus', 'musicOpenedSessionId']);
+  if (!focus?.musicUrl || focus.id !== sessionId || Date.parse(focus.expiresAt) <= Date.now()) return {};
+  musicAddress(focus.musicUrl);
+  if (musicOpenedSessionId === sessionId) return { musicOpened: true };
+  // Existing browser window only; neither the active tab nor window focus is changed.
+  const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+  const target = windows.find(window => window.focused) || windows[0];
+  if (!target) throw new Error('Keep a browser window open to open music in the background.');
+  await chrome.tabs.create({ url: focus.musicUrl, windowId: target.id, active: false });
+  await chrome.storage.local.set({ musicOpenedSessionId: sessionId });
+  return { musicOpened: true };
 }
 
 async function protectTab(tabId, url) {
@@ -102,12 +130,15 @@ async function applyFocusPolicy(policy) {
       action: { type: 'redirect', redirect: { extensionPath: '/blocked.html' } }, condition: focusPattern(pattern) })),
     ...policy.exceptions.map((pattern, i) => ({ id: 1020 + i, priority: 100,
       action: { type: 'allow' }, condition: focusPattern(pattern) })),
+    ...(policy.musicUrl ? [{ id: 1040, priority: 110, action: { type: 'allow' },
+      condition: { regexFilter: `^${escapeRegex(musicAddress(policy.musicUrl))}$`, isUrlFilterCaseSensitive: true, resourceTypes: ['main_frame'] } }] : []),
   ];
   const installed = (await chrome.declarativeNetRequest.getDynamicRules()).filter(rule => FOCUS_RULE_IDS.includes(rule.id));
   const changed = JSON.stringify(focus) !== JSON.stringify(policy)
     || installed.length !== rules.length || !rules.every(rule => installed.some(item => item.id === rule.id
       && item.priority === rule.priority && item.action.type === rule.action.type
-      && item.condition.regexFilter === rule.condition.regexFilter));
+      && item.condition.regexFilter === rule.condition.regexFilter
+      && item.condition.isUrlFilterCaseSensitive === rule.condition.isUrlFilterCaseSensitive));
   await chrome.alarms.create(FOCUS_ALARM, { when: expiresAt });
   if (changed) {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: FOCUS_RULE_IDS, addRules: rules });
@@ -125,7 +156,7 @@ async function focusStatus() {
   const { focus, cancelledFocusId } = await chrome.storage.local.get(['focus', 'cancelledFocusId']);
   const installed = await chrome.declarativeNetRequest.getDynamicRules();
   const siteAccess = await chrome.permissions.contains({ origins: ['http://*/*', 'https://*/*'] });
-  return { extensionVersion: chrome.runtime.getManifest().version, capabilities: ['total-focus'],
+  return { extensionVersion: chrome.runtime.getManifest().version, capabilities: ['total-focus', 'background-music'], musicAvailable: true,
     available: siteAccess && !focusError, error: focusError || (siteAccess ? null : 'Allow Browser Controls access to all websites in your browser extension settings.'),
     sessionId: focus?.id || null, applied: Boolean(siteAccess && !focusError && focus && installed.some(rule => rule.id === 1000)),
     cancelledSessionId: cancelledFocusId || null };
@@ -156,7 +187,12 @@ async function releaseBlocksAfterDisconnect() {
 }
 
 async function runCommand(name, args) {
-  if (name === 'browser.focus_status') return focusStatus();
+  if (name === 'browser.focus_status') {
+    const status = await focusStatus();
+    if (!args.openMusic || !status.applied || status.sessionId !== args.sessionId) return status;
+    try { return { ...status, ...await openFocusMusic(args.sessionId) }; }
+    catch (error) { return { ...status, musicError: String(error.message || error) }; }
+  }
   if (name === 'browser.unblock_all') {
     const { blocks = [] } = await chrome.storage.local.get('blocks');
     if (blocks.length) {

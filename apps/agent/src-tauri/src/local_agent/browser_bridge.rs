@@ -139,7 +139,7 @@ pub fn start() -> Result<(), String> {
                             let _ = super::total_focus::cancel_from_extension(id);
                         }
                         let mut queue = bridge.queue.lock().unwrap();
-                        queue.focus_status = json!({"sessionId":value["sessionId"],"applied":value["applied"],"extensionVersion":value["extensionVersion"],"available":value["available"],"error":value["error"]});
+                        queue.focus_status = json!({"sessionId":value["sessionId"],"applied":value["applied"],"extensionVersion":value["extensionVersion"],"available":value["available"],"musicAvailable":value["musicAvailable"] == true,"error":value["error"]});
                         queue.focus_seen = Some(Instant::now());
                         json_response(json!({"received":true}), 200)
                     } else {
@@ -195,7 +195,7 @@ pub fn focus_status() -> Value {
     BRIDGE.get().and_then(|bridge| bridge.queue.lock().ok().map(|queue| {
         json!({"connected":queue.last_seen.is_some_and(|seen| seen.elapsed() < PAIRING_TIMEOUT),
             "fresh":queue.focus_seen.is_some_and(|seen| seen.elapsed() < PAIRING_TIMEOUT),
-            "totalFocusAvailable":total_focus_available(&queue),"extensionVersion":queue.focus_status["extensionVersion"],
+            "totalFocusAvailable":total_focus_available(&queue),"musicAvailable":total_focus_available(&queue) && queue.focus_status["musicAvailable"] == true,"extensionVersion":queue.focus_status["extensionVersion"],
             "error":queue.focus_status["error"],
             "sessionId":queue.focus_status["sessionId"],"applied":queue.focus_status["applied"] == true})
     })).unwrap_or_else(|| json!({"connected":false,"fresh":false,"applied":false}))

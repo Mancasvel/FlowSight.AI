@@ -18,6 +18,8 @@ pub struct Preferences {
     pub exceptions: Vec<String>,
     pub duration_minutes: u16,
     pub quiet_notifications: bool,
+    pub music_enabled: bool,
+    pub music_url: String,
 }
 
 impl Default for Preferences {
@@ -27,6 +29,8 @@ impl Default for Preferences {
             exceptions: Vec::new(),
             duration_minutes: 50,
             quiet_notifications: true,
+            music_enabled: false,
+            music_url: String::new(),
         }
     }
 }
@@ -47,6 +51,10 @@ pub struct Session {
     pub paused_at: Option<String>,
     #[serde(default)]
     pub remaining_seconds: i64,
+    #[serde(default)]
+    pub music_url: Option<String>,
+    #[serde(default)]
+    pub music_warning: Option<String>,
 }
 
 impl Session {
@@ -105,6 +113,12 @@ fn normalize(pattern: &str) -> Result<String, String> {
 }
 
 pub fn validate(mut preferences: Preferences) -> Result<Preferences, String> {
+    preferences.music_url = preferences.music_url.trim().to_string();
+    if !preferences.music_url.is_empty() {
+        preferences.music_url = validate_music_url(&preferences.music_url)?;
+    } else if preferences.music_enabled {
+        return Err("Add an HTTP(S) music link before enabling background music.".into());
+    }
     if !(5..=180).contains(&preferences.duration_minutes)
         || preferences.patterns.is_empty()
         || preferences.patterns.len() > 20
@@ -121,6 +135,26 @@ pub fn validate(mut preferences: Preferences) -> Result<Preferences, String> {
         list.dedup();
     }
     Ok(preferences)
+}
+
+fn validate_music_url(raw: &str) -> Result<String, String> {
+    let error = "Use a complete public HTTP(S) music link without spaces or sign-in credentials.";
+    if raw.len() > 2048 || raw.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(error.into());
+    }
+    let url = url::Url::parse(raw).map_err(|_| error)?;
+    let host = url.host_str().ok_or(error)?;
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || !host.contains('.')
+        || host.ends_with('.')
+        || host.parse::<std::net::IpAddr>().is_ok()
+    {
+        return Err(error.into());
+    }
+    Ok(url.to_string())
 }
 
 pub fn policy() -> Result<Option<Session>, String> {
@@ -150,7 +184,11 @@ pub fn save_total_focus_preferences(preferences: Preferences) -> Result<Preferen
 
 pub fn activate(intention: String, preferences: Preferences) -> Result<Value, String> {
     activate_with(intention, preferences, browser_bridge::focus_status, || {
-        browser_bridge::execute("browser.focus_status", &json!({}))
+        let session = policy()?.ok_or("Total focus ended before the browser could apply it.")?;
+        browser_bridge::execute(
+            "browser.focus_status",
+            &json!({"openMusic":session.music_url.is_some(),"sessionId":session.id}),
+        )
     })
 }
 
@@ -173,11 +211,15 @@ fn activate_with(
             "Total focus is already active. End it before starting another session.".into(),
         );
     }
-    if status()["totalFocusAvailable"] != true {
+    let browser = status();
+    if browser["totalFocusAvailable"] != true {
         return Err(
             "Update Browser Controls in your browser and reconnect it before starting total focus."
                 .into(),
         );
+    }
+    if preferences.music_enabled && browser["musicAvailable"] != true {
+        return Err("Update Browser Controls to open music in the background.".into());
     }
     let session = Session {
         id: uuid::Uuid::new_v4().to_string(),
@@ -190,6 +232,10 @@ fn activate_with(
         linked_clock: false,
         paused_at: None,
         remaining_seconds: i64::from(preferences.duration_minutes) * 60,
+        music_url: preferences
+            .music_enabled
+            .then(|| preferences.music_url.clone()),
+        music_warning: None,
     };
     state::update(|data| {
         data.total_focus = Some(session.clone());
@@ -210,6 +256,18 @@ fn activate_with(
                 && value["applied"] == true
                 && policy()?.is_some_and(|current| current.id == session.id) =>
         {
+            if let Some(warning) = value["musicError"].as_str() {
+                state::update(|data| {
+                    if let Some(current) = data
+                        .total_focus
+                        .as_mut()
+                        .filter(|current| current.id == session.id)
+                    {
+                        current.music_warning = Some(warning.into());
+                    }
+                    Ok(())
+                })?;
+            }
             get_total_focus()
         }
         result => {
@@ -765,6 +823,8 @@ mod tests {
         let old: Preferences =
             serde_json::from_value(json!({"patterns":["x.com"],"durationMinutes":25})).unwrap();
         assert!(old.quiet_notifications);
+        assert!(!old.music_enabled);
+        assert!(old.music_url.is_empty());
         let _store = state::TestStore::new();
         system_quiet::mock_banners(Some(0));
         activate_with(
@@ -791,6 +851,7 @@ mod tests {
             exceptions: vec!["youtube.com/watch".into()],
             duration_minutes: 50,
             quiet_notifications: true,
+            ..Preferences::default()
         })
         .unwrap();
         assert_eq!(preferences.patterns, vec!["youtube.com"]);
@@ -821,5 +882,64 @@ mod tests {
             ..Preferences::default()
         })
         .is_err());
+    }
+
+    #[test]
+    fn music_links_preserve_playlist_parameters_and_require_web_urls() {
+        let url = "https://www.youtube.com/watch?v=abc&list=PL123#t=20";
+        let preferences = validate(Preferences {
+            music_enabled: true,
+            music_url: format!("  {url}  "),
+            ..Preferences::default()
+        })
+        .unwrap();
+        assert_eq!(preferences.music_url, url);
+        for bad in [
+            "",
+            "youtube.com/watch?v=abc",
+            "javascript:alert(1)",
+            "file:///C:/music.mp3",
+            "https://user:password@music.example.com",
+            "http://127.0.0.1",
+            "https://music.example.com:8443",
+            "https://music.example.com/a b",
+        ] {
+            assert!(
+                validate(Preferences {
+                    music_enabled: true,
+                    music_url: bad.into(),
+                    ..Preferences::default()
+                })
+                .is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn music_requires_capability_and_freezes_the_link_into_the_session() {
+        let _store = state::TestStore::new();
+        let preferences = Preferences {
+            music_enabled: true,
+            music_url: "https://music.example.com/playlist?list=123".into(),
+            quiet_notifications: false,
+            ..Preferences::default()
+        };
+        let error = activate_with(
+            "Study".into(),
+            preferences.clone(),
+            || json!({"totalFocusAvailable":true}),
+            || panic!("Old extension must not receive music activation"),
+        )
+        .unwrap_err();
+        assert!(error.contains("Update Browser Controls"));
+        assert!(policy().unwrap().is_none());
+        activate_with("Study".into(), preferences.clone(), || json!({"totalFocusAvailable":true,"musicAvailable":true}), || {
+            let session = policy()?.unwrap();
+            assert_eq!(session.music_url.as_deref(), Some(preferences.music_url.as_str()));
+            Ok(json!({"sessionId":session.id,"applied":true,"musicError":"Keep a browser window open to open music in the background."}))
+        }).unwrap();
+        assert!(policy().unwrap().unwrap().music_warning.is_some());
+        assert_eq!(state::read().unwrap().total_focus_preferences.music_url, "");
     }
 }

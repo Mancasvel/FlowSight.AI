@@ -14,7 +14,7 @@ function harness(fetchResponse = async () => { throw new Error('offline'); }) {
     permissions: { async contains() { return true; } },
     action: { onClicked: listeners },
     alarms: { create() {}, clear() {}, onAlarm: listeners },
-    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, getManifest() { return { version: '1.1.2' }; }, getURL(path) { return `chrome-extension://test/${path}`; }, openOptionsPage() {} },
+    runtime: { onInstalled: listeners, onStartup: listeners, onMessage: listeners, getManifest() { return { version: '1.1.3' }; }, getURL(path) { return `chrome-extension://test/${path}`; }, openOptionsPage() {} },
     storage: { local: {
       async get(names) {
         const keys = Array.isArray(names) ? names : [names];
@@ -43,6 +43,49 @@ test('a URL path block matches the chosen site and route only', () => {
   assert.equal(pattern.test('https://notyoutube.com/shorts/abc'), false);
   assert.throws(() => ruleFor('file:///etc/passwd', 10002));
   assert.throws(() => ruleFor('https://evil.example/?secret=1', 10003));
+});
+
+test('music opens once in an inactive tab without changing window or tab focus', async () => {
+  const h = harness(), created = [];
+  h.chrome.windows = { async getAll() { return [{ id: 12, focused: false }, { id: 24, focused: true }]; } };
+  h.chrome.tabs.create = async options => { created.push(options);return { id: 50 }; };
+  const musicUrl = 'https://youtube.com/watch?v=music&list=123#t=20';
+  await h.reconcileFocus(policy({ musicUrl }));
+  assert.equal(h.matchesFocus(musicUrl, h.stored.focus), false);
+  assert.equal(h.matchesFocus('https://youtube.com/shorts/123', h.stored.focus), true);
+  assert.equal(h.matchesFocus('http://localhost:1420', h.stored.focus), false);
+  const allow = h.changes.at(-1).addRules.find(rule => rule.id === 1040);
+  assert.equal(new RegExp(allow.condition.regexFilter).test(musicUrl.split('#')[0]), true);
+  assert.equal(new RegExp(allow.condition.regexFilter).test('https://youtube.com/watch?v=other'), false);
+  assert.equal(allow.condition.isUrlFilterCaseSensitive, true);
+  await h.runCommand('browser.focus_status', { openMusic: true, sessionId: 'stale' });
+  assert.equal(created.length, 0);
+  assert.equal((await h.runCommand('browser.focus_status', { openMusic: true, sessionId: 'focus-1' })).musicOpened, true);
+  await h.runCommand('browser.focus_status', { openMusic: true, sessionId: 'focus-1' });
+  assert.equal(created.length, 1);
+  assert.equal(created[0].url, musicUrl);assert.equal(created[0].windowId, 24);assert.equal(created[0].active, false);
+  await h.reconcileFocus(null);
+  await h.reconcileFocus(policy({ id: 'resumed', musicUrl }));
+  await h.runCommand('browser.focus_status', {});
+  assert.equal(created.length, 1, 'Resume/status/reconnect never opens another music tab');
+});
+
+test('music never creates a browser window and reports failure while focus remains applied', async () => {
+  const h = harness();
+  h.chrome.windows = { async getAll() { return []; } };
+  h.chrome.tabs.create = async () => { throw new Error('Must not create a tab without an existing window'); };
+  await h.reconcileFocus(policy({ musicUrl: 'https://music.example.com/playlist?list=123' }));
+  const result = await h.runCommand('browser.focus_status', { openMusic: true, sessionId: 'focus-1' });
+  assert.equal(result.applied, true);assert.match(result.musicError, /Keep a browser window open/);
+  assert.equal(h.stored.musicOpenedSessionId, undefined);
+});
+
+test('unsafe music URLs cannot reach browser tab creation', async () => {
+  for (const musicUrl of ['javascript:alert(1)', 'file:///music.mp3', 'https://user:pass@music.example.com', 'http://127.0.0.1', 'https://music.example.com:8443', 'https://music.example.com/a b']) {
+    const h = harness();
+    await assert.rejects(h.reconcileFocus(policy({ musicUrl })));
+    assert.equal(h.changes.length, 0);
+  }
 });
 
 test('temporary blocks can be removed and do not survive their expiry', async () => {
@@ -123,7 +166,7 @@ test('pairing reports a rejected key and a confirmed MV3 focus handshake', async
   code = 200;
   assert.equal((await h.poll()).connected, true);
   const status = await h.focusStatus();
-  assert.equal(status.extensionVersion, '1.1.2');
+  assert.equal(status.extensionVersion, '1.1.3');
   assert.equal(status.applied, false);
 });
 

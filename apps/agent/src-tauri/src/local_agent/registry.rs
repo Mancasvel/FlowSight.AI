@@ -36,12 +36,14 @@ fn spec(
 
 pub fn specs() -> Vec<ToolSpec> {
     vec![
-        spec("focus.total_start", "focus_total_start", "Activate total focus in the paired browser, hold FlowSight reminders and optionally silence Windows app notification banners, without starting tracking. Uses saved settings unless supplied. Messaging auto replies are not available.", json!({
+        spec("focus.total_start", "focus_total_start", "Start total focus and its linked tracking clock in the paired browser, hold FlowSight reminders, optionally silence Windows notification banners and open a music link in a background tab. Uses saved settings unless supplied. Messaging auto replies are not available.", json!({
             "intention":{"type":"string","maxLength":160},
             "duration_minutes":{"type":"integer","minimum":5,"maximum":180},
             "patterns":{"type":"array","items":{"type":"string","maxLength":240},"minItems":1,"maxItems":20},
             "exceptions":{"type":"array","items":{"type":"string","maxLength":240},"maxItems":20},
-            "quiet_notifications":{"type":"boolean","description":"Silence Windows app notification banners for this session and restore their prior setting afterwards."}
+            "quiet_notifications":{"type":"boolean","description":"Silence Windows app notification banners for this session and restore their prior setting afterwards."},
+            "music_enabled":{"type":"boolean","description":"Open the saved music link in an inactive tab when this focus session starts. Requires updated Browser Controls."},
+            "music_url":{"type":"string","maxLength":2048,"description":"Complete public HTTP(S) music URL, including playlist or video parameters. Used when music_enabled is true."}
         }), &["intention"], true),
         spec("focus.total_end", "focus_total_end", "End total focus, release its browser protection and restore notification banners owned by this session.", json!({}), &[], true),
         spec("focus.total_status", "focus_total_status", "Read total focus settings and the actual extension acknowledgement.", json!({}), &[], false),

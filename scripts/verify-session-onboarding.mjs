@@ -186,6 +186,10 @@ try {
     await page.locator('#onboardingFocusMinutes').fill('50');
     assert.equal(await page.locator('#onboardingFocusQuiet').isChecked(),true);
     await page.locator('#onboardingFocusQuiet').uncheck();
+    const musicUrl='https://music.youtube.com/playlist?list=PLfocus&index=2';
+    assert.equal(await page.locator('#onboardingFocusMusicEnabled').isChecked(),false);
+    await page.locator('#onboardingFocusMusicEnabled').check();
+    await page.locator('#onboardingFocusMusicUrl').fill(musicUrl);
     await page.locator('#onboardingBody').evaluate(element=>{element.scrollTop=0;});
     await page.screenshot({path:fileURLToPath(new URL(`onboarding-total-focus-${viewport.name}.png`,output))});
     await page.locator('#onboardingBody .total-focus-future').scrollIntoViewIfNeeded();
@@ -244,6 +248,8 @@ try {
     assert.equal(calls.some(c=>c.command==='start_total_focus'),false,'Wizard must save settings without activating protection.');
     assert.deepEqual(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.exceptions,['youtube.com/watch']);
     assert.equal(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.quietNotifications,false);
+    assert.equal(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.musicEnabled,true);
+    assert.equal(calls.find(c=>c.command==='save_total_focus_preferences').args.preferences.musicUrl,musicUrl);
     assert.equal(calls.find(c=>c.command==='set_focus_alerts_enabled').args.enabled,true);
     assert.equal(calls.find(c=>c.command==='save_weekly_report_schedule').args.schedule.enabled,true);
     assert.equal(calls.some(c=>c.command==='start_monitoring'||c.command==='set_calendar_auto_publish'||c.command==='set_analytics_consent'),false);
@@ -259,6 +265,7 @@ try {
     await page.evaluate(async()=>{await window.__TAURI_INTERNALS__.invoke('test_focus_connection',{connected:true,available:true});});
     await page.locator('#totalFocusStart').waitFor({state:'visible'});
     await page.waitForFunction(()=>!document.getElementById('totalFocusStart').disabled);
+    await page.evaluate(()=>{document.getElementById('totalFocusMusicEnabled').checked=false;document.getElementById('totalFocusMusicEnabled').dispatchEvent(new Event('input',{bubbles:true}));});
     await page.locator('#totalFocusRepair').waitFor({state:'hidden'});
     await page.locator('#totalFocusTask').fill('');
     await page.locator('#totalFocusStart').click();
@@ -348,6 +355,8 @@ try {
     assert.deepEqual(shortcutStart.args.preferences.patterns,['youtube.com','instagram.com']);
     assert.equal(shortcutStart.args.preferences.durationMinutes,50);
     assert.equal(shortcutStart.args.preferences.quietNotifications,false);
+    assert.equal(shortcutStart.args.preferences.musicEnabled,true);
+    assert.equal(shortcutStart.args.preferences.musicUrl,musicUrl);
     await page.locator('#playTimerBtn').filter({hasText:'Pause total focus'}).waitFor();
     assert.equal(await page.locator('#todayTotalFocusStart').isVisible(),false);
     await page.locator('#stopTimerBtn').click();
@@ -404,6 +413,18 @@ try {
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);
     assert.equal(overflow,false);assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.testWindowErrors),[]);
     console.log(`${viewport.name}: onboarding/planner regression and direct total focus play with saved settings, task context, consent cancel/accept, failure/retry, linked clock and Spanish labels passed.`);
+    await page.locator('#todayTotalFocus').click();
+    await page.evaluate(()=>{const select=document.getElementById('languageSelect');select.value='es';select.dispatchEvent(new Event('change',{bubbles:true}));});
+    await page.locator('#totalFocusMusicEnabled').check();
+    await page.locator('#totalFocusMusicUrl').fill(musicUrl);
+    assert.equal(await page.locator('label[for=totalFocusMusicUrl]').innerText(),'Enlace de música');
+    assert.match(await page.locator('label[for=totalFocusMusicEnabled]').innerText(),/Abrir música al iniciar la concentración total/);
+    assert.equal(await page.locator('#totalFocusMusicUrl').inputValue(),musicUrl);
+    assert.equal(await page.locator('#totalFocusMusicUrl').evaluate(input=>input.getBoundingClientRect().width>200),true);
+    await page.locator('label[for=totalFocusMusicEnabled]').evaluate(label=>label.scrollIntoView({block:'start'}));
+    await page.screenshot({path:fileURLToPath(new URL(`focus-music-es-${viewport.name}.png`,output)),animations:'disabled'});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    console.log(`${viewport.name}: background music saved during setup, used by Today, preserved on language change, compact fields fit.`);
     await page.close();
   }
 } finally { await browser.close(); }
