@@ -41,41 +41,70 @@ export function drawContentImage(visual,canvas=document.createElement('canvas'))
 }
 
 export function mountBuildInPublic({root,invoke}){
-  let state=null,tab='stories',busy=false,error='',notice='',local=[],editor=null,days=7,loaded=false;
+  const emptyStudio=owner_id=>({owner_id,settings:{project_name:'FlowSight',voice:'',excluded_terms:[],cadence:'manual',topic_direction:''},evidence:[],briefs:[],drafts:[],profiles:[],styles:{},tokens:[]});
+  let state=emptyStudio('device'),tab='stories',busy=false,error='',notice='',local=[],editor=null,days=7,loaded=false;
   let networks=['linkedin','x','instagram'],secret='',cadenceTimer=null,refreshing=false,pendingFocus=null;
   const editing=new Map();
   const formDrafts=new Map();
-  let targets={},history=[],recentKeys=[],showHistory=false,setup=false,collecting=false,directionOpen=false,manualDraft=null,includeCodexPrompts=false;
+  let targets={},history=[],recentKeys=[],showHistory=false,setup=false,collecting=false,directionOpen=false,manualDraft=null,includeCodexPrompts=false,pendingDirection=null,localOwner=null,disposed=false;
   const localItems=()=>showHistory?history:local;
   const editorKey=value=>value.id||`local:${value.source_key}`;
   const ideaSignals=item=>item.signals||{};
   const styles=channel=>state?.styles?.[channel]||[];
   const styleLabel=(channel,id)=>{const item=styles(channel).find(item=>item.id===id);return item?.[getLanguage()==='es'?'es':'en']||id;};
-  const api=request=>invoke('bip_cloud',{request:{...request,...(state?.owner_id&&request.action!=='studio'?{expected_owner:state.owner_id}:{})}});
+  const connectionMessage=()=>tr('La conexión online no está disponible. Puedes seguir buscando y revisando ideas en tu equipo. Inicia sesión para guardar ideas online o conectar tu asistente.','The online connection is unavailable. You can keep finding and reviewing ideas on your device. Sign in to save ideas online or connect your assistant.');
+  const cloudError=value=>/invalid_session|session.*(?:invalid|expired)|sign in.*settings/i.test(String(value))?tr('La sesión online ha caducado. Inicia sesión para guardar o compartir; la búsqueda de ideas en tu equipo sigue disponible.','The online session has expired. Sign in to save or share; finding ideas on your device is still available.'):String(value);
+  const api=request=>{
+    if(request.action!=='studio'&&!loaded)return Promise.reject(connectionMessage());
+    return invoke('bip_cloud',{request:{...request,...(request.action!=='studio'?{expected_owner:state.owner_id}:{})}});
+  };
   const localKey=()=>`bip-local-ideas-${state.owner_id}`;
-  function persistLocal(){if(state)try{localStorage.setItem(localKey(),JSON.stringify({evidence:local,history,recentKeys,manualDraft,includeCodexPrompts,at:Date.now()}));}catch{/* Storage may be full. */}}
-  function acceptStudio(next){
-    if(state?.owner_id!==next.owner_id){
-      editor=null;secret='';local=[];history=[];recentKeys=[];manualDraft=null;includeCodexPrompts=false;targets={};editing.clear();formDrafts.clear();showHistory=false;setup=false;
-      try{const cached=JSON.parse(localStorage.getItem(`bip-local-ideas-${next.owner_id}`)||'null');if(cached&&Date.now()-cached.at<30*86400000){local=cached.evidence||[];history=cached.history||[];recentKeys=cached.recentKeys||[];manualDraft=cached.manualDraft||null;includeCodexPrompts=cached.includeCodexPrompts===true;}}catch{/* Invalid cache is ignored. */}
+  function persistLocal(){try{localStorage.setItem(localKey(),JSON.stringify({evidence:local,history,recentKeys,manualDraft,includeCodexPrompts,settings:state.settings,pendingDirection,days,at:Date.now()}));}catch{/* Storage may be full. */}}
+  function acceptStudio(next,{online=true}={}){
+    if(localOwner!==next.owner_id){
+      editor=null;secret='';local=[];history=[];recentKeys=[];manualDraft=null;includeCodexPrompts=false;pendingDirection=null;days=7;targets={};editing.clear();formDrafts.clear();showHistory=false;setup=false;
+      try{const cached=JSON.parse(localStorage.getItem(`bip-local-ideas-${next.owner_id}`)||'null');if(cached&&Date.now()-cached.at<30*86400000){local=cached.evidence||[];history=cached.history||[];recentKeys=cached.recentKeys||[];manualDraft=cached.manualDraft||null;includeCodexPrompts=cached.includeCodexPrompts===true;pendingDirection=typeof cached.pendingDirection==='string'?cached.pendingDirection:null;if([1,7,30].includes(cached.days))days=cached.days;if(!online&&cached.settings)next.settings={...next.settings,...cached.settings};}}catch{/* Invalid cache is ignored. */}
+      localOwner=next.owner_id;
     }
-    state=next;loaded=true;
-    for(const channel of Object.keys(channelName)){const profile=state.profiles?.find(item=>item.channel===channel);if(!targets[channel])targets[channel]={style:profile?.style||styles(channel)[0]?.id,profile_id:profile?.id||null};}
+    if(pendingDirection!==null)next.settings.topic_direction=pendingDirection;
+    state=next;loaded=online;
+    for(const channel of Object.keys(channelName)){const profile=state.profiles?.find(item=>item.channel===channel);if(!targets[channel]?.style)targets[channel]={style:profile?.style||styles(channel)[0]?.id,profile_id:profile?.id||null};}
+    persistLocal();
+  }
+  async function resolveLocalOwner(){
+    // This command reads the stored identity only; it does not validate a JWT online.
+    const user=await invoke('get_current_user');
+    if(disposed)return;
+    const owner=user?.user_id||'device';
+    if(localOwner!==owner)acceptStudio(emptyStudio(owner),{online:false});
+  }
+  function saveLocalDirection(text){
+    if(text!==state.settings.topic_direction)pendingDirection=text;
+    state.settings.topic_direction=text;formDrafts.delete('bipDirectionForm');persistLocal();
+  }
+  async function syncDirection(next){
+    if(pendingDirection===null||next.owner_id!==state.owner_id)return;
+    const text=pendingDirection;
+    try{
+      await invoke('bip_cloud',{request:{action:'direction',text,expected_owner:next.owner_id}});
+      if(pendingDirection===text){pendingDirection=null;next.settings.topic_direction=text;persistLocal();}
+    }catch{/* Keep the local direction until the online connection recovers. */}
   }
   const controlsDisabled=()=>busy?'disabled':'';
   const selected=()=>state?.evidence.filter(item=>item.state==='selected')||[];
   const stateLabel=value=>({draft:tr('Borrador','Draft'),approved:tr('Aprobado','Approved'),sending:tr('Enviando','Sending'),scheduled:tr('En cola','Queued'),published:tr('Publicado','Published'),failed:tr('Revisar envío','Review delivery'),uncertain:tr('Comprobar en Buffer','Check Buffer')})[value]||value;
   async function refresh(){
-    if(busy||refreshing)return;refreshing=true;busy=true;
+    if(busy||refreshing)return;refreshing=true;
     captureEditor();
+    cacheEditor();
     render();
-    try{acceptStudio(await api({action:'studio'}));error='';}catch(e){loaded=false;secret='';error=String(e);}finally{refreshing=false;busy=false;}
+    try{await localReady;await resolveLocalOwner();render();const next=await api({action:'studio'});if(!busy&&!disposed){await syncDirection(next);if(!busy&&!disposed){acceptStudio(next);error='';}}}catch{loaded=false;secret='';}finally{refreshing=false;}
     render();
   }
   async function run(task,{reload=true}={}){
     if(busy)return;busy=true;error='';notice='';render();
-    try{await task();if(reload)acceptStudio(await api({action:'studio'}));}
-    catch(e){error=String(e);}
+    try{await task();if(reload){const next=await api({action:'studio'});await syncDirection(next);acceptStudio(next);}}
+    catch(e){error=cloudError(e);}
     finally{busy=false;render();}
   }
   function header(){return `<h1 class="bip-sr-only">Build in public</h1><nav class="bip-tabs" aria-label="Build in public">${[['stories',tr('Ideas','Ideas')],['prompts',tr('Prompts','Prompts')],['drafts',tr('Contenido','Content')],['connections',tr('Ajustes','Settings')]].map(([value,label])=>`<button type="button" data-view="${value}" aria-current="${tab===value?'page':'false'}" ${controlsDisabled()}>${label}${value==='drafts'&&state?.drafts.length?` <span>${state.drafts.length}</span>`:''}</button>`).join('')}</nav>`;}
@@ -105,7 +134,7 @@ export function mountBuildInPublic({root,invoke}){
     if(!root.querySelector('.bip-status'))root.innerHTML='<div class="bip-header-slot"></div><div class="bip-status" role="status" aria-live="polite" aria-atomic="true"></div><div class="bip-content"></div>';
     root.querySelector('.bip-header-slot').innerHTML=header();
     const live=root.querySelector('.bip-status');live.setAttribute('role',error?'alert':'status');live.textContent=error||notice||(busy&&!collecting?tr('Preparando…','Preparing…'):'');
-    root.querySelector('.bip-content').innerHTML=`${editor?(editor.type==='evidence'?evidenceEditor():editor.type==='brief'?briefEditor():draftEditor()):tab==='stories'?stories():tab==='prompts'?prompts():tab==='drafts'?drafts():connections()}${!loaded&&!busy?`<button class="bip-text-button" data-action="refresh">${tr('Reintentar conexión','Retry connection')}</button>`:''}`;
+    root.querySelector('.bip-content').innerHTML=`${editor?(editor.type==='evidence'?evidenceEditor():editor.type==='brief'?briefEditor():draftEditor()):tab==='stories'?stories():tab==='prompts'?prompts():tab==='drafts'?drafts():connections()}${!loaded?`<p class="bip-note bip-connection-status" role="status">${connectionMessage()}</p><button class="bip-text-button" data-action="refresh" ${refreshing?'disabled':''}>${tr('Reintentar conexión','Retry connection')}</button>`:''}`;
     root.querySelectorAll('form button[type=submit]').forEach(button=>{button.id=`${button.form.id}Submit`;});
     for(const [id,values] of formDrafts){
       const form=root.querySelector(`#${id}`);if(!form)continue;
@@ -165,9 +194,10 @@ export function mountBuildInPublic({root,invoke}){
     if(busy)return;
     const direction=root.querySelector('#bipDirection')?.value??state?.settings.topic_direction??'';
     collecting=true;
-    await run(async()=>{await api({action:'direction',text:direction});formDrafts.delete('bipDirectionForm');state.settings.topic_direction=direction;
+    await run(async()=>{await localReady;saveLocalDirection(direction);const owner=state.owner_id;
       const recentTitles=[...new Set([...local,...history,...(state?.evidence||[])].map(item=>item.title).filter(Boolean))].slice(0,20);
       const result=await invoke('bip_collect_local',{periodDays:days,locale:getLanguage(),excludedTerms:state?.settings.excluded_terms||[],direction,recentKeys,recentTitles,includeCodexPrompts});
+      if(owner!==state.owner_id)return;
       if(!Array.isArray(result.evidence))throw tr('La IA no completó la búsqueda. Tus ideas anteriores siguen guardadas.','The AI did not complete the search. Your previous ideas are still saved.');
       if(result.status==='no_new_ideas')notice=tr('No he encontrado ideas nuevas sin repetir las anteriores. Prueba otro enfoque o más días.','No new ideas found without repeating earlier ones. Try another direction or more days.');
       else {acceptIdeas(result.evidence);if(!result.evidence.length)notice=direction.trim()?tr('No he encontrado el tema solicitado en las fuentes de este periodo. Prueba más días o incluye tus prompts de Codex.','The requested topic was not found in the sources for this period. Try more days or include your Codex prompts.'):tr('No hay suficiente contexto en este periodo. Prueba más días o incluye tus prompts de Codex.','Not enough context in this period. Try more days or include your Codex prompts.');else if(result.evidence.length<5)notice=tr(`He encontrado ${result.evidence.length} ideas distintas con contexto suficiente.`,`Found ${result.evidence.length} distinct ideas with enough context.`);}
@@ -215,7 +245,7 @@ export function mountBuildInPublic({root,invoke}){
     if(event.target.id==='bipProfileNetwork')root.querySelector('#bipProfileStyle').innerHTML=styles(event.target.value).map(style=>`<option value="${style.id}">${esc(style[getLanguage()==='es'?'es':'en'])}</option>`).join('');
     captureForm(event.target.closest('form'));
     if(event.target.id==='bipConfirmed')markEditorDirty();
-    if(event.target.id==='bipPeriod')days=Number(event.target.value);
+    if(event.target.id==='bipPeriod'){days=Number(event.target.value);persistLocal();}
     if(event.target.id==='bipCodexPrompts'){includeCodexPrompts=event.target.checked;persistLocal();}
     if(event.target.dataset.network){networks=event.target.checked?[...new Set([...networks,event.target.dataset.network])]:networks.filter(item=>item!==event.target.dataset.network);render();}
     if(event.target.dataset.select)run(()=>api({action:'evidence',id:event.target.dataset.select,patch:{state:event.target.checked?'selected':'suggested'}}));
@@ -225,7 +255,7 @@ export function mountBuildInPublic({root,invoke}){
     event.preventDefault();if(busy)return;
     const form=event.target;if(!form.reportValidity())return;
     captureForm(form);
-    if(form.id==='bipDirectionForm'){const text=root.querySelector('#bipDirection').value;run(async()=>{await api({action:'direction',text});formDrafts.delete(form.id);notice=tr('Enfoque guardado.','Direction saved.');});}
+    if(form.id==='bipDirectionForm'){const text=root.querySelector('#bipDirection').value;run(async()=>{await localReady;saveLocalDirection(text);if(loaded)await syncDirection(state);notice=tr('Enfoque guardado en tu equipo.','Direction saved on your device.');},{reload:false});}
     if(form.id==='bipProfileForm'){const profile={channel:root.querySelector('#bipProfileNetwork').value,name:root.querySelector('#bipProfileName').value,handle:root.querySelector('#bipProfileHandle').value,style:root.querySelector('#bipProfileStyle').value};run(async()=>{await api({action:'profile',profile});formDrafts.delete(form.id);notice=tr('Perfil añadido a FlowSight.','Profile added to FlowSight.');});}
     if(form.id==='bipBriefEdit'){captureEditor();run(async()=>{const id=editor.value.id;await api({action:'edit_brief',id,revision:editor.value.revision,prompt:editor.value.prompt});state=await api({action:'studio'});editor.value=state.briefs.find(item=>item.id===id);editor.dirty=false;editing.delete(id);notice=tr('Prompt guardado.','Prompt saved.');});}
     if(form.id==='bipSettings'){const prefs={project_name:root.querySelector('#bipProject').value,voice:root.querySelector('#bipVoice').value,excluded_terms:root.querySelector('#bipExcluded').value.split(',').map(x=>x.trim()).filter(Boolean),cadence:root.querySelector('#bipCadence').value,locale:getLanguage()==='es'?'es':'en',timezone:Intl.DateTimeFormat().resolvedOptions().timeZone};run(async()=>{await api({action:'settings',settings:prefs});formDrafts.delete(form.id);notice=tr('Preferencias guardadas.','Preferences saved.');});}
@@ -237,7 +267,7 @@ export function mountBuildInPublic({root,invoke}){
     if(root.contains(document.activeElement)&&document.activeElement.closest('form'))return;
     const before=JSON.stringify([state?.owner_id,state?.briefs,state?.drafts,state?.settings.topic_direction]);
     refreshing=true;
-    try{const next=await api({action:'studio'});if(busy||editor)return;acceptStudio(next);}catch{return;}finally{refreshing=false;}
+    try{await localReady;await resolveLocalOwner();const next=await api({action:'studio'});if(busy||editor)return;await syncDirection(next);if(busy||editor)return;acceptStudio(next);}catch{loaded=false;secret='';}finally{refreshing=false;}
     if(before!==JSON.stringify([state.owner_id,state.briefs,state.drafts,state.settings.topic_direction])&&!root.hidden){notice=tr('Tu contenido está actualizado.','Your content is up to date.');render();}
     if(state.settings.cadence==='manual')return;
     const prefs=state.settings,key=`bip-ideas-${state.owner_id||'local'}`,previous=Number(localStorage.getItem(key)||0),interval=prefs.cadence==='daily'?86400000:7*86400000;
@@ -245,7 +275,8 @@ export function mountBuildInPublic({root,invoke}){
     try{busy=true;collecting=true;render();const recentTitles=[...new Set([...local,...history,...(state?.evidence||[])].map(item=>item.title).filter(Boolean))].slice(0,20);const result=await invoke('bip_collect_local',{periodDays:prefs.cadence==='daily'?1:7,locale:getLanguage(),excludedTerms:prefs.excluded_terms,direction:prefs.topic_direction||'',recentKeys,recentTitles,includeCodexPrompts});if(result.evidence.length){acceptIdeas(result.evidence);localStorage.setItem(key,String(Date.now()));}}catch{/* An offline suggestion must not interrupt focus. */}finally{busy=false;collecting=false;if(!root.hidden)render();}
   }
   document.addEventListener('flowsight:languagechange',()=>{captureEditor();render();});
+  const localReady=resolveLocalOwner().catch(()=>{if(localOwner===null)acceptStudio(emptyStudio('device'),{online:false});}).then(()=>{if(!disposed&&!busy)render();});
   cadenceTimer=setInterval(checkCadence,60000);
   render();
-  return {refresh,dispose(){clearInterval(cadenceTimer);secret='';}};
+  return {refresh,dispose(){disposed=true;clearInterval(cadenceTimer);secret='';}};
 }

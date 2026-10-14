@@ -5,6 +5,7 @@ import {resolve} from 'node:path';
 const {chromium}=await import(process.env.FLOWSIGHT_PLAYWRIGHT_MODULE||'playwright');
 const token=process.env.FLOWSIGHT_BIP_TEST_TOKEN;
 if(!token)throw new Error('A disposable test-user token is required.');
+const userId=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString()).sub;
 const endpoint='https://dzpyrdxelcgfpmcdojvb.supabase.co/functions/v1/';
 async function api(body){const response=await fetch(endpoint+'build-in-public',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});const value=await response.json();assert.ok(response.ok,JSON.stringify(value));return value;}
 const source=await readFile(new URL('./verify-recorded-time.mjs',import.meta.url),'utf8');
@@ -16,12 +17,13 @@ try{
  const page=await browser.newPage({locale:'es-ES',timezoneId:'Europe/Madrid',viewport:{width:370,height:700},reducedMotion:'reduce'});
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.addInitScript({content:`(${source.slice(begin,end)})({locale:'es-ES'});`});
- await page.addInitScript(({token,endpoint})=>{
+ await page.addInitScript(({token,endpoint,userId})=>{
   window.__bipTest={failNext:'',poll:null,batch:0,lastCollection:null,mode:''};
   const interval=window.setInterval.bind(window);
   window.setInterval=(fn,delay,...args)=>{if(delay===60000&&fn.toString().includes('bip_collect_local'))window.__bipTest.poll=fn;return interval(fn,delay,...args);};
   const original=window.__TAURI_INTERNALS__.invoke;
   window.__TAURI_INTERNALS__.invoke=async(command,args={})=>{
+   if(command==='get_current_user')return {user_id:userId,email:'fixture@example.invalid'};
    if(command==='bip_cloud'&&window.__bipTest.failNext===args.request.action){window.__bipTest.failNext='';throw 'Fallo de conexión simulado para comprobar la recuperación.';}
    if(command==='bip_cloud'){const response=await fetch(endpoint+'build-in-public',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(args.request)});const payload=await response.json();if(!response.ok)throw payload.error;return payload;}
    if(command==='bip_collect_local'){
@@ -37,7 +39,7 @@ try{
    if(command==='bip_generate_local')throw new Error('Prompt preparation must not invoke local copywriting.');
    return original(command,args);
   };
- },{token,endpoint});
+ },{token,endpoint,userId});
  const click=selector=>page.locator(selector).click();
  const status=text=>page.locator('.bip-status').filter({hasText:text}).waitFor();
  const focus=async id=>assert.equal(await page.evaluate(()=>document.activeElement.id),id);
