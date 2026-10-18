@@ -58,7 +58,11 @@ export function createReportProgress(local = {}, periodDays = 7) {
   if (!opportunities.length && current.available) {
     const target = rows.find((row) => row.key === 'focus' && row.current < 60)
       || rows.find((row) => row.key === 'detours' && row.current > 5);
-    opportunities.push(target ? item(target, false) : { title: t('Keep the conditions that work'), evidence: '', body: t('Repeat your strongest focus block and check whether the pattern holds next week.') });
+    opportunities.push(target ? {
+      title: target.key === 'focus' ? t('Keep building your sustained focus') : t('Keep reducing distraction time'),
+      evidence: message`Current: ${target.currentLabel}`,
+      body: target.advice,
+    } : { title: t('Keep the conditions that work'), evidence: '', body: t('Repeat your strongest focus block and check whether the pattern holds next week.') });
   }
   return {
     score: current.score, scoreLabel: current.score === null ? '—' : display(current.score),

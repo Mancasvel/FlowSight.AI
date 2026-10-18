@@ -17,7 +17,8 @@ test('grade and improvements compare rates using the same method in adjacent wee
   assert.equal(result.improvements.length, 2);
   assert.equal(result.rows.find(row => row.key === 'detours').tone, 'up');
   assert.equal(result.rows.find(row => row.key === 'longest').tone, 'up');
-  assert.match(result.opportunities[0].title, /Reduce returns/);
+  assert.equal(result.opportunities[0].title, 'Keep reducing distraction time');
+  assert.equal(result.opportunities[0].evidence, 'Current: 6.0 min/h');
 });
 
 test('longer tracked time and more days never raise the grade by themselves', () => {
@@ -38,6 +39,17 @@ test('worsening signals give a negative delta and concrete next steps without in
   assert.equal(result.improvements.length, 0);
   assert.equal(result.opportunities.length, 2);
   assert.ok(result.opportunities.every(item => item.body.length > 20));
+  assert.ok(result.opportunities.every(item => item.evidence.includes('→')));
+});
+
+test('remaining focus goals use the current level without presenting an observed gain as a decline', () => {
+  const local = fixture();
+  local.deep_focus_seconds = 7200; local.distraction_seconds = 0;
+  local.prior_period.deep_focus_seconds = 3600; local.prior_period.distraction_seconds = 0;
+  const result = createReportProgress(local);
+  assert.equal(result.opportunities[0].title, 'Keep building your sustained focus');
+  assert.equal(result.opportunities[0].evidence, 'Current: 40.0 %');
+  assert.ok(result.improvements.some(item => item.evidence.includes('20.0 % → 40.0 %')));
 });
 
 test('stable rates do not claim an improvement', () => {

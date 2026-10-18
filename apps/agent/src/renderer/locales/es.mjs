@@ -32,6 +32,8 @@ Protect a 30-minute block for one task and keep optional checks for the break.|P
 Mute optional notifications and batch app checks into a planned break.|Silencia las notificaciones opcionales y agrupa las consultas a otras apps en una pausa planificada.
 Choose one task before starting and finish the block before switching context.|Elige una tarea antes de empezar y termina el bloque antes de cambiar de contexto.
 Keep the conditions that work|Mantén lo que te está funcionando
+Keep building your sustained focus|Sigue reforzando tu foco sostenido
+Keep reducing distraction time|Sigue reduciendo el tiempo de distracción
 Repeat your strongest focus block and check whether the pattern holds next week.|Repite tu mejor bloque de foco y comprueba si el patrón se mantiene la semana que viene.
 Record a focus block to receive a grade. Time spent in meetings alone does not define your focus.|Registra un bloque de foco para recibir una nota. El tiempo de reuniones por sí solo no define tu concentración.
 There is not enough comparable focus data from the previous period. Your grade uses this period only.|Aún faltan datos de foco comparables del periodo anterior. Tu nota se basa solo en este periodo.
