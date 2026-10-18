@@ -342,6 +342,53 @@ function drawMetrics(doc, model, y) {
   return y + 27;
 }
 
+function drawReportProgress(doc, progress, y) {
+  if (!progress) return y;
+  if (progress.score === null) {
+    y = drawMiniHeading(doc, progress.title, y);
+    return drawParagraph(doc, progress.note, y, { size: 8.4, leading: 4.4, color: MUTED }) + 7;
+  }
+  y = ensureSpace(doc, y, 65);
+  y = drawMiniHeading(doc, progress.title, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(36);
+  doc.setTextColor(8, 127, 120);
+  doc.text(`${progress.scoreLabel}/10`, LEFT, y + 13);
+  let readingY = drawParagraph(doc, progress.verdict, y + 2, { x: LEFT + 55, width: WIDTH - 55, weight: 'bold', size: 11 });
+  if (progress.comparable) {
+    readingY = drawParagraph(doc, `${progress.deltaLabel.replace('−', '-')} ${tr('points')} ${progress.comparisonLabel}`, readingY + 1, { x: LEFT + 55, width: WIDTH - 55, size: 9 });
+  } else {
+    readingY = drawParagraph(doc, progress.status, readingY + 1, { x: LEFT + 55, width: WIDTH - 55, size: 9, color: MUTED });
+  }
+  y = Math.max(y + 23, readingY + 5);
+  y = drawParagraph(doc, progress.note, y, { size: 8, leading: 4.2, color: MUTED }) + 5;
+  const insights = (title, items, empty) => {
+    y = drawMiniHeading(doc, title, y);
+    if (!items.length) y = drawParagraph(doc, empty, y, { size: 8.4, leading: 4.4, color: MUTED });
+    for (const item of items) {
+      y = ensureSpace(doc, y, 18);
+      y = drawParagraph(doc, item.title, y, { size: 9, leading: 4.5, weight: 'bold' });
+      if (item.evidence) y = drawParagraph(doc, item.evidence.replaceAll('→', '->'), y, { size: 8.5, leading: 4.2, color: [8, 127, 120] });
+      if (item.body) y = drawParagraph(doc, item.body, y, { size: 8.4, leading: 4.4, color: MUTED });
+      y += 3;
+    }
+    y += 6;
+  };
+  insights(tr('What improved'), progress.improvements, progress.improvementEmpty);
+  insights(tr('Where to improve'), progress.opportunities, progress.opportunityEmpty);
+  if (progress.rows.length) {
+    y = drawMiniHeading(doc, progress.comparable ? tr('The comparison behind your grade') : tr('Your current focus measures'), y);
+    if (progress.comparable) {
+      y = drawParagraph(doc, `${tr('Previous')} ${progress.previousScoreLabel}/10 -> ${tr('Current')} ${progress.scoreLabel}/10. ${progress.previousPeriod}`, y, { size: 8.3, leading: 4.3, color: MUTED }) + 2;
+    }
+    for (const row of progress.rows) {
+      y = drawParagraph(doc, `${row.label}: ${progress.comparable && row.previous !== null ? `${row.previousLabel} -> ` : ''}${row.currentLabel}`, y, { size: 8.5, leading: 4.4 });
+    }
+    y += 5;
+  }
+  return drawParagraph(doc, progress.method, y, { size: 7.5, leading: 4, color: MUTED }) + 8;
+}
+
 function drawWorkAreas(doc, rows, y) {
   if (!rows.length) return drawParagraph(doc, tr('No work-area detail was generated.'), y, { color: MUTED }) + 4;
   for (const row of rows) {
@@ -499,6 +546,7 @@ function addFooters(doc, model) {
 
 export function renderStatusReportPdf(doc, model) {
   let y = drawReportHeader(doc, model);
+  y = drawReportProgress(doc, model.progress, y);
   y = drawParagraph(doc, `${model.aiPowered ? tr('Local AI report') : tr('Rule-based report')} · ${formatMessage`${model.activeDays} of ${model.periodDays} days with activity`}. ${tr('This covers recorded activity, not your whole working day.')}`, y, {size:8,leading:4.4,color:MUTED}) + 5;
   y = drawParagraph(doc, model.summary, y, { size: 10, leading: 5.5 }) + 7;
   y = drawMetrics(doc, model, y);

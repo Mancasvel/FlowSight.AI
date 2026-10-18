@@ -2491,7 +2491,9 @@ fn query_prior_period_metrics(
     days: i32,
     current_total_seconds: i32,
 ) -> Result<serde_json::Value, String> {
-    let prior_end = period_start - chrono::Duration::days(1);
+    // A daily review compares the same weekday last week. Longer reviews use
+    // the immediately preceding, non-overlapping window of equal length.
+    let prior_end = period_start - chrono::Duration::days(if days == 1 { 7 } else { 1 });
     let prior_start = prior_end - chrono::Duration::days((days - 1) as i64);
     let start_str = prior_start.format("%Y-%m-%d").to_string();
     let end_str = prior_end.format("%Y-%m-%d").to_string();
@@ -2501,13 +2503,14 @@ fn query_prior_period_metrics(
     let prior_focus = crate::focus_semantics::summarize_from_db(conn, &start_str, &end_str)?;
     let deep_focus_seconds = prior_focus.deep_focus_seconds as i32;
 
-    let change_pct = if current_total_seconds > 0 && total_seconds > 0 {
-        ((current_total_seconds - total_seconds) as f64 / total_seconds as f64 * 1000.0).round()
-            / 10.0
-    } else if current_total_seconds > 0 && total_seconds == 0 {
-        100.0
+    let change_pct = if total_seconds > 0 {
+        Some(
+            ((current_total_seconds - total_seconds) as f64 / total_seconds as f64 * 1000.0)
+                .round()
+                / 10.0,
+        )
     } else {
-        0.0
+        None
     };
 
     Ok(serde_json::json!({
@@ -2517,6 +2520,10 @@ fn query_prior_period_metrics(
         "total_hours": round_hours(total_seconds),
         "deep_focus_seconds": deep_focus_seconds,
         "deep_focus_hours": round_hours(deep_focus_seconds),
+        "period_days": days,
+        "focus_eligible_seconds": prior_focus.focus_eligible_seconds,
+        "distraction_seconds": prior_focus.distraction_seconds,
+        "longest_focus_seconds": prior_focus.longest_focus_seconds,
         "activity_count": activity_count,
         "change_pct": change_pct,
     }))
@@ -2676,6 +2683,35 @@ fn clamp_line(s: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn prior_review_uses_matching_week_and_canonical_focus_measures() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE reports (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, activity_type TEXT NOT NULL, description TEXT NOT NULL, jira_ticket_id TEXT, duration_seconds INTEGER NOT NULL, active_app TEXT, window_title TEXT, theme_hint TEXT);").unwrap();
+        let start = chrono::NaiveDate::from_ymd_opt(2026, 10, 12).unwrap();
+        for (date, duration) in [
+            (start - chrono::Duration::days(7), 1800),
+            (start - chrono::Duration::days(1), 900),
+        ] {
+            conn.execute("INSERT INTO reports (created_at, activity_type, description, duration_seconds, theme_hint) VALUES (?1, 'Writing', 'Fixture', ?2, 'Report')",
+                params![utc_storage_timestamp(date.and_hms_opt(12, 30, 0).unwrap()), duration]).unwrap();
+        }
+        let daily = query_prior_period_metrics(&conn, start, 1, 3600).unwrap();
+        assert_eq!(daily["period_start"], "2026-10-05");
+        assert_eq!(daily["period_end"], "2026-10-05");
+        assert_eq!(daily["total_seconds"], 1800);
+        assert_eq!(daily["focus_eligible_seconds"], 1800);
+        assert_eq!(daily["deep_focus_seconds"], 1800);
+        assert_eq!(daily["longest_focus_seconds"], 1800);
+        assert_eq!(daily["distraction_seconds"], 0);
+        let week = query_prior_period_metrics(&conn, start, 7, 3600).unwrap();
+        assert_eq!(week["period_start"], "2026-10-05");
+        assert_eq!(week["period_end"], "2026-10-11");
+        assert_eq!(week["total_seconds"], 2700);
+        let month = query_prior_period_metrics(&conn, start, 30, 3600).unwrap();
+        assert_eq!(month["period_end"], "2026-10-11");
+        assert_eq!(month["period_start"], "2026-09-12");
+    }
 
     #[test]
     fn empty_report_skips_inference_and_startup_failure_uses_rules() {

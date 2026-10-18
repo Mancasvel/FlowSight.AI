@@ -54,7 +54,8 @@ try {
   await page.goto(process.env.FLOWSIGHT_RENDERER_URL||'http://127.0.0.1:1443',{waitUntil:'networkidle'});
   await page.locator('.nav-item[data-tab="tabSummary"]').click();
   await page.locator('#workReportPeriod').waitFor();
-  assert.equal(await page.locator('#workReportPeriod').inputValue(),'1');
+  assert.equal(await page.locator('#workReportPeriod').inputValue(),'7');
+  await page.locator('#workReportPeriod').selectOption('1');
   await page.locator('#generateReportBtn').click();
   await page.locator('[data-review-suggestion="0"]').waitFor();
   assert.match(await page.locator('.sr-origin').first().innerText(),view.language==='es'?/Informe basado en reglas/:/Rule-based report/);

@@ -1,5 +1,54 @@
 // Explicit application copy. User-authored task names, messages and activity are never translated.
 export const spanish = Object.fromEntries(`
+Your focus this week|Tu foco esta semana
+Sustained focus|Foco sostenido
+Your focus today|Tu foco hoy
+Your focus this period|Tu foco en este periodo
+vs. last week|respecto a la semana pasada
+vs. the same day last week|respecto al mismo día de la semana pasada
+vs. the previous 30 days|respecto a los 30 días anteriores
+Your focus improved|Tu foco ha mejorado
+Your focus needs attention|Tu foco necesita atención
+Your focus is stable|Tu foco se mantiene estable
+Building your baseline|Creando tu referencia
+Strong focus rhythm|Buen ritmo de concentración
+A solid foundation|Una base sólida
+Room to build your focus|Margen para ganar foco
+Not enough focus data|Faltan datos de foco
+Focus grade: {p0} out of 10|Nota de foco: {p0} sobre 10
+points|puntos
+What improved|En qué has mejorado
+Where to improve|En qué puedes mejorar
+Your progress|Tu evolución
+More time in sustained focus|Más tiempo en foco sostenido
+Recover your sustained focus|Recupera tu foco sostenido
+Fewer distractions per focus hour|Menos distracciones por hora de foco
+Reduce returns to distractions|Reduce las vueltas a las distracciones
+Longer uninterrupted blocks|Bloques más largos sin interrupciones
+Rebuild one uninterrupted block|Recupera un bloque sin interrupciones
+Distraction minutes per focus hour|Minutos de distracción por hora de foco
+Longest focus block|Bloque de foco más largo
+Protect a 30-minute block for one task and keep optional checks for the break.|Protege un bloque de 30 minutos para una sola tarea y deja las consultas opcionales para la pausa.
+Mute optional notifications and batch app checks into a planned break.|Silencia las notificaciones opcionales y agrupa las consultas a otras apps en una pausa planificada.
+Choose one task before starting and finish the block before switching context.|Elige una tarea antes de empezar y termina el bloque antes de cambiar de contexto.
+Keep the conditions that work|Mantén lo que te está funcionando
+Repeat your strongest focus block and check whether the pattern holds next week.|Repite tu mejor bloque de foco y comprueba si el patrón se mantiene la semana que viene.
+Record a focus block to receive a grade. Time spent in meetings alone does not define your focus.|Registra un bloque de foco para recibir una nota. El tiempo de reuniones por sí solo no define tu concentración.
+There is not enough comparable focus data from the previous period. Your grade uses this period only.|Aún faltan datos de foco comparables del periodo anterior. Tu nota se basa solo en este periodo.
+Both grades use the same method. Changes describe recorded patterns.|Las dos notas usan el mismo método. Los cambios describen los patrones registrados.
+Grade out of 10: 70% sustained-focus share of eligible work + 30% time free of detected distractions. More hours do not earn extra points. Meetings and collaboration are outside this focus grade; it does not measure work quality.|Nota sobre 10: 70% de proporción de foco sostenido en el trabajo elegible + 30% de tiempo libre de distracciones detectadas. Más horas no dan puntos extra. Las reuniones y la colaboración quedan fuera de esta nota de foco; no mide la calidad del trabajo.
+Your first comparison will appear when both periods have focus data.|Tu primera comparación aparecerá cuando ambos periodos tengan datos de foco.
+No clear improvement in these measures this period. Stable patterns are also useful.|No hay una mejora clara en estas medidas durante este periodo. Los patrones estables también son útiles.
+Record a focus block first; there is not enough evidence for a specific change.|Registra primero un bloque de foco; aún faltan datos para sugerir un cambio concreto.
+The comparison behind your grade|La comparación detrás de tu nota
+Your current focus measures|Tus medidas de foco actuales
+Previous|Anterior
+Current|Actual
+Previous: {p0}|Anterior: {p0}
+Current: {p0}|Actual: {p0}
+No baseline|Sin referencia
+How is this grade calculated?|¿Cómo se calcula esta nota?
+{p0} days with recorded activity|{p0} días con actividad registrada
 Could not load saved privacy settings. Try again.|No se pudieron cargar tus preferencias de privacidad guardadas. Inténtalo de nuevo.
 Planning runs on this device. Review and confirm to add the blocks to your linked calendar, or to FlowSight if none is connected.|La planificación se ejecuta en este dispositivo. Revisa y confirma para añadir los bloques a tu calendario vinculado, o a FlowSight si no hay ninguno conectado.
 Draft ready. Review the times and estimates before adding the blocks to {calendar}.|Borrador listo. Revisa las horas y estimaciones antes de añadir los bloques a {calendar}.
