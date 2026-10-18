@@ -4307,6 +4307,7 @@
     import { renderCoachMarkdown } from './coach-markdown.mjs';
     import './session-planner.css';
     import './work-review.css';
+    import './report-progress.css';
     import { createWorkReviewController } from './work-review.mjs';
     const workReview = createWorkReviewController(invoke);
     import { listen } from '@tauri-apps/api/event';
@@ -8487,7 +8488,7 @@
       }
     });
 
-    let workReportPeriodDays = 1;
+    let workReportPeriodDays = 7;
     let reportGenerationPeriod = null;
     function requestStatusReportPayload(periodDays = 7) {
       if (reportGenerationPromise && reportGenerationPeriod !== periodDays) {

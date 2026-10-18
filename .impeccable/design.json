@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-12T18:38:56Z",
+  "generatedAt": "2026-10-18T22:23:55Z",
   "title": "Design System: FlowSight Desktop Renderer",
   "extensions": {
     "colorMeta": {
@@ -297,6 +297,18 @@
           "oklch(86% 0.09 178)",
           "oklch(95% 0.09 178)"
         ]
+      },
+      "report-header": {
+        "role": "neutral",
+        "displayName": "Individual Report Slate Header"
+      },
+      "report-attention-light": {
+        "role": "secondary",
+        "displayName": "Report Attention in Light Appearance"
+      },
+      "report-attention-dark": {
+        "role": "secondary",
+        "displayName": "Report Attention in Dark Appearance"
       }
     },
     "typographyMeta": {
@@ -323,6 +335,10 @@
       "studio-title": {
         "displayName": "Studio Subject",
         "purpose": "Useful subjects at the start of Build in public idea, prompt and proposal rows."
+      },
+      "report-grade": {
+        "displayName": "Individual Report Focus Grade",
+        "purpose": "Tabular focus figure in the individual report header; 60px at widths of 600px and below."
       }
     },
     "shadows": [
@@ -408,6 +424,10 @@
       {
         "name": "studio-setup-columns",
         "value": "560px"
+      },
+      {
+        "name": "report-stacked",
+        "value": "600px"
       }
     ],
     "buildInPublic": {
@@ -463,6 +483,84 @@
         "excerpt": "Single-line 11px muted foreground with ellipsis",
         "metadata": "Single-line 10px Studio Teal, tabular numerals and ellipsis",
         "form": "Open button row with a fine theme border and 13px vertical padding; hover uses a muted surface; full evidence remains in the editor"
+      }
+    },
+    "individualReport": {
+      "scope": "Individual-report top section only; the incumbent FlowSight slate/teal family and all other surfaces remain governed by their existing entries.",
+      "direction": "Read within the incumbent FlowSight mobile family",
+      "header": {
+        "background": "{colors.report-header}",
+        "grade": "{typography.report-grade}",
+        "layout": "Prominent focus grade /10 with a verdict and paired signed point delta when comparable; ten segments fill only whole grade points.",
+        "supportingCopy": "Named period, generation metadata, method note, local AI or rule-based origin, and recorded-day coverage.",
+        "deltaTones": "Up is pale teal, down is warm attention, steady is pale neutral; direction is also shown by an arrow or steady mark."
+      },
+      "progress": {
+        "layout": "Two equal open columns, What improved and Where to improve, with a 28px gap and at most two items per column; no inset cards.",
+        "padding": "26px 36px 20px",
+        "positive": {
+          "light": "{colors.session-action}",
+          "dark": "{colors.teal-active-dark}"
+        },
+        "attention": {
+          "light": "{colors.report-attention-light}",
+          "dark": "{colors.report-attention-dark}"
+        },
+        "measuredChange": "Previous -> current evidence for threshold-qualified improvements and declines; current-level remaining goals use an explicit Current label.",
+        "thresholds": "One percentage point sustained-focus share, 0.5 distraction min/h, or five minutes longest block. Higher share/longer blocks and fewer distractions are favorable; smaller changes remain steady.",
+        "remainingGoals": "When no decline qualifies, use sustained-focus share below 60%, otherwise distraction time above 5 min/h; if neither applies, keep the conditions that work. A remaining goal can coexist with an improvement."
+      },
+      "comparison": {
+        "heading": "Previous/current grades and the matching previous-period dates precede the measures.",
+        "measures": [
+          "Sustained focus",
+          "Distraction minutes per focus hour",
+          "Longest focus block"
+        ],
+        "layout": "Three equal columns with a 22px gap; a fine theme border separates comparison from the progress lists.",
+        "rails": "5px high, 2px corners; previous uses theme muted foreground at 45% opacity and current uses the appearance-specific positive teal.",
+        "values": "Right-aligned tabular values in a 70px column; text and accessible previous/current labels accompany color.",
+        "scale": "Sustained-focus share is fixed to 100%; the other pairs use the larger current/prior recorded value, with a minimum scale of one.",
+        "direction": "Arrow or steady mark uses favorable change independently of rail identity. A shorter current distraction rail can indicate improvement."
+      },
+      "responsive": {
+        "compactCondition": "Viewport width <=600px",
+        "compact": "Progress and measure grids become single columns; 22px progress padding, 22px list-column gap and 16px measure gap. Next goals gain a fine top rule and 20px top padding. Grade reduces to 60px and verdict to 16px; the grade/verdict row wraps.",
+        "preview": "Existing modal is capped at 900px wide and min(94vh, 1000px) high; the body scrolls, including at the 340x400 minimum app window."
+      },
+      "periods": {
+        "defaultDays": 7,
+        "daily": "Today compares the same weekday seven days earlier.",
+        "weekly": "Seven days compare the immediately preceding non-overlapping seven-day window.",
+        "thirtyDay": "Thirty days compare the immediately preceding non-overlapping thirty-day window.",
+        "baselineGate": "Both periods require usable eligible-focus data and the prior start/end must exactly match the expected offset; mismatched cached windows are not comparable."
+      },
+      "states": {
+        "noBaseline": "Current grade and available measures remain. Building-baseline copy replaces the comparison status; point delta, previous rails and trend marks are omitted.",
+        "insufficientFocus": "An em dash replaces the grade, the ten-segment rail is omitted, and recording prompts replace unsupported specific advice.",
+        "stable": "No-clear-improvement copy preserves the value of stable patterns; smaller changes use the steady mark."
+      },
+      "method": "Grade out of 10, rounded to one decimal: 70% sustained-focus share of eligible work plus 30% eligible time divided by eligible plus detected distraction time. Hours, meetings, collaboration and calendar coverage do not earn points; it does not measure work quality.",
+      "disclosure": {
+        "control": "Native details/summary below comparison",
+        "focusWidth": "2px",
+        "focusOffset": "3px",
+        "focusColor": "Appearance-specific positive teal"
+      },
+      "pdf": "Uses the same progress view model for grade, verdict, delta, evidence, matching dates, baseline states, method and coverage. Teal grade on paper with stacked text comparisons; it does not reproduce the renderer bars.",
+      "evidence": {
+        "kind": "Actual compiled renderer and PDF output with synthetic local data; not native Tauri execution.",
+        "captures": [
+          ".impeccable/review/report-progress/wide-es.png",
+          ".impeccable/review/report-progress/compact-es.png",
+          ".impeccable/review/report-progress/minimum-es.png",
+          ".impeccable/review/report-progress/wide-dark.png",
+          ".impeccable/review/report-progress/wide-es-comparison.png",
+          ".impeccable/review/report-progress/compact-es-comparison.png",
+          ".impeccable/review/report-progress/minimum-es-comparison.png",
+          ".impeccable/review/report-progress/wide-dark-comparison.png",
+          ".impeccable/review/report-progress/pdf-first-page.png"
+        ]
       }
     }
   },
@@ -575,6 +673,14 @@
       "description": "Short-window privacy decision with scrolling details, a visible reading cue, and anchored actions.",
       "html": "<section class=\"ds-consent\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"ds-consent-title\"><h2 id=\"ds-consent-title\">Before tracking starts</h2><div class=\"ds-consent-body\" tabindex=\"0\" role=\"region\" aria-label=\"Tracking and privacy details\"><p>FlowSight observes the active application while tracking is on.</p><ul><li>Screenshots are analyzed on this device and are never saved.</li><li>Only short activity summaries are kept locally.</li><li>Window titles are not stored by default.</li></ul></div><button class=\"ds-consent-cue\" type=\"button\">Read remaining details <svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"M12 5v14\"/><path d=\"m5 12 7 7 7-7\"/></svg></button><div class=\"ds-consent-actions\"><button class=\"ds-consent-cancel\" type=\"button\">Cancel</button><button class=\"ds-consent-accept\" type=\"button\">I understand — start</button></div></section>",
       "css": ".ds-consent{width:min(100%,470px);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;padding:24px;border:1px solid #e0eaec;border-radius:22px;background:#fff;color:#354458;box-shadow:0 20px 56px rgb(23 50 64 / .2);font-family:\"Plus Jakarta Sans\", sans-serif}.ds-consent h2{flex:none;margin:0 0 7px;color:#354458;font:800 20px/1.2 Manrope, sans-serif}.ds-consent-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:6px;scrollbar-color:#8bbfbd #ecf5f5}.ds-consent-body p,.ds-consent-body li{font-size:11px;line-height:1.6}.ds-consent-body p{margin:0 0 10px;color:#63788a}.ds-consent-body ul{margin:0;padding-left:18px;color:#485e70}.ds-consent-cue{flex:none;min-height:30px;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-top:5px;padding:3px 0;border:0;background:transparent;color:#087e77;font:800 10px/1.2 \"Plus Jakarta Sans\", sans-serif;cursor:pointer;text-align:left}.ds-consent-cue svg{width:15px;height:15px}.ds-consent-cue:hover{color:#04665f}.ds-consent-cue:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}.ds-consent-actions{flex:none;display:flex;gap:9px;margin-top:16px}.ds-consent-actions button{flex:1;min-height:42px;padding:9px 11px;border-radius:11px;font:700 11px/1.2 \"Plus Jakarta Sans\", sans-serif;cursor:pointer}.ds-consent-cancel{border:1px solid #d9e6e9;background:#f7fbfa;color:#2b5961}.ds-consent-accept{border:1px solid #17ada3;background:#1ab5aa;color:#fff}.ds-consent-cancel:hover{background:#e9f8f5}.ds-consent-accept:hover{background:#0a978d}.ds-consent-actions button:focus-visible{outline:3px solid rgb(0 184 169 / .38);outline-offset:2px;}@media(max-height:520px){.ds-consent{max-height:calc(100dvh - 20px);padding:17px}.ds-consent h2{font-size:18px}.ds-consent-actions{margin-top:10px}.ds-consent-actions button{min-height:38px}}@media(prefers-color-scheme:dark){.ds-consent{border-color:#2a414b;background:#1a2c36;color:#e5f0f1;box-shadow:0 10px 26px rgb(0 0 0 / .12)}.ds-consent h2{color:#e5f0f1}.ds-consent-body{scrollbar-color:#558d88 #25413e}.ds-consent-body p,.ds-consent-body ul{color:#d5e5e8}.ds-consent-cue{color:#8ce1d5}.ds-consent-cancel{border-color:#3c625f;background:#204341;color:#b2efe4}}"
+    },
+    {
+      "name": "Individual Report Focus Grade",
+      "kind": "custom",
+      "refersTo": "report-grade",
+      "description": "Scoped slate-header grade with a paired verdict/delta and whole-point segmented rail; this static example uses the same synthetic 6.9/10 data as the review captures.",
+      "html": "<section class=\"ds-report-grade-root\" aria-labelledby=\"ds-report-grade-title\"><h3 id=\"ds-report-grade-title\">Your focus this week</h3><div class=\"ds-report-grade-main\"><div class=\"ds-report-grade-number\" aria-label=\"Focus grade: 6.9 out of 10\"><strong>6.9</strong><span>/10</span></div><div class=\"ds-report-grade-reading\"><strong>A solid foundation</strong><span class=\"ds-report-grade-delta\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 22 22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 17 17 5M5 5h12v12\"/></svg>+1.6 <span>points</span></span><span>vs. last week</span></div></div><div class=\"ds-report-grade-scale\" aria-hidden=\"true\"><span class=\"ds-report-grade-filled\"></span><span class=\"ds-report-grade-filled\"></span><span class=\"ds-report-grade-filled\"></span><span class=\"ds-report-grade-filled\"></span><span class=\"ds-report-grade-filled\"></span><span class=\"ds-report-grade-filled\"></span><span></span><span></span><span></span><span></span></div><p class=\"ds-report-grade-note\">Both grades use the same method. Changes describe recorded patterns.</p></section>",
+      "css": ".ds-report-grade-root{padding:30px 36px 24px;background:#254451;color:#fff;font-family:\"Plus Jakarta Sans\",sans-serif}.ds-report-grade-root h3{margin:0 0 12px;font:750 16px/1.4 Manrope,sans-serif}.ds-report-grade-main{display:flex;align-items:center;gap:24px}.ds-report-grade-number{display:flex;align-items:baseline;gap:7px;flex:none;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums}.ds-report-grade-number strong{font-size:72px;font-weight:800;line-height:1.08;letter-spacing:-.035em;color:#fff}.ds-report-grade-number>span{font-size:20px;color:#d4e7e7}.ds-report-grade-reading{display:flex;flex-direction:column;gap:7px;min-width:0}.ds-report-grade-reading>strong{font:750 18px/1.35 Manrope,sans-serif;color:#fff}.ds-report-grade-reading>span:last-child{font-size:12px;line-height:1.5;color:#d4e7e7}.ds-report-grade-delta{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:750;font-variant-numeric:tabular-nums;color:#93eee0}.ds-report-grade-delta>span{font-size:12px;font-weight:500}.ds-report-grade-scale{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;max-width:380px;margin-top:18px}.ds-report-grade-scale span{height:5px;border-radius:2px;background:#58707b}.ds-report-grade-scale .ds-report-grade-filled{background:#6cdfd0}.ds-report-grade-note{margin:14px 0 0;color:#d4e7e7;font-size:12px;line-height:1.6;max-width:66ch}@media(max-width:600px){.ds-report-grade-main{gap:18px;flex-wrap:wrap}.ds-report-grade-number strong{font-size:60px}.ds-report-grade-reading{flex:1 1 130px}.ds-report-grade-reading>strong{font-size:16px}}@media(max-width:520px){.ds-report-grade-root{padding:25px 22px 21px}}"
     }
   ],
   "narrative": {
@@ -616,7 +722,7 @@
     ],
     "donts": [
       "Don't stretch the phone layout or its spacing directly into a wide desktop window.",
-      "Don't use teal on every card or turn observed activity into a score-like visual.",
+      "Don't use teal on every card or turn observed activity into a score-like visual. The explicitly labelled individual-report focus grade is the scoped exception described above; it must retain its method and recorded-pattern limits.",
       "Don't let the floating dock cover the last controls in a scrolled pane.",
       "Don't hide remaining consent details behind a fixed action row without a visible way to reach them."
     ]

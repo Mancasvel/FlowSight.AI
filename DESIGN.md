@@ -23,6 +23,9 @@ colors:
   bip-accent: "#167b6d"
   action-indigo: "#7a7cf1"
   action-teal: "#2cbdb4"
+  report-header: "#254451"
+  report-attention-light: "#935719"
+  report-attention-dark: "#ffd29c"
 typography:
   display:
     fontFamily: "Manrope, sans-serif"
@@ -56,6 +59,12 @@ typography:
     fontWeight: 800
     lineHeight: 1.2
     letterSpacing: "0.16em"
+  report-grade:
+    fontFamily: "Manrope, sans-serif"
+    fontSize: "72px"
+    fontWeight: 800
+    lineHeight: 1.08
+    letterSpacing: "-0.035em"
 rounded:
   timer: "27px"
   card: "20px"
@@ -133,6 +142,9 @@ components:
     textColor: "{colors.surface-light}"
     rounded: "{rounded.control}"
     padding: "8px 13px"
+  report-grade:
+    textColor: "{colors.surface-light}"
+    typography: "{typography.report-grade}"
 ---
 
 # Design System: FlowSight Desktop Renderer
@@ -166,10 +178,12 @@ The system is light first, with a complete deep-slate appearance for system dark
 - **Soft Teal** (teal-soft): selected navigation and other quiet active surfaces. **Dark Active Teal** (teal-active-dark) keeps that signal legible on the dark dock.
 - **Session Action Teal** (session-action / session-action-hover): solid affirmative controls in the session planner and onboarding footer. The scoped focus treatment uses Session Action Teal in light appearance and Dark Active Teal in dark appearance.
 - **Studio Teal** (bip-accent): text actions, selected checkboxes, active view underlines, status copy, and focus outlines inside Build in public. Dark appearance reuses Dark Active Teal. Headings and form labels use the actual theme foreground; supporting copy uses the muted foreground. Filled primary buttons retain the incumbent Signal Teal treatment.
+- **Report progress:** current-period rails and improvement evidence reuse Session Action Teal in light appearance and Dark Active Teal in dark appearance. The grade's filled segments use Dark Active Teal against the slate header.
 
 ### Secondary
 
 - **Tracking Gradient Ends** (action-indigo / action-teal): the outer colors of the three-stop gradient used by tracking and selected first-run controls. Its blue midpoint is part of that treatment, not a general accent.
+- **Report Attention** (report-attention-light / report-attention-dark): scoped to declines and the next-goal column. Prior-period comparison rails remain muted foreground at 45% opacity, so attention does not replace the previous/current identity.
 
 ### Neutral
 
@@ -177,6 +191,7 @@ The system is light first, with a complete deep-slate appearance for system dark
 - **Card Surface** (surface-light / surface-dark): grouped content, forms, navigation, and dialogs.
 - **Slate Reading Ink** (slate-ink-light / slate-ink-dark) and **Supporting Text** (muted-text-light / muted-text-dark): the main and secondary text pairs.
 - **Panel Border** (border-light / border-dark): quiet separation around layered surfaces.
+- **Report Header** (report-header): the individual report's solid slate ground in both appearances; the focus grade reads in white with pale supporting copy.
 
 **The Signal Rule.** Use teal to show state, progress, selection, or a real action. Concentrate the indigo-to-teal gradient on tracking and first-run decisions.
 
@@ -196,6 +211,7 @@ Manrope gives headings and measured time a strong, friendly shape. Plus Jakarta 
 - **Studio title** (750, 14px, 1.4): the useful subject at the start of Build in public idea, prompt, and proposal rows.
 - **Body** (13px, 1.5): standard reading and control text; secondary explanations commonly use 11–12px.
 - **Kicker** (800, 11px, 0.16em, uppercase): brief teal section cues such as Today and Your Space.
+- **Report grade** (800, 72px, 1.08): the individual report's tabular focus figure with a smaller /10 denominator (20px). The figure contracts to 60px at widths of 600px and below; its verdict uses Manrope (750, 18px, 1.35), reducing to 16px in that compact layout.
 
 **The Measurement Rule.** Keep numbers aligned with tabular numerals while preserving the same Manrope display voice as the rest of the interface.
 
@@ -220,6 +236,8 @@ Online keeps Leagues and Build in public in one in-place, two-choice tab strip. 
 Ideas leads with a compact two-column toolbar: the work period occupies the first column and Find ideas / More ideas occupies the second. The columns use a 9px gap and 38px minimum-height controls. Optional text direction sits in a disclosure below the toolbar. Open idea rows follow their count heading; retained earlier ideas and saved selections remain separate. A selected count and Prepare prompts action open a dedicated inline setup step in place of the list.
 
 At 700px and wider, the studio is capped at 760px and the optional portrait preview at 360px, within the containing Online layout. Idea rows use the available studio width. Setup keeps networks in divided groups; style and profile fields stack in compact windows and sit in two equal columns from 560px. Studio content uses 12px top and 40px bottom padding in addition to the shared pane's dock allowance. At heights of 550px or less, the top padding contracts to 8px and toolbar controls to a 34px minimum height. The shared shell and reading order carry through all four views.
+
+The individual report stays inside the existing scrollable preview, capped at 900px wide and a height of min(94vh, 1000px). Its header leads with the focus grade and paired verdict/delta; the progress section follows before the narrative overview. Above 600px, improvements and next goals use two equal open columns with a 28px gap, and the three comparison measures use equal columns with a 22px gap. Progress padding is 26px 36px 20px. At 600px and below, both groups become single columns, progress padding becomes 22px, and a fine rule with 20px top padding separates next goals from improvements. The grade/verdict row wraps instead of forcing horizontal overflow. At the 340 × 400px minimum window, the preview body scrolls to reveal the comparison and later content.
 
 ## Elevation & Depth
 
@@ -263,6 +281,22 @@ The five-control dock holds Online, Insights, Clock, Coach, and Settings as larg
 ### Timer and evidence
 
 The Today surface centers status and tabular time above a linear goal rail, goal and streak labels, and the tracking action. Insights uses a weekly day strip, a measured-time card, focus ratio rail, and task bars. Task bars have stable colors by activity category and fill according to their displayed share of tracked time. The hourly Deep Focus chart includes all recorded local hours and uses a fixed 60-minute scale. These visuals show observed time and focus without turning the screen into a score.
+
+### Individual report grade and progress
+
+The individual report leads with an explicitly labelled focus grade out of 10 in the incumbent slate header. A verdict, signed point delta, and named comparison window sit beside the figure when a valid baseline exists. A ten-segment rail reinforces the grade, filling only whole points; supporting copy identifies the local AI or rule-based origin and recorded-day coverage. This is a scoped report indicator of recorded focus patterns, not an assessment of work quality or a productivity score.
+
+The grade uses 70% sustained-focus share of eligible work plus 30% eligible time divided by eligible time plus detected distraction time, then rounds to one decimal place on the ten-point scale. More hours, meetings, collaboration, and calendar coverage do not earn points. Both periods use the same method. The calculation is available through a native disclosure below the comparison; its summary has a visible teal focus outline (2px with a 3px offset).
+
+What improved and Where to improve are open evidence lists rather than inset cards. Each contains at most two items. Clear improvements and declines use previous → current measurements. Sustained-focus share changes by at least one percentage point, distraction minutes per eligible focus hour by at least 0.5 min/h, and the longest block by at least five minutes before a row receives an improvement or decline direction. Higher sustained-focus share and longer blocks are favorable; fewer distraction minutes are favorable. Smaller changes remain steady.
+
+When no measured decline qualifies, a remaining goal can still appear: sustained-focus share below 60%, or otherwise distraction time above 5 min/h. Its evidence is explicitly labelled Current and its advice describes the next focus block. A remaining goal may therefore coexist with improvements in the same period. If neither target applies, the report suggests keeping the conditions that work. These current-level goals must retain their distinction from observed declines.
+
+The comparison repeats the previous and current grades, the prior date range, and three labelled measures: sustained focus, distraction minutes per focus hour, and longest focus block. Each measure uses paired thin rails (5px, 2px corners), previous muted and current teal, with right-aligned tabular values. The focus-share rail uses a fixed 100% scale; each other pair shares its own larger recorded value as the scale. An arrow or steady mark carries the favorable direction independently of the rail colors, including when a shorter distraction rail is an improvement. Text values and previous/current accessible labels accompany the color.
+
+Seven days is the default report period. Today compares the same weekday one week earlier; seven-day reports compare the preceding non-overlapping seven days; thirty-day reports compare the preceding non-overlapping thirty days. A baseline requires usable eligible-focus data in both periods and an exact matching prior start/end window. Without it, the report shows the current grade and available measures, explains that it is building a baseline, and omits the point delta, previous rails, and trend marks. With insufficient current focus data, it shows an em dash and a recording prompt, with no filled grade rail or unsupported specific advice.
+
+The PDF consumes the same progress model, including the grade, verdict, delta, improvement and next-goal evidence, comparison dates, missing-baseline states, method, and coverage. It uses a teal grade on paper and stacked text comparisons rather than reproducing the on-screen bar layout. Renderer examples are `.impeccable/review/report-progress/wide-es.png`, `compact-es.png`, `minimum-es.png`, `wide-dark.png`, and their `*-comparison.png` captures; `pdf-first-page.png` shows the PDF treatment. These are captures of the compiled renderer and export with synthetic local data, not evidence of native Tauri execution.
 
 ### Monitoring consent
 
@@ -310,6 +344,6 @@ An optional Instagram visual outline uses a programmatically drawn PNG canvas in
 ### Don't:
 
 - **Don't** stretch the phone layout or its spacing directly into a wide desktop window.
-- **Don't** use teal on every card or turn observed activity into a score-like visual.
+- **Don't** use teal on every card or turn observed activity into a score-like visual. The explicitly labelled individual-report focus grade is the scoped exception described above; it must retain its method and recorded-pattern limits.
 - **Don't** let the floating dock cover the last controls in a scrolled pane.
 - **Don't** hide remaining consent details behind a fixed action row without a visible way to reach them.

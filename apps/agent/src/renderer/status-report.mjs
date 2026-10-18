@@ -1,4 +1,5 @@
 import { t as tr, message as formatMessage, html, markup, setText, setAttributeText, getLocale, getLanguage, initializeLocalization, categoryLabel } from './i18n.mjs';
+import { createReportProgress } from './report-progress.mjs';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function cleanReportText(value) {
@@ -243,6 +244,7 @@ export function createStatusReportViewModel(payload, { userName = tr('Knowledge 
     focusSessions,
     activeDays,
     periodDays,
+    progress: createReportProgress(local, periodDays),
     empty: totalSeconds === 0,
     days,
     categories,
@@ -277,6 +279,50 @@ function reportList(items, emptyLabel) {
   return items.length
     ? html`<ul class="sr-plain-list">${items.map((item) => html`<li>${escapeHtml(item)}</li>`).join('')}</ul>`
     : html`<p class="sr-muted">${escapeHtml(emptyLabel)}</p>`;
+}
+
+function directionIcon(direction) {
+  const path = direction === 'up' ? 'M5 17 17 5M5 5h12v12' : direction === 'down' ? 'M5 5l12 12M5 17h12V5' : 'M4 11h14';
+  return `<svg width="16" height="16" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${path}"/></svg>`;
+}
+
+function renderReportGrade(progress) {
+  if (!progress) return '';
+  return html`<section class="sr-grade" aria-labelledby="srGradeTitle">
+    <h3 id="srGradeTitle">${escapeHtml(progress.title)}</h3>
+    <div class="sr-grade-main">
+      <div class="sr-grade-number" aria-label="${escapeHtml(formatMessage`Focus grade: ${progress.scoreLabel} out of 10`)}"><strong>${progress.scoreLabel}</strong><span>/10</span></div>
+      <div class="sr-grade-reading"><strong>${escapeHtml(progress.verdict)}</strong>
+        ${progress.comparable ? html`<span class="sr-grade-delta sr-trend-${progress.direction}">${directionIcon(progress.direction)} ${escapeHtml(progress.deltaLabel)} <span>points</span></span>` : ''}
+        <span>${escapeHtml(progress.comparable ? progress.comparisonLabel : progress.status)}</span>
+      </div>
+    </div>
+    ${progress.score !== null ? html`<div class="sr-grade-scale" aria-hidden="true">${Array.from({length:10},(_,i)=>`<span class="${progress.score >= i + 1 ? 'is-filled' : ''}"></span>`).join('')}</div>` : ''}
+    <p class="sr-grade-note">${escapeHtml(progress.note)}</p>
+  </section>`;
+}
+
+function renderReportProgress(progress) {
+  if (!progress) return '';
+  const insightList = (items, empty) => items.length ? html`<ul class="sr-progress-insights">${items.map((item) => html`<li><strong>${escapeHtml(item.title)}</strong>${item.evidence ? html`<span class="sr-progress-evidence">${escapeHtml(item.evidence)}</span>` : ''}${item.body ? html`<p>${escapeHtml(item.body)}</p>` : ''}</li>`).join('')}</ul>` : html`<p class="sr-progress-empty">${escapeHtml(empty)}</p>`;
+  const rows = progress.rows.map((row) => {
+    const max = row.key === 'focus' ? 100 : Math.max(1, row.current, progress.comparable ? row.previous || 0 : 0);
+    const width = (value) => Math.min(100, Math.max(0, value / max * 100));
+    return html`<div class="sr-progress-measure"><div class="sr-progress-measure-title"><strong>${escapeHtml(row.label)}</strong>${progress.comparable ? html`<span class="sr-trend-${row.tone}">${directionIcon(row.tone)}</span>` : ''}</div>
+      ${progress.comparable && row.previous !== null ? html`<div class="sr-comparison-bar sr-comparison-previous" aria-label="${escapeHtml(formatMessage`Previous: ${row.previousLabel}`)}"><span style="width:${width(row.previous)}%"></span><b>${escapeHtml(row.previousLabel)}</b></div>` : ''}
+      <div class="sr-comparison-bar sr-comparison-current" aria-label="${escapeHtml(formatMessage`Current: ${row.currentLabel}`)}"><span style="width:${width(row.current)}%"></span><b>${escapeHtml(row.currentLabel)}</b></div>
+    </div>`;
+  }).join('');
+  return html`<section class="sr-progress" aria-label="Your progress">
+    <div class="sr-progress-columns">
+      <div class="sr-progress-improved"><h3>${directionIcon('up')} What improved</h3>${insightList(progress.improvements, progress.improvementEmpty)}</div>
+      <div class="sr-progress-next"><h3>${directionIcon('steady')} Where to improve</h3>${insightList(progress.opportunities, progress.opportunityEmpty)}</div>
+    </div>
+    ${rows ? html`<div class="sr-progress-comparison"><div class="sr-progress-comparison-heading"><h3>${escapeHtml(progress.comparable ? tr('The comparison behind your grade') : tr('Your current focus measures'))}</h3>
+      ${progress.comparable ? html`<p>Previous <strong>${escapeHtml(progress.previousScoreLabel)}/10</strong> <span aria-hidden="true">→</span> Current <strong>${escapeHtml(progress.scoreLabel)}/10</strong></p><p class="sr-progress-period">${escapeHtml(progress.previousPeriod)} ${escapeHtml(progress.comparisonLabel)}</p>` : ''}</div>
+      <div class="sr-comparison-legend" aria-hidden="true">${progress.comparable ? html`<span class="sr-legend-previous">Previous</span>` : ''}<span class="sr-legend-current">Current</span></div><div class="sr-progress-measures">${rows}</div></div>` : ''}
+    <details class="sr-grade-method"><summary>How is this grade calculated?</summary><p>${escapeHtml(progress.method)}</p></details>
+  </section>`;
 }
 
 export function renderStatusReportHtml(model) {
@@ -326,10 +372,13 @@ export function renderStatusReportHtml(model) {
     <article class="status-report sr-review">
       <header class="sr-review-hero">
         <div class="sr-review-heading"><div><h2>${escapeHtml(model.title)}</h2><p>${escapeHtml(model.period)}</p></div>
-          <span class="sr-signal-chip sr-signal-${model.statusTone}">${escapeHtml(model.status)}</span></div>
+          </div>
         <p class="sr-review-meta">${escapeHtml(model.userName)} <span aria-hidden="true">·</span> ${escapeHtml(formatMessage`Generated ${model.generatedAt}`)}</p>
+        ${renderReportGrade(model.progress)}
         <p class="sr-origin">${escapeHtml(model.aiPowered ? tr('Local AI report') : tr('Rule-based report'))} · ${escapeHtml(formatMessage`${model.activeDays} of ${model.periodDays} days with activity`)}. ${escapeHtml(tr('This covers recorded activity, not your whole working day.'))}</p>
       </header>
+
+      ${renderReportProgress(model.progress)}
 
       <section class="sr-overview" aria-label="Review summary">
         <p>${escapeHtml(model.summary)}</p>

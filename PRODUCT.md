@@ -14,7 +14,7 @@ Individuals doing knowledge work, especially developers, who want to understand 
 
 ## Product Purpose
 
-FlowSight records and interprets local work activity so a person can review time, sustained focus, interruptions, and work context, then decide what to change. A useful result is an evidence-grounded review, not a productivity score.
+FlowSight records and interprets local work activity so a person can review time, sustained focus, interruptions, and work context, then decide what to change. Individual reports lead with a focus grade out of 10, comparison with the preceding week, observed improvements, and practical next steps. The grade describes recorded focus patterns rather than verified work quality or productivity.
 
 ## Positioning
 

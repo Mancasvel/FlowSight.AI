@@ -1,4 +1,4 @@
-import { setLanguagePreference } from './i18n.mjs';
+import { setLanguagePreference, t } from './i18n.mjs';
 setLanguagePreference('en',{persist:false});
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,6 +20,29 @@ test('Spanish screen and PDF use the paired narrative while preserving user name
 });
 
 // Synthetic activity only: these numbers are fixtures, not a customer report.
+test('focus grade, prior grade and improvements lead the screen and PDF and use identical Spanish values', () => {
+  const payload = syntheticReport();
+  Object.assign(payload.local_data, { focus_eligible_seconds: 18000, distraction_seconds: 1800, focus_semantics: { longest_focus_seconds: 2700 },
+    prior_period: { period_start: '2026-09-14', period_end: '2026-09-20', total_seconds: 36000, focus_eligible_seconds: 18000, deep_focus_seconds: 7200, distraction_seconds: 3600, longest_focus_seconds: 1800 } });
+  setLanguagePreference('es', { persist: false });
+  try {
+    const model = createStatusReportViewModel(payload);
+    const output = renderStatusReportHtml(model);
+    assert.ok(output.indexOf('sr-grade-number') < output.indexOf('sr-overview'));
+    assert.match(output, /6,9/); assert.match(output, /5,3/); assert.match(output, /\+1,6/);
+    assert.match(output, /En qué has mejorado/); assert.match(output, /En qué puedes mejorar/);
+    assert.doesNotMatch(output, />Previous</);
+    const doc = new jsPDF(), drawn = []; const original = doc.text.bind(doc);
+    doc.text = (value, ...args) => { drawn.push(String(value)); return original(value, ...args); };
+    renderStatusReportPdf(doc, model);
+    assert.ok(drawn.some(value => value.includes('6,9/10')));
+    assert.ok(drawn.some(value => value.includes('5,3/10')));
+    assert.ok(drawn.some(value => value.includes('+1,6')));
+    assert.ok(drawn.indexOf('En qué has mejorado') < drawn.indexOf(t('What to do next')));
+    assert.ok(drawn.some(value => value.includes('Más tiempo en foco sostenido')));
+  } finally { setLanguagePreference('en', { persist: false }); }
+});
+
 function syntheticReport() {
   return {
     generated_at: '2026-09-27 12:00',
