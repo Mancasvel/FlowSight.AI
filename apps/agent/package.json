@@ -1,6 +1,6 @@
 {
   "name": "@flowsight/agent",
-  "version": "6.4.0",
+  "version": "6.4.1",
   "private": true,
   "description": "FlowSight Agent — Understand your own Workflows",
   "scripts": {
@@ -26,6 +26,6 @@
   "devDependencies": {
     "@tauri-apps/cli": "2.11.2",
     "dotenv": "^17.4.2",
-    "vite": "^7.3.6"
+    "vite": "^7.3.7"
   }
 }
