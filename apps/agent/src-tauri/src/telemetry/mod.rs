@@ -9,7 +9,9 @@
 //!   - `aggregator`: at the configured interval, (a) a pure-text review of UIA/foreground
 //!     events accumulated in the ring buffer during that interval (if any), and
 //!     (b) a screenshot + local vision pass (`agent::capture_and_analyze_screen`,
-//!     save -> analyze -> delete). Each becomes its own `reports` row.
+//!     held in memory only). Each becomes its own `reports` row. Periodic
+//!     frames also feed the in-memory task-progress comparator; only aggregate
+//!     change/stability evidence is saved, separately from the task category.
 //!   - `action_capture`: fired immediately (debounced ~15s) whenever `uia`
 //!     detects a significant action (a window opening/closing), pairing a
 //!     transient screenshot (`agent::capture_and_analyze_action`) with the
@@ -19,6 +21,7 @@
 //! any idle/last-input polling (`GetLastInputInfo`), or any inference of
 //! "away from keyboard". The local model may still *output* an Idle category
 //! from what it sees on screen; we simply never feed idle/keyboard signals in.
+//! Static content beyond 20 minutes is possible stagnation, not an Idle label.
 
 mod action_capture;
 mod aggregator;

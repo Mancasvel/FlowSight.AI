@@ -115,6 +115,8 @@ struct ExportReport {
     window_title: Option<String>,
     capture_source: Option<String>,
     theme_hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progress_observation: Option<crate::task_progress::ProgressObservation>,
 }
 
 #[derive(Debug, Serialize)]
@@ -457,11 +459,12 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
     let db_path = crate::paths::db_path()?;
     let conn = Connection::open(&db_path).map_err(|error| error.to_string())?;
     ensure_schema(&conn)?;
+    crate::task_progress::ensure_schema(&conn).map_err(|error| error.to_string())?;
     let mut stmt = conn
         .prepare(
             "SELECT id, COALESCE(description,''), COALESCE(activity_type,''), COALESCE(synced,0),
                     COALESCE(created_at,''), jira_ticket_id, COALESCE(duration_seconds,0),
-                    active_app, window_title, capture_source, theme_hint
+                    active_app, window_title, capture_source, theme_hint, progress_observation
              FROM reports ORDER BY datetime(created_at) ASC, id ASC",
         )
         .map_err(|error| error.to_string())?;
@@ -479,6 +482,9 @@ pub fn export_personal_data(include_cloud: bool) -> Result<String, String> {
                 window_title: row.get(8)?,
                 capture_source: row.get(9)?,
                 theme_hint: row.get(10)?,
+                progress_observation: row
+                    .get::<_, Option<String>>(11)?
+                    .and_then(|raw| serde_json::from_str(&raw).ok()),
             })
         })
         .map_err(|error| error.to_string())?

@@ -43,6 +43,7 @@ pub fn spawn(
 ) {
     thread::spawn(move || {
         let mut last_snapshot_started: Option<std::time::Instant> = None;
+        let mut progress_tracker = crate::task_progress::ProgressTracker::default();
         loop {
             let interval_ms = capture_interval_ms
                 .load(Ordering::Relaxed)
@@ -54,6 +55,7 @@ pub fn spawn(
                 // next cycle rather than letting the buffer grow unbounded.
                 ring.lock().unwrap().clear();
                 last_snapshot_started = None;
+                progress_tracker.reset();
                 continue;
             }
 
@@ -61,6 +63,7 @@ pub fn spawn(
             if crate::privacy::application_is_excluded(&db_path, foreground.app_name.as_deref()) {
                 ring.lock().unwrap().clear();
                 last_snapshot_started = Some(std::time::Instant::now());
+                progress_tracker.reset();
                 continue;
             }
 
@@ -82,6 +85,20 @@ pub fn spawn(
                 .or_else(|| user_task.clone())
                 .filter(|theme| !theme.trim().is_empty() && !theme.eq_ignore_ascii_case("general"));
 
+            // A document/app switch observed between sampled frames breaks a
+            // continuous static interval, even when the next frame looks alike.
+            // Mere UI control focus events are not evidence of task progression.
+            if events.iter().any(|event| {
+                matches!(
+                    event,
+                    ActionEvent::ForegroundChanged { .. }
+                        | ActionEvent::UiaWindowOpened { .. }
+                        | ActionEvent::UiaWindowClosed { .. }
+                )
+            }) {
+                progress_tracker.reset();
+            }
+
             // (a) Text review of accumulated UIA/foreground actions, if any.
             // Skip empty intervals rather than inventing an idle/no-activity signal.
             if !events.is_empty() {
@@ -96,6 +113,7 @@ pub fn spawn(
                     ACTION_REVIEW_DURATION_SECS,
                     "action_review",
                     theme_hint.clone(),
+                    None,
                     None,
                     None,
                 );
@@ -116,19 +134,55 @@ pub fn spawn(
             );
             last_snapshot_started = Some(capture_started);
             match crate::agent::capture_and_analyze_screen(&db_path, &task_label) {
-                Ok(capture) => persist_and_emit(
-                    &app_handle,
-                    &db_path,
-                    &capture.description,
-                    &capture.category,
-                    jira_ticket,
-                    observed_seconds,
-                    "periodic_vision",
-                    theme_hint,
-                    Some(capture.window),
-                    Some(capture.observed_at_utc),
-                ),
-                Err(e) => log::warn!("[Telemetry] Periodic vision snapshot failed: {e}"),
+                Ok(capture) => {
+                    // A stop/resume or privacy exclusion during inference must
+                    // not extend a static streak or save a late observation.
+                    if !running.load(Ordering::Relaxed)
+                        || *monitoring_started.lock().unwrap() != run_started
+                        || crate::privacy::application_is_excluded(
+                            &db_path,
+                            capture.window.app_name.as_deref(),
+                        )
+                    {
+                        progress_tracker.reset();
+                        continue;
+                    }
+                    let progress = progress_tracker.observe(
+                        capture_started,
+                        run_started,
+                        // A normal local inference can take longer than a 5s
+                        // configured capture interval. Allow that cadence without
+                        // treating every frame as a monitoring interruption.
+                        Duration::from_secs((interval_ms / 1_000).saturating_mul(2).max(120)),
+                        &[
+                            capture.window.app_name.as_deref(),
+                            capture.window.window_title.as_deref(),
+                            user_task.as_deref(),
+                            jira_ticket.as_deref(),
+                            capture.progress_owner_id.as_deref(),
+                        ],
+                        capture.fingerprint,
+                        capture.engagement,
+                        observed_seconds,
+                    );
+                    persist_and_emit(
+                        &app_handle,
+                        &db_path,
+                        &capture.description,
+                        &capture.category,
+                        jira_ticket,
+                        observed_seconds,
+                        "periodic_vision",
+                        theme_hint,
+                        Some(capture.window),
+                        Some(capture.observed_at_utc),
+                        Some(&progress),
+                    );
+                }
+                Err(e) => {
+                    progress_tracker.reset();
+                    log::warn!("[Telemetry] Periodic vision snapshot failed: {e}");
+                }
             }
         }
     });
@@ -163,6 +217,7 @@ fn persist_and_emit(
     theme_hint: Option<String>,
     captured_context: Option<crate::agent::CapturedWindowContext>,
     observed_at_utc: Option<String>,
+    progress: Option<&crate::task_progress::ProgressObservation>,
 ) {
     let category = crate::agent_pure::resolve_persisted_category(category);
     let alert_context = captured_context.clone();
@@ -176,6 +231,7 @@ fn persist_and_emit(
         theme_hint,
         captured_context,
         observed_at_utc,
+        progress,
     ) {
         Some(id) => {
             crate::focus_alerts::review_browsing_report(
@@ -195,6 +251,7 @@ fn persist_and_emit(
                     "description": description,
                     "category": category,
                     "jiraTicket": jira_ticket,
+                    "progress": progress,
                 }),
             );
         }
