@@ -127,6 +127,7 @@ impl ActionCaptureTrigger {
             theme_hint,
             Some(capture.window),
             Some(capture.observed_at_utc),
+            None,
         ) {
             Some(id) => {
                 let _ = self.app_handle.emit(

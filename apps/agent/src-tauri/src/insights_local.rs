@@ -210,6 +210,7 @@ fn build_local_insights_report_inner(
     let mut all_samples: Vec<ActivitySample> = Vec::with_capacity(rows.len());
 
     let canonical_focus = crate::focus_semantics::summarize_from_db(&conn, &start_str, &end_str)?;
+    let task_progress = crate::task_progress::summarize_from_db(&conn, &start_str, &end_str)?;
 
     for row in &rows {
         total_seconds = total_seconds.saturating_add(row.duration_seconds);
@@ -441,6 +442,7 @@ fn build_local_insights_report_inner(
             "avg_session_minutes": avg_session_minutes,
             "deep_focus_sessions": deep_focus_sessions,
             "focus_semantics": canonical_focus,
+            "task_progress": task_progress,
             "unsynced_reports": unsynced_count,
             "peak_day": peak_day,
             "quiet_day": quiet_day,
@@ -1090,7 +1092,7 @@ Return JSON: {\"potential_risks\":[\"specific risk with evidence\"]}",
         &mut passes,
     );
 
-    let progress = llm_section(
+    let mut progress = llm_section(
         app,
         7,
         "progress_tasks",
@@ -1107,6 +1109,8 @@ Return JSON: {\"work_progress\":[\"daily or thematic highlight with date/hours\"
         }),
         &mut passes,
     );
+
+    preserve_task_progress(&mut progress, local_data);
 
     let lessons = llm_section(
         app,
@@ -1209,6 +1213,13 @@ fn build_section_stats_snapshot(
             append_top_tickets(&mut lines, local_data, 5);
         }
         "progress_tasks" => {
+            if local_data["task_progress"]["observed_seconds"]
+                .as_u64()
+                .unwrap_or(0)
+                > 0
+            {
+                lines.push(format!("OBSERVABLE_SCREEN_PROGRESS (not task completion, no input/absence inference, no automatic grade penalty): {}", local_data["task_progress"]));
+            }
             append_daily_detail(&mut lines, local_data);
             append_activity_samples(&mut lines, local_data, 10, 80);
             append_top_tickets(&mut lines, local_data, 8);
@@ -2251,7 +2262,7 @@ fn build_work_progress_for(
     local_data: &serde_json::Value,
     language: ReportLanguage,
 ) -> Vec<String> {
-    let mut progress = Vec::new();
+    let mut progress = build_task_progress_for(local_data, language);
 
     if let Some(days) = local_data["day_category_breakdown"].as_array() {
         for index in temporal_coverage_indices(days.len(), 7) {
@@ -2315,6 +2326,78 @@ fn build_work_progress_for(
     }
 
     progress
+}
+
+fn build_task_progress_for(
+    local_data: &serde_json::Value,
+    language: ReportLanguage,
+) -> Vec<String> {
+    let mut progress = Vec::new();
+    let evidence = &local_data["task_progress"];
+    if evidence["observed_seconds"].as_u64().unwrap_or(0) > 0 {
+        progress.push(report_format!(
+            language,
+            "Observable progression: {} meaningful screen changes. Screen changes do not confirm completed tasks.",
+            "Progresión observable: {} cambios relevantes en pantalla. Los cambios no confirman tareas terminadas.",
+            evidence["visible_change_observations"].as_u64().unwrap_or(0)
+        ));
+        let longest = evidence["longest_unchanged_seconds"].as_u64().unwrap_or(0);
+        if longest > crate::task_progress::STAGNATION_THRESHOLD_SECONDS {
+            progress.push(report_format!(
+                language,
+                "Longest interval without observable changes: {:.1} min. The following durations count only time beyond the 20-minute threshold.",
+                "Tramo más largo sin cambios observables: {:.1} min. Los tiempos siguientes cuentan solo lo que supera el umbral de 20 minutos.",
+                longest as f64 / 60.0
+            ));
+        }
+        for (key, en, es) in [
+            (
+                "possible_stagnation_seconds",
+                "Possible stagnation",
+                "Posible estancamiento",
+            ),
+            (
+                "passive_unchanged_seconds",
+                "No observable changes (possible reading, live meeting or playback)",
+                "Sin cambios observables (posible lectura, reunión en curso o reproducción)",
+            ),
+            (
+                "uncertain_unchanged_seconds",
+                "No observable changes (uncertain activity)",
+                "Sin cambios observables (actividad incierta)",
+            ),
+        ] {
+            let seconds = evidence[key].as_u64().unwrap_or(0);
+            if seconds > 0 {
+                progress.push(report_format!(
+                    language,
+                    "{}: {:.1} min without meaningful screen changes after 20 continuous minutes. No absence or lack of input is inferred.",
+                    "{}: {:.1} min sin cambios relevantes en pantalla tras 20 minutos continuos. No se infiere ausencia ni falta de inputs.",
+                    language.text(en, es), seconds as f64 / 60.0
+                ));
+            }
+        }
+    }
+
+    progress
+}
+
+fn preserve_task_progress(section: &mut serde_json::Value, local_data: &serde_json::Value) {
+    // Evidence and its uncertainty must survive optional model ranking.
+    let pinned = build_task_progress_for(local_data, ReportLanguage::English);
+    if pinned.is_empty() {
+        return;
+    }
+    let mut items: Vec<serde_json::Value> =
+        pinned.into_iter().map(serde_json::Value::String).collect();
+    if let Some(selected) = section["work_progress"].as_array() {
+        for item in selected {
+            if !items.contains(item) {
+                items.push(item.clone());
+            }
+        }
+    }
+    section["work_progress"] = serde_json::Value::Array(items);
 }
 
 fn build_lessons_learned_for(
@@ -3546,5 +3629,47 @@ mod tests {
         ] {
             assert!(apply_grounded_selection(&fallback, &invalid).is_none());
         }
+    }
+
+    #[test]
+    fn observable_progress_and_passive_uncertainty_survive_selection_and_localization() {
+        let data = serde_json::json!({
+            "total_seconds": 3600, "total_hours": 1.0,
+            "task_progress": {
+                "observed_seconds": 1800, "visible_change_observations": 7,
+                "longest_unchanged_seconds": 1260, "possible_stagnation_seconds": 60,
+                "passive_unchanged_seconds": 120, "uncertain_unchanged_seconds": 180
+            },
+            "daily_totals": [{"date":"2026-10-22", "total_seconds":3600, "activity_count":30}]
+        });
+        let all = build_rule_based_report(&data);
+        let mut selected = serde_json::json!({"work_progress":[all["work_progress"].as_array().unwrap().last().unwrap()]});
+        preserve_task_progress(&mut selected, &data);
+        preserve_task_progress(&mut selected, &data);
+        assert_eq!(selected["work_progress"].as_array().unwrap().len(), 6);
+        let bilingual = build_localized_report(&selected, &data);
+        let es = bilingual["es"]["work_progress"].as_array().unwrap();
+        assert!(es[0].as_str().unwrap().contains("7 cambios"));
+        assert!(es[1].as_str().unwrap().contains("21.0 min"));
+        assert!(es[2].as_str().unwrap().contains("1.0 min"));
+        assert!(es[3]
+            .as_str()
+            .unwrap()
+            .contains("Sin cambios observables (posible lectura"));
+        assert!(es[3].as_str().unwrap().contains("2.0 min"));
+        assert!(es[4].as_str().unwrap().contains("actividad incierta"));
+        assert!(es[4].as_str().unwrap().contains("3.0 min"));
+        let stats = build_section_stats_snapshot("progress_tasks", &data, "");
+        assert!(stats.contains("OBSERVABLE_SCREEN_PROGRESS"));
+    }
+
+    #[test]
+    fn legacy_reports_do_not_invent_observable_progress() {
+        let data = serde_json::json!({"daily_totals":[{"date":"2026-10-22", "total_seconds":1200, "activity_count":20}]});
+        assert!(build_task_progress_for(&data, ReportLanguage::Spanish).is_empty());
+        let mut section = serde_json::json!({"work_progress":["Known highlight"]});
+        let before = section.clone();
+        preserve_task_progress(&mut section, &data);
+        assert_eq!(section, before);
     }
 }

@@ -134,6 +134,9 @@ impl FlowSightAgent {
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN window_title TEXT", []);
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN capture_source TEXT", []);
                 let _ = conn.execute("ALTER TABLE reports ADD COLUMN theme_hint TEXT", []);
+                if let Err(error) = crate::task_progress::ensure_schema(&conn) {
+                    log::error!("[TaskProgress] SQLite progress schema failed: {error}");
+                }
                 if let Err(error) = conn.execute_batch(crate::sync_pure::PENDING_REPORT_INDEX_SQL) {
                     log::warn!("[Agent] Could not index pending reports: {error}");
                 }
@@ -229,7 +232,16 @@ impl FlowSightAgent {
 // Capture and analyze screen
 // (Logic moved to Frontend for cross-platform support)
 
-fn capture_screen(db_path: &Path) -> Result<(String, crate::context::SystemContext), String> {
+fn capture_screen(
+    db_path: &Path,
+) -> Result<
+    (
+        String,
+        crate::context::SystemContext,
+        crate::task_progress::VisualFingerprint,
+    ),
+    String,
+> {
     use screenshots::Screen;
 
     let active = active_win_pos_rs::get_active_window().map_err(|_| {
@@ -280,6 +292,7 @@ fn capture_screen(db_path: &Path) -> Result<(String, crate::context::SystemConte
     );
 
     let img = img.resize(960, 540, image::imageops::FilterType::Lanczos3);
+    let fingerprint = crate::task_progress::VisualFingerprint::from_image(&img);
 
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
@@ -296,7 +309,7 @@ fn capture_screen(db_path: &Path) -> Result<(String, crate::context::SystemConte
         file_name,
         file_path: None,
     };
-    Ok((BASE64.encode(&png), context))
+    Ok((BASE64.encode(&png), context, fingerprint))
 }
 
 // ============== TAURI COMMANDS ==============
@@ -1546,6 +1559,7 @@ VISIBLE CONTENT: [1–2 short sentences: the main artifact on screen and what it
 ARTIFACT TYPE: [generic type only, such as report, spreadsheet, design, source file, or research article; never copy a file name, path, URL, person, customer, or account name]
 CURRENT ACTION: [what the user appears to be doing right now, one sentence]
 PROGRESS: [errors, warnings, build/test status if any, or None visible]
+ENGAGEMENT: [exactly one: work, reading, live meeting, playing media, waiting, unknown. Use visible content, not input activity or the application name. A call lobby or ended call is not a live meeting. A static document may be reading; this is a possible context, not proof of attention. Use waiting for a loading/stalled work surface. Never claim task completion or temporal progress from this single frame]
 NEXT STEP: [one short sentence: likely next action]
 CATEGORY: [pick exactly ONE from: {}]
 
@@ -1687,6 +1701,7 @@ pub(crate) fn insert_report(
     theme_hint: Option<String>,
     captured_context: Option<CapturedWindowContext>,
     observed_at_utc: Option<String>,
+    progress: Option<&crate::task_progress::ProgressObservation>,
 ) -> Option<i64> {
     let activity_type = resolve_persisted_category(activity_type);
     let jira_ticket = canonical_ticket_value(jira_ticket.as_deref());
@@ -1696,9 +1711,10 @@ pub(crate) fn insert_report(
     if !crate::privacy::store_window_titles(db_path) {
         system.window_title = None;
     }
+    let progress_json = progress.and_then(|value| serde_json::to_string(value).ok());
     conn.execute(
-        "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds, active_app, window_title, capture_source, theme_hint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))",
-        params![description, activity_type, jira_ticket, duration_seconds, system.app_name, system.window_title, capture_source, theme_hint, observed_at_utc],
+        "INSERT INTO reports (description, activity_type, jira_ticket_id, duration_seconds, active_app, window_title, capture_source, theme_hint, created_at, progress_observation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)",
+        params![description, activity_type, jira_ticket, duration_seconds, system.app_name, system.window_title, capture_source, theme_hint, observed_at_utc, progress_json],
     )
     .ok()?;
     let report_id = conn.last_insert_rowid();
@@ -1733,6 +1749,9 @@ pub(crate) struct AnalyzedCapture {
     pub window: CapturedWindowContext,
     /// UTC wall-clock timestamp taken with the frame, before local inference.
     pub observed_at_utc: String,
+    pub fingerprint: crate::task_progress::VisualFingerprint,
+    pub engagement: crate::task_progress::Engagement,
+    pub progress_owner_id: Option<String>,
 }
 
 /// Configured-interval screenshot + local vision analysis, driven by
@@ -1744,7 +1763,12 @@ pub(crate) fn capture_and_analyze_screen(
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let league_user_id = crate::online_leagues::capture_owner(db_path);
-    let (capture, sys) = capture_screen(db_path)?;
+    // Scope comparison to the local signed-in account even when leagues are off.
+    let progress_owner_id = Connection::open(db_path)
+        .ok()
+        .and_then(|conn| crate::sync::get_user_session_from_conn(&conn))
+        .map(|session| session.user_id);
+    let (capture, sys, fingerprint) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_image_with_vision(&capture, task_context, None).unwrap_or_else(|e| {
             log::warn!("[Telemetry][VisionSnapshot] vision analysis failed: {e}");
@@ -1757,6 +1781,9 @@ pub(crate) fn capture_and_analyze_screen(
         sys.window_title.as_deref(),
     );
     Ok(AnalyzedCapture {
+        fingerprint,
+        engagement: crate::task_progress::Engagement::from_analysis(&raw_analysis),
+        progress_owner_id,
         description,
         category,
         window: CapturedWindowContext {
@@ -1780,7 +1807,7 @@ pub(crate) fn capture_and_analyze_action(
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let league_user_id = crate::online_leagues::capture_owner(db_path);
-    let (capture, sys) = capture_screen(db_path)?;
+    let (capture, sys, fingerprint) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_action_screenshot_with_vision(&capture, task_context, action_context)
             .unwrap_or_else(|e| {
@@ -1794,6 +1821,9 @@ pub(crate) fn capture_and_analyze_action(
         sys.window_title.as_deref(),
     );
     Ok(AnalyzedCapture {
+        fingerprint,
+        engagement: crate::task_progress::Engagement::Unknown,
+        progress_owner_id: None,
         description,
         category,
         window: CapturedWindowContext {
@@ -2015,6 +2045,7 @@ mod agent_struct_tests {
             );",
         )
         .unwrap();
+        crate::task_progress::ensure_schema(&conn).unwrap();
         drop(conn);
 
         insert_report(
@@ -2031,10 +2062,28 @@ mod agent_struct_tests {
                 league_user_id: None,
             }),
             Some("2026-08-22 07:30:00".into()),
+            Some(&crate::task_progress::ProgressObservation {
+                state: crate::task_progress::ProgressState::PassiveContext,
+                observed_seconds: 42,
+                unchanged_seconds: 1260,
+                over_threshold_seconds: 42,
+            }),
         )
         .unwrap();
 
         let conn = Connection::open(&db_path).unwrap();
+        let evidence_json: String = conn
+            .query_row("SELECT progress_observation FROM reports", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let evidence: crate::task_progress::ProgressObservation =
+            serde_json::from_str(&evidence_json).unwrap();
+        assert_eq!(
+            evidence.state,
+            crate::task_progress::ProgressState::PassiveContext
+        );
+        assert_eq!(evidence.observed_seconds, 42);
         let saved: (String, String, String, Option<String>) = conn
             .query_row(
                 "SELECT active_app, window_title, created_at, jira_ticket_id FROM reports",

@@ -38,6 +38,7 @@ mod secure_config;
 mod sync;
 mod sync_env;
 mod sync_pure;
+mod task_progress;
 mod telemetry;
 mod tracking_clock;
 mod user_preferences;
