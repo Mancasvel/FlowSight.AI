@@ -4685,13 +4685,21 @@
       if (usageProfileSaving) return;
       const choice = profileChoice(currentUsageProfile, id, selectedTeamId);
       if (!choice) return;
-      if (choice.mode === 'local' || (id === currentUsageProfile.id && choice.teamId === currentUsageProfile.team_id)) return;
+      if (choice.mode === 'local' || (id === currentUsageProfile.id && choice.teamId === currentUsageProfile.team_id)) {
+        rememberUsageChoice(id === 'individual' ? 'individual' : 'team');
+        if (!userPreferences?.onboardingCompleted) {
+          if (id === 'individual') showOnboardingWizard(false);
+          else if (currentUsageProfile.verified) showTeamSetup();
+        }
+        return;
+      }
       usageProfileSaving = true;
       applyUsageProfile();
       setText(document.getElementById('usageProfileStatus'), () => tr('Changing profile…'));
       try {
         await pauseBeforeProfileChange();
         currentEntitlements = await invoke('set_usage_profile', choice);
+        rememberUsageChoice(id === 'individual' ? 'individual' : 'team');
         await loadPrivacySettings();
         updatePlanBadge(); updateTimerDisplay(); renderTrackingStatus();
         setText(document.getElementById('usageProfileStatus'), () => tr('Profile changed. Recording is stopped; optional sharing is off.'));
@@ -7911,7 +7919,17 @@
       let choice = null;
       try { choice = localStorage.getItem('flowsight_usage_onboarding_choice'); } catch { /* Optional local preference. */ }
       if (!choice && !usageChoiceShown) { showUsageChoice(); return true; }
-      if (choice === 'team' && !authSession) { showCloudActivationPanel('team'); return true; }
+      if (choice === 'team') {
+        if (!authSession) { showCloudActivationPanel('team'); return true; }
+        // A confirmed free account has an Individual server preset until its
+        // invitation resolves. Keep the Team setup path open instead of placing
+        // the personal wizard over the invitation controls.
+        hideOnboardingWizard();
+        switchTab('tabProfile');
+        document.getElementById('usageJoinTeam').open = true;
+        document.getElementById('teamCodeInput').focus({ preventScroll: true });
+        return false;
+      }
       showOnboardingWizard(false);
       return true;
     }

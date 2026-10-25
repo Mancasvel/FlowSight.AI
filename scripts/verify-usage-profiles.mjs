@@ -14,7 +14,7 @@ const browser = await chromium.launch({ headless: true });
 const results = [];
 const scenario = name => !process.env.FLOWSIGHT_USAGE_SCENARIO || process.env.FLOWSIGHT_USAGE_SCENARIO === name;
 
-async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed = true, signedIn = true, licensed = true, solo = false, stale = false, pomodoro = false, dark = false, holdBoot = false } = {}) {
+async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed = true, signedIn = true, licensed = true, usageChoice = null, solo = false, stale = false, pomodoro = false, dark = false, holdBoot = false } = {}) {
   const page = await browser.newPage({ locale, timezoneId: 'Europe/Madrid', colorScheme: dark ? 'dark' : 'light', viewport: { width: 370, height: 700 }, reducedMotion: 'reduce' });
   await page.clock.install({ time: new Date('2026-10-01T17:00:00+02:00') });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -29,8 +29,9 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
       available_profiles: ['team_employee', 'team_manager', ...(config.solo ? ['individual'] : [])],
       capabilities: { online: id === 'individual', focus_alerts: id === 'individual', personal_insights: id === 'individual', team_dashboard: id === 'team_manager' },
     });
+    const freeProfile = { id: 'individual', verified: true, license_plan_id: null, team_id: null, allowed_project_keys: [], available_profiles: ['individual'], teams: [], capabilities: { online: true, focus_alerts: true, personal_insights: true, team_dashboard: false } };
     window.usageFixture = {
-      signedIn: config.signedIn, licensed: config.licensed, profile: profileValue(config.profile), failProfile: false, failJoin: null,
+      signedIn: config.signedIn, licensed: config.licensed, profile: config.licensed ? profileValue(config.profile) : structuredClone(freeProfile), failProfile: false, failJoin: null,
       preferences: { onboardingCompleted: config.completed, displayName: 'Synthetic employee', dailyGoalHours: 6, workRoles: [], workActivities: [], improvementGoals: [] },
       privacy: { noticeVersion: '2026-08-23', monitoringNoticeAcknowledged: config.completed, cloudSyncEnabled: false, cloudAiEnabled: false, storeWindowTitles: false, excludedApplications: [], retentionDays: 30 },
     };
@@ -38,12 +39,15 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
       const tick = performance.now(); if (running) milliseconds += Math.max(0, tick - sampledAt); sampledAt = tick;
       return { date: '2026-10-01', total_seconds: Math.floor(milliseconds / 1000), total_milliseconds: milliseconds, is_running: running };
     };
-    const entitlements = () => !window.usageFixture.signedIn || !window.usageFixture.licensed ? { owner_user_id: window.usageFixture.signedIn ? 'employee-ui' : null, plan: null, status: 'free', team_ids: [] } : {
+    const entitlements = () => !window.usageFixture.signedIn ? { owner_user_id: null, plan: null, status: 'free', team_ids: [] } : !window.usageFixture.licensed ? {
+      owner_user_id: 'employee-ui', plan: null, status: 'free', team_ids: [], active_team_id: null, can_sync: false, can_cloud_ai: false, can_integrations: false, usage_profile: structuredClone(freeProfile),
+    } : {
       owner_user_id: config.stale ? 'another-account' : 'employee-ui', plan: 'team', status: 'active', can_sync: true, can_cloud_ai: true, can_integrations: true,
       team_ids: teams.map(team => team.id), active_team_id: window.usageFixture.profile.team_id,
       usage_profile: structuredClone(window.usageFixture.profile),
     };
     if (config.pomodoro) localStorage.setItem('flowsight_timer_modes_v1', JSON.stringify({ mode: 'pomodoro', work: 25, shortBreak: 5, longBreak: 15 }));
+    if (config.usageChoice) localStorage.setItem('flowsight_usage_onboarding_choice', config.usageChoice);
     window.__TAURI_INTERNALS__.invoke = async (command, args = {}) => {
       const fixture = window.usageFixture;
       if (command === 'initialize_agent' && config.holdBoot) return new Promise(resolve => { fixture.releaseBoot = () => resolve(true); });
@@ -52,7 +56,7 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
       if (command === 'get_current_user') return fixture.signedIn ? { user_id: 'employee-ui', email: 'synthetic@example.test', team_id: fixture.profile.team_id } : null;
       if (command === 'get_auth_session') return null;
       if (command === 'get_entitlements' || command === 'refresh_entitlements') return entitlements();
-      if (command === 'get_user_teams') return { teams: teams.map(team => ({ team_id: team.id, name: team.name, role: team.manager ? 'admin' : 'member' })), active_team_id: fixture.profile.team_id };
+      if (command === 'get_user_teams') return { teams: fixture.licensed ? teams.map(team => ({ team_id: team.id, name: team.name, role: team.manager ? 'admin' : 'member' })) : [], active_team_id: fixture.profile.team_id };
       if (command === 'get_user_preferences') return structuredClone(fixture.preferences);
       if (command === 'save_user_preferences_command') { fixture.preferences = structuredClone(args.prefs); return structuredClone(fixture.preferences); }
       if (command === 'get_privacy_settings') return structuredClone(fixture.privacy);
@@ -80,7 +84,7 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
       if (command === 'logout' || command === 'clear_user_session') { fixture.signedIn = false; running = false; return null; }
       if (command === 'get_online_leagues') return { signed_in: true, enabled: false, groups: [], alias: '' };
     };
-  }, { profile, completed, signedIn, licensed, solo, stale, pomodoro, holdBoot });
+  }, { profile, completed, signedIn, licensed, usageChoice, solo, stale, pomodoro, holdBoot });
   await page.goto(process.env.FLOWSIGHT_RENDERER_URL || 'http://127.0.0.1:1443', { waitUntil: holdBoot ? 'domcontentloaded' : 'networkidle' });
   if (holdBoot) {
     await page.waitForFunction(() => Boolean(window.usageFixture.releaseBoot));
@@ -90,6 +94,7 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
   }
   await page.waitForFunction(() => document.body.dataset.usageProfile !== 'pending');
   await page.locator('#mainApp').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => { const label = document.getElementById('timerKindLabel')?.textContent || ''; return document.body.dataset.usageProfile.startsWith('team') ? /Recorded on this device today|Registrado hoy en este dispositivo/.test(label) : label.trim().length > 0; });
   await page.waitForTimeout(50);
   return { page, errors };
 }
@@ -208,10 +213,15 @@ try {
     assert.deepEqual(errors, []); results.push({ scenario: 'wrong-account cached entitlement fails closed while local Stop/Continue and privacy remain available', passed: true }); await page.close();
   }
   if (scenario('invite')) {
-    const { page, errors } = await pageFor({ licensed: false, completed: false, locale: 'es-ES' });
+    const { page, errors } = await pageFor({ licensed: false, completed: false, signedIn: false, locale: 'es-ES' });
+    await page.locator('#chooseTeamUsage').click();
+    await page.locator('#loginScreen.visible.team-login').waitFor();
+    await page.locator('#toggleManualLogin').click(); await page.locator('#manualCodeInput').fill('fictional-free-ui-token'); await page.locator('#manualLoginBtn').click();
     await page.locator('#tabProfile.active').waitFor();
+    assert.equal(await page.locator('#onboardingOverlay').isVisible(), false, 'A signed-in verified Individual/free account with saved Team choice must reach invitation controls without the personal wizard.');
+    assert.equal(await page.locator('body').getAttribute('data-usage-profile'), 'individual');
     assert.equal(await page.locator('#usageJoinTeam').isVisible(), true);
-    await page.locator('#usageJoinTeam summary').click();
+    assert.equal(await page.locator('#usageJoinTeam').evaluate(element => element.open), true);
     await page.locator('#teamCodeInput').fill('fictional-team-invite');
     await page.evaluate(() => { window.usageFixture.failJoin = 'This invitation was issued to another email address'; });
     await page.locator('#joinTeamBtn').click();
@@ -228,12 +238,12 @@ try {
     const calls = await page.evaluate(() => window.testCalls.map(call => call.command));
     assert.ok(calls.includes('join_team'));
     assert.equal(calls.some(command => ['get_online_leagues', 'bip_collect_local', 'bip_cloud', 'bip_generate_local'].includes(command)), false, 'Team profiles must not invoke personal Online or content cadence commands.');
-    assert.deepEqual(errors, []); results.push({ scenario: 'free signed-in worker joins via team invite without own paid license, translated rejection and retry, explicit setup, no automatic personal background collection', passed: true });
+    assert.deepEqual(errors, []); results.push({ scenario: 'real verified Individual/free payload after Team-first login reaches invitation without personal wizard; team join, translated rejection/retry, explicit setup and no personal background collection', passed: true });
     await page.locator('#navProfile').click(); await page.locator('#usageProfileCard').scrollIntoViewIfNeeded();
     await clearToasts(page); await page.screenshot({ path: resolve(output, 'employee-profile-es.png') }); await page.close();
   }
   if (scenario('claim')) {
-    const { page, errors } = await pageFor({ licensed: false, completed: false });
+    const { page, errors } = await pageFor({ licensed: false, completed: false, usageChoice: 'team' });
     await page.locator('#profileLicenseCode').fill('FS-FICTIONAL-CODE'); await page.locator('#claimLicenseBtn').click();
     await page.locator('#onboardingOverlay.visible.team-setup').waitFor();
     assert.equal(await page.evaluate(() => window.testCalls.filter(call => call.command === 'claim_license_code').length), 1);
@@ -249,6 +259,16 @@ try {
     assert.equal(await page.locator('#onboardingBody input').count() > 0, true);
     assert.equal(await page.locator('#teamSetupShare').count(), 0);
     assert.deepEqual(errors, []); results.push({ scenario: 'individual first choice preserves the existing six-step personal setup', passed: true }); await page.close();
+  }
+  if (scenario('free-individual')) {
+    const { page, errors } = await pageFor({ licensed: false, completed: false, usageChoice: 'team' });
+    await page.locator('#tabProfile.active').waitFor();
+    assert.equal(await page.locator('#onboardingOverlay').isVisible(), false);
+    await page.locator('[data-usage-choice="individual"]').click(); await page.locator('#onboardingOverlay.visible:not(.team-setup)').waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem('flowsight_usage_onboarding_choice')), 'individual');
+    assert.equal(await page.evaluate(() => window.testCalls.some(call => call.command === 'set_usage_profile')), false, 'Explicit same-profile choice changes the setup preference without inventing or requesting a different licensed role.');
+    assert.match(await page.locator('#onboardingStepLabel').innerText(), /1.*6/);
+    assert.deepEqual(errors, []); results.push({ scenario: 'verified free account can explicitly choose its existing Individual profile and open personal setup after previously choosing Team', passed: true }); await page.close();
   }
   await writeFile(resolve(output, 'renderer-e2e.json'), JSON.stringify({ evidence: 'Production renderer with fictional native IPC, no real account or native capture', results }, null, 2));
   console.log(JSON.stringify(results, null, 2));

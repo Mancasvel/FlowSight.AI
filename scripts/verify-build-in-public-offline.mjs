@@ -22,6 +22,7 @@ try{
     const original=window.__TAURI_INTERNALS__.invoke;
     window.__TAURI_INTERNALS__.invoke=async(command,args={})=>{
       if(command==='get_current_user')return {user_id:owner(),email:'fixture@example.invalid'};
+      if(command==='get_entitlements'||command==='refresh_entitlements')return {owner_user_id:owner(),plan:'individual',status:'active',can_sync:false,can_cloud_ai:false,can_integrations:false,team_ids:[],usage_profile:{id:'individual',verified:true,license_plan_id:'solo',team_id:null,teams:[],available_profiles:['individual'],capabilities:{online:true,focus_alerts:true,personal_insights:true,team_dashboard:false}}};
       if(command==='bip_cloud'){
         window.__bipOffline.calls.push(args.request);
         if(window.__bipOffline.mode==='pending')return new Promise(()=>{});
