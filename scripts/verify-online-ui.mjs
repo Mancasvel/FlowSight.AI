@@ -1,6 +1,7 @@
 // Real renderer; simulated native service solely for isolated UI verification.
 import assert from 'node:assert/strict';
 import {readFile,mkdir} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
 const source=await readFile(new URL('./verify-recorded-time.mjs',import.meta.url),'utf8');
 const begin=source.indexOf('await page.addInitScript(')+'await page.addInitScript('.length;
@@ -37,7 +38,7 @@ try{
       return structuredClone(window.onlineTestState);
     };
   });
-  await page.goto('http://127.0.0.1:1420',{waitUntil:'networkidle'});
+  await page.goto(process.env.FLOWSIGHT_RENDERER_URL||'http://127.0.0.1:1420',{waitUntil:'networkidle'});
   await page.locator('#navOnline').click();await page.locator('#onlineAccept:not([disabled])').waitFor();
   assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='set_online_league_consent').length),0);
   assert.match(await page.locator('#tabOnline').innerText(),/no se comparten aplicaciones, tareas, títulos ni capturas/);
@@ -71,7 +72,7 @@ try{
   await page.locator('.online-group').waitFor();assert.equal(await page.locator('.online-group h2').innerText(),'Equipo <b>');
   assert.equal(await page.locator('.online-group b,.online-group script').count(),0);
   await page.locator('#onlineInvitationCode').waitFor();assert.equal((await page.locator('#onlineInvitationCode').inputValue()).length,64);
-  await page.screenshot({path:new URL('group-simulated-native.png',out).pathname.slice(1)});
+  await page.screenshot({path:fileURLToPath(new URL('group-simulated-native.png',out))});
 
   // Accepted once: automatic status and username, with no manual sync action.
   assert.equal(await page.locator('#onlineRefresh').count(),0);
@@ -115,17 +116,33 @@ try{
   await page.evaluate(()=>{window.onlineCloudError='Online leagues could not connect. Check your connection and retry';window.testEmit('online-leagues-updated');});
   await page.locator('.online-status').filter({hasText:'Sin conexión'}).waitFor();
   assert.equal(await page.locator('.online-status').getAttribute('data-state'),'error');
+  assert.equal(await page.locator('#onlineSignIn').count(),0,'A connection failure must not request another login');
   assert.equal(await page.locator('.online-group li strong').innerText(),'70');
   assert.equal(await page.locator('.online-score-line strong').innerText(),'70 / 100');
   await page.evaluate(()=>{window.onlineCloudError='';window.onlineFail=true;window.testEmit('online-leagues-updated');});
   await page.locator('.online-status').filter({hasText:'Sin conexión'}).waitFor();
   await page.evaluate(()=>{window.onlineFail=false;window.testEmit('online-leagues-updated');});
   await page.locator('.online-status[data-state="success"]').waitFor();
+  // A rejected session exposes the existing login flow without changing consent.
+  const mutationsBefore=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='set_online_league_consent').length);
+  await page.evaluate(()=>{window.onlineCloudError='Sign in again to use online leagues';window.testEmit('online-leagues-updated');});
+  await page.locator('#onlineSignIn').waitFor();
+  await page.locator('#onlineSignIn').scrollIntoViewIfNeeded();
+  await page.screenshot({path:fileURLToPath(new URL('sign-in-recovery-simulated-native.png',out))});
+  await page.locator('#onlineSignIn').click();
+  await page.locator('#workerEmail').waitFor({state:'visible'});
+  assert.match(await page.locator('#loginTitle').innerText(),/Vuelve a iniciar sesión/);
+  assert.equal(await page.evaluate(()=>document.getElementById('loginScreen').dataset.returnToOnline),'true');
+  await page.locator('#closeCloudActivationBtn').click();
+  assert.equal(await page.locator('.online-group li strong').innerText(),'70');
+  assert.equal(await page.evaluate(()=>window.testCalls.filter(c=>c.command==='set_online_league_consent').length),mutationsBefore);
+  await page.evaluate(()=>{window.onlineCloudError='';window.testEmit('online-leagues-updated');});
+  await page.locator('#onlineSignIn').waitFor({state:'detached'});
   await page.locator('.online-sharing summary').click();
   await page.locator('#navToday').click();await page.locator('#navOnline').click();
   await page.locator('.online-summary').evaluate(el=>el.scrollIntoView());
   await page.setViewportSize({width:370,height:700});
-  await page.screenshot({path:new URL('automatic-sync-simulated-native.png',out).pathname.slice(1)});
+  await page.screenshot({path:fileURLToPath(new URL('automatic-sync-simulated-native.png',out))});
 
   // A response from before withdrawal must not restore enabled consent.
   await page.locator('.online-sharing summary').click();
@@ -138,6 +155,12 @@ try{
   assert.equal(await page.locator('#onlineInvitationCode').count(),0);
   assert.equal(await page.locator('.online-summary').count(),0);
   assert.equal(await page.locator('#onlineRefresh').count(),0);
+  await page.evaluate(()=>{window.onlineHold=false;window.onlineTestState.signed_in=false;window.testEmit('online-leagues-updated');});
+  await page.locator('#onlineSignIn').waitFor();
+  assert.equal(await page.locator('#onlineAccept').isDisabled(),true);
+  await page.locator('#onlineSignIn').click();
+  await page.locator('#workerEmail').waitFor({state:'visible'});
+  await page.locator('#closeCloudActivationBtn').click();
   assert.deepEqual(errors,[]);
   console.log('PASS: Online opt-in, unique username, group creation, invitation, escaping, withdrawal; automatic sync without Online open or manual buttons, username association, native events, offline retries, updated ranking, draft/focus preservation and stale response protection; five-tab layout at 340/370/900 in light/dark. Screenshots use a simulated native service.');
 }finally{await browser.close();}

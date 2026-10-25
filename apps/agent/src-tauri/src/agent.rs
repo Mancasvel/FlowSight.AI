@@ -1579,7 +1579,7 @@ CATEGORY rules (follow strictly):
 - Learning: coursework, tutorials, deliberate study, or skills practice.
 - Sales: CRM, prospecting, proposals, pipeline work, or customer-facing commercial activity.
 - Admin: expenses, forms, routine record keeping, scheduling, finance operations, or access/settings maintenance.
-- Coding: IDEs and AI code editors (Cursor, VS Code, JetBrains, Xcode, Neovim), editing source files, programming terminals (git/cargo/npm), local app development UIs.
+- Coding: IDEs and AI code editors (Eclipse, Cursor, VS Code, JetBrains, Xcode, Neovim), editing source files, programming terminals (git/cargo/npm), local app development UIs.
 - Debugging: inspecting failures with a debugger, stack trace, logs, or breakpoints.
 - CodeReview: pull requests, diff review, GitHub/GitLab PR pages.
 - Testing: running or inspecting test suites, test results, or quality checks.
@@ -1590,7 +1590,7 @@ CATEGORY rules (follow strictly):
 - Idle: a lock screen or clearly inactive/blank work surface; never infer this from a lack of keyboard or mouse data.
 - General: use only when the primary work activity is genuinely ambiguous after considering the screenshot and task context.
 - Spreadsheets may be Analysis or Admin depending on the visible task. Documents may be Writing, Documentation, Research, or Admin. Email/chat are Communication. Do not assume knowledge work means software development.
-Never label Cursor, VS Code, or a GitHub engineering page as Browsing or General."#,
+Never label Eclipse showing a source file/workspace, Cursor, VS Code, or a GitHub engineering page as Browsing or General. Eclipse Java editing is Coding; debugger/breakpoint work is Debugging; running JUnit/test suites is Testing."#,
         current_task,
         allowed_categories_prompt()
     );

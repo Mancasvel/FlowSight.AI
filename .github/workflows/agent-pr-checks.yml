@@ -146,6 +146,11 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Production localization and state preservation checks failed.' }
             node scripts/verify-work-review.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Local work review persistence and privacy checks failed.' }
+            $env:FLOWSIGHT_REPORT_EVIDENCE = Join-Path (Get-Location).Path '.impeccable/review/report-export'
+            node scripts/verify-report-export.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Production report UI and PDF export checks failed.' }
+            node scripts/verify-online-ui.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'Online sync and sign-in recovery checks failed.' }
             node scripts/verify-coach-conversation.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Saved Pro Coach conversation and reply checks failed.' }
             node scripts/verify-linked-session.mjs
