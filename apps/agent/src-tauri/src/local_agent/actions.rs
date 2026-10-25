@@ -147,6 +147,21 @@ fn release_focus_protection(focus: &FocusBlock) -> Vec<String> {
     warnings
 }
 
+pub(super) fn clear_focus_for_context_change() -> Result<Vec<String>, String> {
+    let _guard = FOCUS_ACTION_LOCK
+        .lock()
+        .map_err(|error| error.to_string())?;
+    let focus = state::update(|data| {
+        // Do not deliver a personal digest into a different account or team.
+        data.notification_digest.clear();
+        Ok(data.focus.take())
+    })?;
+    Ok(focus
+        .as_ref()
+        .map(release_focus_protection)
+        .unwrap_or_default())
+}
+
 fn elapsed_focus_seconds(focus: &FocusBlock) -> Result<i64, String> {
     let started = parse_time(&focus.started_at)?;
     let end = if focus.status == "paused" {
@@ -621,6 +636,7 @@ pub fn execute(
     app: AppHandle,
     agent_state: State<'_, AgentState>,
 ) -> Result<Value, String> {
+    super::require_profile_tool(name, args)?;
     if !super::registry::is_enabled_name(name) {
         return Err("Connected-service writes are unavailable in this release.".into());
     }

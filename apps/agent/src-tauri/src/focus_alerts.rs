@@ -266,6 +266,9 @@ pub fn excluded_app_entered() {
 }
 
 pub fn record_app_switch(app: &tauri::AppHandle, app_name: &str) {
+    if !crate::desktop_presence::focus_alerts_enabled() {
+        return;
+    }
     let now = Instant::now();
     let normalized = app_name.trim().to_ascii_lowercase();
     static OWN_EXE: OnceLock<String> = OnceLock::new();
@@ -343,7 +346,10 @@ pub fn review_browsing_report(
     description: &str,
     captured_app: Option<&str>,
 ) {
-    if duration_seconds == 0 || !category.eq_ignore_ascii_case("Browsing") {
+    if !crate::entitlements::personal_features_allowed(db_path)
+        || duration_seconds == 0
+        || !category.eq_ignore_ascii_case("Browsing")
+    {
         return;
     }
     let today = Local::now().format("%Y-%m-%d").to_string();
@@ -698,6 +704,10 @@ fn contextual_copy_for(
 fn finish_proposal(app: &tauri::AppHandle, proposal: Proposal, decision: Option<Advice>) {
     let mut guard = state().lock().unwrap_or_else(|error| error.into_inner());
     if guard.generation != proposal.generation {
+        return;
+    }
+    if !crate::desktop_presence::focus_alerts_enabled() {
+        guard.set_pending(proposal.evidence.kind(), false);
         return;
     }
     let Some(advice) = decision else {

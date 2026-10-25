@@ -39,7 +39,10 @@ fn write_bool(key: &str, enabled: bool) -> Result<(), String> {
 }
 
 pub fn focus_alerts_enabled() -> bool {
-    read_bool(FOCUS_ALERTS_KEY).unwrap_or(false)
+    crate::paths::db_path()
+        .map(|path| crate::entitlements::personal_features_allowed(&path))
+        .unwrap_or(false)
+        && read_bool(FOCUS_ALERTS_KEY).unwrap_or(false)
 }
 
 pub fn contextual_focus_alerts_enabled() -> bool {
@@ -140,6 +143,9 @@ pub fn set_focus_alerts_enabled(
     state: tauri::State<'_, crate::agent::AgentState>,
     enabled: bool,
 ) -> Result<bool, String> {
+    if enabled && !crate::entitlements::personal_features_allowed(&crate::paths::db_path()?) {
+        return Err("Focus reminders are available in the Individual profile".into());
+    }
     #[cfg(desktop)]
     if enabled
         && app

@@ -63,6 +63,9 @@ fn enabled(conn: &Connection, uid: &str) -> bool {
 
 /// Bind only newly captured reports to the account that opted in. No history import.
 pub fn capture_owner(path: &Path) -> Option<String> {
+    if !crate::entitlements::personal_features_allowed(path) {
+        return None;
+    }
     let conn = Connection::open(path).ok()?;
     let session = get_user_session_from_conn(&conn)?;
     enabled(&conn, &session.user_id).then_some(session.user_id)
@@ -73,7 +76,10 @@ pub fn bind_observation(conn: &Connection, report_id: i64, captured_owner: Optio
         return;
     }
     if let Some(session) = get_user_session_from_conn(conn) {
-        if captured_owner == Some(session.user_id.as_str()) && enabled(conn, &session.user_id) {
+        if crate::entitlements::profile_id(conn) == "individual"
+            && captured_owner == Some(session.user_id.as_str())
+            && enabled(conn, &session.user_id)
+        {
             let _ = conn.execute(
                 "INSERT OR IGNORE INTO online_observation_owner(report_id,user_id) VALUES(?1,?2)",
                 params![report_id, session.user_id],
@@ -91,6 +97,28 @@ fn account(path: &Path) -> Result<(Connection, UserSession), String> {
 }
 
 fn rpc(session: &UserSession, body: Value) -> Result<Value, String> {
+    retry_authenticated_request(
+        session,
+        |active| rpc_once(active, &body),
+        crate::sync::refresh_supabase_token,
+    )
+}
+
+fn retry_authenticated_request(
+    session: &UserSession,
+    mut request: impl FnMut(&UserSession) -> Result<Value, String>,
+    renew: impl FnOnce(&UserSession) -> Result<UserSession, String>,
+) -> Result<Value, String> {
+    match request(session) {
+        Err(error) if error == "Sign in again to use online leagues" => {
+            let renewed = renew(session)?;
+            request(&renewed)
+        }
+        result => result,
+    }
+}
+
+fn rpc_once(session: &UserSession, body: &Value) -> Result<Value, String> {
     let response = Client::builder()
         .timeout(Duration::from_secs(20))
         .build()
@@ -308,6 +336,15 @@ fn local_view(path: &Path) -> Result<Value, String> {
 }
 
 fn sync_inner(path: &Path) -> Result<Value, String> {
+    if !crate::entitlements::personal_features_allowed(path) {
+        let (conn, session) = account(path)?;
+        conn.execute("UPDATE online_local_consent SET enabled=0,withdrawal_pending=1 WHERE user_id=?1 AND enabled=1",[&session.user_id]).map_err(|_| "Could not stop league sharing")?;
+        conn.execute(
+            "DELETE FROM online_observation_owner WHERE user_id=?1",
+            [&session.user_id],
+        )
+        .map_err(|_| "Could not clear league ownership")?;
+    }
     let mut view = local_view(path)?;
     if view["withdrawal_pending"] == true {
         crate::sync::refresh_session_if_expiring(&path.to_path_buf());
@@ -444,6 +481,7 @@ pub async fn set_online_league_consent(accept: bool, alias: String) -> Result<Va
             if let Err(error)=remote{view["cloud_error"]=json!(error);}
             return Ok(view);
         }
+        if !crate::entitlements::personal_features_allowed(&path) { return Err("Online leagues are available in the Individual profile".into()); }
         let alias=normalize_username(&alias)?;
         crate::sync::refresh_session_if_expiring(&path);
         let (_,session)=account(&path)?;
@@ -478,6 +516,9 @@ pub async fn online_league_action(request: Value) -> Result<Value, String> {
             return Err("Unsupported league action".into());
         }
         let path = crate::paths::db_path()?;
+        if request["action"] != "export" && !crate::entitlements::personal_features_allowed(&path) {
+            return Err("Online leagues are available in the Individual profile".into());
+        }
         crate::sync::refresh_session_if_expiring(&path);
         let (conn, session) = account(&path)?;
         if !enabled(&conn, &session.user_id) {
@@ -542,6 +583,53 @@ pub(crate) fn export_data(conn: &Connection, include_cloud: bool) -> Result<Valu
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn an_unauthorized_league_request_renews_once_and_retries_with_the_rotated_session() {
+        let session = UserSession {
+            user_id: "alice".into(),
+            team_id: None,
+            access_token: "expired".into(),
+            refresh_token: Some("refresh".into()),
+            email: "fixture@example.test".into(),
+        };
+        let mut calls = 0;
+        let value = retry_authenticated_request(
+            &session,
+            |s| {
+                calls += 1;
+                if s.access_token == "expired" {
+                    Err("Sign in again to use online leagues".into())
+                } else {
+                    Ok(json!({"ok":true}))
+                }
+            },
+            |s| {
+                let mut next = s.clone();
+                next.access_token = "rotated".into();
+                Ok(next)
+            },
+        )
+        .unwrap();
+        assert_eq!(calls, 2);
+        assert_eq!(value["ok"], true);
+        calls = 0;
+        assert!(retry_authenticated_request(
+            &session,
+            |_| {
+                calls += 1;
+                Err("Sign in again to use online leagues".into())
+            },
+            |s| Ok(s.clone())
+        )
+        .is_err());
+        assert_eq!(calls, 2);
+        assert!(retry_authenticated_request(
+            &session,
+            |_| Err("Connection unavailable".into()),
+            |_| panic!("Network failures must not rotate tokens")
+        )
+        .is_err());
+    }
     #[test]
     fn background_worker_starts_without_ui_and_wakes_and_retries() {
         let (sender, receiver) = mpsc::sync_channel(1);
@@ -701,6 +789,15 @@ mod tests {
             &c,
             "user_session",
             &serde_json::to_string(&session).unwrap(),
+        )
+        .unwrap();
+        crate::entitlements::save_entitlements(
+            &c,
+            &crate::entitlements::Entitlements {
+                owner_user_id: Some("alice".into()),
+                usage_profile: Some(json!({"id":"individual"})),
+                ..Default::default()
+            },
         )
         .unwrap();
         c.execute("INSERT INTO reports(id,created_at,duration_seconds,activity_type,capture_source) VALUES(1,'2026-10-01 09:00:00',60,'Research','periodic_vision')",[]).unwrap();

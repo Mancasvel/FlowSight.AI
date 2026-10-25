@@ -183,6 +183,7 @@ pub fn save_total_focus_preferences(preferences: Preferences) -> Result<Preferen
 }
 
 pub fn activate(intention: String, preferences: Preferences) -> Result<Value, String> {
+    super::require_profile_tool("focus.total_start", &json!({}))?;
     activate_with(intention, preferences, browser_bridge::focus_status, || {
         let session = policy()?.ok_or("Total focus ended before the browser could apply it.")?;
         browser_bridge::execute(
@@ -383,6 +384,18 @@ pub fn end_linked(app: &AppHandle) -> Result<Value, String> {
     Ok(result)
 }
 
+pub(super) fn end_for_context_change() -> Result<(), String> {
+    let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+    if state::read()?.total_focus.is_some() {
+        let _ = end()?;
+    }
+    state::update(|data| {
+        data.total_focus_clock_stop_pending = false;
+        Ok(())
+    })?;
+    release_notifications()
+}
+
 fn pause_with(apply: impl FnOnce(&Session) -> Result<Value, String>) -> Result<Value, String> {
     let _guard = CONTROL.lock().map_err(|error| error.to_string())?;
     let paused = state::update(|data| {
@@ -506,6 +519,7 @@ pub async fn pause_total_focus(app: AppHandle) -> Result<Value, String> {
 pub async fn resume_total_focus(app: AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = LINKED_CONTROL.lock().map_err(|error| error.to_string())?;
+        super::require_profile_tool("focus.total_start", &json!({}))?;
         crate::privacy::require_monitoring_acknowledgement(&crate::paths::db_path()?)?;
         resume_with(browser_bridge::focus_status, |previous| {
             sync_music_playback(previous, "play")
@@ -586,6 +600,10 @@ pub fn maintain_linked_clock(app: &AppHandle) -> Result<(), String> {
     let Ok(_guard) = LINKED_CONTROL.try_lock() else {
         return Ok(());
     };
+    // A personal session must never control the employee's Parar/Continuar clock.
+    if !crate::entitlements::personal_features_allowed(&crate::paths::db_path()?) {
+        return Ok(());
+    }
     // Native initialization is performed by the renderer after app setup.
     let agent = app.state::<AgentState>();
     let Some(running) = agent
@@ -641,6 +659,30 @@ pub fn restore_after_restart() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn context_change_releases_old_clock_and_quiet_without_changing_preferences() {
+        let _store = state::TestStore::new();
+        system_quiet::mock_banners(Some(1));
+        start_confirmed();
+        let preferences = state::read().unwrap().total_focus_preferences;
+        state::update(|data| {
+            data.total_focus.as_mut().unwrap().linked_clock = true;
+            data.total_focus_clock_stop_pending = true;
+            Ok(())
+        })
+        .unwrap();
+        end_for_context_change().unwrap();
+        let data = state::read().unwrap();
+        assert!(data.total_focus.is_none());
+        assert!(!data.total_focus_clock_stop_pending);
+        assert!(data.total_focus_quiet.is_none());
+        assert_eq!(system_quiet::mocked_banners(), Some(1));
+        assert_eq!(
+            data.total_focus_preferences.duration_minutes,
+            preferences.duration_minutes
+        );
+        assert_eq!(data.total_focus_preferences.patterns, preferences.patterns);
+    }
     #[test]
     fn music_pause_resume_keeps_tab_identity_and_surfaces_playback_errors() {
         let _store = state::TestStore::new();

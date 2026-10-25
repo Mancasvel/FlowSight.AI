@@ -143,6 +143,9 @@ impl FlowSightAgent {
                 if let Err(error) = crate::privacy::ensure_schema(&conn) {
                     log::error!("[Privacy] SQLite privacy schema failed: {error}");
                 }
+                if let Err(error) = crate::sync::ensure_capture_schema(&conn) {
+                    log::error!("[Sync] Capture ownership schema failed: {error}");
+                }
             }
             Err(e) => log::error!(
                 "[Agent] SQLite open failed {:?} (init_db): {}",
@@ -1719,6 +1722,7 @@ pub(crate) fn insert_report(
     .ok()?;
     let report_id = conn.last_insert_rowid();
     crate::online_leagues::bind_observation(&conn, report_id, system.league_user_id.as_deref());
+    crate::sync::bind_cloud_observation(&conn, report_id, system.cloud_owner.as_ref());
     if capture_source == "periodic_vision" && system.league_user_id.is_some() {
         crate::online_leagues::request_sync();
     }
@@ -1730,6 +1734,7 @@ pub(crate) struct CapturedWindowContext {
     pub app_name: Option<String>,
     pub window_title: Option<String>,
     pub league_user_id: Option<String>,
+    pub cloud_owner: Option<crate::sync::CloudCaptureOwner>,
 }
 
 impl From<crate::context::SystemContext> for CapturedWindowContext {
@@ -1738,6 +1743,7 @@ impl From<crate::context::SystemContext> for CapturedWindowContext {
             app_name: value.app_name,
             window_title: value.window_title,
             league_user_id: None,
+            cloud_owner: None,
         }
     }
 }
@@ -1763,6 +1769,7 @@ pub(crate) fn capture_and_analyze_screen(
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let league_user_id = crate::online_leagues::capture_owner(db_path);
+    let cloud_owner = crate::sync::cloud_capture_owner(db_path);
     // Scope comparison to the local signed-in account even when leagues are off.
     let progress_owner_id = Connection::open(db_path)
         .ok()
@@ -1790,6 +1797,7 @@ pub(crate) fn capture_and_analyze_screen(
             app_name: sys.app_name,
             window_title: sys.window_title,
             league_user_id,
+            cloud_owner,
         },
         observed_at_utc,
     })
@@ -1807,6 +1815,7 @@ pub(crate) fn capture_and_analyze_action(
 ) -> Result<AnalyzedCapture, String> {
     let observed_at_utc = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let league_user_id = crate::online_leagues::capture_owner(db_path);
+    let cloud_owner = crate::sync::cloud_capture_owner(db_path);
     let (capture, sys, fingerprint) = capture_screen(db_path)?;
     let raw_analysis =
         analyze_action_screenshot_with_vision(&capture, task_context, action_context)
@@ -1830,6 +1839,7 @@ pub(crate) fn capture_and_analyze_action(
             app_name: sys.app_name,
             window_title: sys.window_title,
             league_user_id,
+            cloud_owner,
         },
         observed_at_utc,
     })
@@ -2060,6 +2070,7 @@ mod agent_struct_tests {
                 app_name: Some("Captured App".into()),
                 window_title: Some("Captured Window".into()),
                 league_user_id: None,
+                cloud_owner: None,
             }),
             Some("2026-08-22 07:30:00".into()),
             Some(&crate::task_progress::ProgressObservation {
