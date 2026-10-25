@@ -78,12 +78,14 @@ body[data-usage-profile^="team"] .timer-display { font-variant-numeric: tabular-
 body[data-usage-profile^="team"] .timer-actions { margin: 0; }
 body[data-usage-profile^="team"] .play-timer-btn { width: 100%; min-height: 54px; background: #087f78; border-radius: 12px; }
 body[data-usage-profile^="team"] .play-timer-btn:hover:not(:disabled) { background: #066b65; }
-body[data-usage-profile^="team"] .bottom-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 340px; }
-body[data-usage-profile^="team"] .bottom-nav .nav-item { gap: 4px; min-height: 58px; }
+body[data-usage-profile^="team"] .bottom-nav { display: flex; max-width: 340px; }
+body[data-usage-profile^="team"] .bottom-nav .nav-item { flex: 1 1 0; gap: 4px; min-height: 58px; }
 body[data-usage-profile^="team"] .bottom-nav .nav-item .nav-label {
   display: block; position: static; width: auto; height: auto; margin: 0; padding: 0;
   clip-path: none; overflow: visible; white-space: normal; font-size: 11px; line-height: 1.3;
 }
+/* Recording confirmations stay above the dock so both destinations remain usable. */
+body[data-usage-profile^="team"] .toast-container { bottom: 104px; }
 
 .usage-choice-card { display: flex; flex-direction: column; gap: 16px; max-width: 460px; }
 .usage-choice-card h1 { margin: 0; font-family: Manrope, sans-serif; font-size: 25px; line-height: 1.25; font-weight: 750; letter-spacing: -0.025em; }

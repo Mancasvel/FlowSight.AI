@@ -127,6 +127,8 @@ components:
     rounded: "{rounded.dock}"
     padding: "7px"
     width: "min(calc(100% - 24px), 540px)"
+    team-width: "min(calc(100% - 24px), 340px)"
+    team-layout: "Two equal-width flex destinations with visible icon/label pairs; feedback clears the dock."
   timer-surface:
     textColor: "{colors.slate-ink-light}"
     rounded: "{rounded.timer}"

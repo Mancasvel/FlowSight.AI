@@ -4564,7 +4564,7 @@
 
     function renderTeamSharing() {
       const team = isTeamProfile(currentUsageProfile);
-      const copy = tr('Optional team sharing sends dates, work, meeting and other activity totals, and recognized project references. Personal descriptions, screenshots, app and site names, browsing and distraction signals, and focus grades are not shared.');
+      const copy = tr('Optional team sharing sends dates, work, meeting and other activity totals, and recognized project references. Personal descriptions, screenshots, app and site names, browsing and distraction signals, and focus grades are not shared. Shared totals may also appear in weekly reports emailed to verified team managers.');
       for (const id of ['teamTodayContext', 'teamSharingExplanation', 'teamPrivacyNoticeText', 'teamLocalHistory']) document.getElementById(id).hidden = !team;
       setText(document.getElementById('teamTodayName'), () => currentUsageProfile.team_name || tr('Team profile awaiting verification'));
       setText(document.getElementById('teamTodaySharing'), teamSharingCopy);
@@ -4733,7 +4733,7 @@
         <p class="onboarding-subtitle">${escapeHtml(currentUsageProfile.team_name || tr('Your work team'))} · ${usageProfileLabel()}</p>
         <p>Continue starts recording on this device. Stop ends recording; today’s recorded time is kept. Closing the window keeps FlowSight in the system tray.</p>
         <h2>What is observed locally</h2><p>While recording, FlowSight processes the active app, selected interface elements and periodic images of the active window on this device. Images are not saved. Short activity summaries stay in local history; sensitive apps can be excluded in Settings.</p>
-        <h2>Separate team sharing</h2><p>${tr('Optional team sharing sends dates, work, meeting and other activity totals, and recognized project references. Personal descriptions, screenshots, app and site names, browsing and distraction signals, and focus grades are not shared.')}</p>
+        <h2>Separate team sharing</h2><p>${tr('Optional team sharing sends dates, work, meeting and other activity totals, and recognized project references. Personal descriptions, screenshots, app and site names, browsing and distraction signals, and focus grades are not shared. Shared totals may also appear in weekly reports emailed to verified team managers.')}</p>
         <label class="consent-toggle-row" for="teamSetupShare"><input type="checkbox" id="teamSetupShare" ${privacySettings?.cloudSyncEnabled ? 'checked' : ''} ${!currentEntitlements?.can_sync ? 'disabled' : ''}><span>Share structured work totals with my team</span></label>
         <p class="privacy-detail" id="teamSetupSharingState">${teamSharingCopy()}</p>
         <button type="button" class="button button-ghost" id="teamSetupPrivacy">Read privacy notice</button>
@@ -7382,7 +7382,7 @@
           typeof res.gpuLayers === 'number'
             ? ` (${res.gpuLayers} GPU layers${res.gpuAuto ? ', auto-selected' : ''})`
             : '';
-        showToast(formatMessage`Local AI Server Ready${layerSuffix}`, 'success');
+        if (!isTeamProfile(currentUsageProfile)) showToast(formatMessage`Local AI Server Ready${layerSuffix}`, 'success');
 
         try {
           await loadCurrentDayHistory();
