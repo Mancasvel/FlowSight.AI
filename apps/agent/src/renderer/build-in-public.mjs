@@ -40,7 +40,9 @@ export function drawContentImage(visual,canvas=document.createElement('canvas'))
   return canvas.toDataURL('image/png');
 }
 
-export function mountBuildInPublic({root,invoke}){
+export function mountBuildInPublic({root,invoke,canUse=()=>true}){
+  const nativeInvoke=invoke;
+  invoke=(command,args)=>canUse()?nativeInvoke(command,args):Promise.reject(tr('Esta función pertenece al perfil individual.','This feature belongs to the individual profile.'));
   const emptyStudio=owner_id=>({owner_id,settings:{project_name:'FlowSight',voice:'',excluded_terms:[],cadence:'manual',topic_direction:''},evidence:[],briefs:[],drafts:[],profiles:[],styles:{},tokens:[]});
   let state=emptyStudio('device'),tab='stories',busy=false,error='',notice='',local=[],editor=null,days=7,loaded=false;
   let networks=['linkedin','x','instagram'],secret='',cadenceTimer=null,refreshing=false,pendingFocus=null;
@@ -94,7 +96,7 @@ export function mountBuildInPublic({root,invoke}){
   const selected=()=>state?.evidence.filter(item=>item.state==='selected')||[];
   const stateLabel=value=>({draft:tr('Borrador','Draft'),approved:tr('Aprobado','Approved'),sending:tr('Enviando','Sending'),scheduled:tr('En cola','Queued'),published:tr('Publicado','Published'),failed:tr('Revisar envío','Review delivery'),uncertain:tr('Comprobar en Buffer','Check Buffer')})[value]||value;
   async function refresh(){
-    if(busy||refreshing)return;refreshing=true;
+    if(!canUse()||busy||refreshing)return;refreshing=true;
     captureEditor();
     cacheEditor();
     render();
@@ -102,7 +104,7 @@ export function mountBuildInPublic({root,invoke}){
     render();
   }
   async function run(task,{reload=true}={}){
-    if(busy)return;busy=true;error='';notice='';render();
+    if(!canUse()||busy)return;busy=true;error='';notice='';render();
     try{await task();if(reload){const next=await api({action:'studio'});await syncDirection(next);acceptStudio(next);}}
     catch(e){error=cloudError(e);}
     finally{busy=false;render();}
@@ -263,7 +265,7 @@ export function mountBuildInPublic({root,invoke}){
     if(form.id==='bipEvidenceEdit'){captureEditor();const item=editor.value;run(async()=>{if(!item.id){const {source_key,title,summary,occurred_on,kind,signals={}}=item;await api({action:'import',evidence:[{source_key,title,summary,occurred_on,kind,signals}],manual:editor.manual===true});state=await api({action:'studio'});item.id=state.evidence.find(row=>row.source_key===item.source_key)?.id;}await api({action:'evidence',id:item.id,patch:{title:item.title,summary:item.summary,confirmed:item.confirmed,state:'selected'}});editing.delete(editorKey(item));if(editor.manual){manualDraft=null;persistLocal();}if(editor.localKey){editing.delete(`local:${editor.localKey}`);local=local.filter(row=>row.source_key!==editor.localKey);history=history.filter(row=>row.source_key!==editor.localKey);persistLocal();}editor=null;});}
   });
   async function checkCadence(){
-    if(busy||refreshing||editor)return;
+    if(!canUse()||busy||refreshing||editor)return;
     if(root.contains(document.activeElement)&&document.activeElement.closest('form'))return;
     const before=JSON.stringify([state?.owner_id,state?.briefs,state?.drafts,state?.settings.topic_direction]);
     refreshing=true;

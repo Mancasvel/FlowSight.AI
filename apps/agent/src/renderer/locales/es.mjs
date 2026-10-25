@@ -1,5 +1,83 @@
 // Explicit application copy. User-authored task names, messages and activity are never translated.
 export const spanish = Object.fromEntries(`
+How will you use FlowSight?|¿Cómo vas a usar FlowSight?
+Choose the setup that fits your work. Your license and team role determine the available features.|Elige la configuración que encaja con tu trabajo. Tu licencia y tu rol en el equipo determinan las funciones disponibles.
+For my team|Para mi equipo
+Recommended for work teams. A simple recording screen and separate sharing choices.|Recomendado para equipos de trabajo. Una pantalla de registro sencilla y opciones de compartir independientes.
+For myself|Para mí
+Personal goals, insights and optional focus tools, with the full individual setup.|Objetivos personales, análisis y herramientas de foco opcionales, con la configuración individual completa.
+Your FlowSight profile|Tu perfil de FlowSight
+Checking your profile…|Comprobando tu perfil…
+Predefined profiles|Perfiles predefinidos
+Team member|Miembro del equipo
+Project manager|Project manager
+Recording, Stop and Continue, and control over your data.|Registro, Detener y Continuar, y control sobre tus datos.
+The same simple recorder, plus the team dashboard for coordination.|El mismo registro sencillo, con el dashboard del equipo para coordinar el trabajo.
+Personal insights, planning, focus tools and optional Online features.|Análisis personal, planificación, herramientas de foco y funciones online opcionales.
+Work team|Equipo de trabajo
+Connect my team|Conectar mi equipo
+Refresh my profile|Actualizar mi perfil
+Open the team dashboard|Abrir el dashboard del equipo
+Join with a team code|Unirme con un código de equipo
+Recording diagnostics|Diagnóstico del registro
+Individual · on this device|Individual · en este dispositivo
+Simple recording · profile not verified|Registro sencillo · perfil sin verificar
+Connect your team to use its licensed profile. Personal features stay available locally.|Conecta tu equipo para usar el perfil de su licencia. Las funciones personales siguen disponibles en local.
+We could not verify your licensed profile. Recording and privacy remain available. Refresh your profile, activate a license or join your team.|No hemos podido verificar el perfil de tu licencia. El registro y la privacidad siguen disponibles. Actualiza el perfil, activa una licencia o únete a tu equipo.
+Your license and verified role determine these choices. Changing profile or team stops recording and turns optional sharing off.|Tu licencia y tu rol verificado determinan estas opciones. Cambiar de perfil o equipo detiene el registro y desactiva el uso compartido opcional.
+Team sharing is unavailable until your profile is verified.|No puedes compartir con el equipo hasta verificar tu perfil.
+Sharing on — structured work totals go to {p0}.|Compartir activado: los totales estructurados del trabajo se envían a {p0}.
+Sharing off — no new activity is sent to {p0}.|Compartir desactivado: no se envía actividad nueva a {p0}.
+Team profile awaiting verification|Perfil de equipo pendiente de verificar
+Optional team sharing sends dates, work, meeting and other activity totals, and recognized project references. Personal descriptions, screenshots, app and site names, browsing and distraction signals, and focus grades are not shared.|Compartir con el equipo es opcional. Se envían fechas, totales de trabajo, reuniones y otras actividades, y referencias a proyectos reconocidos. No se comparten descripciones personales, capturas, nombres de apps o sitios, señales de navegación o distracciones ni notas de foco.
+Share structured work totals with my team|Compartir totales estructurados del trabajo con mi equipo
+Privacy and sharing|Privacidad y uso compartido
+Review my local history|Consultar mi historial local
+Activity recorded on this device today. This is your local history, not a team report or billable time.|Actividad registrada hoy en este dispositivo. Es tu historial local, no un informe de equipo ni tiempo facturable.
+Loading local history…|Cargando el historial local…
+No local activity recorded today.|Hoy no hay actividad registrada en local.
+Local history could not be loaded. Close and reopen this section to retry.|No se ha podido cargar el historial local. Cierra y vuelve a abrir esta sección para intentarlo de nuevo.
+Recorded on this device today|Registrado hoy en este dispositivo
+Work session|Sesión de trabajo
+Recording on this device. Stop whenever you need.|Registrando en este dispositivo. Detén el registro cuando lo necesites.
+Recording is stopped. Continue when you are ready.|El registro está detenido. Continúa cuando quieras.
+Stop recording|Detener registro
+Continue recording|Continuar registro
+Recording|Registrando
+Stopped|Detenido
+Recording started on this device.|Registro iniciado en este dispositivo.
+Recording stopped on this device.|Registro detenido en este dispositivo.
+Startup|Inicio
+Wait for recording to finish changing, then try again.|Espera a que termine el cambio de estado del registro y vuelve a intentarlo.
+Recording could not stop. Try again before changing profile.|No se ha podido detener el registro. Inténtalo de nuevo antes de cambiar de perfil.
+Changing profile…|Cambiando de perfil…
+Profile changed. Recording is stopped; optional sharing is off.|Perfil cambiado. El registro está detenido y el uso compartido opcional está desactivado.
+Could not change profile.|No se ha podido cambiar de perfil.
+Profile refreshed.|Perfil actualizado.
+Could not refresh your profile.|No se ha podido actualizar tu perfil.
+Connect your work team|Conecta tu equipo de trabajo
+Sign in with your work account. Your license and team role choose the profile.|Inicia sesión con tu cuenta de trabajo. Tu licencia y tu rol en el equipo determinan el perfil.
+A simple work session|Una sesión de trabajo sencilla
+Your work team|Tu equipo de trabajo
+Continue starts recording on this device. Stop ends recording; today’s recorded time is kept. Closing the window keeps FlowSight in the system tray.|Continuar inicia el registro en este dispositivo. Detener lo para y conserva el tiempo registrado hoy. Cerrar la ventana mantiene FlowSight en la bandeja del sistema.
+What is observed locally|Qué se observa en local
+While recording, FlowSight processes the active app, selected interface elements and periodic images of the active window on this device. Images are not saved. Short activity summaries stay in local history; sensitive apps can be excluded in Settings.|Durante el registro, FlowSight procesa en este dispositivo la app activa, algunos elementos de su interfaz e imágenes periódicas de la ventana activa. Las imágenes no se guardan. Los resúmenes breves permanecen en el historial local; puedes excluir apps sensibles en Ajustes.
+Separate team sharing|Compartir con el equipo es independiente
+Finishing acknowledges local recording. It does not start recording or turn sharing on.|Al terminar confirmas que entiendes el registro local. Esto no inicia el registro ni activa el uso compartido.
+I understand — finish setup|Lo entiendo: terminar configuración
+Could not finish setup.|No se ha podido terminar la configuración.
+Sign in before joining your team.|Inicia sesión antes de unirte a tu equipo.
+Team joined|Te has unido al equipo
+Sign in before joining a team|Inicia sesión antes de unirte a un equipo
+Invalid invitation code|El código de invitación no es válido.
+Invitation expired or unavailable|La invitación ha caducado o ya no está disponible.
+This feature belongs to the individual profile.|Esta función pertenece al perfil individual.
+Profile access could not be verified|No se ha podido verificar el acceso al perfil.
+This invitation was issued to another email address|Esta invitación se envió a otra dirección de correo
+This team needs an active Team license|Este equipo necesita una licencia Team activa
+This team has no available license seats|No quedan puestos disponibles en la licencia de este equipo
+Account changed while joining the team|La cuenta ha cambiado mientras te unías al equipo
+Could not join your team.|No se ha podido unir tu cuenta al equipo.
 Your focus this week|Tu foco esta semana
 Sustained focus|Foco sostenido
 Your focus today|Tu foco hoy

@@ -289,6 +289,7 @@ pub async fn bip_collect_local(
     recent_titles: Option<Vec<String>>,
 ) -> Result<Value, String> {
     let path = crate::paths::db_path_read_only()?;
+    crate::local_agent::require_profile_tool("content.collect", &json!({}))?;
     let terms = excluded_terms.unwrap_or_default();
     let direction = direction.unwrap_or_default();
     let recent = recent_keys.unwrap_or_default();
@@ -375,9 +376,12 @@ pub(crate) fn cloud(request: Value) -> Result<Value, String> {
 
 #[tauri::command]
 pub async fn bip_cloud(request: Value) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || cloud(request))
-        .await
-        .map_err(|_| "The request stopped".to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::local_agent::require_profile_tool("content.cloud", &request)?;
+        cloud(request)
+    })
+    .await
+    .map_err(|_| "The request stopped".to_string())?
 }
 
 fn parse_generated(raw: &str, source: &Value, channel: &str) -> Result<Value, String> {
@@ -552,6 +556,7 @@ pub fn verify_local(input: &Path, output: &Path) -> Result<(), String> {
 #[tauri::command]
 pub async fn bip_generate_local(app: tauri::AppHandle, request: Value) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        crate::local_agent::require_profile_tool("content.generate", &request)?;
         static GENERATING: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let _guard = GENERATING
             .try_lock()

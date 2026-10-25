@@ -152,6 +152,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Linked calendar session recovery and destination checks failed.' }
             node scripts/verify-build-in-public-offline.mjs
             if ($LASTEXITCODE -ne 0) { throw 'Build in public local discovery and offline recovery checks failed.' }
+            $env:FLOWSIGHT_USAGE_EVIDENCE = Join-Path (Get-Location).Path '.impeccable/review/usage-profiles'
+            node scripts/verify-usage-profiles.mjs
+            if ($LASTEXITCODE -ne 0) { throw 'License profile, employee recording and privacy checks failed.' }
           } finally {
             if (-not $server.HasExited) { & taskkill.exe /PID $server.Id /T /F | Out-Null }
           }

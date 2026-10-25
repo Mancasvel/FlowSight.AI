@@ -199,6 +199,38 @@ pub fn cloud_sync_enabled(db_path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+pub(crate) fn disable_cloud_for_context_change(conn: &Connection) -> Result<(), String> {
+    ensure_schema(conn)?;
+    let mut settings: PrivacySettings = config_value(conn, PRIVACY_SETTINGS_KEY)
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default();
+    if settings.cloud_sync_enabled {
+        record_choice(conn, "cloud_activity_sync", false)?;
+    }
+    if settings.cloud_ai_enabled {
+        record_choice(conn, "cloud_ai", false)?;
+    }
+    settings.cloud_sync_enabled = false;
+    settings.cloud_sync_enabled_at = None;
+    settings.cloud_ai_enabled = false;
+    settings.cloud_ai_enabled_at = None;
+    conn.execute(
+        "INSERT OR REPLACE INTO config(key,value) VALUES('start_monitoring_at_login','false')",
+        [],
+    )
+    .map_err(|error| error.to_string())?;
+    save_privacy_settings(conn, &settings)
+}
+
+pub(crate) fn forget_monitoring_acknowledgement(conn: &Connection) -> Result<(), String> {
+    let mut settings: PrivacySettings = config_value(conn, PRIVACY_SETTINGS_KEY)
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default();
+    settings.monitoring_notice_acknowledged = false;
+    settings.monitoring_notice_acknowledged_at = None;
+    save_privacy_settings(conn, &settings)
+}
+
 pub fn require_cloud_ai(db_path: &Path) -> Result<(), String> {
     let settings = load_privacy_settings(db_path)?;
     if settings.cloud_ai_enabled {
@@ -283,6 +315,12 @@ pub fn enforce_local_retention(db_path: &Path) -> Result<usize, String> {
             params![modifier],
         )
         .map_err(|error| error.to_string())?;
+    crate::sync::ensure_capture_schema(&conn)?;
+    conn.execute(
+        "DELETE FROM cloud_observation_owner WHERE report_id NOT IN (SELECT rowid FROM reports)",
+        [],
+    )
+    .map_err(|error| error.to_string())?;
     if tracking_table_exists(&conn)? {
         // Preserve minimal earned counters and this week's marks before raw time expires.
         crate::daily_flow::reconcile_progress(&conn, Local::now().date_naive())?;
@@ -653,7 +691,7 @@ pub(crate) fn erase_local_database(conn: &Connection) -> Result<(), String> {
         .execute("DELETE FROM config", [])
         .map_err(|error| error.to_string())?;
     transaction
-        .execute_batch("DROP TABLE IF EXISTS work_review_decisions; DROP TABLE IF EXISTS tracking_daily_time; DROP TABLE IF EXISTS online_observation_owner; DROP TABLE IF EXISTS online_local_consent;")
+        .execute_batch("DROP TABLE IF EXISTS work_review_decisions; DROP TABLE IF EXISTS tracking_daily_time; DROP TABLE IF EXISTS online_observation_owner; DROP TABLE IF EXISTS online_local_consent; DROP TABLE IF EXISTS cloud_observation_owner;")
         .map_err(|error| error.to_string())?;
     transaction.commit().map_err(|error| error.to_string())?;
     conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;")

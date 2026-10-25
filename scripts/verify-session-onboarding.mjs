@@ -5,7 +5,7 @@ import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const output = new URL('../.impeccable/review/', import.meta.url);
+const output = new URL(process.env.FLOWSIGHT_EVIDENCE_URL || '../.impeccable/review/', import.meta.url);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 async function assertTimerLabelFits(page, selector) {
@@ -115,6 +115,7 @@ try {
       };
     }, { pro:Boolean(viewport.dark) });
     await page.goto(process.env.FLOWSIGHT_RENDERER_URL || 'http://127.0.0.1:1420',{waitUntil:'networkidle'});
+    await page.locator('#chooseIndividualUsage').click();
     await page.locator('#onboardingOverlay.visible').waitFor();
     await page.evaluate(()=>document.fonts.ready);
     await page.screenshot({path:fileURLToPath(new URL(`onboarding-${viewport.name}.png`,output))});

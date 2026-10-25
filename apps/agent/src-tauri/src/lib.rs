@@ -124,6 +124,8 @@ pub fn run() {
             sync::set_active_team,
             entitlements::get_entitlements,
             entitlements::refresh_entitlements,
+            entitlements::set_usage_profile,
+            entitlements::claim_license_code,
             #[cfg(desktop)]
             install_health::check_installation_health,
             #[cfg(windows)]

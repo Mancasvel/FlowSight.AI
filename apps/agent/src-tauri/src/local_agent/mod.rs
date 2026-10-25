@@ -26,7 +26,49 @@ use crate::agent::AgentState;
 use crate::vision_model::LLAMA_CHAT_MODEL_ID;
 
 const MAX_USER_MESSAGE_CHARS: usize = 1200;
+
+pub(crate) fn profile_tool_allowed(name: &str, args: &Value, personal: bool) -> bool {
+    personal
+        || matches!(
+            name,
+            "focus.end"
+                | "focus.pause"
+                | "focus.total_end"
+                | "focus.total_status"
+                | "browser.unblock"
+                | "browser.restore_tab"
+        )
+        || (name == "system.set_dnd" && args["enabled"] == false)
+}
+
+pub(crate) fn require_profile_tool(name: &str, args: &Value) -> Result<(), String> {
+    let personal = crate::entitlements::personal_features_allowed(&crate::paths::db_path()?);
+    if profile_tool_allowed(name, args, personal) {
+        Ok(())
+    } else {
+        Err("Personal automations are available in the Individual profile".into())
+    }
+}
 const PROPOSAL_LIFETIME: Duration = Duration::from_secs(5 * 60);
+
+pub(crate) fn clear_pending_personal_actions() {
+    if let Ok(mut pending) = PENDING.lock() {
+        pending.clear();
+    }
+}
+
+pub(crate) fn end_personal_context() -> Result<(), String> {
+    clear_pending_personal_actions();
+    session_plan::clear_pending();
+    total_focus::end_for_context_change()?;
+    for warning in actions::clear_focus_for_context_change()? {
+        log::warn!("Context change: {warning}");
+    }
+    if state::read()?.quiet.is_some() {
+        system_quiet::disable()?;
+    }
+    Ok(())
+}
 static PENDING: Mutex<Vec<PendingAction>> = Mutex::new(Vec::new());
 
 struct PendingAction {
@@ -377,6 +419,7 @@ fn request_model(
 pub fn get_local_agent_tools() -> Vec<Value> {
     registry::enabled_specs()
         .iter()
+        .filter(|spec| require_profile_tool(spec.name, &json!({})).is_ok())
         .map(|spec| {
             json!({
                 "name": spec.name,
@@ -401,6 +444,7 @@ fn propose_local_agent_tool_blocking(
     name: String,
     arguments: Value,
 ) -> Result<ActionProposal, String> {
+    require_profile_tool(&name, &arguments)?;
     let spec = registry::enabled_by_public_name(&name)
         .ok_or("This local agent tool is unavailable in this release.")?;
     if !spec.confirmation {
@@ -417,6 +461,7 @@ pub async fn ask_local_agent(app: AppHandle, message: String) -> Result<AgentTur
 }
 
 fn ask_local_agent_blocking(app: AppHandle, message: String) -> Result<AgentTurn, String> {
+    require_profile_tool("personal.assistant", &json!({}))?;
     let message = message.trim();
     if message.is_empty() || message.chars().count() > MAX_USER_MESSAGE_CHARS {
         return Err("Write a request of up to 1,200 characters.".into());
@@ -563,6 +608,13 @@ pub async fn control_local_focus_block(app: AppHandle, action: String) -> Result
 }
 
 pub fn start_maintenance(app: AppHandle) {
+    if !crate::paths::db_path()
+        .is_ok_and(|path| crate::entitlements::personal_features_allowed(&path))
+    {
+        if let Err(error) = end_personal_context() {
+            log::warn!("Could not release personal protection on startup: {error}");
+        }
+    }
     if let Ok(data) = state::read() {
         if data.quiet.is_some() {
             if let Err(error) = system_quiet::disable() {
@@ -642,6 +694,38 @@ pub fn clear_pending_after_data_deletion() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn team_profiles_deny_personal_actions_and_keep_recovery_actions() {
+        for name in [
+            "focus.total_start",
+            "focus.start",
+            "browser.close_tab",
+            "browser.block",
+            "automation.run",
+            "tasks.create",
+        ] {
+            assert!(!profile_tool_allowed(name, &json!({}), false));
+            assert!(profile_tool_allowed(name, &json!({}), true));
+        }
+        for name in [
+            "focus.end",
+            "focus.total_end",
+            "browser.restore_tab",
+            "browser.unblock",
+        ] {
+            assert!(profile_tool_allowed(name, &json!({}), false));
+        }
+        assert!(profile_tool_allowed(
+            "system.set_dnd",
+            &json!({"enabled":false}),
+            false
+        ));
+        assert!(!profile_tool_allowed(
+            "system.set_dnd",
+            &json!({"enabled":true}),
+            false
+        ));
+    }
 
     #[test]
     fn unknown_or_multiple_model_calls_never_execute() {
