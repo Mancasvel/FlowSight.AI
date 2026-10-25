@@ -155,7 +155,7 @@ try{
   assert.equal(await page.locator('#onlineInvitationCode').count(),0);
   assert.equal(await page.locator('.online-summary').count(),0);
   assert.equal(await page.locator('#onlineRefresh').count(),0);
-  await page.evaluate(()=>{window.onlineTestState.signed_in=false;window.testEmit('online-leagues-updated');});
+  await page.evaluate(()=>{window.onlineHold=false;window.onlineTestState.signed_in=false;window.testEmit('online-leagues-updated');});
   await page.locator('#onlineSignIn').waitFor();
   assert.equal(await page.locator('#onlineAccept').isDisabled(),true);
   await page.locator('#onlineSignIn').click();
