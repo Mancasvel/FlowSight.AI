@@ -91,6 +91,9 @@ pub fn load_entitlements(conn: &Connection) -> Entitlements {
 /// Unconnected accounts default to Individual. An account-scoped team cache
 /// retains worker restrictions during a temporary loss of network access.
 pub(crate) fn profile_id(conn: &Connection) -> String {
+    if get_user_session_from_conn(conn).is_none() {
+        return "individual".into();
+    }
     let entitlements = load_entitlements(conn);
     if let Some(id @ ("individual" | "team_employee" | "team_manager")) = entitlements
         .usage_profile
@@ -146,6 +149,21 @@ mod profile_tests {
             profile_id(&account_cache(Some("individual"), Some("personal"), None)),
             "individual"
         );
+        let conn = account_cache(Some("team"), Some("company"), Some("team_employee"));
+        conn.execute("DELETE FROM config WHERE key='user_session'", [])
+            .unwrap();
+        // Old caches could omit owner_user_id. Signing out still wins over
+        // any profile or plan left by a legacy client.
+        let mut legacy = load_entitlements(&conn);
+        legacy.owner_user_id = None;
+        legacy.plan = Some("team".into());
+        legacy.usage_profile = Some(serde_json::json!({"id":"team_employee"}));
+        conn.execute(
+            "UPDATE config SET value=?1 WHERE key='entitlements'",
+            [serde_json::to_string(&legacy).unwrap()],
+        )
+        .unwrap();
+        assert_eq!(profile_id(&conn), "individual");
     }
 
     #[test]
