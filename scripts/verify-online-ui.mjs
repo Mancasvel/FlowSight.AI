@@ -127,6 +127,7 @@ try{
   const mutationsBefore=await page.evaluate(()=>window.testCalls.filter(c=>c.command==='set_online_league_consent').length);
   await page.evaluate(()=>{window.onlineCloudError='Sign in again to use online leagues';window.testEmit('online-leagues-updated');});
   await page.locator('#onlineSignIn').waitFor();
+  await page.locator('#onlineSignIn').scrollIntoViewIfNeeded();
   await page.screenshot({path:fileURLToPath(new URL('sign-in-recovery-simulated-native.png',out))});
   await page.locator('#onlineSignIn').click();
   await page.locator('#workerEmail').waitFor({state:'visible'});
@@ -154,6 +155,12 @@ try{
   assert.equal(await page.locator('#onlineInvitationCode').count(),0);
   assert.equal(await page.locator('.online-summary').count(),0);
   assert.equal(await page.locator('#onlineRefresh').count(),0);
+  await page.evaluate(()=>{window.onlineTestState.signed_in=false;window.testEmit('online-leagues-updated');});
+  await page.locator('#onlineSignIn').waitFor();
+  assert.equal(await page.locator('#onlineAccept').isDisabled(),true);
+  await page.locator('#onlineSignIn').click();
+  await page.locator('#workerEmail').waitFor({state:'visible'});
+  await page.locator('#closeCloudActivationBtn').click();
   assert.deepEqual(errors,[]);
   console.log('PASS: Online opt-in, unique username, group creation, invitation, escaping, withdrawal; automatic sync without Online open or manual buttons, username association, native events, offline retries, updated ranking, draft/focus preservation and stale response protection; five-tab layout at 340/370/900 in light/dark. Screenshots use a simulated native service.');
 }finally{await browser.close();}
