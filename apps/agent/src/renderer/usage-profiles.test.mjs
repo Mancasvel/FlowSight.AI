@@ -18,15 +18,24 @@ test('a local guest retains individual tools without a fabricated licensed manag
   assert.deepEqual(profileChoice(profile, 'individual'), { mode: 'local', teamId: null });
 });
 
-test('unverified and different-account caches keep signed-in users in the simple safe recorder', () => {
-  for (const value of [null, { ...entitlement(), owner_user_id: 'other-worker' }, entitlement('team_manager', { verified: false }), { plan: 'enterprise', status: 'active', can_sync: true }]) {
+test('unconnected accounts and foreign caches default to local Individual without granting a team role', () => {
+  for (const value of [null, { ...entitlement(), owner_user_id: 'other-worker' }, { owner_user_id: 'worker-a', plan: 'individual', status: 'active', active_team_id: 'personal-team' }]) {
     const profile = resolve(value);
-    assert.equal(profile.id, 'team_employee'); assert.equal(profile.verified, false);
-    assert.equal(profileAllowsTab(profile, 'tabToday'), true); assert.equal(profileAllowsTab(profile, 'tabProfile'), true);
-    assert.equal(profileAllowsTab(profile, 'tabOnline'), false); assert.equal(profileAllowsTab(profile, 'tabSummary'), false);
-    assert.equal(profileChoice(profile, 'individual'), null); assert.equal(profile.capabilities.team_dashboard, false);
+    assert.equal(profile.id, 'individual'); assert.equal(profile.local, true);
+    assert.equal(profileAllowsTab(profile, 'tabOnline'), true); assert.equal(profileAllowsTab(profile, 'tabSummary'), true);
+    assert.deepEqual(profileChoice(profile, 'individual'), { mode: 'local', teamId: null });
+    assert.equal(profileChoice(profile, 'team_employee'), null); assert.equal(profile.can_manage_team, false);
   }
   assert.equal(resolveUsageProfile(entitlement(), { accountId: 'worker-a', hydrated: false }).verified, false);
+});
+
+test('known worker caches retain their restrictions while the server cannot be reached', () => {
+  for (const value of [entitlement(), { owner_user_id: 'worker-a', plan: 'team', status: 'active', active_team_id: 'company-a' }, entitlement('team_employee', { verified: false })]) {
+    const profile = resolve(value);
+    assert.equal(profile.id, 'team_employee');
+    assert.equal(profileAllowsTab(profile, 'tabOnline'), false); assert.equal(profileAllowsTab(profile, 'tabSummary'), false);
+    assert.equal(profile.capabilities.focus_alerts, false);
+  }
 });
 
 test('a named licensed employee team cannot enable personal analysis or manager analytics through broad legacy flags', () => {
@@ -36,11 +45,14 @@ test('a named licensed employee team cannot enable personal analysis or manager 
   for (const tab of ['tabOnline', 'tabSummary', 'tabCloudInsights', 'undefined', 'constructor']) assert.equal(profileAllowsTab(profile, tab), false);
 });
 
-test('manager access requires the verified manager role for the selected named workspace', () => {
-  assert.equal(resolve(entitlement('team_manager')).capabilities.team_dashboard, true);
+test('legacy manager payloads direct the PM to the web without creating a desktop manager mode', () => {
+  const manager = resolve(entitlement('team_manager'));
+  assert.equal(manager.id, 'individual'); assert.equal(manager.can_manage_team, true);
+  assert.equal(manager.capabilities.team_dashboard, false); assert.equal(profileAllowsTab(manager, 'tabOnline'), false);
+  assert.equal(profileChoice(manager, 'team_manager'), null);
   assert.equal(resolve(entitlement('team_manager', { team_id: 'company-a' })).verified, false);
-  assert.equal(resolve(entitlement('team_manager', { teams: [] })).verified, false);
-  assert.equal(resolve(entitlement('team_manager', { capabilities: { team_dashboard: false } })).capabilities.team_dashboard, false);
+  assert.equal(resolve(entitlement('team_manager', { team_id: 'company-a' })).can_manage_team, false);
+  assert.equal(resolve(entitlement('team_manager', { teams: [] })).can_manage_team, false);
 });
 
 test('the server-authorized team choice sends a mode and matching team, never an invented role', () => {
@@ -48,7 +60,7 @@ test('the server-authorized team choice sends a mode and matching team, never an
   assert.equal(profileChoice(employee, 'team_manager'), null); assert.equal(profileChoice(employee, 'individual'), null);
   assert.deepEqual(profileChoice(employee, 'team_employee'), { mode: 'team', teamId: 'company-a' });
   const multi = resolve(entitlement());
-  assert.deepEqual(profileChoice(multi, 'team_manager', 'company-b'), { mode: 'team', teamId: 'company-b' });
+  assert.equal(profileChoice(multi, 'team_manager', 'company-b'), null);
   assert.deepEqual(profileChoice(multi, 'team_employee', 'company-b'), { mode: 'team', teamId: 'company-a' });
   assert.equal(profileChoice(multi, 'owner'), null);
 });
@@ -59,4 +71,5 @@ test('an authorized individual profile restores only its native capabilities and
   assert.equal(profileAllowsTab(profile, 'tabOnline'), true); assert.equal(profileAllowsTab(profile, 'tabSummary'), true);
   assert.equal(profile.capabilities.focus_alerts, false);
   assert.deepEqual(profileChoice(profile, 'individual'), { mode: 'individual', teamId: null });
+  assert.equal(profile.can_manage_team, true); assert.equal(profile.capabilities.team_dashboard, false);
 });

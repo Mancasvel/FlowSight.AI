@@ -3335,15 +3335,16 @@
   <div class="consent-overlay usage-choice-overlay" id="usageChoiceOverlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="usageChoiceTitle">
     <div class="consent-card usage-choice-card">
       <h1 id="usageChoiceTitle">How will you use FlowSight?</h1>
-      <p>Choose the setup that fits your work. Your license and team role determine the available features.</p>
-      <button type="button" class="usage-start-choice" id="chooseTeamUsage">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h18v13H3zM8 7V4h8v3M3 12h18M10 12v3h4v-3"/></svg>
-        <span><strong>For my team</strong><small>Recommended for work teams. A simple recording screen and separate sharing choices.</small></span>
-      </button>
-      <button type="button" class="usage-start-choice usage-start-personal" id="chooseIndividualUsage">
+      <p>Start in Individual. Connect a work team if you have an employee invitation.</p>
+      <button type="button" class="usage-start-choice" id="chooseIndividualUsage">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-3a8 8 0 0 1 16 0v3"/></svg>
-        <span><strong>For myself</strong><small>Personal goals, insights and optional focus tools, with the full individual setup.</small></span>
+        <span><strong>For myself</strong><small>The default on this device. Personal goals, insights and optional focus tools.</small></span>
       </button>
+      <button type="button" class="usage-start-choice usage-start-personal" id="chooseTeamUsage">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h18v13H3zM8 7V4h8v3M3 12h18M10 12v3h4v-3"/></svg>
+        <span><strong>For my team</strong><small>For invited employees. A simple recording screen with Stop and Continue.</small></span>
+      </button>
+      <a class="usage-dashboard-link" href="https://app.flowsight.site/dashboard/team" target="_blank" rel="noopener noreferrer">Project managers use the web dashboard</a>
       <button type="button" class="button button-ghost" id="skipUsageChoice">Skip setup</button>
     </div>
   </div>
@@ -3860,14 +3861,13 @@
           <p class="privacy-detail" id="usageProfileExplanation"></p>
           <div class="usage-profile-options" role="group" aria-label="Predefined profiles">
             <button type="button" class="usage-profile-option" data-usage-choice="team_employee" aria-pressed="false" disabled><strong>Team member</strong><span>Recording, Stop and Continue, and control over your data.</span></button>
-            <button type="button" class="usage-profile-option" data-usage-choice="team_manager" aria-pressed="false" disabled><strong>Project manager</strong><span>The same simple recorder, plus the team dashboard for coordination.</span></button>
             <button type="button" class="usage-profile-option" data-usage-choice="individual" aria-pressed="false" disabled><strong>Individual</strong><span>Personal insights, planning, focus tools and optional Online features.</span></button>
           </div>
           <div class="form-group" id="usageTeamSelectGroup" hidden><label class="label" for="usageTeamSelect">Work team</label><select class="select" id="usageTeamSelect"></select></div>
           <p id="usageProfileStatus" class="profile-form-status" role="status" aria-live="polite"></p>
           <button type="button" class="button button-secondary profile-full-button" id="usageConnectTeam">Connect my team</button>
           <button type="button" class="button button-ghost profile-full-button" id="usageRefreshProfile" hidden>Refresh my profile</button>
-          <a class="usage-dashboard-link" id="usageManagerDashboard" href="https://app.flowsight.site/dashboard/team" target="_blank" rel="noopener noreferrer" hidden>Open the team dashboard</a>
+          <a class="usage-dashboard-link" id="usageManagerDashboard" href="https://app.flowsight.site/dashboard/team" target="_blank" rel="noopener noreferrer" hidden>Project managers use the web dashboard</a>
           <details id="usageJoinTeam" class="usage-join-team"><summary>Join with a team code</summary><div id="usageTeamCodeSlot"></div></details>
         </section>
         <div class="card" id="languageSettingsCard">
@@ -4552,7 +4552,7 @@
     const NOTION_INTEGRATION_ENABLED = false;
 
     function usageProfileLabel(id = currentUsageProfile.id) {
-      return tr(id === 'team_manager' ? 'Project manager' : id === 'team_employee' ? 'Team member' : 'Individual');
+      return tr(id === 'team_employee' ? 'Team member' : 'Individual');
     }
 
     function teamSharingCopy() {
@@ -4622,21 +4622,22 @@
       }
       setText(document.getElementById('usageCurrentProfile'), () => currentUsageProfile.verified
         ? `${usageProfileLabel()}${currentUsageProfile.team_name ? ` · ${currentUsageProfile.team_name}` : ''}`
-        : currentUsageProfile.guest ? tr('Individual · on this device') : tr('Simple recording · profile not verified'));
-      setText(document.getElementById('usageProfileExplanation'), () => currentUsageProfile.guest
+        : currentUsageProfile.local ? tr('Individual · on this device') : tr('Simple recording · profile not verified'));
+      setText(document.getElementById('usageProfileExplanation'), () => currentUsageProfile.local
         ? tr('Connect your team to use its licensed profile. Personal features stay available locally.')
         : !currentUsageProfile.verified ? tr('We could not verify your licensed profile. Recording and privacy remain available. Refresh your profile, activate a license or join your team.')
         : tr('Your license and verified role determine these choices. Changing profile or team stops recording and turns optional sharing off.'));
       const selector = document.getElementById('usageTeamSelect');
-      const options = currentUsageProfile.teams.map(item => `${item.id}:${item.name}`).join('|');
+      const employeeTeams = currentUsageProfile.teams.filter(item => !item.manager);
+      const options = employeeTeams.map(item => `${item.id}:${item.name}`).join('|');
       if (selector.dataset.options !== options) {
-        selector.replaceChildren(...currentUsageProfile.teams.map(item => { const option = document.createElement('option'); option.value = item.id; option.textContent = item.name; return option; }));
+        selector.replaceChildren(...employeeTeams.map(item => { const option = document.createElement('option'); option.value = item.id; option.textContent = item.name; return option; }));
         selector.dataset.options = options;
       }
       selector.value = currentUsageProfile.team_id || '';
       selector.disabled = usageProfileSaving;
-      document.getElementById('usageTeamSelectGroup').hidden = !team || currentUsageProfile.teams.length < 2;
-      document.getElementById('usageManagerDashboard').hidden = !currentUsageProfile.capabilities.team_dashboard;
+      document.getElementById('usageTeamSelectGroup').hidden = !team || employeeTeams.length < 2;
+      document.getElementById('usageManagerDashboard').hidden = !currentUsageProfile.can_manage_team;
       document.getElementById('usageConnectTeam').hidden = Boolean(authSession && currentUsageProfile.teams.length);
       document.getElementById('usageRefreshProfile').hidden = !authSession;
       document.getElementById('usageRefreshProfile').disabled = usageProfileSaving;
@@ -4717,6 +4718,7 @@
       if (isPaused) await resumeMonitoring(); else await startMonitoringFull();
     }
 
+    let teamConnectionRequested = false;
     function showUsageChoice() { usageChoiceShown = true; dialogFocus.open(document.getElementById('usageChoiceOverlay')); }
     function hideUsageChoice() { dialogFocus.close(document.getElementById('usageChoiceOverlay')); }
     function rememberUsageChoice(choice) { try { localStorage.setItem('flowsight_usage_onboarding_choice', choice); } catch { /* Session-only setup works. */ } }
@@ -4770,12 +4772,13 @@
     document.querySelectorAll('[data-usage-choice]').forEach(button => button.addEventListener('click', () => changeUsageProfile(button.dataset.usageChoice, document.getElementById('usageTeamSelect').value || null)));
     document.getElementById('usageTeamSelect').addEventListener('change', event => {
       const team = currentUsageProfile.teams.find(item => item.id === event.target.value);
-      if (team) changeUsageProfile(team.manager ? 'team_manager' : 'team_employee', team.id);
+      if (team && !team.manager) changeUsageProfile('team_employee', team.id);
     });
-    document.getElementById('chooseTeamUsage').addEventListener('click', () => { rememberUsageChoice('team'); hideUsageChoice(); showCloudActivationPanel('team'); });
+    document.getElementById('chooseTeamUsage').addEventListener('click', () => { teamConnectionRequested = true; rememberUsageChoice('team'); hideUsageChoice(); showCloudActivationPanel('team'); });
     document.getElementById('chooseIndividualUsage').addEventListener('click', () => { rememberUsageChoice('individual'); hideUsageChoice(); showOnboardingWizard(); });
     document.getElementById('skipUsageChoice').addEventListener('click', () => { rememberUsageChoice('individual'); hideUsageChoice(); });
     document.getElementById('usageConnectTeam').addEventListener('click', () => {
+      teamConnectionRequested = true;
       if (!authSession) { showCloudActivationPanel('team'); return; }
       document.getElementById('usageJoinTeam').open = true; document.getElementById('teamCodeInput').focus();
     });
@@ -5400,9 +5403,8 @@
         return entitlements;
       } catch (e) {
         console.warn('[Entitlements] load failed:', e);
-        currentEntitlements = null;
         updatePlanBadge();
-        return null;
+        return currentEntitlements;
       }
     }
 
@@ -6123,7 +6125,7 @@
           agentFocusStatus: totalFocus?.session?.pausedAt ? 'paused' : localAgent?.focus?.status,
         });
 
-        if (isTeamProfile(currentUsageProfile) && restored.shouldResumeNative) restored = { ...restored, mode: 'paused', shouldResumeNative: false };
+        if (restored.shouldResumeNative && (isTeamProfile(currentUsageProfile) || !usageProfileHydrated || currentUsageProfile.local || !userPreferences?.onboardingCompleted || !monitoringNoticeAccepted(privacySettings))) restored = { ...restored, mode: 'paused', shouldResumeNative: false };
         if (restored.shouldResumeNative) {
           try {
             await startNativeMonitoring();
@@ -7918,6 +7920,7 @@
       }
       let choice = null;
       try { choice = localStorage.getItem('flowsight_usage_onboarding_choice'); } catch { /* Optional local preference. */ }
+      if (choice === 'team' && !teamConnectionRequested) { choice = 'individual'; rememberUsageChoice('individual'); }
       if (!choice && !usageChoiceShown) { showUsageChoice(); return true; }
       if (choice === 'team') {
         if (!authSession) { showCloudActivationPanel('team'); return true; }
@@ -8132,7 +8135,7 @@
     });
 
     function maybeStartMonitoringAtLogin() {
-      if (isTeamProfile(currentUsageProfile)) return;
+      if (!usageProfileHydrated || isTeamProfile(currentUsageProfile) || !userPreferences?.onboardingCompleted) return;
       if (!desktopPreferences?.autostartLaunch || !desktopPreferences?.startMonitoringAtLogin) return;
       if (!monitoringNoticeAccepted(privacySettings)) return;
       if (isMonitoring || loadTrackingCheckpoint(localStorage)?.mode === 'paused') return;
