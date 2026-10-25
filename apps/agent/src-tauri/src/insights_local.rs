@@ -161,10 +161,15 @@ fn build_local_insights_report_inner(
         .filter_map(|r| r.ok());
     let mut rows = Vec::<ClippedReportRow>::new();
     let mut activity_count = 0i32;
-    for (timestamp, raw_category, description, ticket, duration, synced, _app, _title, theme) in
+    for (timestamp, raw_category, description, ticket, duration, synced, app, title, theme) in
         raw_rows
     {
-        let category = crate::agent_pure::resolve_persisted_category(&raw_category);
+        let category = crate::agent_pure::resolve_activity_category(
+            &raw_category,
+            &description,
+            app.as_deref(),
+            title.as_deref(),
+        );
         let ticket = crate::focus_semantics::canonical_ticket_value(ticket.as_deref());
         let slices = window.slices_for_observation(&timestamp, duration);
         if slices.is_empty() {
@@ -3322,6 +3327,51 @@ mod tests {
         );
         assert_eq!(report["work_themes"].as_array().unwrap().len(), 1);
         assert_eq!(report["work_themes"][0]["label"], "Task Policy brief");
+    }
+
+    #[test]
+    fn historic_eclipse_categories_match_focus_metrics_in_the_report_payload() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("eclipse-insights.sqlite");
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE reports (
+                id INTEGER PRIMARY KEY, created_at TEXT NOT NULL,
+                activity_type TEXT NOT NULL, description TEXT NOT NULL,
+                jira_ticket_id TEXT, duration_seconds INTEGER NOT NULL,
+                synced INTEGER DEFAULT 0, active_app TEXT,
+                window_title TEXT, theme_hint TEXT
+            );",
+        )
+        .unwrap();
+        let day = Local::now().date_naive();
+        for (minute, category, duration) in [(15, "Browsing", 900), (30, "General", 900)] {
+            conn.execute(
+                "INSERT INTO reports (created_at, activity_type, description, duration_seconds, active_app, window_title)
+                 VALUES (?1, ?2, 'Interacting with editing controls', ?3, 'eclipse.exe', 'workspace - Main.java - Eclipse IDE')",
+                params![utc_storage_timestamp(day.and_hms_opt(12, minute, 0).unwrap()), category, duration],
+            ).unwrap();
+        }
+        let (report, apps) = build_local_insights_report_inner(&db_path, 1, Some(&[])).unwrap();
+        assert_eq!(report["category_breakdown"].as_array().unwrap().len(), 1);
+        assert_eq!(report["category_breakdown"][0]["category"], "Coding");
+        assert_eq!(report["category_breakdown"][0]["total_seconds"], 1800);
+        assert_eq!(
+            report["day_category_breakdown"][0]["top_category"],
+            "Coding"
+        );
+        assert_eq!(report["deep_focus_seconds"], 1800);
+        assert_eq!(report["focus_semantics"]["distraction_seconds"], 0);
+        assert!(apps.unwrap().unwrap().detours.is_empty());
+        assert_eq!(
+            conn.query_row(
+                "SELECT activity_type FROM reports ORDER BY id LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0)
+            )
+            .unwrap(),
+            "Browsing",
+        );
     }
 
     #[test]
