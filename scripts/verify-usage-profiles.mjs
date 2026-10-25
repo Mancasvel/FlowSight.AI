@@ -14,7 +14,7 @@ const browser = await chromium.launch({ headless: true });
 const results = [];
 const scenario = name => !process.env.FLOWSIGHT_USAGE_SCENARIO || process.env.FLOWSIGHT_USAGE_SCENARIO === name;
 
-async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed = true, signedIn = true, licensed = true, usageChoice = null, solo = false, stale = false, pomodoro = false, dark = false, holdBoot = false } = {}) {
+async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed = true, signedIn = true, licensed = true, usageChoice = null, solo = false, stale = false, legacy = false, offline = false, pomodoro = false, dark = false, holdBoot = false } = {}) {
   const page = await browser.newPage({ locale, timezoneId: 'Europe/Madrid', colorScheme: dark ? 'dark' : 'light', viewport: { width: 370, height: 700 }, reducedMotion: 'reduce' });
   await page.clock.install({ time: new Date('2026-10-01T17:00:00+02:00') });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -22,11 +22,11 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
   await page.addInitScript(config => {
     const original = window.__TAURI_INTERNALS__.invoke;
     let running = false, milliseconds = 20_700_000, sampledAt = performance.now();
-    const teams = [{ id: 'company-a', name: 'Acme Diseño', manager: false }, { id: 'company-b', name: 'Beta Engineering', manager: true }];
+    const teams = [{ id: 'company-a', name: 'Acme Diseño', manager: false }, { id: 'company-b', name: 'Beta Engineering', manager: true }, { id: 'company-c', name: 'Gamma Design', manager: false }];
     const profileValue = (id, teamId) => ({
       id, verified: true, license_plan_id: id === 'individual' ? 'solo' : 'team_simple',
       team_id: id === 'individual' ? null : teamId || (id === 'team_manager' ? 'company-b' : 'company-a'), teams,
-      available_profiles: ['team_employee', 'team_manager', ...(config.solo ? ['individual'] : [])],
+      available_profiles: ['team_employee', ...(config.solo || id === 'individual' ? ['individual'] : [])],
       capabilities: { online: id === 'individual', focus_alerts: id === 'individual', personal_insights: id === 'individual', team_dashboard: id === 'team_manager' },
     });
     const freeProfile = { id: 'individual', verified: true, license_plan_id: null, team_id: null, allowed_project_keys: [], available_profiles: ['individual'], teams: [], capabilities: { online: true, focus_alerts: true, personal_insights: true, team_dashboard: false } };
@@ -42,9 +42,9 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
     const entitlements = () => !window.usageFixture.signedIn ? { owner_user_id: null, plan: null, status: 'free', team_ids: [] } : !window.usageFixture.licensed ? {
       owner_user_id: 'employee-ui', plan: null, status: 'free', team_ids: [], active_team_id: null, can_sync: false, can_cloud_ai: false, can_integrations: false, usage_profile: structuredClone(freeProfile),
     } : {
-      owner_user_id: config.stale ? 'another-account' : 'employee-ui', plan: 'team', status: 'active', can_sync: true, can_cloud_ai: true, can_integrations: true,
+      owner_user_id: config.stale ? 'another-account' : 'employee-ui', plan: window.usageFixture.profile.id === 'individual' ? 'individual' : 'team', status: 'active', can_sync: true, can_cloud_ai: true, can_integrations: true,
       team_ids: teams.map(team => team.id), active_team_id: window.usageFixture.profile.team_id,
-      usage_profile: structuredClone(window.usageFixture.profile),
+      usage_profile: config.legacy ? null : structuredClone(window.usageFixture.profile),
     };
     if (config.pomodoro) localStorage.setItem('flowsight_timer_modes_v1', JSON.stringify({ mode: 'pomodoro', work: 25, shortBreak: 5, longBreak: 15 }));
     if (config.usageChoice) localStorage.setItem('flowsight_usage_onboarding_choice', config.usageChoice);
@@ -55,6 +55,7 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
       window.testCalls.push({ command, args });
       if (command === 'get_current_user') return fixture.signedIn ? { user_id: 'employee-ui', email: 'synthetic@example.test', team_id: fixture.profile.team_id } : null;
       if (command === 'get_auth_session') return null;
+      if (command === 'refresh_entitlements' && config.offline) throw 'Synthetic network unavailable';
       if (command === 'get_entitlements' || command === 'refresh_entitlements') return entitlements();
       if (command === 'get_user_teams') return { teams: fixture.licensed ? teams.map(team => ({ team_id: team.id, name: team.name, role: team.manager ? 'admin' : 'member' })) : [], active_team_id: fixture.profile.team_id };
       if (command === 'get_user_preferences') return structuredClone(fixture.preferences);
@@ -84,7 +85,7 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
       if (command === 'logout' || command === 'clear_user_session') { fixture.signedIn = false; running = false; return null; }
       if (command === 'get_online_leagues') return { signed_in: true, enabled: false, groups: [], alias: '' };
     };
-  }, { profile, completed, signedIn, licensed, usageChoice, solo, stale, pomodoro, holdBoot });
+  }, { profile, completed, signedIn, licensed, usageChoice, solo, stale, legacy, offline, pomodoro, holdBoot });
   await page.goto(process.env.FLOWSIGHT_RENDERER_URL || 'http://127.0.0.1:1443', { waitUntil: holdBoot ? 'domcontentloaded' : 'networkidle' });
   if (holdBoot) {
     await page.waitForFunction(() => Boolean(window.usageFixture.releaseBoot));
@@ -215,10 +216,11 @@ try {
     assert.equal(await page.locator('body').getAttribute('data-usage-profile'), 'team_employee');
     assert.equal(await page.locator('[data-usage-choice="individual"]').isEnabled(), true, 'A failed profile change is recoverable.');
     await page.evaluate(() => { window.usageFixture.failProfile = false; });
-    await page.locator('#usageTeamSelect').selectOption('company-b'); await page.waitForFunction(() => document.body.dataset.usageProfile === 'team_manager');
-    assert.equal(await page.locator('#usageManagerDashboard').isVisible(), true); assert.match(await page.locator('#usageCurrentProfile').innerText(), /Beta Engineering/);
+    assert.equal(await page.locator('#usageTeamSelect option[value="company-b"]').count(), 0, 'PM workspaces are managed on the web, not selected as a recorder.');
+    await page.locator('#usageTeamSelect').selectOption('company-c'); await page.locator('#usageCurrentProfile').filter({ hasText: 'Gamma Design' }).waitFor();
+    assert.equal(await page.locator('#usageManagerDashboard').isVisible(), true);
     await page.locator('#usageTeamSelect').selectOption('company-a'); await page.waitForFunction(() => document.body.dataset.usageProfile === 'team_employee');
-    assert.equal(await page.locator('#usageManagerDashboard').isVisible(), false);
+    assert.equal(await page.locator('[data-usage-choice="team_manager"]').count(), 0);
     await page.locator('#navToday').click(); await page.locator('#playTimerBtn').click(); await page.locator('#playTimerLabel').filter({ hasText: 'Detener registro' }).waitFor();
     await page.locator('#navProfile').click(); await page.locator('#logoutBtn').click(); await page.waitForFunction(() => document.body.dataset.usageProfile === 'individual');
     assert.equal(await page.evaluate(() => window.usageFixture.signedIn), false);
@@ -230,13 +232,12 @@ try {
   }
   if (scenario('stale-cache')) {
     const { page, errors } = await pageFor({ stale: true, holdBoot: true });
-    await simpleRecorder(page); await page.locator('#navProfile').click();
-    assert.equal(await page.locator('[data-usage-choice="individual"]').isEnabled(), false); assert.equal(await page.locator('[data-usage-choice="team_manager"]').isEnabled(), false);
+    assert.equal(await page.locator('body').getAttribute('data-usage-profile'), 'individual');
+    assert.equal(await page.locator('#navOnline').isVisible(), true); await page.locator('#navProfile').click();
+    assert.equal(await page.locator('[data-usage-choice="individual"]').isEnabled(), true); assert.equal(await page.locator('[data-usage-choice="team_manager"]').count(), 0);
     assert.equal(await page.locator('#usageManagerDashboard').isVisible(), false);
-    assert.match(await page.locator('#usageCurrentProfile').innerText(), /not verified/);
-    await page.locator('#navToday').click(); await page.locator('#playTimerBtn').click(); await page.locator('#playTimerLabel').filter({ hasText: 'Stop recording' }).waitFor();
-    await page.locator('#playTimerBtn').click();
-    assert.deepEqual(errors, []); results.push({ scenario: 'wrong-account cached entitlement fails closed while local Stop/Continue and privacy remain available', passed: true }); await page.close();
+    assert.match(await page.locator('#usageCurrentProfile').innerText(), /Individual/);
+    assert.deepEqual(errors, []); results.push({ scenario: 'wrong-account cache grants no team or PM role; current account defaults to local Individual after native hydration', passed: true }); await page.close();
   }
   if (scenario('invite')) {
     const { page, errors } = await pageFor({ licensed: false, completed: false, signedIn: false, locale: 'es-ES' });
@@ -270,6 +271,8 @@ try {
   }
   if (scenario('claim')) {
     const { page, errors } = await pageFor({ licensed: false, completed: false, usageChoice: 'team' });
+    await page.locator('#onboardingSkipCalendarBtn').click(); await page.locator('#navProfile').click();
+    await page.evaluate(() => { window.usageFixture.preferences.onboardingCompleted = false; });
     await page.locator('#profileLicenseCode').fill('FS-FICTIONAL-CODE'); await page.locator('#claimLicenseBtn').click();
     await page.locator('#onboardingOverlay.visible.team-setup').waitFor();
     assert.equal(await page.evaluate(() => window.testCalls.filter(call => call.command === 'claim_license_code').length), 1);
@@ -292,8 +295,6 @@ try {
       { name: 'employee-default', width: 370, height: 700, locale: 'es-ES' },
       { name: 'employee-dark', width: 370, height: 700, locale: 'en-GB', dark: true },
       { name: 'employee-wide', width: 900, height: 1000, locale: 'es-ES' },
-      { name: 'manager-compact', width: 340, height: 400, locale: 'en-GB', dark: true, profile: 'team_manager' },
-      { name: 'manager-default', width: 370, height: 700, locale: 'es-ES', profile: 'team_manager' },
     ]) {
       const { page, errors } = await pageFor(config);
       await page.setViewportSize({ width: config.width, height: config.height });
@@ -322,13 +323,35 @@ try {
   }
   if (scenario('free-individual')) {
     const { page, errors } = await pageFor({ licensed: false, completed: false, usageChoice: 'team' });
-    await page.locator('#tabProfile.active').waitFor();
-    assert.equal(await page.locator('#onboardingOverlay').isVisible(), false);
-    await page.locator('[data-usage-choice="individual"]').click(); await page.locator('#onboardingOverlay.visible:not(.team-setup)').waitFor();
+    await page.locator('#onboardingOverlay.visible:not(.team-setup)').waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('flowsight_usage_onboarding_choice')), 'individual');
     assert.equal(await page.evaluate(() => window.testCalls.some(call => call.command === 'set_usage_profile')), false, 'Explicit same-profile choice changes the setup preference without inventing or requesting a different licensed role.');
     assert.match(await page.locator('#onboardingStepLabel').innerText(), /1.*6/);
     assert.deepEqual(errors, []); results.push({ scenario: 'verified free account can explicitly choose its existing Individual profile and open personal setup after previously choosing Team', passed: true }); await page.close();
+  }
+  if (scenario('individual-defaults')) {
+    for (const config of [{ signedIn: false, usageChoice: 'team', completed: false }, { profile: 'individual', legacy: true }, { licensed: false }]) {
+      const { page, errors } = await pageFor(config);
+      assert.equal(await page.locator('body').getAttribute('data-usage-profile'), 'individual');
+      assert.equal(await page.locator('#navOnline').isVisible(), true); assert.equal(await page.locator('#navSummary').isVisible(), true);
+      assert.equal(await page.locator('#loginScreen.visible.team-login').count(), 0);
+      assert.deepEqual(errors, []); await page.close();
+    }
+    const { page, errors } = await pageFor({ offline: true, pomodoro: true });
+    await simpleRecorder(page); assert.equal(await page.locator('#focusAlertsToggle').isVisible(), false);
+    assert.deepEqual(errors, []); await page.close();
+    results.push({ scenario: 'disconnected, signed-in free and legacy paid Individual defaults; stored Team choice does not force login; known offline employee retains simple recorder', passed: true });
+  }
+  if (scenario('pm-web')) {
+    const { page, errors } = await pageFor({ profile: 'individual', solo: true, locale: 'es-ES' });
+    await page.locator('#navProfile').click();
+    assert.equal(await page.locator('[data-usage-choice="team_manager"]').count(), 0);
+    assert.equal(await page.locator('#usageManagerDashboard').isVisible(), true);
+    assert.equal(await page.locator('#usageManagerDashboard').getAttribute('href'), 'https://app.flowsight.site/dashboard/team');
+    assert.equal(await page.locator('body').getAttribute('data-usage-profile'), 'individual');
+    await page.locator('#usageProfileCard').screenshot({ path: resolve(output, 'pm-web-profiles.png') });
+    assert.deepEqual(errors, []); await page.close();
+    results.push({ scenario: 'PM management link opens the existing web dashboard and no PM recorder mode exists', passed: true });
   }
   await writeFile(resolve(output, 'renderer-e2e.json'), JSON.stringify({ evidence: 'Production renderer with fictional native IPC, no real account or native capture', results }, null, 2));
   console.log(JSON.stringify(results, null, 2));

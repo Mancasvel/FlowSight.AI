@@ -3,6 +3,10 @@ export const spanish = Object.fromEntries(`
 How will you use FlowSight?|¿Cómo vas a usar FlowSight?
 Choose the setup that fits your work. Your license and team role determine the available features.|Elige la configuración que encaja con tu trabajo. Tu licencia y tu rol en el equipo determinan las funciones disponibles.
 For my team|Para mi equipo
+Start in Individual. Connect a work team if you have an employee invitation.|Empieza en Individual. Conecta un equipo de trabajo si tienes una invitación como empleado.
+The default on this device. Personal goals, insights and optional focus tools.|El modo predeterminado en este dispositivo. Objetivos personales, análisis y herramientas de concentración opcionales.
+For invited employees. A simple recording screen with Stop and Continue.|Para empleados con invitación. Una pantalla de registro sencilla con Parar y Continuar.
+Project managers use the web dashboard|Los project managers usan el dashboard web
 Recommended for work teams. A simple recording screen and separate sharing choices.|Recomendado para equipos de trabajo. Una pantalla de registro sencilla y opciones de compartir independientes.
 For myself|Para mí
 Personal goals, insights and optional focus tools, with the full individual setup.|Objetivos personales, análisis y herramientas de foco opcionales, con la configuración individual completa.

@@ -88,10 +88,12 @@ pub fn load_entitlements(conn: &Connection) -> Entitlements {
     entitlements
 }
 
-/// Legacy or unavailable account entitlements stay in the simple team shell
-/// until a server response identifies the current profile. Local guests retain
-/// the complete individual experience.
+/// Unconnected accounts default to Individual. An account-scoped team cache
+/// retains worker restrictions during a temporary loss of network access.
 pub(crate) fn profile_id(conn: &Connection) -> String {
+    if get_user_session_from_conn(conn).is_none() {
+        return "individual".into();
+    }
     let entitlements = load_entitlements(conn);
     if let Some(id @ ("individual" | "team_employee" | "team_manager")) = entitlements
         .usage_profile
@@ -100,12 +102,13 @@ pub(crate) fn profile_id(conn: &Connection) -> String {
     {
         return id.to_string();
     }
-    if entitlements.plan.as_deref() == Some("individual")
-        || get_user_session_from_conn(conn).is_none()
+    if entitlements.plan.as_deref() == Some("team")
+        || (entitlements.active_team_id.is_some()
+            && entitlements.plan.as_deref() != Some("individual"))
     {
-        "individual".into()
-    } else {
         "team_employee".into()
+    } else {
+        "individual".into()
     }
 }
 
@@ -113,6 +116,85 @@ pub(crate) fn personal_features_allowed(path: &std::path::Path) -> bool {
     Connection::open(path)
         .map(|conn| profile_id(&conn) == "individual")
         .unwrap_or(false)
+}
+
+#[cfg(all(test, windows))]
+mod profile_tests {
+    use super::*;
+
+    fn account_cache(plan: Option<&str>, team: Option<&str>, profile: Option<&str>) -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT)", [])
+            .unwrap();
+        crate::secure_config::save_secret(&conn, "user_session", &serde_json::json!({
+            "user_id":"worker", "team_id":team, "access_token":"synthetic", "refresh_token":null, "email":"worker@example.test"
+        }).to_string()).unwrap();
+        let mut value = Entitlements::free();
+        value.owner_user_id = Some("worker".into());
+        value.plan = plan.map(String::from);
+        value.active_team_id = team.map(String::from);
+        value.usage_profile = profile.map(|id| serde_json::json!({"id":id,"verified":true}));
+        conn.execute(
+            "INSERT INTO config (key,value) VALUES ('entitlements',?1)",
+            [serde_json::to_string(&value).unwrap()],
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn unconnected_and_legacy_individual_accounts_keep_personal_tools() {
+        assert_eq!(profile_id(&account_cache(None, None, None)), "individual");
+        assert_eq!(
+            profile_id(&account_cache(Some("individual"), Some("personal"), None)),
+            "individual"
+        );
+        let conn = account_cache(Some("team"), Some("company"), Some("team_employee"));
+        conn.execute("DELETE FROM config WHERE key='user_session'", [])
+            .unwrap();
+        // Old caches could omit owner_user_id. Signing out still wins over
+        // any profile or plan left by a legacy client.
+        let mut legacy = load_entitlements(&conn);
+        legacy.owner_user_id = None;
+        legacy.plan = Some("team".into());
+        legacy.usage_profile = Some(serde_json::json!({"id":"team_employee"}));
+        conn.execute(
+            "UPDATE config SET value=?1 WHERE key='entitlements'",
+            [serde_json::to_string(&legacy).unwrap()],
+        )
+        .unwrap();
+        assert_eq!(profile_id(&conn), "individual");
+    }
+
+    #[test]
+    fn known_worker_cache_stays_restricted_without_network() {
+        assert_eq!(
+            profile_id(&account_cache(Some("team"), Some("company"), None)),
+            "team_employee"
+        );
+        assert_eq!(
+            profile_id(&account_cache(
+                Some("team"),
+                Some("company"),
+                Some("team_employee")
+            )),
+            "team_employee"
+        );
+        // Old manager caches cannot grant personal tools against a company
+        // upload destination before the canonical server refresh completes.
+        assert_ne!(
+            profile_id(&account_cache(
+                Some("team"),
+                Some("company"),
+                Some("team_manager")
+            )),
+            "individual"
+        );
+        assert_eq!(
+            profile_id(&account_cache(None, None, Some("individual"))),
+            "individual"
+        );
+    }
 }
 
 pub fn save_entitlements(conn: &Connection, entitlements: &Entitlements) -> Result<(), String> {
