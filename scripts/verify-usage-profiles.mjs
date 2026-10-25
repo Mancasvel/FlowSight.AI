@@ -100,6 +100,9 @@ async function pageFor({ profile = 'team_employee', locale = 'en-GB', completed 
 }
 
 async function simpleRecorder(page, locale = 'en-GB') {
+  // Setup completion also refreshes the clock. Wait for the rendered team label
+  // rather than sampling an intermediate state on slower Windows CI runners.
+  await page.locator('#timerKindLabel').filter({ hasText: locale.startsWith('es') ? /Registrado hoy en este dispositivo/ : /Recorded on this device today/ }).waitFor({ state: 'visible' });
   assert.equal(await page.locator('#navOnline').isVisible(), false);
   assert.equal(await page.locator('#navSummary').isVisible(), false);
   assert.equal(await page.locator('#navCloudInsights').isVisible(), false, await page.locator('#navCloudInsights').evaluate(element => JSON.stringify({ html: element.outerHTML, profile: document.body.dataset.usageProfile, display: getComputedStyle(element).display, css: [...document.styleSheets].flatMap(sheet => {try {return [...sheet.cssRules].filter(rule => rule.selectorText && element.matches(rule.selectorText)).map(rule => ({selector:rule.selectorText,display:rule.style.display,priority:rule.style.getPropertyPriority('display')}));} catch {return [];}}) }))); 
