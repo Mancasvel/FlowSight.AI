@@ -116,6 +116,15 @@ async function simpleRecorder(page, locale = 'en-GB') {
   assert.equal(await page.locator('#timerDisplay').innerText(), '05:45:00', 'Saved Pomodoro must not replace the actual device clock in team mode.');
   assert.equal(await page.locator('.bottom-nav .nav-item:visible').count(), 2);
   assert.equal(await page.locator('.bottom-nav .nav-label:visible').count(), 2);
+  const dock = await page.locator('.bottom-nav').boundingBox();
+  const targets = await page.locator('.bottom-nav .nav-item:visible').evaluateAll(elements => elements.map(element => {
+    const box = element.getBoundingClientRect();
+    return { id: element.id, x: box.x, y: box.y, width: box.width, height: box.height };
+  }));
+  assert.ok(dock && dock.height < 90, 'The two team destinations must stay in one compact row.');
+  assert.equal(targets.map(target => target.id).join(','), 'navToday,navProfile');
+  assert.ok(Math.abs(targets[0].y - targets[1].y) < 1 && Math.abs(targets[0].width - targets[1].width) < 1);
+  for (const target of targets) assert.ok(target.width >= dock.width * 0.4, `Each team destination must occupy half the dock rather than a slot in the Individual five-column grid: ${JSON.stringify({ dock, target })}`);
   for (const label of await page.locator('.bottom-nav .nav-label:visible').all()) {
     const geometry = await label.evaluate(element => ({ width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height, clip: getComputedStyle(element).clipPath }));
     assert.ok(geometry.width > 20 && geometry.height > 10 && geometry.clip === 'none', `Navigation labels must be visually readable, beyond DOM visibility: ${JSON.stringify(geometry)}`);
@@ -124,6 +133,20 @@ async function simpleRecorder(page, locale = 'en-GB') {
 }
 
 async function clearToasts(page) { await page.waitForTimeout(4600); }
+
+async function unobstructedTeamDock(page) {
+  const dock = await page.locator('.bottom-nav').boundingBox();
+  for (const toast of await page.locator('.toast-container .toast:visible').all()) {
+    const box = await toast.boundingBox();
+    assert.ok(box && box.y + box.height <= dock.y - 8, 'Recording feedback must stay above the team navigation.');
+  }
+  for (const target of await page.locator('.bottom-nav .nav-item:visible').all()) {
+    assert.equal(await target.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('.nav-item') === element;
+    }), true, 'Both team destinations remain clickable while feedback is visible.');
+  }
+}
 
 try {
   if (scenario('team-first')) {
@@ -262,6 +285,40 @@ try {
     assert.equal(await page.locator('#onboardingBody input').count() > 0, true);
     assert.equal(await page.locator('#teamSetupShare').count(), 0);
     assert.deepEqual(errors, []); results.push({ scenario: 'individual first choice preserves the existing six-step personal setup', passed: true }); await page.close();
+  }
+  if (scenario('navigation')) {
+    for (const config of [
+      { name: 'employee-compact', width: 340, height: 400, locale: 'es-ES' },
+      { name: 'employee-default', width: 370, height: 700, locale: 'es-ES' },
+      { name: 'employee-dark', width: 370, height: 700, locale: 'en-GB', dark: true },
+      { name: 'employee-wide', width: 900, height: 1000, locale: 'es-ES' },
+      { name: 'manager-compact', width: 340, height: 400, locale: 'en-GB', dark: true, profile: 'team_manager' },
+      { name: 'manager-default', width: 370, height: 700, locale: 'es-ES', profile: 'team_manager' },
+    ]) {
+      const { page, errors } = await pageFor(config);
+      await page.setViewportSize({ width: config.width, height: config.height });
+      await simpleRecorder(page, config.locale);
+      if (config.name === 'employee-default') await page.screenshot({ path: resolve(output, 'employee-navigation.png') });
+      await page.locator('#playTimerBtn').click();
+      await page.locator('#playTimerLabel').filter({ hasText: config.locale.startsWith('es') ? 'Detener registro' : 'Stop recording' }).waitFor();
+      assert.doesNotMatch(await page.locator('.toast-container').innerText(), /Local AI Server Ready|Servidor local de IA listo/);
+      await unobstructedTeamDock(page);
+      await page.locator('#navProfile').click(); await page.locator('#tabProfile.active').waitFor();
+      await page.locator('#navToday').focus(); await page.keyboard.press('Enter'); await page.locator('#tabToday.active').waitFor();
+      await page.locator('#playTimerBtn').click();
+      await page.locator('#playTimerLabel').filter({ hasText: config.locale.startsWith('es') ? 'Continuar registro' : 'Continue recording' }).waitFor();
+      await page.locator('.toast-container .toast').first().waitFor();
+      await page.clock.runFor(400);
+      await unobstructedTeamDock(page);
+      if (config.name === 'employee-default') await page.screenshot({ path: resolve(output, 'employee-navigation-feedback.png') });
+      assert.deepEqual(errors, []); await page.close();
+    }
+    const { page, errors } = await pageFor({ profile: 'individual', solo: true, locale: 'es-ES' });
+    assert.equal(await page.locator('.bottom-nav .nav-item:visible').count(), 5);
+    const dock = await page.locator('.bottom-nav').boundingBox(), clock = await page.locator('#navToday').boundingBox();
+    assert.ok(Math.abs(clock.x + clock.width / 2 - (dock.x + dock.width / 2)) < 1, 'The Individual clock remains centered among its five destinations.');
+    assert.deepEqual(errors, []); await page.close();
+    results.push({ scenario: 'equal-width team destinations in one row at minimum, default and wide sizes; Spanish/English and light/dark; no technical server-ready notification; recording feedback does not cover pointer or keyboard navigation; Individual keeps five centered destinations', passed: true });
   }
   if (scenario('free-individual')) {
     const { page, errors } = await pageFor({ licensed: false, completed: false, usageChoice: 'team' });

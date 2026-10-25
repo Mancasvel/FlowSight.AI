@@ -7382,7 +7382,7 @@
           typeof res.gpuLayers === 'number'
             ? ` (${res.gpuLayers} GPU layers${res.gpuAuto ? ', auto-selected' : ''})`
             : '';
-        showToast(formatMessage`Local AI Server Ready${layerSuffix}`, 'success');
+        if (!isTeamProfile(currentUsageProfile)) showToast(formatMessage`Local AI Server Ready${layerSuffix}`, 'success');
 
         try {
           await loadCurrentDayHistory();
